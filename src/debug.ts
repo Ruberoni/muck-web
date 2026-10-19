@@ -61,6 +61,10 @@ export function installDebug(game: Game) {
       return game.interaction.target?.id ?? null
     },
     inventory: () => game.inventory.toJSON(),
+    hotbar: () => ({ slots: [...game.inventory.slots], selected: game.inventory.selected }),
+    select: (index: number) => game.inventory.select(index),
+    craft: (index: number) => game.craft(index),
+    setCrafting: (open: boolean) => game.setCrafting(open),
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: () => game.interaction.target?.id ?? null,
     heightAt,

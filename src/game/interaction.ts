@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { PropData, World } from '../world/props'
-import { HIT_COOLDOWN, PROP_DEFS, REACH, WOBBLE_DURATION } from './constants'
-import type { Inventory } from './inventory'
+import { BASE_DAMAGE, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from './constants'
+import type { Inventory, ItemId } from './inventory'
 
 const SCREEN_CENTER = new THREE.Vector2(0, 0)
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
@@ -56,7 +56,7 @@ export class Interaction {
   }
 
   private hit(prop: PropData) {
-    prop.hp--
+    prop.hp = Math.max(0, prop.hp - hitDamage(this.inventory.selectedItem, prop.kind))
     if (prop.hp <= 0) this.destroy(prop)
     else this.wobbles.set(prop, 0)
   }
@@ -112,6 +112,12 @@ export class Interaction {
       else this.wobbles.set(prop, t)
     }
   }
+}
+
+/** Daño de un golpe con el objeto en la mano (null = mano vacía). */
+export function hitDamage(item: ItemId | null, kind: PropData['kind']): number {
+  const tool = item ? TOOL_DEFS[item] : undefined
+  return BASE_DAMAGE * (tool?.kind === kind ? tool.multiplier : 1)
 }
 
 /** Posición y orientación para apuntar a un prop desde fuera de su radio (debug y tests). */
