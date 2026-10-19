@@ -40,6 +40,10 @@ export const MOUSE_SENSITIVITY = 0.002
 export const MAX_PITCH = (89 * Math.PI) / 180
 // Solo se aplica sin unadjustedMovement: descarta los picos de movementX/Y de Chrome.
 export const MOUSE_SPIKE_LIMIT = 450
+// Rueda: un paso de hotbar cada tantos píxeles seguidos; tras una pausa el primer evento cuenta ya.
+export const WHEEL_STEP_PX = 50
+export const WHEEL_LINE_PX = 40
+export const WHEEL_GESTURE_GAP_MS = 150
 
 export const REACH = 3.5
 export const HIT_COOLDOWN = 0.4

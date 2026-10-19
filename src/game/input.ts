@@ -1,9 +1,38 @@
-import { MOUSE_SPIKE_LIMIT } from './constants'
+import { MOUSE_SPIKE_LIMIT, WHEEL_GESTURE_GAP_MS, WHEEL_LINE_PX, WHEEL_STEP_PX } from './constants'
 import type { PlayerInput } from './player'
 
 /** Códigos de pulsación única del clic izquierdo y derecho (no son e.code reales). */
 export const CLICK = 'Mouse0'
 export const RIGHT_CLICK = 'Mouse2'
+
+/**
+ * Convierte la rueda en pasos de -1, 0 o 1. Una muesca de ratón da 100 px (Chrome) o 3 líneas (Firefox)
+ * y un trackpad da muchos eventos pequeños; en macOS una muesca lenta da pocos píxeles, por eso el primer
+ * evento tras una pausa o un cambio de sentido cuenta sin acumular.
+ */
+export class WheelStepper {
+  private px = 0
+  private dir = 0
+  private last = -Infinity
+
+  /** `dy` en píxeles (positivo hacia abajo) y `time` en ms (e.timeStamp). */
+  push(dy: number, time: number): number {
+    if (dy === 0) return 0
+    const dir = Math.sign(dy)
+    const fresh = time - this.last > WHEEL_GESTURE_GAP_MS || dir !== this.dir
+    this.last = time
+    this.dir = dir
+    this.px = fresh ? 0 : this.px + Math.abs(dy)
+    if (!fresh && this.px < WHEEL_STEP_PX) return 0
+    this.px = 0
+    return dir
+  }
+
+  reset() {
+    this.px = this.dir = 0
+    this.last = -Infinity
+  }
+}
 
 interface InputCallbacks {
   onLockChange(locked: boolean): void
@@ -18,6 +47,8 @@ export class Input {
   private dx = 0
   private dy = 0
   private rawMouse = false
+  private wheel = 0
+  private stepper = new WheelStepper()
   attackHeld = false
   locked = false
 
@@ -59,6 +90,14 @@ export class Input {
       if (e.button === 0) this.attackHeld = false
     })
 
+    // Solo con el ratón capturado: en menús y pausa la rueda sigue desplazando la página.
+    document.addEventListener('wheel', (e) => {
+      if (!this.locked) return
+      const scale = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE_PX : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1
+      const step = this.stepper.push(e.deltaY * scale, e.timeStamp)
+      if (step) this.scroll(step)
+    })
+
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.element
       if (!this.locked) this.clear()
@@ -97,6 +136,18 @@ export class Input {
     if (this.callbacks.isPlaying()) this.presses.add(code)
   }
 
+  /** Registra pasos de rueda (positivo hacia abajo). Como el clic, fuera de partida no cuenta. */
+  scroll(steps: number) {
+    if (this.callbacks.isPlaying()) this.wheel += steps
+  }
+
+  /** Pasos de rueda acumulados desde la última llamada. */
+  takeWheel(): number {
+    const steps = this.wheel
+    this.wheel = 0
+    return steps
+  }
+
   /**
    * Teclas pulsadas (sin autorrepetición) desde la última llamada, por e.code.
    * Se llama una vez por paso fijo; el Set devuelto solo es válido hasta la siguiente llamada.
@@ -122,6 +173,8 @@ export class Input {
   clear() {
     this.keys.clear()
     this.presses.clear()
+    this.wheel = 0
+    this.stepper.reset()
     this.attackHeld = false
     this.dx = this.dy = 0
   }

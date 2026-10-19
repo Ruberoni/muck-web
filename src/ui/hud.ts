@@ -39,7 +39,7 @@ const CONTROLS = `
     <li><kbd>Shift</kbd> correr</li>
     <li><kbd>Clic</kbd> golpear (mantener para repetir)</li>
     <li><kbd>Clic derecho</kbd> o <kbd>F</kbd> comer bayas</li>
-    <li><kbd>1–9</kbd> elegir casilla</li>
+    <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
     <li><kbd>C</kbd> crafteo (con él abierto, 1–5 fabrica)</li>
     <li><kbd>Clic</kbd> con la fogata en la mano: colocarla</li>
     <li><kbd>Esc</kbd> pausa</li>
