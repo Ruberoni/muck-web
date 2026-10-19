@@ -1,8 +1,9 @@
 import { MOUSE_SPIKE_LIMIT } from './constants'
 import type { PlayerInput } from './player'
 
-/** Código de pulsación única del clic izquierdo (no es un e.code real). */
+/** Códigos de pulsación única del clic izquierdo y derecho (no son e.code reales). */
 export const CLICK = 'Mouse0'
+export const RIGHT_CLICK = 'Mouse2'
 
 interface InputCallbacks {
   onLockChange(locked: boolean): void
@@ -44,9 +45,15 @@ export class Input {
     })
     // El clic que inicia o reanuda llega con el juego aún en menú/pausa, así que no cuenta como golpe.
     document.addEventListener('mousedown', (e) => {
-      if (e.button !== 0 || !this.callbacks.isPlaying()) return
+      if (!this.callbacks.isPlaying()) return
+      if (e.button === 2) return this.press(RIGHT_CLICK)
+      if (e.button !== 0) return
       this.attackHeld = true
       this.press(CLICK)
+    })
+    // Con el ratón capturado el clic derecho es del juego, no del menú contextual.
+    document.addEventListener('contextmenu', (e) => {
+      if (this.locked) e.preventDefault()
     })
     document.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.attackHeld = false
