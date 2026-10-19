@@ -99,4 +99,16 @@ describe('Inventory', () => {
     inv.select(2)
     expect(inv.selectedItem).toBe(null)
   })
+
+  it('cycle mueve la selección y da la vuelta en los dos extremos', () => {
+    const inv = new Inventory()
+    inv.cycle(1)
+    expect(inv.selected).toBe(1)
+    inv.cycle(-2)
+    expect(inv.selected).toBe(SLOT_COUNT - 1)
+    inv.cycle(1)
+    expect(inv.selected).toBe(0)
+    inv.cycle(SLOT_COUNT * 2 + 3)
+    expect(inv.selected).toBe(3)
+  })
 })

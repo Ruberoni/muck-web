@@ -246,20 +246,24 @@ export class Game {
     this.render(this.state === 'playing' && !this.manualClock ? this.acc / STEP : 1, dt, time)
   }
 
-  /** C abre o cierra el crafteo; los números eligen casilla o, con el crafteo abierto, fabrican. */
-  private handlePresses(presses: ReadonlySet<string>) {
+  /**
+   * C abre o cierra el crafteo; los números eligen casilla o, con el crafteo abierto, fabrican.
+   * La rueda mueve la casilla elegida salvo con el crafteo abierto, donde se ignora.
+   */
+  private handlePresses(presses: ReadonlySet<string>, wheel: number) {
     if (presses.has('KeyC')) this.setCrafting(!this.craftingOpen)
     for (let i = 0; i < SLOT_COUNT; i++) {
       if (!presses.has(`Digit${i + 1}`)) continue
       if (this.craftingOpen) this.craft(i)
       else this.inventory.select(i)
     }
+    if (wheel && !this.craftingOpen) this.inventory.cycle(wheel)
   }
 
   private step() {
     const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
     const presses = this.input.takePresses()
-    this.handlePresses(presses)
+    this.handlePresses(presses, this.input.takeWheel())
     stepPlayer(this.player, input, this.env, STEP)
     this.clock.step(STEP)
     const damage = this.enemies.step(STEP, this.player.pos, this.clock.phase, this.clock.day)

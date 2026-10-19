@@ -35,6 +35,8 @@ export function installDebug(game: Game) {
     },
     /** Pulsación única de tecla (e.code), se consume en el siguiente paso. */
     press: (code: string) => game.input.press(code),
+    /** Pasos de rueda (positivo hacia abajo), se consumen en el siguiente paso. */
+    scroll: (steps: number) => game.input.scroll(steps),
     setVitals(vitals: { health?: number; hunger?: number }) {
       Object.assign(player, vitals)
     },

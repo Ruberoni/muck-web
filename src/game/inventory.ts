@@ -70,6 +70,11 @@ export class Inventory {
     this.emit()
   }
 
+  /** Mueve la selección `steps` casillas, dando la vuelta al pasar de un extremo. */
+  cycle(steps: number) {
+    this.select((((this.selected + steps) % SLOT_COUNT) + SLOT_COUNT) % SLOT_COUNT)
+  }
+
   /** Objeto de la casilla seleccionada; null si está vacía. */
   get selectedItem(): ItemId | null {
     return this.slots[this.selected]
