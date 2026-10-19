@@ -8,7 +8,7 @@ import { heightAt, ROCK_LEVEL, SAND_LEVEL, WORLD_SIZE } from './terrain'
 const TREE_COUNT = 180
 const ROCK_COUNT = 60
 const BUSH_COUNT = 45
-const MAX_SLOPE = 1.6
+export const MAX_SLOPE = 1.6
 
 const TRUNK_BOTTOM_RADIUS = 0.35
 const TRUNK_HEIGHT = 2.6
@@ -63,7 +63,7 @@ export interface PropData {
 }
 
 /** Diferencia de altura en un entorno de ±1 unidad: aproxima la pendiente. */
-const slopeAt = (x: number, z: number) =>
+export const slopeAt = (x: number, z: number) =>
   Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) + Math.abs(heightAt(x, z + 1) - heightAt(x, z - 1))
 
 function createInstanced(geometry: THREE.BufferGeometry, material: THREE.Material, count: number) {

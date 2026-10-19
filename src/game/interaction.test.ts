@@ -2,8 +2,9 @@ import * as THREE from 'three'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createProps, type PropData } from '../world/props'
 import { heightAt } from '../world/terrain'
-import { EYE_HEIGHT, PROP_DEFS, STEP } from './constants'
-import { aimPose, hitDamage, Interaction } from './interaction'
+import { SpatialGrid, type Collider } from './collision'
+import { EYE_HEIGHT, PLAYER_RADIUS, PROP_DEFS, REGROW_CLEARANCE, STEP } from './constants'
+import { aimPose, canRegrowAt, hitDamage, Interaction } from './interaction'
 import { Inventory, type ItemId } from './inventory'
 
 function setup() {
@@ -149,12 +150,38 @@ describe('bayas y reaparición', () => {
     expect(ctx.interaction.target).toBe(bush)
   })
 
-  it('árboles y rocas no vuelven a crecer solos', () => {
+  it('árboles y rocas también vuelven a crecer, cada uno a su tiempo', () => {
     const tree = ctx.world.props.find((p) => p.kind === 'tree')!
+    const rock = ctx.world.props.find((p) => p.kind === 'rock')!
     ctx.aimAt(tree)
     ctx.hold(1.2)
-    wait(PROP_DEFS.bush.regrow! * 2)
+    ctx.aimAt(rock)
+    ctx.hold(1.6)
     expect(tree.alive).toBe(false)
+    expect(rock.alive).toBe(false)
+    // Desde el último golpe de la roca: el árbol cayó 0,4 s antes.
+    wait(PROP_DEFS.tree.regrow! - 1)
+    expect(tree.alive).toBe(true)
+    expect(rock.alive).toBe(false)
+    wait(PROP_DEFS.rock.regrow! - PROP_DEFS.tree.regrow! + 1)
+    expect(rock.alive).toBe(true)
+    expect(rock.hp).toBe(rock.maxHp)
+    expect(isHidden(rock)).toBe(false)
+  })
+
+  it('mientras algo lo impide no reaparece, y lo hace en cuanto se libera', () => {
+    let blocked = true
+    const interaction = new Interaction(ctx.world, ctx.inventory, () => !blocked)
+    const tree = ctx.world.props.find((p) => p.kind === 'tree')!
+    tree.hp = 1
+    interaction.target = tree
+    interaction.step(STEP, true)
+    expect(tree.alive).toBe(false)
+    for (let i = 0; i < Math.round((PROP_DEFS.tree.regrow! + 30) / STEP); i++) interaction.step(STEP, false)
+    expect(tree.alive).toBe(false)
+    blocked = false
+    interaction.step(STEP, false)
+    expect(tree.alive).toBe(true)
   })
 
   it('reset restaura props destruidos y dañados y cancela las reapariciones', () => {
@@ -190,6 +217,29 @@ describe('bayas y reaparición', () => {
     // El temporizador antiguo habría vencido aquí; el nuevo aún no.
     wait(regrow / 2 + 1)
     expect(bush.alive).toBe(false)
+  })
+})
+
+describe('canRegrowAt', () => {
+  const world = createProps()
+  const tree = world.props.find((p) => p.kind === 'tree')!
+  const empty = new SpatialGrid<Collider>()
+
+  it('no reaparece encima del jugador ni pegado a él', () => {
+    expect(canRegrowAt(tree, { x: tree.x, z: tree.z }, empty)).toBe(false)
+    const touching = tree.radius + PLAYER_RADIUS + REGROW_CLEARANCE - 0.01
+    expect(canRegrowAt(tree, { x: tree.x + touching, z: tree.z }, empty)).toBe(false)
+    expect(canRegrowAt(tree, { x: tree.x + touching + 0.02, z: tree.z }, empty)).toBe(true)
+  })
+
+  it('no reaparece encima de un collider vivo, como una fogata', () => {
+    const far = { x: tree.x + 20, z: tree.z }
+    const blockers = new SpatialGrid<Collider>()
+    const fire = { x: tree.x + 0.5, z: tree.z, radius: 0.6, alive: true }
+    blockers.insert(fire)
+    expect(canRegrowAt(tree, far, blockers)).toBe(false)
+    fire.alive = false
+    expect(canRegrowAt(tree, far, blockers)).toBe(true)
   })
 })
 

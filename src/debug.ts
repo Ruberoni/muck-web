@@ -65,6 +65,7 @@ export function installDebug(game: Game) {
     select: (index: number) => game.inventory.select(index),
     craft: (index: number) => game.craft(index),
     setCrafting: (open: boolean) => game.setCrafting(open),
+    campfires: () => game.campfires.list.map(({ x, y, z }) => ({ x, y, z })),
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: () => game.interaction.target?.id ?? null,
     heightAt,

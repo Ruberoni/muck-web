@@ -5,12 +5,13 @@ export interface Recipe {
   cost: { item: ItemId; amount: number }[]
 }
 
-// El orden es el de las teclas 1–4 con el menú de crafteo abierto.
+// El orden es el de las teclas 1–5 con el menú de crafteo abierto.
 export const RECIPES: Recipe[] = [
   { result: 'wood_axe', cost: [{ item: 'wood', amount: 5 }] },
   { result: 'wood_pickaxe', cost: [{ item: 'wood', amount: 5 }] },
   { result: 'stone_axe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }] },
   { result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }] },
+  { result: 'campfire', cost: [{ item: 'wood', amount: 6 }, { item: 'stone', amount: 3 }] },
 ]
 
 export function canCraft(inventory: Inventory, recipe: Recipe): boolean {

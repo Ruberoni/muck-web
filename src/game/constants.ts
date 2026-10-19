@@ -55,10 +55,13 @@ export interface PropDef {
 }
 
 export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
-  tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood', amount: 4 } },
-  rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone', amount: 3 } },
+  tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood', amount: 4 }, regrow: 240 },
+  rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone', amount: 3 }, regrow: 300 },
   bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: 1, drop: { item: 'berry', amount: 3 }, regrow: 90 },
 }
+
+// Margen extra entre el jugador y un prop que vuelve a crecer: no reaparece pegado a él.
+export const REGROW_CLEARANCE = 0.5
 
 export const BASE_DAMAGE = 1
 
@@ -75,3 +78,11 @@ export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   stone_pickaxe: { kind: 'rock', multiplier: 4 },
 }
 
+
+export const CAMPFIRE_RADIUS = 0.6
+// Distancia por delante del jugador a la que se coloca la fogata.
+export const CAMPFIRE_PLACE_DISTANCE = 2.2
+// Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.
+export const CAMPFIRE_LIGHTS = 4
+export const CAMPFIRE_LIGHT_INTENSITY = 30
+export const CAMPFIRE_LIGHT_DISTANCE = 22

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { PropData, World } from '../world/props'
-import { BASE_DAMAGE, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from './constants'
+import type { Collider, SpatialGrid } from './collision'
+import { BASE_DAMAGE, HIT_COOLDOWN, PLAYER_RADIUS, PROP_DEFS, REACH, REGROW_CLEARANCE, TOOL_DEFS, WOBBLE_DURATION } from './constants'
 import type { Inventory, ItemId } from './inventory'
 
 const SCREEN_CENTER = new THREE.Vector2(0, 0)
@@ -19,9 +20,11 @@ export class Interaction {
   private scratch = new THREE.Matrix4()
   private hits: THREE.Intersection[] = []
 
+  /** `canRegrow` decide si un prop ya puede reaparecer; si no, se vuelve a probar en cada paso. */
   constructor(
     private world: World,
     private inventory: Inventory,
+    private canRegrow: (prop: PropData) => boolean = () => true,
   ) {
     this.meshes = Object.values(world.meshes)
     this.raycaster.far = REACH
@@ -47,7 +50,8 @@ export class Interaction {
   step(dt: number, attackHeld: boolean) {
     for (const [prop, left] of this.regrowing) {
       if (left - dt > 1e-9) this.regrowing.set(prop, left - dt)
-      else this.respawn(prop)
+      else if (this.canRegrow(prop)) this.respawn(prop)
+      else this.regrowing.set(prop, 0)
     }
     this.cooldown = Math.max(0, this.cooldown - dt)
     if (!attackHeld || this.cooldown > 1e-9 || !this.target) return
@@ -112,6 +116,15 @@ export class Interaction {
       else this.wobbles.set(prop, t)
     }
   }
+}
+
+/** Un prop no reaparece encima del jugador (con margen) ni de otro collider vivo, como una fogata. */
+export function canRegrowAt(prop: PropData, player: { x: number; z: number }, blockers: SpatialGrid<Collider>): boolean {
+  if (Math.hypot(player.x - prop.x, player.z - prop.z) < prop.radius + PLAYER_RADIUS + REGROW_CLEARANCE) return false
+  for (const c of blockers.query(prop.x, prop.z, prop.radius + blockers.maxRadius)) {
+    if (c.alive && Math.hypot(c.x - prop.x, c.z - prop.z) < c.radius + prop.radius) return false
+  }
+  return true
 }
 
 /** Daño de un golpe con el objeto en la mano (null = mano vacía). */
