@@ -51,6 +51,23 @@ describe('recolección', () => {
     expect(ctx.inventory.count('wood')).toBe(4)
   })
 
+  it('step devuelve cada golpe y marca el que lo destruye', () => {
+    const tree = firstOf('tree')
+    ctx.aimAt(tree)
+    const hits: { kind: string; destroyed: boolean }[] = []
+    for (let i = 0; i < Math.round(1.2 / STEP); i++) {
+      ctx.interaction.updateTarget(ctx.camera)
+      const hit = ctx.interaction.step(STEP, true)
+      if (hit) hits.push({ kind: hit.target.kind, destroyed: hit.destroyed })
+    }
+    expect(hits).toEqual([
+      { kind: 'tree', destroyed: false },
+      { kind: 'tree', destroyed: false },
+      { kind: 'tree', destroyed: true },
+    ])
+    expect(ctx.interaction.step(STEP, true)).toBeNull()
+  })
+
   it('una roca necesita 4 golpes y da piedra', () => {
     const rock = firstOf('rock')
     ctx.aimAt(rock)

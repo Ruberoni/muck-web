@@ -54,6 +54,12 @@ El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya dev
 
 Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera y 2 con uno de piedra; cada golpe los hace retroceder. Al morir sueltan carne cruda, y al amanecer los que quedan desaparecen.
 
+## Sonido y ajustes
+
+Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
+
+En el menú y en la pausa hay deslizadores para la sensibilidad del ratón, el campo de visión y el volumen. Se guardan en `localStorage` y se aplican al momento.
+
 ## Mundo
 
 El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/world/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, un tercero, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.

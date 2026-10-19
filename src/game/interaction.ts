@@ -58,33 +58,40 @@ export class Interaction {
     }
   }
 
-  /** Paso fijo: mientras se mantiene el ataque, golpea cada vez que termina el cooldown. */
-  step(dt: number, attackHeld: boolean) {
+  /**
+   * Paso fijo: mientras se mantiene el ataque, golpea cada vez que termina el cooldown.
+   * Devuelve el golpe de este paso, si lo hubo (`destroyed`: lo rompió o lo mató).
+   */
+  step(dt: number, attackHeld: boolean): { target: Target; destroyed: boolean } | null {
     for (const [prop, left] of this.regrowing) {
       if (left - dt > 1e-9) this.regrowing.set(prop, left - dt)
       else if (this.canRegrow(prop)) this.respawn(prop)
       else this.regrowing.set(prop, 0)
     }
     this.cooldown = Math.max(0, this.cooldown - dt)
-    if (!attackHeld || this.cooldown > 1e-9 || !this.target) return
-    this.hit(this.target)
+    const target = this.target
+    if (!attackHeld || this.cooldown > 1e-9 || !target) return null
     this.cooldown = HIT_COOLDOWN
+    return { target, destroyed: this.hit(target) }
   }
 
-  private hit(target: Target) {
+  /** Devuelve si el golpe lo destruye. */
+  private hit(target: Target): boolean {
     if (target.kind === 'enemy') return this.hitEnemy(target)
     const prop = target
     prop.hp = Math.max(0, prop.hp - hitDamage(this.inventory.selectedItem, prop.kind))
     if (prop.hp <= 0) this.destroy(prop)
     else this.wobbles.set(prop, 0)
+    return !prop.alive
   }
 
-  private hitEnemy(enemy: EnemyData) {
+  private hitEnemy(enemy: EnemyData): boolean {
     // El raycast salió de la cámara: el retroceso es en sentido contrario al jugador.
     const from = this.raycaster.ray.origin
-    if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from)) return
+    if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from)) return false
     if (this.target === enemy) this.target = null
     this.inventory.add(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount)
+    return true
   }
 
   private destroy(prop: PropData) {
