@@ -6,6 +6,7 @@ import { islandMeshes } from './world/props'
 import { heightAt, WATER_LEVEL } from './world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './game/constants'
 import { ENEMY_AIM_HEIGHT } from './game/enemies'
+import { campfireSpot } from './game/campfire'
 
 /** Helpers de depuración y pruebas, solo en desarrollo. */
 export function installDebug(game: Game) {
@@ -72,6 +73,8 @@ export function installDebug(game: Game) {
     craft: (index: number) => game.craft(index),
     setCrafting: (open: boolean) => game.setCrafting(open),
     campfires: () => game.campfires.list.map(({ x, y, z }) => ({ x, y, z })),
+    /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo. */
+    placeCampfire: (x: number, z: number, yaw = 0) => game.campfires.place(campfireSpot({ x, z }, yaw, [world.grid, game.campfires.grid])),
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: targetPropId,
     enemies: () =>
