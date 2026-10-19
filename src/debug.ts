@@ -1,11 +1,13 @@
 import { aimPose } from './game/interaction'
 import type { Game } from './game/Game'
+import type { ItemId } from './game/inventory'
 import type { PlayerInput } from './game/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './world/props'
 import { heightAt, WATER_LEVEL } from './world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './game/constants'
 import { ENEMY_AIM_HEIGHT } from './game/enemies'
+import { campfireSpot } from './game/campfire'
 
 /** Helpers de depuración y pruebas, solo en desarrollo. */
 export function installDebug(game: Game) {
@@ -68,10 +70,13 @@ export function installDebug(game: Game) {
     },
     inventory: () => game.inventory.toJSON(),
     hotbar: () => ({ slots: [...game.inventory.slots], selected: game.inventory.selected }),
+    give: (item: ItemId, amount = 1) => game.inventory.add(item, amount),
     select: (index: number) => game.inventory.select(index),
     craft: (index: number) => game.craft(index),
     setCrafting: (open: boolean) => game.setCrafting(open),
     campfires: () => game.campfires.list.map(({ x, y, z }) => ({ x, y, z })),
+    /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo. */
+    placeCampfire: (x: number, z: number, yaw = 0) => game.campfires.place(campfireSpot({ x, z }, yaw, [world.grid, game.campfires.grid])),
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: targetPropId,
     enemies: () =>
@@ -90,6 +95,7 @@ export function installDebug(game: Game) {
       game.interaction.updateTarget(game.camera)
       return game.interaction.target === e
     },
+    hand: () => ({ item: game.handheld.item, action: game.handheld.action }),
     heightAt,
     clock: () => ({ day: game.clock.day, phase: game.clock.phase }),
     /** Salta a una hora del día actual (0 = amanecer) y renderiza. */

@@ -8,6 +8,8 @@
   user-select: none;
   /* Las 9 casillas caben siempre en pantalla: encogen en ventanas muy estrechas. */
   --slot: clamp(36px, calc((100vw - 120px) / 9), 52px);
+  /* El minimapa también encoge en ventanas pequeñas, de ancho o de alto. */
+  --minimap: clamp(96px, min(20vw, 24vh), 160px);
 }
 
 .crosshair {
@@ -142,11 +144,25 @@
   font-weight: 600;
 }
 
+.minimap {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  /* Más específico que la regla global de canvas (100% × 100%). */
+  width: var(--minimap);
+  height: var(--minimap);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.6), 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+/* Centrado en el hueco entre el minimapa y la hotbar, para no taparlos en ventanas bajas. */
 .crafting {
   position: absolute;
   right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: calc(16px + var(--minimap) + 12px);
+  bottom: calc(16px + var(--slot) + 36px);
+  height: fit-content;
+  margin: auto 0;
   display: grid;
   gap: 6px;
   padding: 12px 14px;

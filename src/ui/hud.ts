@@ -2,6 +2,7 @@ import { ENEMY_DEF, PROP_DEFS } from '../game/constants'
 import { canCraft, RECIPES } from '../game/crafting'
 import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../game/inventory'
 import type { Target } from '../game/interaction'
+import { Minimap } from './minimap'
 
 const HANDLE = `<polygon points="7,28 10,29.5 22,8 19,6.5" fill="#8a5a32"/>`
 const axe = (head: string, edge: string) =>
@@ -53,6 +54,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, pa
 
 /** HUD en DOM. Solo toca el DOM cuando cambia un valor visible. */
 export class Hud {
+  readonly minimap: Minimap
   private healthFill: HTMLElement
   private hungerBar: HTMLElement
   private hungerFill: HTMLElement
@@ -77,6 +79,7 @@ export class Hud {
     el('div', 'crosshair', root)
     this.prompt = el('div', 'prompt', root)
     this.day = el('div', 'day', root)
+    this.minimap = new Minimap(root)
 
     const bars = el('div', 'bars', root)
     this.healthFill = el('div', 'fill', el('div', 'bar health', bars))

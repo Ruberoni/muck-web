@@ -23,6 +23,7 @@ import {
 } from './constants'
 import { craft, RECIPES } from './crafting'
 import { Enemies } from './enemies'
+import { Handheld } from './handheld'
 import { CLICK, Input, RIGHT_CLICK } from './input'
 import { Interaction } from './interaction'
 import { Inventory, SLOT_COUNT } from './inventory'
@@ -65,6 +66,7 @@ export class Game {
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
+  readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
   craftingOpen = false
@@ -89,6 +91,8 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight)
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFShadowMap
+    // Se borra a mano en render(): la mano se dibuja encima del mundo sin borrar el color.
+    this.renderer.autoClear = false
     container.appendChild(this.renderer.domElement)
 
     this.camera = new THREE.PerspectiveCamera(this.settings.fov, window.innerWidth / window.innerHeight, 0.1, 600)
@@ -139,6 +143,7 @@ export class Game {
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight
       this.camera.updateProjectionMatrix()
+      this.handheld.setAspect(this.camera.aspect)
       this.renderer.setSize(window.innerWidth, window.innerHeight)
     })
 
@@ -271,7 +276,10 @@ export class Game {
     // Con la fogata en la mano el clic la coloca en vez de golpear.
     const placing = this.holdingCampfire
     const hit = this.interaction.step(STEP, !placing && (this.attackOverride ?? this.input.attackHeld))
-    if (hit) this.audio.hit(hit.target, hit.dropped)
+    if (hit) {
+      this.handheld.play('swing')
+      this.audio.hit(hit.target, hit.dropped)
+    }
     if (placing && presses.has(CLICK)) this.placeCampfire()
 
     if (presses.has(EAT_KEY) || presses.has(RIGHT_CLICK)) this.eatBerry()
@@ -286,15 +294,17 @@ export class Game {
   private placeCampfire() {
     const spot = campfireSpot(this.player.pos, this.player.yaw, [this.world.grid, this.campfires.grid], this.spot)
     if (!this.campfires.place(spot)) return
+    this.handheld.play('place', 'campfire')
     this.inventory.remove('campfire', 1)
     this.sound.play('place')
   }
 
   private eatBerry() {
-    if (this.inventory.count('berry') > 0 && eat(this.player, BERRY_FOOD)) {
-      this.inventory.remove('berry', 1)
-      this.sound.play('eat')
-    }
+    if (this.inventory.count('berry') === 0 || !eat(this.player, BERRY_FOOD)) return
+    this.inventory.remove('berry', 1)
+    // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
+    this.handheld.play('eat', 'berry')
+    this.sound.play('eat')
   }
 
   private die() {
@@ -335,9 +345,14 @@ export class Game {
     if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
     else this.hud.setTarget(this.interaction.target)
     this.hud.setDay(this.clock.day)
+    this.hud.minimap.draw({ x: this.renderPos.x, z: this.renderPos.z, yaw: p.yaw, campfires: this.campfires.list, enemies: this.enemies.list })
     this.updateAmbient(dt)
 
+    this.handheld.setItem(this.inventory.selectedItem)
+    this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
+    this.renderer.clear()
     this.renderer.render(this.scene, this.camera)
+    if (this.state !== 'dead') this.handheld.render(this.renderer)
   }
 
   private updateAmbient(dt: number) {

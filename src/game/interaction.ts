@@ -56,19 +56,20 @@ export class Interaction {
   }
 
   /**
-   * Paso fijo: mientras se mantiene el ataque, golpea cada vez que termina el cooldown.
-   * Devuelve el golpe de este paso, si lo hubo (`dropped`: soltó algo al inventario: lo rompió, lo mató o cogió una baya).
+   * Paso fijo: mientras se mantiene el ataque, da un golpe cada vez que termina el cooldown,
+   * también al aire (como la animación). Devuelve el golpe que empieza en este paso, si lo hay:
+   * `target` es null al aire y `dropped` dice si soltó algo al inventario (lo rompió, lo mató o cogió una baya).
    */
-  step(dt: number, attackHeld: boolean): { target: Target; dropped: boolean } | null {
+  step(dt: number, attackHeld: boolean): { target: Target | null; dropped: boolean } | null {
     for (const [bush, left] of this.regrowing) {
       if (left - dt > 1e-9) this.regrowing.set(bush, left - dt)
       else this.growBerry(bush)
     }
     this.cooldown = Math.max(0, this.cooldown - dt)
+    if (!attackHeld || this.cooldown > 1e-9) return null
     const target = this.target
-    if (!attackHeld || this.cooldown > 1e-9 || !target) return null
     this.cooldown = HIT_COOLDOWN
-    return { target, dropped: this.hit(target) }
+    return { target, dropped: target ? this.hit(target) : false }
   }
 
   /** Devuelve si el golpe suelta algo al inventario. */

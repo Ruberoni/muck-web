@@ -67,10 +67,16 @@ export class GameAudio {
     }
   }
 
-  /** Un golpe con la herramienta (o la mano) sobre `target`; `dropped` si soltó algo (lo rompió, lo mató o cogió una baya). */
-  hit(target: Target, dropped: boolean) {
+  /**
+   * Un golpe con la herramienta (o la mano) sobre `target`, o al aire si es null;
+   * `dropped` si soltó algo (lo rompió, lo mató o cogió una baya).
+   */
+  hit(target: Target | null, dropped: boolean) {
     const s = this.sound
-    switch (target.kind) {
+    switch (target?.kind) {
+      case undefined:
+        s.play('swing')
+        break
       case 'tree':
         s.play(dropped ? 'breakWood' : 'hitWood')
         break

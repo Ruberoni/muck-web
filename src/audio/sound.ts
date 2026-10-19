@@ -1,5 +1,6 @@
 /** Efectos que suenan una vez. Todos se generan con Web Audio: no hay archivos de audio. */
 export type SoundName =
+  | 'swing'
   | 'hitWood'
   | 'hitStone'
   | 'hitBush'
@@ -314,6 +315,7 @@ export class Sound implements SoundOut {
 
 // Cada efecto suena por el bus del momento y devuelve su duración en segundos.
 const EFFECTS: Record<SoundName, (s: Sound) => number> = {
+  swing: (s) => s.noise(0.14, { filter: 'bandpass', freq: 700 + s.random() * 300, q: 0.7, gain: 0.25, attack: 0.05 }),
   hitWood: (s) =>
     Math.max(
       s.tone(170 + s.random() * 30, 0.13, { type: 'triangle', to: 95, gain: 0.55 }),
