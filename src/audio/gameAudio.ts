@@ -90,7 +90,13 @@ export class GameAudio {
         s.play(dropped ? 'enemyDeath' : 'enemyHit')
         break
     }
-    if (dropped) s.play('pickup', { gain: 0.8 })
+    // Las bayas van directas al inventario; lo demás suena al recogerlo del suelo (pickup()).
+    if (dropped && target?.kind === 'bush') this.pickup()
+  }
+
+  /** Se mete algo en el inventario al recogerlo. */
+  pickup() {
+    this.sound.play('pickup', { gain: 0.8 })
   }
 
   /** Partida nueva o teletransporte: no se cuenta como un paso ni como aterrizaje. */
