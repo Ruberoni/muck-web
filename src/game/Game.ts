@@ -300,6 +300,7 @@ export class Game {
     if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
     else this.hud.setTarget(this.interaction.target)
     this.hud.setDay(this.clock.day)
+    this.hud.minimap.draw({ x: this.renderPos.x, z: this.renderPos.z, yaw: p.yaw, campfires: this.campfires.list, enemies: this.enemies.list })
 
     this.handheld.setItem(this.inventory.selectedItem)
     this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
