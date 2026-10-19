@@ -38,7 +38,7 @@ const CONTROLS = `
     <li><kbd>Espacio</kbd> saltar</li>
     <li><kbd>Shift</kbd> correr</li>
     <li><kbd>Clic</kbd> golpear (mantener para repetir)</li>
-    <li><kbd>F</kbd> comer bayas</li>
+    <li><kbd>Clic derecho</kbd> o <kbd>F</kbd> comer bayas</li>
     <li><kbd>1–9</kbd> elegir casilla</li>
     <li><kbd>C</kbd> crafteo (con él abierto, 1–5 fabrica)</li>
     <li><kbd>Clic</kbd> con la fogata en la mano: colocarla</li>
@@ -156,7 +156,10 @@ export class Hud {
 
   setTarget(target: Target | null) {
     let text = ''
-    if (target) {
+    if (target?.kind === 'bush') {
+      const { name, verb } = PROP_DEFS.bush
+      text = target.hp > 0 ? `${name} (${target.hp}) — clic para ${verb}` : `${name} — sin bayas`
+    } else if (target) {
       const def = target.kind === 'enemy' ? ENEMY_DEF : PROP_DEFS[target.kind]
       const hp = target.maxHp > 1 ? ` ${'▮'.repeat(target.hp)}${'▯'.repeat(target.maxHp - target.hp)}` : ''
       text = `${def.name}${hp} — clic para ${def.verb}`

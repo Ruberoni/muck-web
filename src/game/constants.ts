@@ -50,18 +50,19 @@ export interface PropDef {
   verb: string
   hp: number
   drop: { item: ItemId; amount: number }
-  /** Segundos hasta que vuelve a aparecer tras destruirlo; sin valor, no vuelve. */
-  regrow?: number
+  /** Se recoge poco a poco: cada golpe quita 1 de vida y da el drop; a 0 no se destruye y se rellena solo. */
+  harvest?: boolean
 }
+
+// Cada baya es un punto de vida del arbusto. Las que faltan vuelven de una en una: vacío se llena en 90 s.
+export const BERRIES_PER_BUSH = 6
+export const BERRY_REGROW = 15
 
 export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
   tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood', amount: 4 } },
   rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone', amount: 3 } },
-  bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: 1, drop: { item: 'berry', amount: 3 }, regrow: 90 },
+  bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: BERRIES_PER_BUSH, drop: { item: 'berry', amount: 1 }, harvest: true },
 }
-
-// Margen extra entre el jugador y un prop que vuelve a crecer: no reaparece pegado a él.
-export const REGROW_CLEARANCE = 0.5
 
 export const BASE_DAMAGE = 1
 
