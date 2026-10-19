@@ -6,6 +6,8 @@
   color: #fff;
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
   user-select: none;
+  /* Las 9 casillas caben siempre en pantalla: encogen en ventanas muy estrechas. */
+  --slot: clamp(36px, calc((100vw - 120px) / 9), 52px);
 }
 
 .crosshair {
@@ -65,6 +67,16 @@
 .bar.stamina .fill { background: #f2c94c; }
 .bar.stamina.exhausted .fill { background: #9b8b5a; }
 
+/* La hotbar centrada mide 9 casillas de 56 (52 + borde) y 8 huecos de 6,
+   unos 552 px; con las barras (16 + 220 + margen) a cada lado hacen falta
+   unos 1050 px. Por debajo, las barras suben por encima de las casillas. */
+@media (max-width: 1060px) {
+  .bars {
+    bottom: calc(16px + var(--slot) + 12px);
+    width: min(220px, calc(50vw - 76px));
+  }
+}
+
 .dock {
   position: absolute;
   left: 50%;
@@ -88,8 +100,8 @@
 
 .slot {
   position: relative;
-  width: 52px;
-  height: 52px;
+  width: var(--slot);
+  height: var(--slot);
   border-radius: 8px;
   background: rgb(0 0 0 / 0.3);
   border: 2px solid rgb(255 255 255 / 0.25);
