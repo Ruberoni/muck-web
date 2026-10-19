@@ -50,6 +50,18 @@ describe('recolección', () => {
     expect(ctx.inventory.count('wood')).toBe(4)
   })
 
+  it('sin objetivo también golpea al aire y espera el cooldown', () => {
+    ctx.interaction.target = null
+    expect(ctx.interaction.step(STEP, true)).toBe(true)
+    expect(ctx.interaction.step(STEP, true)).toBe(false)
+    const tree = firstOf('tree')
+    ctx.aimAt(tree)
+    ctx.interaction.step(STEP, true)
+    expect(tree.hp).toBe(tree.maxHp)
+    ctx.hold(HIT_COOLDOWN)
+    expect(tree.hp).toBe(tree.maxHp - 1)
+  })
+
   it('una roca necesita 4 golpes y da piedra', () => {
     const rock = firstOf('rock')
     ctx.aimAt(rock)
