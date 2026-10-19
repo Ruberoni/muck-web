@@ -60,3 +60,18 @@ export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
   bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: 1, drop: { item: 'berry', amount: 3 }, regrow: 90 },
 }
 
+export const BASE_DAMAGE = 1
+
+export interface ToolDef {
+  kind: keyof typeof PROP_DEFS
+  multiplier: number
+}
+
+// Una herramienta solo multiplica el daño contra su tipo de prop; contra el resto se golpea como a mano.
+export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
+  wood_axe: { kind: 'tree', multiplier: 2 },
+  stone_axe: { kind: 'tree', multiplier: 4 },
+  wood_pickaxe: { kind: 'rock', multiplier: 2 },
+  stone_pickaxe: { kind: 'rock', multiplier: 4 },
+}
+

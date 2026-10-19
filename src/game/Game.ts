@@ -16,9 +16,10 @@ import {
   STAMINA_MAX,
   STEP,
 } from './constants'
+import { craft, RECIPES } from './crafting'
 import { Input } from './input'
 import { Interaction } from './interaction'
-import { Inventory } from './inventory'
+import { Inventory, SLOT_COUNT } from './inventory'
 import {
   createPlayer,
   interpolate,
@@ -51,6 +52,7 @@ export class Game {
   readonly input: Input
 
   state: GameState = 'menu'
+  craftingOpen = false
   /** Con reloj manual, la simulación solo avanza con advance() (debug y pruebas). */
   manualClock = false
   inputOverride: Partial<PlayerInput> | null = null
@@ -124,11 +126,23 @@ export class Game {
   /** Partida nueva: inventario vacío, isla restaurada y jugador en el punto de aparición. */
   restart() {
     this.inventory.clear()
+    this.setCrafting(false)
     this.interaction.reset()
     Object.assign(this.player, createPlayer(this.env, this.spawn.x, this.spawn.z))
     this.acc = 0
     this.placeCamera(this.player.pos)
     if (this.state === 'dead') this.setState('menu')
+  }
+
+  setCrafting(open: boolean) {
+    this.craftingOpen = open
+    this.hud.setCrafting(open)
+  }
+
+  /** Fabrica la receta por índice (el de su tecla menos 1). */
+  craft(index: number): boolean {
+    const recipe = RECIPES[index]
+    return recipe ? craft(this.inventory, recipe) : false
   }
 
   teleport(x: number, z: number, yaw = this.player.yaw, pitch = this.player.pitch) {
@@ -175,8 +189,20 @@ export class Game {
     this.render(this.state === 'playing' && !this.manualClock ? this.acc / STEP : 1, dt, time)
   }
 
+  /** C abre o cierra el crafteo; los números eligen casilla o, con el crafteo abierto, fabrican. */
+  private handlePresses(presses: ReadonlySet<string>) {
+    if (presses.has('KeyC')) this.setCrafting(!this.craftingOpen)
+    for (let i = 0; i < SLOT_COUNT; i++) {
+      if (!presses.has(`Digit${i + 1}`)) continue
+      if (this.craftingOpen) this.craft(i)
+      else this.inventory.select(i)
+    }
+  }
+
   private step() {
     const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
+    const presses = this.input.takePresses()
+    this.handlePresses(presses)
     stepPlayer(this.player, input, this.env, STEP)
     // Raycast desde la posición simulada (no interpolada): golpear no depende del framerate.
     this.placeCamera(this.player.pos)
@@ -184,7 +210,6 @@ export class Game {
     this.interaction.updateTarget(this.camera)
     this.interaction.step(STEP, this.attackOverride ?? this.input.attackHeld)
 
-    const presses = this.input.takePresses()
     if (presses.has(EAT_KEY)) this.eatBerry()
     stepSurvival(this.player, STEP)
     if (isDead(this.player)) this.die()
