@@ -1,7 +1,7 @@
-import { PROP_DEFS } from '../game/constants'
+import { ENEMY_DEF, PROP_DEFS } from '../game/constants'
 import { canCraft, RECIPES } from '../game/crafting'
 import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../game/inventory'
-import type { PropData } from '../world/props'
+import type { Target } from '../game/interaction'
 
 const HANDLE = `<polygon points="7,28 10,29.5 22,8 19,6.5" fill="#8a5a32"/>`
 const axe = (head: string, edge: string) =>
@@ -17,6 +17,7 @@ const ICONS: Record<ItemId, string> = {
   wood_pickaxe: pickaxe('#d9a86a', '#b07b45'),
   stone_axe: axe('#b8b5a8', '#7c796e'),
   stone_pickaxe: pickaxe('#b8b5a8', '#7c796e'),
+  raw_meat: `<svg viewBox="0 0 32 32"><rect x="20" y="17" width="9" height="4" rx="2" transform="rotate(35 24 19)" fill="#efe6d2"/><path d="M5 15 Q6 6 15 6 Q24 7 23 15 Q22 24 13 25 Q4 24 5 15" fill="#d9566a"/><path d="M9 14 Q11 9 16 10" stroke="#f2a0ad" stroke-width="2" fill="none"/><circle cx="14" cy="17" r="2.5" fill="#f4e2c8"/></svg>`,
   campfire: `<svg viewBox="0 0 32 32"><path d="M16 4 Q23 12 21 19 Q19 23 16 23 Q13 23 11 19 Q9 12 16 4" fill="#ff7a1f"/><path d="M16 11 Q20 16 18.5 20 Q17.5 22 16 22 Q14.5 22 13.5 20 Q12 16 16 11" fill="#ffd23f"/><polygon points="4,25 6,22 26,26 25,29" fill="#6b4426"/><polygon points="28,25 26,22 6,26 7,29" fill="#8a5a32"/></svg>`,
 }
 
@@ -63,12 +64,14 @@ export class Hud {
   private held: HTMLElement
   private crafting: HTMLElement
   private recipes: HTMLElement[] = []
+  private hurt: HTMLElement
   private overlay: HTMLElement
   private overlayTitle: HTMLElement
   private last = { health: -1, hunger: -1, stamina: -1, exhausted: false, prompt: '', day: 0 }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
+    this.hurt = el('div', 'hurt', root)
     el('div', 'crosshair', root)
     this.prompt = el('div', 'prompt', root)
     this.day = el('div', 'day', root)
@@ -148,11 +151,11 @@ export class Hud {
     }
   }
 
-  setTarget(prop: PropData | null) {
+  setTarget(target: Target | null) {
     let text = ''
-    if (prop) {
-      const def = PROP_DEFS[prop.kind]
-      const hp = prop.maxHp > 1 ? ` ${'▮'.repeat(prop.hp)}${'▯'.repeat(prop.maxHp - prop.hp)}` : ''
+    if (target) {
+      const def = target.kind === 'enemy' ? ENEMY_DEF : PROP_DEFS[target.kind]
+      const hp = target.maxHp > 1 ? ` ${'▮'.repeat(target.hp)}${'▯'.repeat(target.maxHp - target.hp)}` : ''
       text = `${def.name}${hp} — clic para ${def.verb}`
     }
     this.setPrompt(text)
@@ -164,6 +167,14 @@ export class Hud {
     this.last.prompt = text
     this.prompt.textContent = text
     this.prompt.hidden = !text
+  }
+
+  /** Destello rojo en los bordes al recibir daño. */
+  flashHurt() {
+    this.hurt.classList.remove('active')
+    // Forzar reflow para que la animación vuelva a empezar aunque siga activa.
+    void this.hurt.offsetWidth
+    this.hurt.classList.add('active')
   }
 
   setCrafting(open: boolean) {

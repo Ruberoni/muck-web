@@ -1,19 +1,23 @@
 import * as THREE from 'three'
 import type { PropData, World } from '../world/props'
 import type { Collider, SpatialGrid } from './collision'
-import { BASE_DAMAGE, HIT_COOLDOWN, PLAYER_RADIUS, PROP_DEFS, REACH, REGROW_CLEARANCE, TOOL_DEFS, WOBBLE_DURATION } from './constants'
+import { BASE_DAMAGE, ENEMY_DEF, HIT_COOLDOWN, PLAYER_RADIUS, PROP_DEFS, REACH, REGROW_CLEARANCE, TOOL_DEFS, WOBBLE_DURATION } from './constants'
+import type { Enemies, EnemyData } from './enemies'
 import type { Inventory, ItemId } from './inventory'
+
+/** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
+export type Target = PropData | EnemyData
 
 const SCREEN_CENTER = new THREE.Vector2(0, 0)
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
 const WOBBLE_AMOUNT = 0.12
 
-/** Objetivo, golpes, animación de golpe, destrucción y reaparición de props. */
+/** Objetivo, golpes, animación de golpe, destrucción y reaparición de props; golpes a enemigos. */
 export class Interaction {
-  target: PropData | null = null
+  target: Target | null = null
   private cooldown = 0
   private raycaster = new THREE.Raycaster()
-  private meshes: THREE.InstancedMesh[]
+  private objects: THREE.Object3D[]
   private wobbles = new Map<PropData, number>()
   /** Segundos que faltan para que reaparezca cada prop destruido que vuelve a crecer. */
   private regrowing = new Map<PropData, number>()
@@ -25,8 +29,9 @@ export class Interaction {
     private world: World,
     private inventory: Inventory,
     private canRegrow: (prop: PropData) => boolean = () => true,
+    private enemies?: Enemies,
   ) {
-    this.meshes = Object.values(world.meshes)
+    this.objects = [...Object.values(world.meshes), ...(enemies ? [enemies.group] : [])]
     this.raycaster.far = REACH
   }
 
@@ -34,9 +39,16 @@ export class Interaction {
   updateTarget(camera: THREE.Camera) {
     this.raycaster.setFromCamera(SCREEN_CENTER, camera)
     this.hits.length = 0
-    this.raycaster.intersectObjects(this.meshes, false, this.hits)
+    // Recursivo por el grupo de enemigos; los props no tienen hijos. Los impactos vienen ordenados por distancia.
+    this.raycaster.intersectObjects(this.objects, true, this.hits)
     this.target = null
     for (const hit of this.hits) {
+      const enemy = hit.object.userData.enemy as EnemyData | undefined
+      if (enemy) {
+        if (!enemy.alive) continue
+        this.target = enemy
+        break
+      }
       const id = hit.instanceId === undefined ? -1 : (this.world.instanceToProp.get(hit.object as THREE.InstancedMesh)?.[hit.instanceId] ?? -1)
       const prop = this.world.props[id]
       if (prop?.alive) {
@@ -59,10 +71,20 @@ export class Interaction {
     this.cooldown = HIT_COOLDOWN
   }
 
-  private hit(prop: PropData) {
+  private hit(target: Target) {
+    if (target.kind === 'enemy') return this.hitEnemy(target)
+    const prop = target
     prop.hp = Math.max(0, prop.hp - hitDamage(this.inventory.selectedItem, prop.kind))
     if (prop.hp <= 0) this.destroy(prop)
     else this.wobbles.set(prop, 0)
+  }
+
+  private hitEnemy(enemy: EnemyData) {
+    // El raycast salió de la cámara: el retroceso es en sentido contrario al jugador.
+    const from = this.raycaster.ray.origin
+    if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from)) return
+    if (this.target === enemy) this.target = null
+    this.inventory.add(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount)
   }
 
   private destroy(prop: PropData) {
@@ -128,8 +150,9 @@ export function canRegrowAt(prop: PropData, player: { x: number; z: number }, bl
 }
 
 /** Daño de un golpe con el objeto en la mano (null = mano vacía). */
-export function hitDamage(item: ItemId | null, kind: PropData['kind']): number {
+export function hitDamage(item: ItemId | null, kind: Target['kind']): number {
   const tool = item ? TOOL_DEFS[item] : undefined
+  if (kind === 'enemy') return tool?.attack ?? BASE_DAMAGE
   return BASE_DAMAGE * (tool?.kind === kind ? tool.multiplier : 1)
 }
 

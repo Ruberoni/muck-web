@@ -68,16 +68,40 @@ export const BASE_DAMAGE = 1
 export interface ToolDef {
   kind: keyof typeof PROP_DEFS
   multiplier: number
+  /** Daño contra enemigos, sea cual sea el tipo de herramienta. */
+  attack: number
 }
 
 // Una herramienta solo multiplica el daño contra su tipo de prop; contra el resto se golpea como a mano.
 export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
-  wood_axe: { kind: 'tree', multiplier: 2 },
-  stone_axe: { kind: 'tree', multiplier: 4 },
-  wood_pickaxe: { kind: 'rock', multiplier: 2 },
-  stone_pickaxe: { kind: 'rock', multiplier: 4 },
+  wood_axe: { kind: 'tree', multiplier: 2, attack: 2 },
+  stone_axe: { kind: 'tree', multiplier: 4, attack: 3 },
+  wood_pickaxe: { kind: 'rock', multiplier: 2, attack: 2 },
+  stone_pickaxe: { kind: 'rock', multiplier: 4, attack: 3 },
 }
 
+// Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra.
+export const ENEMY_DEF = { name: 'Trasgo', verb: 'atacar', hp: 6, drop: { item: 'raw_meat' as ItemId, amount: 1 } }
+export const ENEMY_RADIUS = 0.55
+// Algo más lento que andar: se le puede dejar atrás, pero no mientras se tala o se pica.
+export const ENEMY_SPEED = 5
+export const ENEMY_DAMAGE = 10
+/** Hueco (entre bordes) que deja al llegar al jugador, para que no le tape la vista. */
+export const ENEMY_GAP = 0.35
+/** Hueco máximo (entre bordes) desde el que alcanza al jugador. */
+export const ENEMY_REACH = 0.7
+export const ENEMY_ATTACK_INTERVAL = 1.2
+/** Espera desde que llega al jugador (o se recupera de un golpe) hasta su primer ataque. */
+export const ENEMY_WINDUP = 0.5
+export const ENEMY_KNOCKBACK = 6
+export const ENEMY_STAGGER = 0.3
+export const ENEMY_SPAWN_INTERVAL = 5
+export const ENEMY_SPAWN_MIN = 26
+export const ENEMY_SPAWN_MAX = 40
+/** Enemigos a la vez la primera noche; cada noche se suman ENEMY_PER_NIGHT, hasta ENEMY_MAX. */
+export const ENEMY_BASE_COUNT = 3
+export const ENEMY_PER_NIGHT = 2
+export const ENEMY_MAX = 12
 
 export const CAMPFIRE_RADIUS = 0.6
 // Distancia por delante del jugador a la que se coloca la fogata.
