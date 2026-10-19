@@ -55,8 +55,8 @@ export interface PropDef {
 }
 
 export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
-  tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood', amount: 4 }, regrow: 240 },
-  rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone', amount: 3 }, regrow: 300 },
+  tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood', amount: 4 } },
+  rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone', amount: 3 } },
   bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: 1, drop: { item: 'berry', amount: 3 }, regrow: 90 },
 }
 

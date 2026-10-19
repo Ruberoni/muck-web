@@ -88,7 +88,7 @@ export class Game {
     this.water = water
     this.world = world
     this.campfires = new Campfires(scene)
-    // Árboles, rocas y arbustos no vuelven a crecer encima del jugador ni de una fogata.
+    // Los arbustos no vuelven a crecer encima del jugador ni de una fogata.
     this.interaction = new Interaction(world, this.inventory, (prop) => canRegrowAt(prop, this.player.pos, this.campfires.grid))
 
     this.env = {

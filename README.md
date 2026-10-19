@@ -40,7 +40,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Clic izquierdo** con la fogata en la mano | colocarla |
 | **Esc** | pausa |
 
-Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Los arbustos de bayas se recogen con un clic (+3 bayas). Todo vuelve a crecer en su sitio: los arbustos a los 90 s, los árboles a los 240 s y las rocas a los 300 s, aunque nunca encima del jugador ni de una fogata (esperan a que el sitio quede libre). Lo recogido aparece en la hotbar.
+Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Los arbustos de bayas se recogen con un clic (+3 bayas) y vuelven a crecer a los 90 s, aunque nunca encima del jugador ni de una fogata (esperan a que el sitio quede libre). Los árboles y las rocas no vuelven. Lo recogido aparece en la hotbar.
 
 ## Fogata
 
