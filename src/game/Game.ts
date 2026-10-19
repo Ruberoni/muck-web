@@ -21,8 +21,8 @@ import {
 import { craft, RECIPES } from './crafting'
 import { Enemies } from './enemies'
 import { Handheld } from './handheld'
-import { CLICK, Input } from './input'
-import { canRegrowAt, Interaction } from './interaction'
+import { CLICK, Input, RIGHT_CLICK } from './input'
+import { Interaction } from './interaction'
 import { Inventory, SLOT_COUNT } from './inventory'
 import {
   createPlayer,
@@ -96,8 +96,7 @@ export class Game {
     this.campfires = new Campfires(scene)
     this.enemies = new Enemies([world.grid, this.campfires.grid])
     scene.add(this.enemies.group)
-    // Los arbustos no vuelven a crecer encima del jugador ni de una fogata.
-    this.interaction = new Interaction(world, this.inventory, (prop) => canRegrowAt(prop, this.player.pos, this.campfires.grid), this.enemies)
+    this.interaction = new Interaction(world, this.inventory, this.enemies)
 
     this.env = {
       heightAt,
@@ -241,7 +240,7 @@ export class Game {
     if (this.interaction.step(STEP, !placing && (this.attackOverride ?? this.input.attackHeld))) this.handheld.play('swing')
     if (placing && presses.has(CLICK)) this.placeCampfire()
 
-    if (presses.has(EAT_KEY)) this.eatBerry()
+    if (presses.has(EAT_KEY) || presses.has(RIGHT_CLICK)) this.eatBerry()
     stepSurvival(this.player, STEP)
     if (isDead(this.player)) this.die()
   }
@@ -260,7 +259,7 @@ export class Game {
   private eatBerry() {
     if (this.inventory.count('berry') === 0 || !eat(this.player, BERRY_FOOD)) return
     this.inventory.remove('berry', 1)
-    // F come bayas aunque se tenga otra cosa en la mano: la animación se hace con una baya.
+    // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
     this.handheld.play('eat', 'berry')
   }
 
