@@ -68,6 +68,12 @@ export function installDebug(game: Game) {
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: () => game.interaction.target?.id ?? null,
     heightAt,
+    clock: () => ({ day: game.clock.day, phase: game.clock.phase }),
+    /** Salta a una hora del día actual (0 = amanecer) y renderiza. */
+    setPhase(phase: number) {
+      game.clock.phase = phase
+      game.advance(0)
+    },
   }
 
   window.__debug = api

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
-import { createScene, updateSun } from '../scene'
+import { createScene, updateSky, type Sky } from '../scene'
 import { Hud } from '../ui/hud'
+import { DayClock } from '../world/daycycle'
 import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../world/terrain'
 import { resolveCircle } from './collision'
 import {
@@ -50,6 +51,7 @@ export class Game {
   readonly env: PlayerEnv
   readonly hud: Hud
   readonly input: Input
+  readonly clock = new DayClock()
 
   state: GameState = 'menu'
   craftingOpen = false
@@ -58,7 +60,7 @@ export class Game {
   inputOverride: Partial<PlayerInput> | null = null
   attackOverride: boolean | null = null
 
-  private sun: THREE.DirectionalLight
+  private sky: Sky
   private water: THREE.Mesh
   private acc = 0
   private lastTime: number | null = null
@@ -77,9 +79,9 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 600)
     this.camera.rotation.order = 'YXZ'
 
-    const { scene, sun, water, world } = createScene()
+    const { scene, sky, water, world } = createScene()
     this.scene = scene
-    this.sun = sun
+    this.sky = sky
     this.water = water
     this.world = world
     this.interaction = new Interaction(world, this.inventory)
@@ -128,6 +130,7 @@ export class Game {
     this.inventory.clear()
     this.setCrafting(false)
     this.interaction.reset()
+    this.clock.reset()
     Object.assign(this.player, createPlayer(this.env, this.spawn.x, this.spawn.z))
     this.acc = 0
     this.placeCamera(this.player.pos)
@@ -204,6 +207,7 @@ export class Game {
     const presses = this.input.takePresses()
     this.handlePresses(presses)
     stepPlayer(this.player, input, this.env, STEP)
+    this.clock.step(STEP)
     // Raycast desde la posición simulada (no interpolada): golpear no depende del framerate.
     this.placeCamera(this.player.pos)
     this.camera.updateMatrixWorld()
@@ -243,12 +247,13 @@ export class Game {
       this.renderPos.y,
       this.renderPos.z - Math.cos(p.yaw) * SHADOW_LOOK_AHEAD,
     )
-    updateSun(this.sun, this.shadowCenter)
+    updateSky(this.sky, this.clock.phase, this.shadowCenter)
 
     this.hud.setHealth(p.health, HEALTH_MAX)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     this.hud.setTarget(this.interaction.target)
+    this.hud.setDay(this.clock.day)
 
     this.renderer.render(this.scene, this.camera)
   }

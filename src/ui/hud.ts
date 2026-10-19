@@ -56,18 +56,20 @@ export class Hud {
   private staminaBar: HTMLElement
   private staminaFill: HTMLElement
   private prompt: HTMLElement
+  private day: HTMLElement
   private slots: { root: HTMLElement; icon: HTMLElement; count: HTMLElement }[] = []
   private held: HTMLElement
   private crafting: HTMLElement
   private recipes: HTMLElement[] = []
   private overlay: HTMLElement
   private overlayTitle: HTMLElement
-  private last = { health: -1, hunger: -1, stamina: -1, exhausted: false, prompt: '' }
+  private last = { health: -1, hunger: -1, stamina: -1, exhausted: false, prompt: '', day: 0 }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
     el('div', 'crosshair', root)
     this.prompt = el('div', 'prompt', root)
+    this.day = el('div', 'day', root)
 
     const bars = el('div', 'bars', root)
     this.healthFill = el('div', 'fill', el('div', 'bar health', bars))
@@ -173,5 +175,10 @@ export class Hud {
     const held = inventory.selectedItem
     this.held.textContent = held ? ITEM_NAMES[held] : ''
     RECIPES.forEach((recipe, i) => this.recipes[i].classList.toggle('available', canCraft(inventory, recipe)))
+  }
+  setDay(day: number) {
+    if (day === this.last.day) return
+    this.last.day = day
+    this.day.textContent = `Día ${day}`
   }
 }

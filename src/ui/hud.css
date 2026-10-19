@@ -29,6 +29,14 @@
   white-space: nowrap;
 }
 
+.day {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
 .bars {
   position: absolute;
   left: 16px;
