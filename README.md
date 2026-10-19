@@ -15,29 +15,39 @@ npm install
 npm run dev       # servidor de desarrollo en http://localhost:5173/
 ```
 
-Build de producción:
+Tests y build de producción:
 
 ```bash
+npm test          # tests unitarios (vitest)
 npm run build     # typecheck + build en dist/
 npm run preview   # sirve dist/ en http://localhost:4173/
 ```
 
 ## Controles
 
-- **Arrastrar con el ratón**: rotar la cámara
-- **Rueda**: zoom
-- **Clic derecho + arrastrar**: desplazar
+Haz clic en la pantalla para empezar (captura el ratón).
+
+| Tecla | Acción |
+| --- | --- |
+| **W A S D** | moverse |
+| **Ratón** | mirar |
+| **Espacio** | saltar (gasta stamina) |
+| **Shift** | correr (gasta stamina) |
+| **Clic izquierdo** | golpear; mantenerlo repite el golpe |
+| **Esc** | pausa |
+
+Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Lo recogido aparece en la hotbar.
 
 ## Mundo
 
-El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/world/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente, así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug.worldHash` expone un hash del mundo para detectar cambios.
+El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/world/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente, así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.
 
 ## Despliegue
 
 El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
 
-- en cada **push a `main`** hace build y despliega `dist/` a GitHub Pages;
-- en cada **pull request** hacia `main` solo hace el build (sin desplegar);
+- en cada **push a `main`** corre los tests, hace el build y despliega `dist/` a GitHub Pages;
+- en cada **pull request** hacia `main` solo corre los tests y el build (sin desplegar);
 - también se puede lanzar a mano desde la pestaña Actions (solo despliega si se lanza sobre `main`).
 
 Configuración única en GitHub:
