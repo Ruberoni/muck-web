@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import { PROP_DEFS } from '../game/constants'
+import { SpatialGrid } from '../game/collision'
 import { createPropsRng } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WORLD_SIZE } from './terrain'
 
@@ -6,14 +8,42 @@ const TREE_COUNT = 180
 const ROCK_COUNT = 60
 const MAX_SLOPE = 1.6
 
+const TRUNK_BOTTOM_RADIUS = 0.35
+const TRUNK_HEIGHT = 2.6
+// La base de la copa queda por encima de los ojos (1,7) incluso con la escala mínima (0,8).
+const FOLIAGE_BASE = 2.4
+const FOLIAGE_HEIGHT = 3.4
+
 // Una geometría y un material por tipo, compartidos por todas las instancias.
-const trunkGeometry = new THREE.CylinderGeometry(0.25, 0.35, 2, 6).translate(0, 1, 0)
-const foliageGeometry = new THREE.ConeGeometry(1.5, 3.4, 7).translate(0, 3.4, 0)
+const trunkGeometry = new THREE.CylinderGeometry(0.25, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, 6).translate(0, TRUNK_HEIGHT / 2, 0)
+const foliageGeometry = new THREE.ConeGeometry(1.5, FOLIAGE_HEIGHT, 7).translate(0, FOLIAGE_BASE + FOLIAGE_HEIGHT / 2, 0)
 const rockGeometry = new THREE.IcosahedronGeometry(1, 0)
 
 const trunkMaterial = new THREE.MeshStandardMaterial({ color: '#7a5230', flatShading: true })
 const foliageMaterial = new THREE.MeshStandardMaterial({ color: '#2f6f2e', flatShading: true })
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#9a978a', flatShading: true })
+
+export type PropKind = keyof typeof PROP_DEFS
+
+export interface PropInstance {
+  mesh: THREE.InstancedMesh
+  index: number
+  base: THREE.Matrix4
+}
+
+export interface PropData {
+  id: number
+  kind: PropKind
+  x: number
+  /** Árboles: base del tronco. Rocas: centro. */
+  y: number
+  z: number
+  radius: number
+  hp: number
+  maxHp: number
+  alive: boolean
+  instances: PropInstance[]
+}
 
 /** Diferencia de altura en un entorno de ±1 unidad: aproxima la pendiente. */
 const slopeAt = (x: number, z: number) =>
@@ -39,7 +69,21 @@ export function createProps() {
   const foliage = createInstanced(foliageGeometry, foliageMaterial, TREE_COUNT)
   const rocks = createInstanced(rockGeometry, rockMaterial, ROCK_COUNT)
   const dummy = new THREE.Object3D()
+  const props: PropData[] = []
 
+  const addProp = (kind: PropKind, x: number, y: number, z: number, radius: number, meshes: THREE.InstancedMesh[], index: number) => {
+    const { hp } = PROP_DEFS[kind]
+    const instances = meshes.map((mesh) => {
+      mesh.setMatrixAt(index, dummy.matrix)
+      // La base se lee de vuelta (Float32) para que restaurarla tras un wobble sea exacto.
+      const base = new THREE.Matrix4()
+      mesh.getMatrixAt(index, base)
+      return { mesh, index, base }
+    })
+    props.push({ id: props.length, kind, x, y, z, radius, hp, maxHp: hp, alive: true, instances })
+  }
+
+  // El orden de consumo del PRNG no debe cambiar: define el mundo (ver world/hash.ts).
   let trees = 0
   for (let attempt = 0; trees < TREE_COUNT && attempt < TREE_COUNT * 20; attempt++) {
     const { x, z } = randomPoint()
@@ -52,8 +96,7 @@ export function createProps() {
     dummy.rotation.set(0, rotation, 0)
     dummy.scale.setScalar(scale)
     dummy.updateMatrix()
-    trunks.setMatrixAt(trees, dummy.matrix)
-    foliage.setMatrixAt(trees, dummy.matrix)
+    addProp('tree', x, y - 0.1, z, TRUNK_BOTTOM_RADIUS * scale, [trunks, foliage], trees)
     trees++
   }
   trunks.count = foliage.count = trees
@@ -74,13 +117,26 @@ export function createProps() {
     dummy.rotation.set(rx * 0.2, ry, 0)
     dummy.scale.set(sx, sy, sz)
     dummy.updateMatrix()
-    rocks.setMatrixAt(rockCount, dummy.matrix)
+    // El icosaedro base tiene radio 1: max(sx, sz) cubre sus vértices en XZ.
+    addProp('rock', x, y - sy * 0.3, z, Math.max(sx, sz), [rocks], rockCount)
     rockCount++
   }
   rocks.count = rockCount
 
+  const meshes = { trunks, foliage, rocks }
+  const instanceToProp = new Map<THREE.InstancedMesh, Int32Array>(
+    Object.values(meshes).map((mesh) => [mesh, new Int32Array(mesh.count).fill(-1)]),
+  )
+  const grid = new SpatialGrid<PropData>()
+  for (const prop of props) {
+    for (const { mesh, index } of prop.instances) instanceToProp.get(mesh)![index] = prop.id
+    grid.insert(prop)
+  }
+
   const group = new THREE.Group()
   group.add(trunks, foliage, rocks)
 
-  return { group, instances: [trunks, foliage, rocks] }
+  return { group, props, meshes, instanceToProp, grid }
 }
+
+export type World = ReturnType<typeof createProps>

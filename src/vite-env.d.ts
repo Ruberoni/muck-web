@@ -2,7 +2,7 @@
 
 declare global {
   interface Window {
-    __debug?: { worldHash: string }
+    __debug?: import('./debug').DebugApi
   }
 }
 
