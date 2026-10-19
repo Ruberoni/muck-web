@@ -5,12 +5,18 @@ import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './world/props'
 import { heightAt, WATER_LEVEL } from './world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './game/constants'
+import { ENEMY_AIM_HEIGHT } from './game/enemies'
 
 /** Helpers de depuración y pruebas, solo en desarrollo. */
 export function installDebug(game: Game) {
   const { world, player } = game
   // Se calcula antes de que el jugador toque nada: es la huella del mundo generado.
   const worldHash = computeWorldHash(islandMeshes(world))
+  // Solo ids de props: los enemigos tienen su propia numeración (ver enemies()).
+  const targetPropId = () => {
+    const t = game.interaction.target
+    return t && t.kind !== 'enemy' ? t.id : null
+  }
 
   const api = {
     worldHash,
@@ -58,7 +64,7 @@ export function installDebug(game: Game) {
       const eyeY = Math.max(heightAt(pose.x, pose.z), WATER_LEVEL - FLOAT_DEPTH) + EYE_HEIGHT
       game.teleport(pose.x, pose.z, pose.yaw, Math.atan2(pose.aimY - eyeY, pose.horizontal))
       game.advance(0)
-      return game.interaction.target?.id ?? null
+      return targetPropId()
     },
     inventory: () => game.inventory.toJSON(),
     hotbar: () => ({ slots: [...game.inventory.slots], selected: game.inventory.selected }),
@@ -66,7 +72,23 @@ export function installDebug(game: Game) {
     craft: (index: number) => game.craft(index),
     setCrafting: (open: boolean) => game.setCrafting(open),
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
-    target: () => game.interaction.target?.id ?? null,
+    target: targetPropId,
+    enemies: () =>
+      game.enemies.list.map(({ id, pos, hp }) => ({ id, x: pos.x, z: pos.z, hp, targeted: game.interaction.target?.kind === 'enemy' && game.interaction.target.id === id })),
+    spawnEnemy: (x: number, z: number) => game.enemies.spawnAt(x, z).id,
+    /** Gira la cámara hacia el enemigo sin mover al jugador; devuelve si queda apuntado. */
+    aimAtEnemy(id: number) {
+      const e = game.enemies.list.find((en) => en.id === id)
+      if (!e) return false
+      const dx = e.pos.x - player.pos.x
+      const dz = e.pos.z - player.pos.z
+      const dy = heightAt(e.pos.x, e.pos.z) + ENEMY_AIM_HEIGHT - (player.pos.y + EYE_HEIGHT)
+      game.teleport(player.pos.x, player.pos.z, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)))
+      game.advance(0)
+      game.camera.updateMatrixWorld()
+      game.interaction.updateTarget(game.camera)
+      return game.interaction.target === e
+    },
     heightAt,
     clock: () => ({ day: game.clock.day, phase: game.clock.phase }),
     /** Salta a una hora del día actual (0 = amanecer) y renderiza. */

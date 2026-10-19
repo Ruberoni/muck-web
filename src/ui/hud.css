@@ -20,6 +20,20 @@
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4);
 }
 
+.hurt {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgb(200 20 20 / 0.55));
+}
+
+.hurt.active { animation: hurt 0.45s ease-out; }
+
+@keyframes hurt {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .prompt {
   position: absolute;
   left: 50%;

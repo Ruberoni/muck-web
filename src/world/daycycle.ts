@@ -41,6 +41,9 @@ export class DayClock {
   }
 }
 
+/** De noche el sol está bajo el horizonte. */
+export const isNight = (phase: number) => THREE.MathUtils.euclideanModulo(phase, 1) >= DAY_FRACTION
+
 /** Dirección hacia el sol: sale por +X, culmina hacia +Z y se pone por -X. */
 export function sunDirection(phase: number, out = new THREE.Vector3()) {
   const p = THREE.MathUtils.euclideanModulo(phase, 1)

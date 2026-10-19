@@ -18,6 +18,7 @@ import {
   STEP,
 } from './constants'
 import { craft, RECIPES } from './crafting'
+import { Enemies } from './enemies'
 import { Input } from './input'
 import { Interaction } from './interaction'
 import { Inventory, SLOT_COUNT } from './inventory'
@@ -47,6 +48,7 @@ export class Game {
   readonly world: ReturnType<typeof createScene>['world']
   readonly inventory = new Inventory()
   readonly interaction: Interaction
+  readonly enemies: Enemies
   readonly player: Player
   readonly env: PlayerEnv
   readonly hud: Hud
@@ -84,7 +86,9 @@ export class Game {
     this.sky = sky
     this.water = water
     this.world = world
-    this.interaction = new Interaction(world, this.inventory)
+    this.enemies = new Enemies(world.grid)
+    scene.add(this.enemies.group)
+    this.interaction = new Interaction(world, this.inventory, this.enemies)
 
     this.env = {
       heightAt,
@@ -130,6 +134,7 @@ export class Game {
     this.inventory.clear()
     this.setCrafting(false)
     this.interaction.reset()
+    this.enemies.reset()
     this.clock.reset()
     Object.assign(this.player, createPlayer(this.env, this.spawn.x, this.spawn.z))
     this.acc = 0
@@ -208,6 +213,11 @@ export class Game {
     this.handlePresses(presses)
     stepPlayer(this.player, input, this.env, STEP)
     this.clock.step(STEP)
+    const damage = this.enemies.step(STEP, this.player.pos, this.clock.phase, this.clock.day)
+    if (damage > 0) {
+      this.player.health = Math.max(0, this.player.health - damage)
+      this.hud.flashHurt()
+    }
     // Raycast desde la posición simulada (no interpolada): golpear no depende del framerate.
     this.placeCamera(this.player.pos)
     this.camera.updateMatrixWorld()
@@ -237,6 +247,7 @@ export class Game {
   private render(alpha: number, dt: number, time: number) {
     const p = this.player
     this.placeCamera(interpolate(p, alpha, this.renderPos))
+    this.enemies.place(alpha)
     this.interaction.updateAnimations(dt)
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08
