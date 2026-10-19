@@ -104,7 +104,7 @@ describe('sonido', () => {
     expect(growls[0].options!.gain).toBeCloseTo(spatialize(5, 0, 0, GROWL_DISTANCE).gain)
   })
 
-  it('cada golpe suena según lo que golpea, y si suelta algo suena al recogerlo', () => {
+  it('cada golpe suena según lo que golpea; solo la baya suena al recogerla en el golpe', () => {
     const { audio, names } = setup()
     const t = (kind: Target['kind']) => ({ kind }) as Target
     audio.hit(null, false)
@@ -115,6 +115,8 @@ describe('sonido', () => {
     audio.hit(t('bush'), false)
     audio.hit(t('enemy'), false)
     audio.hit(t('enemy'), true)
-    expect(names()).toEqual(['swing', 'hitWood', 'breakWood', 'pickup', 'hitStone', 'hitBush', 'pickup', 'hitBush', 'enemyHit', 'enemyDeath', 'pickup'])
+    expect(names()).toEqual(['swing', 'hitWood', 'breakWood', 'hitStone', 'hitBush', 'pickup', 'hitBush', 'enemyHit', 'enemyDeath'])
+    audio.pickup()
+    expect(names().at(-1)).toBe('pickup')
   })
 })

@@ -1,8 +1,10 @@
 import * as THREE from 'three'
 import type { PropData, PropInstance, World } from '../world/props'
+import { heightAt } from '../world/terrain'
 import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from './constants'
 import type { Enemies, EnemyData } from './enemies'
 import type { Inventory, ItemId } from './inventory'
+import type { Pickups } from './pickups'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
 export type Target = PropData | EnemyData
@@ -10,8 +12,13 @@ export type Target = PropData | EnemyData
 const SCREEN_CENTER = new THREE.Vector2(0, 0)
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
 const WOBBLE_AMOUNT = 0.12
+// Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan.
+const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
 
-/** Objetivo, golpes, animación de golpe, destrucción de props, recogida y rebrote de bayas; golpes a enemigos. */
+/**
+ * Objetivo, golpes, animación de golpe, destrucción de props, recogida y rebrote de bayas; golpes a enemigos.
+ * Lo que sueltan árboles, rocas y enemigos cae al suelo (`pickups`); las bayas van directas al inventario.
+ */
 export class Interaction {
   target: Target | null = null
   private cooldown = 0
@@ -26,6 +33,7 @@ export class Interaction {
   constructor(
     private world: World,
     private inventory: Inventory,
+    private pickups: Pickups,
     private enemies?: Enemies,
   ) {
     this.objects = [...world.allMeshes, ...(enemies ? [enemies.group] : [])]
@@ -58,7 +66,7 @@ export class Interaction {
   /**
    * Paso fijo: mientras se mantiene el ataque, da un golpe cada vez que termina el cooldown,
    * también al aire (como la animación). Devuelve el golpe que empieza en este paso, si lo hay:
-   * `target` es null al aire y `dropped` dice si soltó algo al inventario (lo rompió, lo mató o cogió una baya).
+   * `target` es null al aire y `dropped` dice si soltó algo (lo rompió, lo mató o cogió una baya).
    */
   step(dt: number, attackHeld: boolean): { target: Target | null; dropped: boolean } | null {
     for (const [bush, left] of this.regrowing) {
@@ -72,7 +80,7 @@ export class Interaction {
     return { target, dropped: target ? this.hit(target) : false }
   }
 
-  /** Devuelve si el golpe suelta algo al inventario. */
+  /** Devuelve si el golpe suelta algo. */
   private hit(target: Target): boolean {
     if (target.kind === 'enemy') return this.hitEnemy(target)
     const prop = target
@@ -88,7 +96,8 @@ export class Interaction {
     const from = this.raycaster.ray.origin
     if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from)) return false
     if (this.target === enemy) this.target = null
-    this.inventory.add(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount)
+    const { x, z } = enemy.pos
+    this.pickups.drop(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount, x, heightAt(x, z) + DROP_HEIGHT.enemy, z)
     return true
   }
 
@@ -102,7 +111,8 @@ export class Interaction {
     }
     if (this.target === prop) this.target = null
     const { drop } = PROP_DEFS[prop.kind]
-    this.inventory.add(drop.item, drop.amount)
+    const height = prop.kind === 'tree' || prop.kind === 'rock' ? DROP_HEIGHT[prop.kind] : 0
+    this.pickups.drop(drop.item, drop.amount, prop.x, prop.y + height, prop.z)
   }
 
   /** Cada clic quita una baya; el arbusto se queda aunque esté vacío. */

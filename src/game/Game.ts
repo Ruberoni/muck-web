@@ -27,6 +27,7 @@ import { Handheld } from './handheld'
 import { CLICK, Input, RIGHT_CLICK } from './input'
 import { Interaction } from './interaction'
 import { Inventory, SLOT_COUNT } from './inventory'
+import { Pickups } from './pickups'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import {
   createPlayer,
@@ -57,6 +58,7 @@ export class Game {
   readonly inventory = new Inventory()
   readonly interaction: Interaction
   readonly enemies: Enemies
+  readonly pickups: Pickups
   readonly player: Player
   readonly env: PlayerEnv
   readonly hud: Hud
@@ -84,6 +86,8 @@ export class Game {
   private spawn: { x: number; z: number }
   private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
   private sun = new THREE.Vector3()
+  /** El jugador está encima de algo que no cabe en la hotbar. */
+  private hotbarFull = false
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -105,8 +109,9 @@ export class Game {
     this.world = world
     this.campfires = new Campfires(scene)
     this.enemies = new Enemies([world.grid, this.campfires.grid])
-    scene.add(this.enemies.group)
-    this.interaction = new Interaction(world, this.inventory, this.enemies)
+    this.pickups = new Pickups([world.grid, this.campfires.grid])
+    scene.add(this.enemies.group, this.pickups.group)
+    this.interaction = new Interaction(world, this.inventory, this.pickups, this.enemies)
 
     this.env = {
       heightAt,
@@ -167,6 +172,8 @@ export class Game {
     this.setCrafting(false)
     this.interaction.reset()
     this.enemies.reset()
+    this.pickups.clear()
+    this.hotbarFull = false
     this.campfires.clear()
     this.clock.reset()
     this.audio.reset()
@@ -285,6 +292,9 @@ export class Game {
       this.audio.hit(hit.target, hit.dropped)
     }
     if (placing && presses.has(CLICK)) this.placeCampfire()
+    const picked = this.pickups.step(STEP, this.player.pos, this.inventory)
+    if (picked.collected > 0) this.audio.pickup()
+    this.hotbarFull = picked.full
 
     if (presses.has(EAT_KEY) || presses.has(RIGHT_CLICK)) this.eatBerry()
     stepSurvival(this.player, STEP)
@@ -327,6 +337,7 @@ export class Game {
     const p = this.player
     this.placeCamera(interpolate(p, alpha, this.renderPos))
     this.enemies.place(alpha)
+    this.pickups.place(alpha)
     this.interaction.updateAnimations(dt)
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08
@@ -347,6 +358,7 @@ export class Game {
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
+    else if (this.hotbarFull && !this.interaction.target) this.hud.setPrompt('Hotbar llena')
     else this.hud.setTarget(this.interaction.target)
     this.hud.setDay(this.clock.day)
     this.hud.minimap.draw({ x: this.renderPos.x, z: this.renderPos.z, yaw: p.yaw, campfires: this.campfires.list, enemies: this.enemies.list })

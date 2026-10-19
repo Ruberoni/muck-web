@@ -138,7 +138,8 @@ function campfireBundle() {
   return g
 }
 
-function itemModel(item: ItemId): THREE.Group {
+/** Modelo de un objeto a escala de la mano (también se usa, escalado, para los objetos en el suelo). */
+export function itemModel(item: ItemId): THREE.Group {
   switch (item) {
     case 'wood_axe':
       return axe(woodHead)

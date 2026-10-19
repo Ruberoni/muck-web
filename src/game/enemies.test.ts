@@ -21,6 +21,7 @@ import {
 import { ENEMY_AIM_HEIGHT, Enemies, enemyCap, type EnemyData } from './enemies'
 import { hitDamage, Interaction } from './interaction'
 import { Inventory, type ItemId } from './inventory'
+import { Pickups } from './pickups'
 
 const NIGHT = DAY_FRACTION + 0.1
 const DAY = 0.3
@@ -154,7 +155,8 @@ describe('combate', () => {
   const setup = () => {
     const inventory = new Inventory()
     const enemies = new Enemies([world.grid], mulberry32(7))
-    const interaction = new Interaction(world, inventory, enemies)
+    const pickups = new Pickups([world.grid], mulberry32(3))
+    const interaction = new Interaction(world, inventory, pickups, enemies)
     const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
     camera.rotation.order = 'YXZ'
     const enemy = enemies.spawnAt(spot.x + 1.5, spot.z)
@@ -175,7 +177,8 @@ describe('combate', () => {
       inventory.add(item, 1)
       inventory.select(inventory.slots.indexOf(item))
     }
-    return { inventory, enemies, interaction, enemy, hold, equip }
+    const meat = () => pickups.list.filter((p) => p.item === 'raw_meat')
+    return { inventory, enemies, interaction, enemy, hold, equip, meat }
   }
 
   it('las herramientas pegan más fuerte que la mano, sea hacha o pico', () => {
@@ -192,22 +195,25 @@ describe('combate', () => {
     expect(interaction.target).toBe(enemy)
   })
 
-  it('con hacha de piedra cae en 2 golpes y suelta carne cruda', () => {
-    const { inventory, enemies, interaction, enemy, hold, equip } = setup()
+  it('con hacha de piedra cae en 2 golpes y suelta carne cruda al suelo', () => {
+    const { inventory, enemies, interaction, enemy, hold, equip, meat } = setup()
+    const { x, z } = enemy.pos
     equip('stone_axe')
     hold(STEP)
     expect(enemy.hp).toBe(ENEMY_DEF.hp - 3)
     hold(0.4)
     expect(enemy.alive).toBe(false)
     expect(enemies.list).toHaveLength(0)
-    expect(inventory.count('raw_meat')).toBe(ENEMY_DEF.drop.amount)
+    expect(inventory.count('raw_meat')).toBe(0)
+    expect(meat()).toHaveLength(ENEMY_DEF.drop.amount)
+    expect(Math.hypot(meat()[0].pos.x - x, meat()[0].pos.z - z)).toBeLessThan(0.01)
     expect(interaction.target).not.toBe(enemy)
   })
 
   it('a mano hacen falta 6 golpes', () => {
-    const { inventory, enemy, hold } = setup()
+    const { enemy, hold, meat } = setup()
     hold(0.4 * 5 + STEP)
     expect(enemy.hp).toBe(0)
-    expect(inventory.count('raw_meat')).toBe(1)
+    expect(meat()).toHaveLength(1)
   })
 })

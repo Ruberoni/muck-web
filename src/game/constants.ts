@@ -70,6 +70,15 @@ export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
 
 export const BASE_DAMAGE = 1
 
+// Lo que sueltan árboles, rocas y trasgos cae al suelo (una pieza por unidad) y se recoge al pasar por encima.
+/** Segundos desde que cae hasta que se puede recoger: se ve saltar antes de que el jugador lo coja. */
+export const PICKUP_DELAY = 0.5
+/** Distancia horizontal (desde el centro del jugador) a la que se recoge. */
+export const PICKUP_RADIUS = 0.9
+/** Más cerca que esto, si cabe en la hotbar, se desliza hacia el jugador. */
+export const PICKUP_MAGNET = 1.6
+export const PICKUP_MAGNET_SPEED = 6
+
 export interface ToolDef {
   kind: keyof typeof PROP_DEFS
   multiplier: number

@@ -5,11 +5,13 @@ import { heightAt } from '../world/terrain'
 import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from './constants'
 import { aimPose, hitDamage, Interaction } from './interaction'
 import { Inventory, type ItemId } from './inventory'
+import { Pickups } from './pickups'
 
 function setup() {
   const world = createProps()
   const inventory = new Inventory()
-  const interaction = new Interaction(world, inventory)
+  const pickups = new Pickups([world.grid], () => 0.5)
+  const interaction = new Interaction(world, inventory, pickups)
   const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
   camera.rotation.order = 'YXZ'
 
@@ -29,7 +31,9 @@ function setup() {
       interaction.step(STEP, true)
     }
   }
-  return { world, inventory, interaction, camera, aimAt, hold }
+  /** Piezas de `item` en el suelo. */
+  const onGround = (item: ItemId) => pickups.list.filter((p) => p.item === item).length
+  return { world, inventory, pickups, interaction, camera, aimAt, hold, onGround }
 }
 
 describe('recolección', () => {
@@ -40,14 +44,15 @@ describe('recolección', () => {
 
   const firstOf = (kind: PropData['kind']) => ctx.world.props.find((p) => p.kind === kind)!
 
-  it('apunta al prop y mantener el ataque 1,2 s da exactamente 3 golpes', () => {
+  it('apunta al prop y mantener el ataque 1,2 s da exactamente 3 golpes y la madera cae al suelo', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     expect(ctx.interaction.target).toBe(tree)
     ctx.hold(1.2)
     expect(tree.alive).toBe(false)
     expect(tree.hp).toBe(0)
-    expect(ctx.inventory.count('wood')).toBe(4)
+    expect(ctx.onGround('wood')).toBe(4)
+    expect(ctx.inventory.count('wood')).toBe(0)
   })
 
   it('step devuelve cada golpe y marca el que suelta algo', () => {
@@ -87,7 +92,7 @@ describe('recolección', () => {
     expect(rock.alive).toBe(true)
     ctx.hold(0.4)
     expect(rock.alive).toBe(false)
-    expect(ctx.inventory.count('stone')).toBe(3)
+    expect(ctx.onGround('stone')).toBe(3)
   })
 
   it('tras destruirlo el raycast ya no lo selecciona', () => {
@@ -160,6 +165,7 @@ describe('bayas', () => {
     expect(ctx.interaction.target).toBe(bush)
     ctx.hold(STEP)
     expect(ctx.inventory.count('berry')).toBe(1)
+    expect(ctx.pickups.list).toHaveLength(0)
     expect(bush.hp).toBe(BERRIES_PER_BUSH - 1)
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
     expect(bush.alive).toBe(true)
@@ -287,7 +293,7 @@ describe('herramientas', () => {
     expect(tree.hp).toBe(1)
     ctx.hold(0.4)
     expect(tree.alive).toBe(false)
-    expect(ctx.inventory.count('wood')).toBe(4)
+    expect(ctx.onGround('wood')).toBe(4)
   })
 
   it('con pico de piedra una roca cae de un golpe y la vida no baja de 0', () => {
@@ -297,7 +303,7 @@ describe('herramientas', () => {
     ctx.hold(STEP)
     expect(rock.alive).toBe(false)
     expect(rock.hp).toBe(0)
-    expect(ctx.inventory.count('stone')).toBe(3)
+    expect(ctx.onGround('stone')).toBe(3)
   })
 
   it('el pico no ayuda contra los árboles', () => {

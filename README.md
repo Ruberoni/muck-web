@@ -40,7 +40,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Clic izquierdo** con la fogata en la mano | colocarla |
 | **Esc** | pausa |
 
-Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas no vuelven. Lo recogido aparece en la hotbar.
+Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas no vuelven. La madera y la piedra caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas a la hotbar. Si la hotbar no tiene sitio para algo nuevo, se queda en el suelo.
 
 El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata también se animan.
 
@@ -54,7 +54,7 @@ El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya dev
 
 ## Enemigos
 
-Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera y 2 con uno de piedra; cada golpe los hace retroceder. Al morir sueltan carne cruda, y al amanecer los que quedan desaparecen.
+Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera y 2 con uno de piedra; cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo, y al amanecer los que quedan desaparecen.
 
 ## Sonido y ajustes
 
