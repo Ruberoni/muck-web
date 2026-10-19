@@ -1,7 +1,10 @@
 import * as THREE from 'three'
+import { GameAudio } from '../audio/gameAudio'
+import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
 import { Hud } from '../ui/hud'
-import { DayClock } from '../world/daycycle'
+import { createSettingsPanel } from '../ui/settings'
+import { DayClock, sunDirection } from '../world/daycycle'
 import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../world/terrain'
 import { Campfires, campfireSpot, type CampfireSpot } from './campfire'
 import { resolveCircle } from './collision'
@@ -24,6 +27,7 @@ import { Handheld } from './handheld'
 import { CLICK, Input, RIGHT_CLICK } from './input'
 import { Interaction } from './interaction'
 import { Inventory, SLOT_COUNT } from './inventory'
+import { loadSettings, saveSettings, type Settings } from './settings'
 import {
   createPlayer,
   interpolate,
@@ -42,6 +46,8 @@ export type GameState = 'menu' | 'playing' | 'paused' | 'dead'
 
 const SHADOW_LOOK_AHEAD = 25
 const SPAWN_CLEARANCE = 3
+// Distancia a la que deja de oírse una fogata.
+const CAMPFIRE_HEARING = 14
 
 export class Game {
   readonly renderer: THREE.WebGLRenderer
@@ -57,6 +63,9 @@ export class Game {
   readonly input: Input
   readonly clock = new DayClock()
   readonly campfires: Campfires
+  readonly settings: Settings = loadSettings()
+  readonly sound = new Sound()
+  private audio = new GameAudio(this.sound)
   readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
@@ -74,6 +83,7 @@ export class Game {
   private shadowCenter = new THREE.Vector3()
   private spawn: { x: number; z: number }
   private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
+  private sun = new THREE.Vector3()
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -85,7 +95,7 @@ export class Game {
     this.renderer.autoClear = false
     container.appendChild(this.renderer.domElement)
 
-    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 600)
+    this.camera = new THREE.PerspectiveCamera(this.settings.fov, window.innerWidth / window.innerHeight, 0.1, 600)
     this.camera.rotation.order = 'YXZ'
 
     const { scene, sky, water, world } = createScene()
@@ -111,6 +121,16 @@ export class Game {
     this.hud = new Hud(container, () => this.onOverlayClick())
     this.hud.setInventory(this.inventory)
     this.inventory.onChange(() => this.hud.setInventory(this.inventory))
+    this.sound.setVolume(this.settings.volume)
+    createSettingsPanel(
+      this.hud.panel,
+      this.settings,
+      () => this.applySettings(),
+      (settings, key) => {
+        saveSettings(settings)
+        if (key === 'volume') this.sound.play('pickup')
+      },
+    )
 
     this.input = new Input(this.renderer.domElement, {
       isPlaying: () => this.state === 'playing',
@@ -149,10 +169,20 @@ export class Game {
     this.enemies.reset()
     this.campfires.clear()
     this.clock.reset()
+    this.audio.reset()
     Object.assign(this.player, createPlayer(this.env, this.spawn.x, this.spawn.z))
     this.acc = 0
     this.placeCamera(this.player.pos)
     if (this.state === 'dead') this.setState('menu')
+  }
+
+  /** Aplica los ajustes actuales (al mover un deslizador). */
+  applySettings() {
+    this.camera.fov = this.settings.fov
+    this.camera.updateProjectionMatrix()
+    // Mover un deslizador es un gesto del usuario: basta para poder sonar.
+    this.sound.unlock()
+    this.sound.setVolume(this.settings.volume)
   }
 
   setCrafting(open: boolean) {
@@ -163,13 +193,16 @@ export class Game {
   /** Fabrica la receta por índice (el de su tecla menos 1). */
   craft(index: number): boolean {
     const recipe = RECIPES[index]
-    return recipe ? craft(this.inventory, recipe) : false
+    const ok = recipe ? craft(this.inventory, recipe) : false
+    if (ok) this.sound.play('craft')
+    return ok
   }
 
   teleport(x: number, z: number, yaw = this.player.yaw, pitch = this.player.pitch) {
     teleportPlayer(this.player, this.env, x, z, yaw)
     this.player.pitch = pitch
     this.acc = 0
+    this.audio.reset()
     this.placeCamera(this.player.pos)
   }
 
@@ -183,6 +216,8 @@ export class Game {
 
   private async onOverlayClick() {
     if (this.state === 'playing') return
+    // El clic es el gesto que permite al navegador empezar a sonar.
+    this.sound.unlock()
     if (this.state === 'dead') this.restart()
     const ok = await this.input.requestLock()
     if (!ok) this.hud.showOverlay('retry')
@@ -194,7 +229,8 @@ export class Game {
 
     // El ratón se aplica por frame (a la frecuencia del monitor), no por paso fijo.
     const { dx, dy } = this.input.consumeMouse()
-    if (this.state === 'playing') rotatePlayer(this.player, -dx * MOUSE_SENSITIVITY, -dy * MOUSE_SENSITIVITY)
+    const sensitivity = MOUSE_SENSITIVITY * this.settings.sensitivity
+    if (this.state === 'playing') rotatePlayer(this.player, -dx * sensitivity, -dy * sensitivity)
 
     if (this.state === 'playing' && !this.manualClock) {
       this.acc += dt
@@ -227,9 +263,11 @@ export class Game {
     stepPlayer(this.player, input, this.env, STEP)
     this.clock.step(STEP)
     const damage = this.enemies.step(STEP, this.player.pos, this.clock.phase, this.clock.day)
+    this.audio.step(STEP, this.player, this.enemies.list)
     if (damage > 0) {
       this.player.health = Math.max(0, this.player.health - damage)
       this.hud.flashHurt()
+      this.sound.play('hurt')
     }
     // Raycast desde la posición simulada (no interpolada): golpear no depende del framerate.
     this.placeCamera(this.player.pos)
@@ -237,7 +275,11 @@ export class Game {
     this.interaction.updateTarget(this.camera)
     // Con la fogata en la mano el clic la coloca en vez de golpear.
     const placing = this.holdingCampfire
-    if (this.interaction.step(STEP, !placing && (this.attackOverride ?? this.input.attackHeld))) this.handheld.play('swing')
+    const hit = this.interaction.step(STEP, !placing && (this.attackOverride ?? this.input.attackHeld))
+    if (hit) {
+      this.handheld.play('swing')
+      this.audio.hit(hit.target, hit.dropped)
+    }
     if (placing && presses.has(CLICK)) this.placeCampfire()
 
     if (presses.has(EAT_KEY) || presses.has(RIGHT_CLICK)) this.eatBerry()
@@ -254,6 +296,7 @@ export class Game {
     if (!this.campfires.place(spot)) return
     this.handheld.play('place', 'campfire')
     this.inventory.remove('campfire', 1)
+    this.sound.play('place')
   }
 
   private eatBerry() {
@@ -261,10 +304,12 @@ export class Game {
     this.inventory.remove('berry', 1)
     // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
     this.handheld.play('eat', 'berry')
+    this.sound.play('eat')
   }
 
   private die() {
     this.setState('dead')
+    this.sound.play('death')
     // Con el estado ya en 'dead', perder el ratón no lo cambia a pausa.
     if (this.input.locked) document.exitPointerLock()
   }
@@ -301,12 +346,23 @@ export class Game {
     else this.hud.setTarget(this.interaction.target)
     this.hud.setDay(this.clock.day)
     this.hud.minimap.draw({ x: this.renderPos.x, z: this.renderPos.z, yaw: p.yaw, campfires: this.campfires.list, enemies: this.enemies.list })
+    this.updateAmbient(dt)
 
     this.handheld.setItem(this.inventory.selectedItem)
     this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
     this.renderer.clear()
     this.renderer.render(this.scene, this.camera)
     if (this.state !== 'dead') this.handheld.render(this.renderer)
+  }
+
+  private updateAmbient(dt: number) {
+    let nearest = Infinity
+    for (const fire of this.campfires.list) nearest = Math.min(nearest, Math.hypot(fire.x - this.renderPos.x, fire.z - this.renderPos.z))
+    this.sound.update(dt, {
+      active: this.state === 'playing',
+      night: 1 - THREE.MathUtils.smoothstep(sunDirection(this.clock.phase, this.sun).y, -0.1, 0.25),
+      campfire: Math.max(0, 1 - nearest / CAMPFIRE_HEARING),
+    })
   }
 
   /** Espiral desde el centro hasta el primer punto con hierba y sin props cerca. */

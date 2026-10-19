@@ -57,35 +57,39 @@ export class Interaction {
 
   /**
    * Paso fijo: mientras se mantiene el ataque, da un golpe cada vez que termina el cooldown,
-   * también al aire (como la animación). Devuelve si ha empezado un golpe en este paso.
+   * también al aire (como la animación). Devuelve el golpe que empieza en este paso, si lo hay:
+   * `target` es null al aire y `dropped` dice si soltó algo al inventario (lo rompió, lo mató o cogió una baya).
    */
-  step(dt: number, attackHeld: boolean): boolean {
+  step(dt: number, attackHeld: boolean): { target: Target | null; dropped: boolean } | null {
     for (const [bush, left] of this.regrowing) {
       if (left - dt > 1e-9) this.regrowing.set(bush, left - dt)
       else this.growBerry(bush)
     }
     this.cooldown = Math.max(0, this.cooldown - dt)
-    if (!attackHeld || this.cooldown > 1e-9) return false
-    if (this.target) this.hit(this.target)
+    if (!attackHeld || this.cooldown > 1e-9) return null
+    const target = this.target
     this.cooldown = HIT_COOLDOWN
-    return true
+    return { target, dropped: target ? this.hit(target) : false }
   }
 
-  private hit(target: Target) {
+  /** Devuelve si el golpe suelta algo al inventario. */
+  private hit(target: Target): boolean {
     if (target.kind === 'enemy') return this.hitEnemy(target)
     const prop = target
     if (PROP_DEFS[prop.kind].harvest) return this.harvest(prop)
     prop.hp = Math.max(0, prop.hp - hitDamage(this.inventory.selectedItem, prop.kind))
     if (prop.hp <= 0) this.destroy(prop)
     else this.wobbles.set(prop, 0)
+    return !prop.alive
   }
 
-  private hitEnemy(enemy: EnemyData) {
+  private hitEnemy(enemy: EnemyData): boolean {
     // El raycast salió de la cámara: el retroceso es en sentido contrario al jugador.
     const from = this.raycaster.ray.origin
-    if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from)) return
+    if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from)) return false
     if (this.target === enemy) this.target = null
     this.inventory.add(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount)
+    return true
   }
 
   private destroy(prop: PropData) {
@@ -102,8 +106,8 @@ export class Interaction {
   }
 
   /** Cada clic quita una baya; el arbusto se queda aunque esté vacío. */
-  private harvest(bush: PropData) {
-    if (bush.hp <= 0) return
+  private harvest(bush: PropData): boolean {
+    if (bush.hp <= 0) return false
     bush.hp--
     this.setBerry(bush, bush.hp, false)
     // El rebrote sigue su ritmo: recoger no reinicia el temporizador de la siguiente baya.
@@ -111,6 +115,7 @@ export class Interaction {
     this.wobbles.set(bush, 0)
     const { drop } = PROP_DEFS[bush.kind]
     this.inventory.add(drop.item, drop.amount)
+    return true
   }
 
   private growBerry(bush: PropData) {

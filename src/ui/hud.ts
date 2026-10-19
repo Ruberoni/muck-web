@@ -69,6 +69,8 @@ export class Hud {
   private hurt: HTMLElement
   private overlay: HTMLElement
   private overlayTitle: HTMLElement
+  /** Panel del menú y la pausa, donde van los ajustes. */
+  readonly panel: HTMLElement
   private last = { health: -1, hunger: -1, stamina: -1, exhausted: false, prompt: '', day: 0 }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
@@ -109,7 +111,7 @@ export class Hud {
     this.crafting.hidden = true
 
     this.overlay = el('div', 'overlay', container)
-    const panel = el('div', 'panel', this.overlay)
+    const panel = (this.panel = el('div', 'panel', this.overlay))
     el('h1', 'title', panel).textContent = 'muck-web'
     this.overlayTitle = el('p', 'action', panel)
     panel.insertAdjacentHTML('beforeend', CONTROLS)
