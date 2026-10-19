@@ -1,19 +1,21 @@
 import * as THREE from 'three'
 import type { PropData, World } from '../world/props'
-import { HIT_COOLDOWN, PROP_DEFS, REACH, WOBBLE_DURATION } from './constants'
-import type { Inventory } from './inventory'
+import { BASE_DAMAGE, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from './constants'
+import type { Inventory, ItemId } from './inventory'
 
 const SCREEN_CENTER = new THREE.Vector2(0, 0)
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
 const WOBBLE_AMOUNT = 0.12
 
-/** Objetivo, golpes, animación de golpe y destrucción de props. */
+/** Objetivo, golpes, animación de golpe, destrucción y reaparición de props. */
 export class Interaction {
   target: PropData | null = null
   private cooldown = 0
   private raycaster = new THREE.Raycaster()
   private meshes: THREE.InstancedMesh[]
   private wobbles = new Map<PropData, number>()
+  /** Segundos que faltan para que reaparezca cada prop destruido que vuelve a crecer. */
+  private regrowing = new Map<PropData, number>()
   private scratch = new THREE.Matrix4()
   private hits: THREE.Intersection[] = []
 
@@ -43,6 +45,10 @@ export class Interaction {
 
   /** Paso fijo: mientras se mantiene el ataque, golpea cada vez que termina el cooldown. */
   step(dt: number, attackHeld: boolean) {
+    for (const [prop, left] of this.regrowing) {
+      if (left - dt > 1e-9) this.regrowing.set(prop, left - dt)
+      else this.respawn(prop)
+    }
     this.cooldown = Math.max(0, this.cooldown - dt)
     if (!attackHeld || this.cooldown > 1e-9 || !this.target) return
     this.hit(this.target)
@@ -50,7 +56,7 @@ export class Interaction {
   }
 
   private hit(prop: PropData) {
-    prop.hp--
+    prop.hp = Math.max(0, prop.hp - hitDamage(this.inventory.selectedItem, prop.kind))
     if (prop.hp <= 0) this.destroy(prop)
     else this.wobbles.set(prop, 0)
   }
@@ -64,8 +70,31 @@ export class Interaction {
       mesh.instanceMatrix.needsUpdate = true
     }
     if (this.target === prop) this.target = null
-    const { item, amount } = PROP_DEFS[prop.kind].drop
-    this.inventory.add(item, amount)
+    const { drop, regrow } = PROP_DEFS[prop.kind]
+    if (regrow !== undefined) this.regrowing.set(prop, regrow)
+    this.inventory.add(drop.item, drop.amount)
+  }
+
+  /** Devuelve el prop a su estado original (vida llena, matriz base). */
+  respawn(prop: PropData) {
+    this.regrowing.delete(prop)
+    this.wobbles.delete(prop)
+    prop.hp = prop.maxHp
+    prop.alive = true
+    for (const { mesh, index, base } of prop.instances) {
+      mesh.setMatrixAt(index, base)
+      mesh.instanceMatrix.needsUpdate = true
+    }
+  }
+
+  /** Reinicio de partida: todos los props como al generar la isla. */
+  reset() {
+    for (const prop of this.world.props) {
+      if (!prop.alive || prop.hp < prop.maxHp || this.wobbles.has(prop)) this.respawn(prop)
+    }
+    this.regrowing.clear()
+    this.cooldown = 0
+    this.target = null
   }
 
   /** Por frame: animación de golpe (tronco y copa a la vez). */
@@ -83,6 +112,12 @@ export class Interaction {
       else this.wobbles.set(prop, t)
     }
   }
+}
+
+/** Daño de un golpe con el objeto en la mano (null = mano vacía). */
+export function hitDamage(item: ItemId | null, kind: PropData['kind']): number {
+  const tool = item ? TOOL_DEFS[item] : undefined
+  return BASE_DAMAGE * (tool?.kind === kind ? tool.multiplier : 1)
 }
 
 /** Posición y orientación para apuntar a un prop desde fuera de su radio (debug y tests). */
@@ -104,6 +139,6 @@ export function aimPose(prop: PropData, isFree: (x: number, z: number) => boolea
   const dz = prop.z - z
   // forward = (-sin(yaw), -cos(yaw))
   const yaw = Math.atan2(-dx, -dz)
-  const aimY = prop.kind === 'tree' ? prop.y + 1.2 : prop.y + 0.2
+  const aimY = prop.kind === 'tree' ? prop.y + 1.2 : prop.kind === 'bush' ? prop.y + 0.5 : prop.y + 0.2
   return { x, z, yaw, aimY, horizontal: Math.hypot(dx, dz) }
 }

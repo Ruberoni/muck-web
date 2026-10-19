@@ -34,13 +34,18 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Espacio** | saltar (gasta stamina) |
 | **Shift** | correr (gasta stamina) |
 | **Clic izquierdo** | golpear; mantenerlo repite el golpe |
+| **F** | comer una baya |
 | **Esc** | pausa |
 
-Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Lo recogido aparece en la hotbar.
+Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Los arbustos de bayas se recogen con un clic (+3 bayas) y vuelven a crecer a los 90 s. Lo recogido aparece en la hotbar.
+
+## Supervivencia
+
+El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya devuelve 15. Con el hambre por encima del 30 % la vida se regenera, y con el hambre a 0 la vida baja hasta morir. Al morir la partida empieza de nuevo: inventario vacío, isla restaurada y el jugador en el punto de aparición.
 
 ## Mundo
 
-El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/world/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente, así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.
+El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/world/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, un tercero, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.
 
 ## Despliegue
 

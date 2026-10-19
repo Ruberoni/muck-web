@@ -2,9 +2,9 @@ import * as THREE from 'three'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createProps, type PropData } from '../world/props'
 import { heightAt } from '../world/terrain'
-import { EYE_HEIGHT, STEP } from './constants'
-import { aimPose, Interaction } from './interaction'
-import { Inventory } from './inventory'
+import { EYE_HEIGHT, PROP_DEFS, STEP } from './constants'
+import { aimPose, hitDamage, Interaction } from './interaction'
+import { Inventory, type ItemId } from './inventory'
 
 function setup() {
   const world = createProps()
@@ -99,5 +99,149 @@ describe('recolección', () => {
       expect(m.equals(base)).toBe(true)
     }
     expect(foliage.base.equals(trunk.base)).toBe(true)
+  })
+})
+
+describe('bayas y reaparición', () => {
+  let ctx: ReturnType<typeof setup>
+  beforeEach(() => {
+    ctx = setup()
+  })
+
+  const firstBush = () => ctx.world.props.find((p) => p.kind === 'bush')!
+  const wait = (seconds: number) => {
+    for (let i = 0; i < Math.round(seconds / STEP); i++) ctx.interaction.step(STEP, false)
+  }
+  const isHidden = (prop: PropData) => {
+    const m = new THREE.Matrix4()
+    return prop.instances.every(({ mesh, index }) => {
+      mesh.getMatrixAt(index, m)
+      return new THREE.Vector3().setFromMatrixScale(m).length() === 0
+    })
+  }
+
+  it('un clic en un arbusto da bayas y lo oculta', () => {
+    const bush = firstBush()
+    ctx.aimAt(bush)
+    expect(ctx.interaction.target).toBe(bush)
+    ctx.hold(STEP)
+    expect(bush.alive).toBe(false)
+    expect(isHidden(bush)).toBe(true)
+    expect(ctx.inventory.count('berry')).toBe(PROP_DEFS.bush.drop.amount)
+  })
+
+  it('el arbusto vuelve a crecer pasado su tiempo, y no antes', () => {
+    const bush = firstBush()
+    const regrow = PROP_DEFS.bush.regrow!
+    ctx.aimAt(bush)
+    ctx.hold(STEP)
+    wait(regrow - 1)
+    expect(bush.alive).toBe(false)
+    wait(1)
+    expect(bush.alive).toBe(true)
+    expect(bush.hp).toBe(bush.maxHp)
+    const m = new THREE.Matrix4()
+    for (const { mesh, index, base } of bush.instances) {
+      mesh.getMatrixAt(index, m)
+      expect(m.equals(base)).toBe(true)
+    }
+    ctx.interaction.updateTarget(ctx.camera)
+    expect(ctx.interaction.target).toBe(bush)
+  })
+
+  it('árboles y rocas no vuelven a crecer solos', () => {
+    const tree = ctx.world.props.find((p) => p.kind === 'tree')!
+    ctx.aimAt(tree)
+    ctx.hold(1.2)
+    wait(PROP_DEFS.bush.regrow! * 2)
+    expect(tree.alive).toBe(false)
+  })
+
+  it('reset restaura props destruidos y dañados y cancela las reapariciones', () => {
+    const tree = ctx.world.props.find((p) => p.kind === 'tree')!
+    const rock = ctx.world.props.find((p) => p.kind === 'rock')!
+    const bush = firstBush()
+    ctx.aimAt(tree)
+    ctx.hold(1.2)
+    ctx.aimAt(rock)
+    ctx.hold(STEP)
+    ctx.aimAt(bush)
+    ctx.hold(STEP)
+    expect(rock.hp).toBe(rock.maxHp - 1)
+
+    ctx.interaction.reset()
+    for (const prop of [tree, rock, bush]) {
+      expect(prop.alive).toBe(true)
+      expect(prop.hp).toBe(prop.maxHp)
+      expect(isHidden(prop)).toBe(false)
+    }
+    expect(ctx.interaction.target).toBe(null)
+  })
+
+  it('tras reset no queda ninguna reaparición antigua pendiente', () => {
+    const bush = firstBush()
+    const regrow = PROP_DEFS.bush.regrow!
+    ctx.aimAt(bush)
+    ctx.hold(STEP)
+    wait(regrow / 2)
+    ctx.interaction.reset()
+    ctx.aimAt(bush)
+    ctx.hold(STEP)
+    // El temporizador antiguo habría vencido aquí; el nuevo aún no.
+    wait(regrow / 2 + 1)
+    expect(bush.alive).toBe(false)
+  })
+})
+
+describe('herramientas', () => {
+  let ctx: ReturnType<typeof setup>
+  beforeEach(() => {
+    ctx = setup()
+  })
+
+  const firstOf = (kind: PropData['kind']) => ctx.world.props.find((p) => p.kind === kind)!
+  const equip = (item: ItemId) => {
+    ctx.inventory.add(item, 1)
+    ctx.inventory.select(ctx.inventory.slots.indexOf(item))
+  }
+
+  it('cada herramienta multiplica el daño solo contra su tipo de prop', () => {
+    expect(hitDamage(null, 'tree')).toBe(1)
+    expect(hitDamage('wood', 'tree')).toBe(1)
+    expect(hitDamage('wood_axe', 'tree')).toBe(2)
+    expect(hitDamage('stone_axe', 'tree')).toBe(4)
+    expect(hitDamage('stone_axe', 'rock')).toBe(1)
+    expect(hitDamage('wood_pickaxe', 'rock')).toBe(2)
+    expect(hitDamage('stone_pickaxe', 'rock')).toBe(4)
+    expect(hitDamage('stone_pickaxe', 'tree')).toBe(1)
+  })
+
+  it('con hacha de madera un árbol cae en 2 golpes', () => {
+    equip('wood_axe')
+    const tree = firstOf('tree')
+    ctx.aimAt(tree)
+    ctx.hold(STEP)
+    expect(tree.hp).toBe(1)
+    ctx.hold(0.4)
+    expect(tree.alive).toBe(false)
+    expect(ctx.inventory.count('wood')).toBe(4)
+  })
+
+  it('con pico de piedra una roca cae de un golpe y la vida no baja de 0', () => {
+    equip('stone_pickaxe')
+    const rock = firstOf('rock')
+    ctx.aimAt(rock)
+    ctx.hold(STEP)
+    expect(rock.alive).toBe(false)
+    expect(rock.hp).toBe(0)
+    expect(ctx.inventory.count('stone')).toBe(3)
+  })
+
+  it('el pico no ayuda contra los árboles', () => {
+    equip('stone_pickaxe')
+    const tree = firstOf('tree')
+    ctx.aimAt(tree)
+    ctx.hold(STEP)
+    expect(tree.hp).toBe(2)
   })
 })

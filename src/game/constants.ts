@@ -26,6 +26,15 @@ export const STAMINA_REGEN_DELAY = 1
 export const STAMINA_RECOVER_THRESHOLD = 15
 
 export const HEALTH_MAX = 100
+export const HUNGER_MAX = 100
+// De lleno a vacío en unos 4 minutos; con hambre a 0 la vida baja hasta morir en 50 s.
+export const HUNGER_DRAIN_PER_SEC = 0.4
+export const STARVE_DAMAGE_PER_SEC = 2
+// Por encima de este hambre la vida se regenera.
+export const HEALTH_REGEN_HUNGER = 30
+export const HEALTH_REGEN_PER_SEC = 1
+export const BERRY_FOOD = 15
+export const EAT_KEY = 'KeyF'
 
 export const MOUSE_SENSITIVITY = 0.002
 export const MAX_PITCH = (89 * Math.PI) / 180
@@ -36,8 +45,33 @@ export const REACH = 3.5
 export const HIT_COOLDOWN = 0.4
 export const WOBBLE_DURATION = 0.15
 
-export const PROP_DEFS = {
-  tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood' as ItemId, amount: 4 } },
-  rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone' as ItemId, amount: 3 } },
-} as const
+export interface PropDef {
+  name: string
+  verb: string
+  hp: number
+  drop: { item: ItemId; amount: number }
+  /** Segundos hasta que vuelve a aparecer tras destruirlo; sin valor, no vuelve. */
+  regrow?: number
+}
+
+export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
+  tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood', amount: 4 } },
+  rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone', amount: 3 } },
+  bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: 1, drop: { item: 'berry', amount: 3 }, regrow: 90 },
+}
+
+export const BASE_DAMAGE = 1
+
+export interface ToolDef {
+  kind: keyof typeof PROP_DEFS
+  multiplier: number
+}
+
+// Una herramienta solo multiplica el daño contra su tipo de prop; contra el resto se golpea como a mano.
+export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
+  wood_axe: { kind: 'tree', multiplier: 2 },
+  stone_axe: { kind: 'tree', multiplier: 4 },
+  wood_pickaxe: { kind: 'rock', multiplier: 2 },
+  stone_pickaxe: { kind: 'rock', multiplier: 4 },
+}
 

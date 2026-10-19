@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { computeWorldHash } from './hash'
-import { createProps } from './props'
+import { createProps, islandMeshes } from './props'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './terrain'
 
 describe('mundo determinista', () => {
   const world = createProps()
@@ -9,7 +10,30 @@ describe('mundo determinista', () => {
   // El código de la fase 1 da '50ef32fe' en Node y '2e7f5c79' en Chromium (las funciones
   // matemáticas difieren en los últimos bits). El valor del navegador se comprueba con Playwright.
   it('conserva el hash de la fase 1 (referencia en Node)', () => {
-    expect(computeWorldHash(Object.values(world.meshes))).toBe('50ef32fe')
+    expect(computeWorldHash(islandMeshes(world))).toBe('50ef32fe')
+  })
+
+  it('los arbustos son deterministas y no cambian árboles ni rocas', () => {
+    const again = createProps()
+    const { bushes, berries } = world.meshes
+    expect(bushes.count).toBeGreaterThan(30)
+    expect(berries.count).toBe(bushes.count)
+    expect(computeWorldHash([again.meshes.bushes, again.meshes.berries])).toBe(computeWorldHash([bushes, berries]))
+    // Los arbustos van al final: los ids de árboles y rocas no se mueven.
+    const firstBush = world.props.findIndex((p) => p.kind === 'bush')
+    expect(world.props.slice(firstBush).every((p) => p.kind === 'bush')).toBe(true)
+  })
+
+  it('los arbustos están en hierba y no se solapan con otros props', () => {
+    for (const bush of world.props.filter((p) => p.kind === 'bush')) {
+      const h = heightAt(bush.x, bush.z)
+      expect(h).toBeGreaterThan(SAND_LEVEL)
+      expect(h).toBeLessThanOrEqual(ROCK_LEVEL)
+      for (const other of world.props) {
+        if (other === bush) continue
+        expect(Math.hypot(other.x - bush.x, other.z - bush.z)).toBeGreaterThan(other.radius + bush.radius)
+      }
+    }
   })
 
   it('las posiciones de PropData coinciden con las matrices de instancia', () => {
