@@ -52,6 +52,8 @@
 }
 
 .bar.health .fill { background: #e05a4f; }
+.bar.hunger .fill { background: #e0913a; }
+.bar.hunger.starving { box-shadow: 0 0 0 2px #e05a4f; }
 .bar.stamina .fill { background: #f2c94c; }
 .bar.stamina.exhausted .fill { background: #9b8b5a; }
 
@@ -97,6 +99,7 @@
 }
 
 .overlay[hidden] { display: none; }
+.overlay.dead { background: rgb(70 10 10 / 0.6); }
 
 .overlay .panel {
   padding: 24px 32px;

@@ -5,14 +5,16 @@ import type { PropData } from '../world/props'
 const ICONS: Record<ItemId, string> = {
   wood: `<svg viewBox="0 0 32 32"><rect x="4" y="9" width="24" height="14" rx="3" fill="#8a5a32"/><ellipse cx="26" cy="16" rx="4" ry="7" fill="#d9a86a"/><ellipse cx="26" cy="16" rx="2" ry="3.5" fill="#b07b45"/></svg>`,
   stone: `<svg viewBox="0 0 32 32"><polygon points="6,22 10,10 20,6 27,14 25,24 14,27" fill="#9a978a"/><polygon points="10,10 20,6 18,15" fill="#b8b5a8"/><polygon points="18,15 27,14 25,24" fill="#7c796e"/></svg>`,
+  berry: `<svg viewBox="0 0 32 32"><path d="M16 9 Q18 4 23 4 Q21 8 16 9" fill="#3d7d35"/><circle cx="11" cy="19" r="6" fill="#c2304a"/><circle cx="21" cy="20" r="6" fill="#a8243d"/><circle cx="16" cy="12" r="5.5" fill="#d63d58"/><circle cx="14.5" cy="10.5" r="1.5" fill="#f2a0ad"/></svg>`,
 }
 
-export type OverlayKind = 'menu' | 'paused' | 'retry' | null
+export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | null
 
 const OVERLAY_TEXT: Record<Exclude<OverlayKind, null>, string> = {
   menu: 'Haz clic para jugar',
   paused: 'Pausa — haz clic para continuar',
   retry: 'No se pudo capturar el ratón. Haz clic de nuevo',
+  dead: 'Has muerto — haz clic para empezar de nuevo',
 }
 
 const CONTROLS = `
@@ -22,6 +24,7 @@ const CONTROLS = `
     <li><kbd>Espacio</kbd> saltar</li>
     <li><kbd>Shift</kbd> correr</li>
     <li><kbd>Clic</kbd> golpear (mantener para repetir)</li>
+    <li><kbd>F</kbd> comer bayas</li>
     <li><kbd>Esc</kbd> pausa</li>
   </ul>`
 
@@ -35,13 +38,15 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, pa
 /** HUD en DOM. Solo toca el DOM cuando cambia un valor visible. */
 export class Hud {
   private healthFill: HTMLElement
+  private hungerBar: HTMLElement
+  private hungerFill: HTMLElement
   private staminaBar: HTMLElement
   private staminaFill: HTMLElement
   private prompt: HTMLElement
   private slots: { root: HTMLElement; icon: HTMLElement; count: HTMLElement }[] = []
   private overlay: HTMLElement
   private overlayTitle: HTMLElement
-  private last = { health: -1, stamina: -1, exhausted: false, prompt: '' }
+  private last = { health: -1, hunger: -1, stamina: -1, exhausted: false, prompt: '' }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
@@ -50,6 +55,8 @@ export class Hud {
 
     const bars = el('div', 'bars', root)
     this.healthFill = el('div', 'fill', el('div', 'bar health', bars))
+    this.hungerBar = el('div', 'bar hunger', bars)
+    this.hungerFill = el('div', 'fill', this.hungerBar)
     this.staminaBar = el('div', 'bar stamina', bars)
     this.staminaFill = el('div', 'fill', this.staminaBar)
 
@@ -73,14 +80,24 @@ export class Hud {
 
   showOverlay(kind: OverlayKind) {
     this.overlay.hidden = kind === null
+    this.overlay.classList.toggle('dead', kind === 'dead')
     if (kind) this.overlayTitle.textContent = OVERLAY_TEXT[kind]
   }
 
   setHealth(value: number, max: number) {
-    const v = Math.round(value)
+    const v = Math.ceil(value)
     if (v === this.last.health) return
     this.last.health = v
     this.healthFill.style.transform = `scaleX(${v / max})`
+  }
+
+  setHunger(value: number, max: number) {
+    // ceil, como la vida: la barra no se vacía hasta que el hambre llega de verdad a 0.
+    const v = Math.ceil(value)
+    if (v === this.last.hunger) return
+    this.last.hunger = v
+    this.hungerFill.style.transform = `scaleX(${v / max})`
+    this.hungerBar.classList.toggle('starving', v === 0)
   }
 
   setStamina(value: number, max: number, exhausted: boolean) {
@@ -99,7 +116,8 @@ export class Hud {
     let text = ''
     if (prop) {
       const def = PROP_DEFS[prop.kind]
-      text = `${def.name} ${'▮'.repeat(prop.hp)}${'▯'.repeat(prop.maxHp - prop.hp)} — clic para ${def.verb}`
+      const hp = prop.maxHp > 1 ? ` ${'▮'.repeat(prop.hp)}${'▯'.repeat(prop.maxHp - prop.hp)}` : ''
+      text = `${def.name}${hp} — clic para ${def.verb}`
     }
     if (text === this.last.prompt) return
     this.last.prompt = text
