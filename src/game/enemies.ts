@@ -95,8 +95,9 @@ export class Enemies {
   private spawnTimer = 0
   private nextId = 0
 
+  /** `grids`: obstáculos que rodean (props, fogatas…). */
   constructor(
-    private grid: SpatialGrid<Collider>,
+    private grids: SpatialGrid<Collider>[],
     private rng: () => number = Math.random,
   ) {}
 
@@ -174,7 +175,7 @@ export class Enemies {
 
   /** Lo saca de los props; si eso lo empuja al agua profunda, vuelve a (x, z). */
   private settle(e: EnemyData, x: number, z: number) {
-    resolveCircle(e.pos, ENEMY_RADIUS, this.grid)
+    for (const grid of this.grids) resolveCircle(e.pos, ENEMY_RADIUS, grid)
     if (!walkable(e.pos.x, e.pos.z)) {
       e.pos.x = x
       e.pos.z = z
@@ -216,7 +217,7 @@ export class Enemies {
       const z = pz + Math.sin(angle) * r
       if (Math.hypot(x, z) > BOUND || heightAt(x, z) < WATER_LEVEL + 0.2) continue
       const pos = { x, z }
-      if (resolveCircle(pos, ENEMY_RADIUS, this.grid)) continue
+      if (this.grids.some((grid) => resolveCircle(pos, ENEMY_RADIUS, grid))) continue
       return this.spawnAt(x, z)
     }
     return null

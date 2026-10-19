@@ -49,7 +49,7 @@ describe('enemigos nocturnos', () => {
   let enemies: Enemies
   let player: { x: number; z: number }
   beforeEach(() => {
-    enemies = new Enemies(world.grid, mulberry32(7))
+    enemies = new Enemies([world.grid], mulberry32(7))
     player = { ...spot }
   })
 
@@ -153,8 +153,8 @@ describe('enemigos nocturnos', () => {
 describe('combate', () => {
   const setup = () => {
     const inventory = new Inventory()
-    const enemies = new Enemies(world.grid, mulberry32(7))
-    const interaction = new Interaction(world, inventory, enemies)
+    const enemies = new Enemies([world.grid], mulberry32(7))
+    const interaction = new Interaction(world, inventory, undefined, enemies)
     const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
     camera.rotation.order = 'YXZ'
     const enemy = enemies.spawnAt(spot.x + 1.5, spot.z)

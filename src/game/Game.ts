@@ -3,6 +3,7 @@ import { createScene, updateSky, type Sky } from '../scene'
 import { Hud } from '../ui/hud'
 import { DayClock } from '../world/daycycle'
 import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../world/terrain'
+import { Campfires, campfireSpot, type CampfireSpot } from './campfire'
 import { resolveCircle } from './collision'
 import {
   BERRY_FOOD,
@@ -19,8 +20,8 @@ import {
 } from './constants'
 import { craft, RECIPES } from './crafting'
 import { Enemies } from './enemies'
-import { Input } from './input'
-import { Interaction } from './interaction'
+import { CLICK, Input } from './input'
+import { canRegrowAt, Interaction } from './interaction'
 import { Inventory, SLOT_COUNT } from './inventory'
 import {
   createPlayer,
@@ -54,6 +55,7 @@ export class Game {
   readonly hud: Hud
   readonly input: Input
   readonly clock = new DayClock()
+  readonly campfires: Campfires
 
   state: GameState = 'menu'
   craftingOpen = false
@@ -69,6 +71,7 @@ export class Game {
   private renderPos = { x: 0, y: 0, z: 0 }
   private shadowCenter = new THREE.Vector3()
   private spawn: { x: number; z: number }
+  private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -86,13 +89,18 @@ export class Game {
     this.sky = sky
     this.water = water
     this.world = world
-    this.enemies = new Enemies(world.grid)
+    this.campfires = new Campfires(scene)
+    this.enemies = new Enemies([world.grid, this.campfires.grid])
     scene.add(this.enemies.group)
-    this.interaction = new Interaction(world, this.inventory, this.enemies)
+    // Los arbustos no vuelven a crecer encima del jugador ni de una fogata.
+    this.interaction = new Interaction(world, this.inventory, (prop) => canRegrowAt(prop, this.player.pos, this.campfires.grid), this.enemies)
 
     this.env = {
       heightAt,
-      collide: (pos) => resolveCircle(pos, PLAYER_RADIUS, world.grid),
+      collide: (pos) => {
+        const props = resolveCircle(pos, PLAYER_RADIUS, world.grid)
+        return resolveCircle(pos, PLAYER_RADIUS, this.campfires.grid) || props
+      },
     }
     this.spawn = this.findSpawn()
     this.player = createPlayer(this.env, this.spawn.x, this.spawn.z)
@@ -135,6 +143,7 @@ export class Game {
     this.setCrafting(false)
     this.interaction.reset()
     this.enemies.reset()
+    this.campfires.clear()
     this.clock.reset()
     Object.assign(this.player, createPlayer(this.env, this.spawn.x, this.spawn.z))
     this.acc = 0
@@ -222,11 +231,23 @@ export class Game {
     this.placeCamera(this.player.pos)
     this.camera.updateMatrixWorld()
     this.interaction.updateTarget(this.camera)
-    this.interaction.step(STEP, this.attackOverride ?? this.input.attackHeld)
+    // Con la fogata en la mano el clic la coloca en vez de golpear.
+    const placing = this.holdingCampfire
+    this.interaction.step(STEP, !placing && (this.attackOverride ?? this.input.attackHeld))
+    if (placing && presses.has(CLICK)) this.placeCampfire()
 
     if (presses.has(EAT_KEY)) this.eatBerry()
     stepSurvival(this.player, STEP)
     if (isDead(this.player)) this.die()
+  }
+
+  private get holdingCampfire() {
+    return this.inventory.selectedItem === 'campfire'
+  }
+
+  private placeCampfire() {
+    const spot = campfireSpot(this.player.pos, this.player.yaw, [this.world.grid, this.campfires.grid], this.spot)
+    if (this.campfires.place(spot)) this.inventory.remove('campfire', 1)
   }
 
   private eatBerry() {
@@ -259,11 +280,16 @@ export class Game {
       this.renderPos.z - Math.cos(p.yaw) * SHADOW_LOOK_AHEAD,
     )
     updateSky(this.sky, this.clock.phase, this.shadowCenter)
+    this.campfires.update(time, this.clock.phase, this.renderPos)
+    const placing = this.state === 'playing' && this.holdingCampfire
+    const spot = placing ? campfireSpot(this.renderPos, p.yaw, [this.world.grid, this.campfires.grid], this.spot) : null
+    this.campfires.setGhost(spot)
 
     this.hud.setHealth(p.health, HEALTH_MAX)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
-    this.hud.setTarget(this.interaction.target)
+    if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
+    else this.hud.setTarget(this.interaction.target)
     this.hud.setDay(this.clock.day)
 
     this.renderer.render(this.scene, this.camera)

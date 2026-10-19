@@ -60,6 +60,9 @@ export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
   bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: 1, drop: { item: 'berry', amount: 3 }, regrow: 90 },
 }
 
+// Margen extra entre el jugador y un prop que vuelve a crecer: no reaparece pegado a él.
+export const REGROW_CLEARANCE = 0.5
+
 export const BASE_DAMAGE = 1
 
 export interface ToolDef {
@@ -100,3 +103,10 @@ export const ENEMY_BASE_COUNT = 3
 export const ENEMY_PER_NIGHT = 2
 export const ENEMY_MAX = 12
 
+export const CAMPFIRE_RADIUS = 0.6
+// Distancia por delante del jugador a la que se coloca la fogata.
+export const CAMPFIRE_PLACE_DISTANCE = 2.2
+// Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.
+export const CAMPFIRE_LIGHTS = 4
+export const CAMPFIRE_LIGHT_INTENSITY = 30
+export const CAMPFIRE_LIGHT_DISTANCE = 22

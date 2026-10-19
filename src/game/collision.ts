@@ -25,6 +25,11 @@ export class SpatialGrid<T extends Collider> {
     })
   }
 
+  clear() {
+    this.cells.clear()
+    this.maxRadius = 0
+  }
+
   /** Colliders cuyas celdas tocan el círculo (x, z, r). El Set devuelto se reutiliza entre llamadas. */
   query(x: number, z: number, r: number): Set<T> {
     this.result.clear()

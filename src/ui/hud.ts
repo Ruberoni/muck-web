@@ -18,6 +18,7 @@ const ICONS: Record<ItemId, string> = {
   stone_axe: axe('#b8b5a8', '#7c796e'),
   stone_pickaxe: pickaxe('#b8b5a8', '#7c796e'),
   raw_meat: `<svg viewBox="0 0 32 32"><rect x="20" y="17" width="9" height="4" rx="2" transform="rotate(35 24 19)" fill="#efe6d2"/><path d="M5 15 Q6 6 15 6 Q24 7 23 15 Q22 24 13 25 Q4 24 5 15" fill="#d9566a"/><path d="M9 14 Q11 9 16 10" stroke="#f2a0ad" stroke-width="2" fill="none"/><circle cx="14" cy="17" r="2.5" fill="#f4e2c8"/></svg>`,
+  campfire: `<svg viewBox="0 0 32 32"><path d="M16 4 Q23 12 21 19 Q19 23 16 23 Q13 23 11 19 Q9 12 16 4" fill="#ff7a1f"/><path d="M16 11 Q20 16 18.5 20 Q17.5 22 16 22 Q14.5 22 13.5 20 Q12 16 16 11" fill="#ffd23f"/><polygon points="4,25 6,22 26,26 25,29" fill="#6b4426"/><polygon points="28,25 26,22 6,26 7,29" fill="#8a5a32"/></svg>`,
 }
 
 export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | null
@@ -38,7 +39,8 @@ const CONTROLS = `
     <li><kbd>Clic</kbd> golpear (mantener para repetir)</li>
     <li><kbd>F</kbd> comer bayas</li>
     <li><kbd>1–9</kbd> elegir casilla</li>
-    <li><kbd>C</kbd> crafteo (con él abierto, 1–4 fabrica)</li>
+    <li><kbd>C</kbd> crafteo (con él abierto, 1–5 fabrica)</li>
+    <li><kbd>Clic</kbd> con la fogata en la mano: colocarla</li>
     <li><kbd>Esc</kbd> pausa</li>
   </ul>`
 
@@ -156,6 +158,11 @@ export class Hud {
       const hp = target.maxHp > 1 ? ` ${'▮'.repeat(target.hp)}${'▯'.repeat(target.maxHp - target.hp)}` : ''
       text = `${def.name}${hp} — clic para ${def.verb}`
     }
+    this.setPrompt(text)
+  }
+
+  /** Texto bajo la mira; vacío lo oculta. */
+  setPrompt(text: string) {
     if (text === this.last.prompt) return
     this.last.prompt = text
     this.prompt.textContent = text
