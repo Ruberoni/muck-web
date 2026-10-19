@@ -35,9 +35,16 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Shift** | correr (gasta stamina) |
 | **Clic izquierdo** | golpear; mantenerlo repite el golpe |
 | **F** | comer una baya |
+| **1–9** | elegir casilla de la hotbar |
+| **C** | abrir o cerrar el crafteo (con él abierto, **1–5** fabrica) |
+| **Clic izquierdo** con la fogata en la mano | colocarla |
 | **Esc** | pausa |
 
-Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Los arbustos de bayas se recogen con un clic (+3 bayas) y vuelven a crecer a los 90 s. Lo recogido aparece en la hotbar.
+Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Los arbustos de bayas se recogen con un clic (+3 bayas) y vuelven a crecer a los 90 s, aunque nunca encima del jugador ni de una fogata (esperan a que el sitio quede libre). Los árboles y las rocas no vuelven. Lo recogido aparece en la hotbar.
+
+## Fogata
+
+Se fabrica con 6 de madera y 3 de piedra. Con ella en la mano aparece una vista previa delante del jugador (verde si se puede colocar, roja si cae en el agua, en una pendiente o encima de algo) y un clic la coloca. Da luz cálida que de noche ilumina el entorno; de día apenas se nota. No se puede atravesar y desaparece al morir, con el resto de la partida.
 
 ## Supervivencia
 

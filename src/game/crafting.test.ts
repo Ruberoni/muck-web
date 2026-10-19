@@ -31,6 +31,16 @@ describe('crafteo', () => {
     expect(inv.slots[0]).toBe('wood_axe')
   })
 
+  it('la fogata cuesta madera y piedra', () => {
+    const inv = new Inventory()
+    inv.add('wood', 6)
+    inv.add('stone', 2)
+    expect(canCraft(inv, recipe('campfire'))).toBe(false)
+    inv.add('stone', 1)
+    expect(craft(inv, recipe('campfire'))).toBe(true)
+    expect(inv.toJSON()).toEqual({ campfire: 1 })
+  })
+
   it('con la hotbar llena solo se fabrica si un ingrediente se agota', () => {
     const inv = new Inventory()
     inv.add('wood', 10)

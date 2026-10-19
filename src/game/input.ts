@@ -1,6 +1,9 @@
 import { MOUSE_SPIKE_LIMIT } from './constants'
 import type { PlayerInput } from './player'
 
+/** Código de pulsación única del clic izquierdo (no es un e.code real). */
+export const CLICK = 'Mouse0'
+
 interface InputCallbacks {
   onLockChange(locked: boolean): void
   isPlaying(): boolean
@@ -41,7 +44,9 @@ export class Input {
     })
     // El clic que inicia o reanuda llega con el juego aún en menú/pausa, así que no cuenta como golpe.
     document.addEventListener('mousedown', (e) => {
-      if (e.button === 0 && this.callbacks.isPlaying()) this.attackHeld = true
+      if (e.button !== 0 || !this.callbacks.isPlaying()) return
+      this.attackHeld = true
+      this.press(CLICK)
     })
     document.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.attackHeld = false

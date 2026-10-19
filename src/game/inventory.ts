@@ -1,4 +1,4 @@
-export type ItemId = 'wood' | 'stone' | 'berry' | 'wood_axe' | 'wood_pickaxe' | 'stone_axe' | 'stone_pickaxe'
+export type ItemId = 'wood' | 'stone' | 'berry' | 'wood_axe' | 'wood_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'campfire'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -8,6 +8,7 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   wood_pickaxe: 'Pico de madera',
   stone_axe: 'Hacha de piedra',
   stone_pickaxe: 'Pico de piedra',
+  campfire: 'Fogata',
 }
 // Una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9
