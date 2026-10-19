@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createProps, type PropData } from '../world/props'
 import { heightAt } from '../world/terrain'
 import { SpatialGrid, type Collider } from './collision'
-import { EYE_HEIGHT, PLAYER_RADIUS, PROP_DEFS, REGROW_CLEARANCE, STEP } from './constants'
+import { EYE_HEIGHT, HIT_COOLDOWN, PLAYER_RADIUS, PROP_DEFS, REGROW_CLEARANCE, STEP } from './constants'
 import { aimPose, canRegrowAt, hitDamage, Interaction } from './interaction'
 import { Inventory, type ItemId } from './inventory'
 
@@ -49,6 +49,18 @@ describe('recolección', () => {
     expect(tree.alive).toBe(false)
     expect(tree.hp).toBe(0)
     expect(ctx.inventory.count('wood')).toBe(4)
+  })
+
+  it('sin objetivo también golpea al aire y espera el cooldown', () => {
+    ctx.interaction.target = null
+    expect(ctx.interaction.step(STEP, true)).toBe(true)
+    expect(ctx.interaction.step(STEP, true)).toBe(false)
+    const tree = firstOf('tree')
+    ctx.aimAt(tree)
+    ctx.interaction.step(STEP, true)
+    expect(tree.hp).toBe(tree.maxHp)
+    ctx.hold(HIT_COOLDOWN)
+    expect(tree.hp).toBe(tree.maxHp - 1)
   })
 
   it('una roca necesita 4 golpes y da piedra', () => {

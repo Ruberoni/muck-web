@@ -58,17 +58,21 @@ export class Interaction {
     }
   }
 
-  /** Paso fijo: mientras se mantiene el ataque, golpea cada vez que termina el cooldown. */
-  step(dt: number, attackHeld: boolean) {
+  /**
+   * Paso fijo: mientras se mantiene el ataque, da un golpe cada vez que termina el cooldown,
+   * también al aire (como la animación). Devuelve si ha empezado un golpe en este paso.
+   */
+  step(dt: number, attackHeld: boolean): boolean {
     for (const [prop, left] of this.regrowing) {
       if (left - dt > 1e-9) this.regrowing.set(prop, left - dt)
       else if (this.canRegrow(prop)) this.respawn(prop)
       else this.regrowing.set(prop, 0)
     }
     this.cooldown = Math.max(0, this.cooldown - dt)
-    if (!attackHeld || this.cooldown > 1e-9 || !this.target) return
-    this.hit(this.target)
+    if (!attackHeld || this.cooldown > 1e-9) return false
+    if (this.target) this.hit(this.target)
     this.cooldown = HIT_COOLDOWN
+    return true
   }
 
   private hit(target: Target) {
