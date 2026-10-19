@@ -1,27 +1,33 @@
 import * as THREE from 'three'
+import { createSkyState, sampleSky } from './world/daycycle'
 import { createProps } from './world/props'
 import { createTerrain, createWater } from './world/terrain'
 
-const SKY_COLOR = '#9fd4f0'
-const SUN_DIR = new THREE.Vector3(60, 90, 40).normalize()
 const SUN_DISTANCE = 150
 const SHADOW_HALF = 60
 const SHADOW_MAP_SIZE = 2048
 const TEXEL = (SHADOW_HALF * 2) / SHADOW_MAP_SIZE
 
-// Orientación de la cámara de sombras (mira en -SUN_DIR con up +Y, igual que la que crea three).
-const lightRotation = new THREE.Matrix4().lookAt(SUN_DIR, new THREE.Vector3(), new THREE.Object3D().up)
-const lightRotationInv = lightRotation.clone().invert()
+// Orientación de la cámara de sombras (mira en -lightDir con up +Y, igual que la que crea three).
+const lightRotation = new THREE.Matrix4()
+const lightRotationInv = new THREE.Matrix4()
+const origin = new THREE.Vector3()
+const up = new THREE.Object3D().up
 const snapped = new THREE.Vector3()
+const state = createSkyState()
 
 export function createScene() {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(SKY_COLOR)
-  scene.fog = new THREE.Fog(SKY_COLOR, 120, 320)
+  const background = new THREE.Color()
+  scene.background = background
+  const fog = new THREE.Fog(background, 120, 320)
+  scene.fog = fog
 
-  scene.add(new THREE.HemisphereLight('#d6ecff', '#5d7a3a', 1.4))
+  const hemi = new THREE.HemisphereLight()
+  scene.add(hemi)
 
-  const sun = new THREE.DirectionalLight('#fff3d6', 2.6)
+  // De día es el sol y de noche la luna: una sola luz con sombras.
+  const sun = new THREE.DirectionalLight()
   sun.castShadow = true
   sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE)
   Object.assign(sun.shadow.camera, {
@@ -41,19 +47,37 @@ export function createScene() {
   const world = createProps()
   scene.add(terrain, water, world.group)
 
-  return { scene, sun, water, world }
+  const sky = { background, fog, hemi, sun }
+  return { scene, sky, water, world }
 }
 
+export type Sky = ReturnType<typeof createScene>['sky']
+
 /**
- * Centra la cámara de sombras en `center` (normalmente por delante del jugador),
- * ajustada a la rejilla de texels en el espacio de la luz para que las sombras no parpadeen.
+ * Aplica la hora del día (`phase`, ver DayClock) a cielo, niebla y luces, y centra la cámara
+ * de sombras en `center` (normalmente por delante del jugador), ajustada a la rejilla de texels
+ * en el espacio de la luz para que las sombras no parpadeen.
  */
-export function updateSun(sun: THREE.DirectionalLight, center: THREE.Vector3) {
+export function updateSky(sky: Sky, phase: number, center: THREE.Vector3) {
+  sampleSky(phase, state)
+  sky.background.copy(state.sky)
+  sky.fog.color.copy(state.sky)
+  sky.fog.near = state.fogNear
+  sky.fog.far = state.fogFar
+  sky.hemi.color.copy(state.hemiSky)
+  sky.hemi.groundColor.copy(state.hemiGround)
+  sky.hemi.intensity = state.hemiIntensity
+  const { sun } = sky
+  sun.color.copy(state.lightColor)
+  sun.intensity = state.lightIntensity
+
+  lightRotation.lookAt(state.lightDir, origin, up)
+  lightRotationInv.copy(lightRotation).invert()
   snapped.copy(center).applyMatrix4(lightRotationInv)
   snapped.x = Math.round(snapped.x / TEXEL) * TEXEL
   snapped.y = Math.round(snapped.y / TEXEL) * TEXEL
   snapped.applyMatrix4(lightRotation)
   sun.target.position.copy(snapped)
-  sun.position.copy(snapped).addScaledVector(SUN_DIR, SUN_DISTANCE)
+  sun.position.copy(snapped).addScaledVector(state.lightDir, SUN_DISTANCE)
   sun.target.updateMatrixWorld()
 }
