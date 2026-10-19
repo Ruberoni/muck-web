@@ -2,6 +2,8 @@ import { WATER_LEVEL, WORLD_SIZE } from '../world/terrain'
 import {
   FLOAT_DEPTH,
   GRAVITY,
+  HEALTH_MAX,
+  HUNGER_MAX,
   GROUND_SNAP,
   JUMP_COST,
   JUMP_VELOCITY,
@@ -17,6 +19,7 @@ import {
   WATER_SPEED_FACTOR,
   WORLD_BOUND_FACTOR,
 } from './constants'
+import type { Vitals } from './survival'
 
 export interface Vec3 {
   x: number
@@ -41,7 +44,7 @@ export interface PlayerEnv {
   collide?(pos: Vec3): void
 }
 
-export interface Player {
+export interface Player extends Vitals {
   /** Posición de los pies. La cámara va en pos.y + EYE_HEIGHT. */
   pos: Vec3
   prev: Vec3
@@ -77,6 +80,8 @@ export function createPlayer(env: PlayerEnv, x: number, z: number, yaw = 0): Pla
     exhausted: false,
     sprintLocked: false,
     regenDelay: 0,
+    health: HEALTH_MAX,
+    hunger: HUNGER_MAX,
   }
 }
 

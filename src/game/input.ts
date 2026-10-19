@@ -9,6 +9,8 @@ interface InputCallbacks {
 /** Teclado (por e.code), ratón y pointer lock. */
 export class Input {
   private keys = new Set<string>()
+  private presses = new Set<string>()
+  private taken = new Set<string>()
   private dx = 0
   private dy = 0
   private rawMouse = false
@@ -22,6 +24,7 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') e.preventDefault()
       this.keys.add(e.code)
+      if (!e.repeat) this.press(e.code)
     })
     window.addEventListener('keyup', (e) => this.keys.delete(e.code))
     window.addEventListener('blur', () => this.clear())
@@ -77,6 +80,21 @@ export class Input {
     return delta
   }
 
+  /** Registra una pulsación única. Como el clic, fuera de partida no cuenta. */
+  press(code: string) {
+    if (this.callbacks.isPlaying()) this.presses.add(code)
+  }
+
+  /**
+   * Teclas pulsadas (sin autorrepetición) desde la última llamada, por e.code.
+   * Se llama una vez por paso fijo; el Set devuelto solo es válido hasta la siguiente llamada.
+   */
+  takePresses(): ReadonlySet<string> {
+    ;[this.presses, this.taken] = [this.taken, this.presses]
+    this.presses.clear()
+    return this.taken
+  }
+
   state(): PlayerInput {
     const k = this.keys
     return {
@@ -91,6 +109,7 @@ export class Input {
 
   clear() {
     this.keys.clear()
+    this.presses.clear()
     this.attackHeld = false
     this.dx = this.dy = 0
   }

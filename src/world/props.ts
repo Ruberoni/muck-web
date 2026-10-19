@@ -1,11 +1,13 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { PROP_DEFS } from '../game/constants'
 import { SpatialGrid } from '../game/collision'
-import { createPropsRng } from './random'
+import { createBushRng, createPropsRng } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WORLD_SIZE } from './terrain'
 
 const TREE_COUNT = 180
 const ROCK_COUNT = 60
+const BUSH_COUNT = 45
 const MAX_SLOPE = 1.6
 
 const TRUNK_BOTTOM_RADIUS = 0.35
@@ -18,10 +20,25 @@ const FOLIAGE_HEIGHT = 3.4
 const trunkGeometry = new THREE.CylinderGeometry(0.25, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, 6).translate(0, TRUNK_HEIGHT / 2, 0)
 const foliageGeometry = new THREE.ConeGeometry(1.5, FOLIAGE_HEIGHT, 7).translate(0, FOLIAGE_BASE + FOLIAGE_HEIGHT / 2, 0)
 const rockGeometry = new THREE.IcosahedronGeometry(1, 0)
+const BUSH_RADIUS = 0.75
+const bushGeometry = new THREE.IcosahedronGeometry(BUSH_RADIUS, 0).scale(1, 0.75, 1).translate(0, 0.45, 0)
+// Bayas repartidas por la mitad superior del arbusto, en una sola geometría.
+const berryGeometry = mergeGeometries(
+  [
+    [0.55, 0.75, 0.15],
+    [-0.4, 0.8, 0.4],
+    [0.1, 0.95, -0.5],
+    [-0.5, 0.6, -0.25],
+    [0.3, 0.55, 0.6],
+    [0.05, 1.0, 0.1],
+  ].map(([x, y, z]) => new THREE.IcosahedronGeometry(0.09, 0).translate(x, y, z)),
+)
 
 const trunkMaterial = new THREE.MeshStandardMaterial({ color: '#7a5230', flatShading: true })
 const foliageMaterial = new THREE.MeshStandardMaterial({ color: '#2f6f2e', flatShading: true })
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#9a978a', flatShading: true })
+const bushMaterial = new THREE.MeshStandardMaterial({ color: '#3d7d35', flatShading: true })
+const berryMaterial = new THREE.MeshStandardMaterial({ color: '#c2304a', flatShading: true })
 
 export type PropKind = keyof typeof PROP_DEFS
 
@@ -35,7 +52,7 @@ export interface PropData {
   id: number
   kind: PropKind
   x: number
-  /** Árboles: base del tronco. Rocas: centro. */
+  /** Árboles y arbustos: base. Rocas: centro. */
   y: number
   z: number
   radius: number
@@ -68,6 +85,8 @@ export function createProps() {
   const trunks = createInstanced(trunkGeometry, trunkMaterial, TREE_COUNT)
   const foliage = createInstanced(foliageGeometry, foliageMaterial, TREE_COUNT)
   const rocks = createInstanced(rockGeometry, rockMaterial, ROCK_COUNT)
+  const bushes = createInstanced(bushGeometry, bushMaterial, BUSH_COUNT)
+  const berries = createInstanced(berryGeometry, berryMaterial, BUSH_COUNT)
   const dummy = new THREE.Object3D()
   const props: PropData[] = []
 
@@ -123,20 +142,53 @@ export function createProps() {
   }
   rocks.count = rockCount
 
-  const meshes = { trunks, foliage, rocks }
+  const grid = new SpatialGrid<PropData>()
+  for (const prop of props) grid.insert(prop)
+
+  // Después de árboles y rocas y con su propio PRNG: no cambian nada de lo anterior.
+  const bushRng = createBushRng()
+  let bushCount = 0
+  for (let attempt = 0; bushCount < BUSH_COUNT && attempt < BUSH_COUNT * 20; attempt++) {
+    const angle = bushRng() * Math.PI * 2
+    const r = Math.sqrt(bushRng()) * WORLD_SIZE * 0.45
+    const x = Math.cos(angle) * r
+    const z = Math.sin(angle) * r
+    const scale = 0.8 + bushRng() * 0.4
+    const rotation = bushRng() * Math.PI * 2
+    const y = heightAt(x, z)
+    const radius = BUSH_RADIUS * scale
+    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || slopeAt(x, z) > MAX_SLOPE) continue
+    let blocked = false
+    for (const other of grid.query(x, z, radius + 1 + grid.maxRadius)) {
+      if (Math.hypot(other.x - x, other.z - z) < other.radius + radius + 1) blocked = true
+    }
+    if (blocked) continue
+
+    dummy.position.set(x, y - 0.05, z)
+    dummy.rotation.set(0, rotation, 0)
+    dummy.scale.setScalar(scale)
+    dummy.updateMatrix()
+    addProp('bush', x, y - 0.05, z, radius, [bushes, berries], bushCount)
+    grid.insert(props[props.length - 1])
+    bushCount++
+  }
+  bushes.count = berries.count = bushCount
+
+  const meshes = { trunks, foliage, rocks, bushes, berries }
   const instanceToProp = new Map<THREE.InstancedMesh, Int32Array>(
     Object.values(meshes).map((mesh) => [mesh, new Int32Array(mesh.count).fill(-1)]),
   )
-  const grid = new SpatialGrid<PropData>()
   for (const prop of props) {
     for (const { mesh, index } of prop.instances) instanceToProp.get(mesh)![index] = prop.id
-    grid.insert(prop)
   }
 
   const group = new THREE.Group()
-  group.add(trunks, foliage, rocks)
+  group.add(trunks, foliage, rocks, bushes, berries)
 
   return { group, props, meshes, instanceToProp, grid }
 }
 
 export type World = ReturnType<typeof createProps>
+
+/** Meshes que definen la isla original para computeWorldHash (los arbustos van aparte). */
+export const islandMeshes = ({ meshes }: World) => [meshes.trunks, meshes.foliage, meshes.rocks]

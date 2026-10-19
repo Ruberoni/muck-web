@@ -2,6 +2,7 @@ import { aimPose } from './game/interaction'
 import type { Game } from './game/Game'
 import type { PlayerInput } from './game/player'
 import { computeWorldHash } from './world/hash'
+import { islandMeshes } from './world/props'
 import { heightAt, WATER_LEVEL } from './world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './game/constants'
 
@@ -9,7 +10,7 @@ import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './game/const
 export function installDebug(game: Game) {
   const { world, player } = game
   // Se calcula antes de que el jugador toque nada: es la huella del mundo generado.
-  const worldHash = computeWorldHash(Object.values(world.meshes))
+  const worldHash = computeWorldHash(islandMeshes(world))
 
   const api = {
     worldHash,
@@ -24,6 +25,13 @@ export function installDebug(game: Game) {
     setAttack(held: boolean | null) {
       game.attackOverride = held
     },
+    /** Pulsación única de tecla (e.code), se consume en el siguiente paso. */
+    press: (code: string) => game.input.press(code),
+    setVitals(vitals: { health?: number; hunger?: number }) {
+      Object.assign(player, vitals)
+    },
+    state: () => game.state,
+    restart: () => game.restart(),
     player: () => ({
       x: player.pos.x,
       y: player.pos.y,
@@ -33,6 +41,8 @@ export function installDebug(game: Game) {
       grounded: player.grounded,
       exhausted: player.exhausted,
       sprintLocked: player.sprintLocked,
+      health: player.health,
+      hunger: player.hunger,
     }),
     teleport: (x: number, z: number, yaw?: number) => game.teleport(x, z, yaw, 0),
     aimAt(propId: number) {

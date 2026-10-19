@@ -4,8 +4,11 @@ import { Hud } from '../ui/hud'
 import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../world/terrain'
 import { resolveCircle } from './collision'
 import {
+  BERRY_FOOD,
+  EAT_KEY,
   EYE_HEIGHT,
   HEALTH_MAX,
+  HUNGER_MAX,
   MAX_FRAME_DT,
   MAX_STEPS_PER_FRAME,
   MOUSE_SENSITIVITY,
@@ -28,8 +31,9 @@ import {
   type PlayerEnv,
   type PlayerInput,
 } from './player'
+import { eat, isDead, stepSurvival } from './survival'
 
-export type GameState = 'menu' | 'playing' | 'paused'
+export type GameState = 'menu' | 'playing' | 'paused' | 'dead'
 
 const SHADOW_LOOK_AHEAD = 25
 const SPAWN_CLEARANCE = 3
@@ -58,6 +62,7 @@ export class Game {
   private lastTime: number | null = null
   private renderPos = { x: 0, y: 0, z: 0 }
   private shadowCenter = new THREE.Vector3()
+  private spawn: { x: number; z: number }
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -81,8 +86,8 @@ export class Game {
       heightAt,
       collide: (pos) => resolveCircle(pos, PLAYER_RADIUS, world.grid),
     }
-    const spawn = this.findSpawn()
-    this.player = createPlayer(this.env, spawn.x, spawn.z)
+    this.spawn = this.findSpawn()
+    this.player = createPlayer(this.env, this.spawn.x, this.spawn.z)
 
     this.hud = new Hud(container, () => this.onOverlayClick())
     this.hud.setInventory(this.inventory)
@@ -116,6 +121,16 @@ export class Game {
     this.hud.showOverlay(state === 'playing' ? null : state)
   }
 
+  /** Partida nueva: inventario vacío, isla restaurada y jugador en el punto de aparición. */
+  restart() {
+    this.inventory.clear()
+    this.interaction.reset()
+    Object.assign(this.player, createPlayer(this.env, this.spawn.x, this.spawn.z))
+    this.acc = 0
+    this.placeCamera(this.player.pos)
+    if (this.state === 'dead') this.setState('menu')
+  }
+
   teleport(x: number, z: number, yaw = this.player.yaw, pitch = this.player.pitch) {
     teleportPlayer(this.player, this.env, x, z, yaw)
     this.player.pitch = pitch
@@ -126,13 +141,14 @@ export class Game {
   /** Ejecuta pasos fijos de forma síncrona y renderiza un frame (debug y pruebas). */
   advance(seconds: number) {
     const steps = Math.round(seconds / STEP)
-    for (let i = 0; i < steps; i++) this.step()
+    for (let i = 0; i < steps && this.state !== 'dead'; i++) this.step()
     this.acc = 0
     this.render(1, seconds, performance.now())
   }
 
   private async onOverlayClick() {
     if (this.state === 'playing') return
+    if (this.state === 'dead') this.restart()
     const ok = await this.input.requestLock()
     if (!ok) this.hud.showOverlay('retry')
   }
@@ -148,7 +164,7 @@ export class Game {
     if (this.state === 'playing' && !this.manualClock) {
       this.acc += dt
       let steps = 0
-      while (this.acc >= STEP && steps < MAX_STEPS_PER_FRAME) {
+      while (this.acc >= STEP && steps < MAX_STEPS_PER_FRAME && this.state === 'playing') {
         this.step()
         this.acc -= STEP
         steps++
@@ -167,6 +183,21 @@ export class Game {
     this.camera.updateMatrixWorld()
     this.interaction.updateTarget(this.camera)
     this.interaction.step(STEP, this.attackOverride ?? this.input.attackHeld)
+
+    const presses = this.input.takePresses()
+    if (presses.has(EAT_KEY)) this.eatBerry()
+    stepSurvival(this.player, STEP)
+    if (isDead(this.player)) this.die()
+  }
+
+  private eatBerry() {
+    if (this.inventory.count('berry') > 0 && eat(this.player, BERRY_FOOD)) this.inventory.remove('berry', 1)
+  }
+
+  private die() {
+    this.setState('dead')
+    // Con el estado ya en 'dead', perder el ratón no lo cambia a pausa.
+    if (this.input.locked) document.exitPointerLock()
   }
 
   private placeCamera(pos: { x: number; y: number; z: number }) {
@@ -189,7 +220,8 @@ export class Game {
     )
     updateSun(this.sun, this.shadowCenter)
 
-    this.hud.setHealth(HEALTH_MAX, HEALTH_MAX)
+    this.hud.setHealth(p.health, HEALTH_MAX)
+    this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     this.hud.setTarget(this.interaction.target)
 

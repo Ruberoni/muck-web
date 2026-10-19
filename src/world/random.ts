@@ -15,3 +15,5 @@ export function mulberry32(seed: number): () => number {
 // Streams independientes: cambiar el terreno no reordena los props y viceversa.
 export const createTerrainRng = () => mulberry32(WORLD_SEED)
 export const createPropsRng = () => mulberry32(WORLD_SEED ^ 0x9e3779b9)
+// Los arbustos tienen su propio stream: así no alteran árboles ni rocas (ni el hash del mundo).
+export const createBushRng = () => mulberry32(WORLD_SEED ^ 0x85ebca6b)
