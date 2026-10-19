@@ -154,7 +154,7 @@ describe('combate', () => {
   const setup = () => {
     const inventory = new Inventory()
     const enemies = new Enemies([world.grid], mulberry32(7))
-    const interaction = new Interaction(world, inventory, undefined, enemies)
+    const interaction = new Interaction(world, inventory, enemies)
     const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
     camera.rotation.order = 'YXZ'
     const enemy = enemies.spawnAt(spot.x + 1.5, spot.z)

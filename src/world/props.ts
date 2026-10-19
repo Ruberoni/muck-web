@@ -1,6 +1,5 @@
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { PROP_DEFS } from '../game/constants'
+import { BERRIES_PER_BUSH, PROP_DEFS } from '../game/constants'
 import { SpatialGrid } from '../game/collision'
 import { createBushRng, createPropsRng } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WORLD_SIZE } from './terrain'
@@ -22,17 +21,17 @@ const foliageGeometry = new THREE.ConeGeometry(1.5, FOLIAGE_HEIGHT, 7).translate
 const rockGeometry = new THREE.IcosahedronGeometry(1, 0)
 const BUSH_RADIUS = 0.75
 const bushGeometry = new THREE.IcosahedronGeometry(BUSH_RADIUS, 0).scale(1, 0.75, 1).translate(0, 0.45, 0)
-// Bayas repartidas por la mitad superior del arbusto, en una sola geometría.
-const berryGeometry = mergeGeometries(
-  [
-    [0.55, 0.75, 0.15],
-    [-0.4, 0.8, 0.4],
-    [0.1, 0.95, -0.5],
-    [-0.5, 0.6, -0.25],
-    [0.3, 0.55, 0.6],
-    [0.05, 1.0, 0.1],
-  ].map(([x, y, z]) => new THREE.IcosahedronGeometry(0.09, 0).translate(x, y, z)),
-)
+// Bayas repartidas por la mitad superior del arbusto. Una geometría (y un InstancedMesh) por posición:
+// así cada baya se oculta por separado y comparte la matriz del arbusto (el wobble las mueve juntas).
+const berryGeometries = [
+  [0.55, 0.75, 0.15],
+  [-0.4, 0.8, 0.4],
+  [0.1, 0.95, -0.5],
+  [-0.5, 0.6, -0.25],
+  [0.3, 0.55, 0.6],
+  [0.05, 1.0, 0.1],
+].map(([x, y, z]) => new THREE.IcosahedronGeometry(0.09, 0).translate(x, y, z))
+if (berryGeometries.length !== BERRIES_PER_BUSH) throw new Error('Una posición por baya')
 
 const trunkMaterial = new THREE.MeshStandardMaterial({ color: '#7a5230', flatShading: true })
 const foliageMaterial = new THREE.MeshStandardMaterial({ color: '#2f6f2e', flatShading: true })
@@ -46,6 +45,8 @@ export interface PropInstance {
   mesh: THREE.InstancedMesh
   index: number
   base: THREE.Matrix4
+  /** Solo en arbustos: número de baya. Se ve mientras sea menor que la vida del arbusto. */
+  berry?: number
 }
 
 export interface PropData {
@@ -86,18 +87,19 @@ export function createProps() {
   const foliage = createInstanced(foliageGeometry, foliageMaterial, TREE_COUNT)
   const rocks = createInstanced(rockGeometry, rockMaterial, ROCK_COUNT)
   const bushes = createInstanced(bushGeometry, bushMaterial, BUSH_COUNT)
-  const berries = createInstanced(berryGeometry, berryMaterial, BUSH_COUNT)
+  const berries = berryGeometries.map((geometry) => createInstanced(geometry, berryMaterial, BUSH_COUNT))
   const dummy = new THREE.Object3D()
   const props: PropData[] = []
 
-  const addProp = (kind: PropKind, x: number, y: number, z: number, radius: number, meshes: THREE.InstancedMesh[], index: number) => {
+  const addProp = (kind: PropKind, x: number, y: number, z: number, radius: number, meshes: ReturnType<typeof createInstanced>[], index: number) => {
     const { hp } = PROP_DEFS[kind]
-    const instances = meshes.map((mesh) => {
+    const instances = meshes.map((mesh): PropInstance => {
       mesh.setMatrixAt(index, dummy.matrix)
       // La base se lee de vuelta (Float32) para que restaurarla tras un wobble sea exacto.
       const base = new THREE.Matrix4()
       mesh.getMatrixAt(index, base)
-      return { mesh, index, base }
+      const berry = berries.indexOf(mesh)
+      return berry < 0 ? { mesh, index, base } : { mesh, index, base, berry }
     })
     props.push({ id: props.length, kind, x, y, z, radius, hp, maxHp: hp, alive: true, instances })
   }
@@ -168,24 +170,24 @@ export function createProps() {
     dummy.rotation.set(0, rotation, 0)
     dummy.scale.setScalar(scale)
     dummy.updateMatrix()
-    addProp('bush', x, y - 0.05, z, radius, [bushes, berries], bushCount)
+    addProp('bush', x, y - 0.05, z, radius, [bushes, ...berries], bushCount)
     grid.insert(props[props.length - 1])
     bushCount++
   }
-  bushes.count = berries.count = bushCount
+  bushes.count = bushCount
+  for (const mesh of berries) mesh.count = bushCount
 
   const meshes = { trunks, foliage, rocks, bushes, berries }
-  const instanceToProp = new Map<THREE.InstancedMesh, Int32Array>(
-    Object.values(meshes).map((mesh) => [mesh, new Int32Array(mesh.count).fill(-1)]),
-  )
+  const allMeshes = [trunks, foliage, rocks, bushes, ...berries]
+  const instanceToProp = new Map<THREE.InstancedMesh, Int32Array>(allMeshes.map((mesh) => [mesh, new Int32Array(mesh.count).fill(-1)]))
   for (const prop of props) {
     for (const { mesh, index } of prop.instances) instanceToProp.get(mesh)![index] = prop.id
   }
 
   const group = new THREE.Group()
-  group.add(trunks, foliage, rocks, bushes, berries)
+  group.add(...allMeshes)
 
-  return { group, props, meshes, instanceToProp, grid }
+  return { group, props, meshes, allMeshes, instanceToProp, grid }
 }
 
 export type World = ReturnType<typeof createProps>

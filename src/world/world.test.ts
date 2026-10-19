@@ -17,8 +17,8 @@ describe('mundo determinista', () => {
     const again = createProps()
     const { bushes, berries } = world.meshes
     expect(bushes.count).toBeGreaterThan(30)
-    expect(berries.count).toBe(bushes.count)
-    expect(computeWorldHash([again.meshes.bushes, again.meshes.berries])).toBe(computeWorldHash([bushes, berries]))
+    for (const mesh of berries) expect(mesh.count).toBe(bushes.count)
+    expect(computeWorldHash([again.meshes.bushes, ...again.meshes.berries])).toBe(computeWorldHash([bushes, ...berries]))
     // Los arbustos van al final: los ids de árboles y rocas no se mueven.
     const firstBush = world.props.findIndex((p) => p.kind === 'bush')
     expect(world.props.slice(firstBush).every((p) => p.kind === 'bush')).toBe(true)

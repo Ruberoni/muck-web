@@ -67,25 +67,24 @@ export class GameAudio {
     }
   }
 
-  /** Un golpe con la herramienta (o la mano) sobre `target`; `destroyed` si lo rompió o lo mató. */
-  hit(target: Target, destroyed: boolean) {
+  /** Un golpe con la herramienta (o la mano) sobre `target`; `dropped` si soltó algo (lo rompió, lo mató o cogió una baya). */
+  hit(target: Target, dropped: boolean) {
     const s = this.sound
     switch (target.kind) {
       case 'tree':
-        s.play(destroyed ? 'breakWood' : 'hitWood')
+        s.play(dropped ? 'breakWood' : 'hitWood')
         break
       case 'rock':
-        s.play(destroyed ? 'breakStone' : 'hitStone')
+        s.play(dropped ? 'breakStone' : 'hitStone')
         break
       case 'bush':
         s.play('hitBush')
         break
       case 'enemy':
-        s.play(destroyed ? 'enemyDeath' : 'enemyHit')
+        s.play(dropped ? 'enemyDeath' : 'enemyHit')
         break
     }
-    // El golpe que rompe algo suelta su recurso en el inventario (los arbustos dan bayas a cada golpe).
-    if (destroyed || target.kind === 'bush') s.play('pickup', { gain: 0.8 })
+    if (dropped) s.play('pickup', { gain: 0.8 })
   }
 
   /** Partida nueva o teletransporte: no se cuenta como un paso ni como aterrizaje. */

@@ -1,10 +1,9 @@
 import * as THREE from 'three'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createProps, type PropData } from '../world/props'
+import { createProps, type PropData, type PropInstance } from '../world/props'
 import { heightAt } from '../world/terrain'
-import { SpatialGrid, type Collider } from './collision'
-import { EYE_HEIGHT, PLAYER_RADIUS, PROP_DEFS, REGROW_CLEARANCE, STEP } from './constants'
-import { aimPose, canRegrowAt, hitDamage, Interaction } from './interaction'
+import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from './constants'
+import { aimPose, hitDamage, Interaction } from './interaction'
 import { Inventory, type ItemId } from './inventory'
 
 function setup() {
@@ -51,19 +50,19 @@ describe('recolección', () => {
     expect(ctx.inventory.count('wood')).toBe(4)
   })
 
-  it('step devuelve cada golpe y marca el que lo destruye', () => {
+  it('step devuelve cada golpe y marca el que suelta algo', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
-    const hits: { kind: string; destroyed: boolean }[] = []
+    const hits: { kind: string; dropped: boolean }[] = []
     for (let i = 0; i < Math.round(1.2 / STEP); i++) {
       ctx.interaction.updateTarget(ctx.camera)
       const hit = ctx.interaction.step(STEP, true)
-      if (hit) hits.push({ kind: hit.target.kind, destroyed: hit.destroyed })
+      if (hit) hits.push({ kind: hit.target.kind, dropped: hit.dropped })
     }
     expect(hits).toEqual([
-      { kind: 'tree', destroyed: false },
-      { kind: 'tree', destroyed: false },
-      { kind: 'tree', destroyed: true },
+      { kind: 'tree', dropped: false },
+      { kind: 'tree', dropped: false },
+      { kind: 'tree', dropped: true },
     ])
     expect(ctx.interaction.step(STEP, true)).toBeNull()
   })
@@ -120,7 +119,7 @@ describe('recolección', () => {
   })
 })
 
-describe('bayas y reaparición', () => {
+describe('bayas', () => {
   let ctx: ReturnType<typeof setup>
   beforeEach(() => {
     ctx = setup()
@@ -130,41 +129,73 @@ describe('bayas y reaparición', () => {
   const wait = (seconds: number) => {
     for (let i = 0; i < Math.round(seconds / STEP); i++) ctx.interaction.step(STEP, false)
   }
-  const isHidden = (prop: PropData) => {
+  const isHidden = ({ mesh, index }: PropInstance) => {
     const m = new THREE.Matrix4()
-    return prop.instances.every(({ mesh, index }) => {
-      mesh.getMatrixAt(index, m)
-      return new THREE.Vector3().setFromMatrixScale(m).length() === 0
-    })
+    mesh.getMatrixAt(index, m)
+    return new THREE.Vector3().setFromMatrixScale(m).length() === 0
   }
+  const visibleBerries = (bush: PropData) => bush.instances.filter((i) => i.berry !== undefined && !isHidden(i)).length
 
-  it('un clic en un arbusto da bayas y lo oculta', () => {
+  it('cada arbusto tiene una baya visible por punto de vida', () => {
+    const bush = firstBush()
+    expect(bush.maxHp).toBe(BERRIES_PER_BUSH)
+    expect(bush.instances.filter((i) => i.berry !== undefined)).toHaveLength(BERRIES_PER_BUSH)
+    expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH)
+  })
+
+  it('cada clic quita una baya y da una; el arbusto se queda', () => {
     const bush = firstBush()
     ctx.aimAt(bush)
     expect(ctx.interaction.target).toBe(bush)
     ctx.hold(STEP)
-    expect(bush.alive).toBe(false)
-    expect(isHidden(bush)).toBe(true)
-    expect(ctx.inventory.count('berry')).toBe(PROP_DEFS.bush.drop.amount)
+    expect(ctx.inventory.count('berry')).toBe(1)
+    expect(bush.hp).toBe(BERRIES_PER_BUSH - 1)
+    expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
+    expect(bush.alive).toBe(true)
+    expect(isHidden(bush.instances[0])).toBe(false)
   })
 
-  it('el arbusto vuelve a crecer pasado su tiempo, y no antes', () => {
+  it('vaciado sigue en pie y apuntable, y más clics no dan nada', () => {
     const bush = firstBush()
-    const regrow = PROP_DEFS.bush.regrow!
+    ctx.aimAt(bush)
+    ctx.hold(HIT_COOLDOWN * (BERRIES_PER_BUSH + 2))
+    expect(ctx.inventory.count('berry')).toBe(BERRIES_PER_BUSH)
+    expect(bush.hp).toBe(0)
+    expect(bush.alive).toBe(true)
+    expect(visibleBerries(bush)).toBe(0)
+    expect(ctx.interaction.target).toBe(bush)
+  })
+
+  it('el wobble no vuelve a mostrar las bayas recogidas', () => {
+    const bush = firstBush()
     ctx.aimAt(bush)
     ctx.hold(STEP)
-    wait(regrow - 1)
-    expect(bush.alive).toBe(false)
-    wait(1)
-    expect(bush.alive).toBe(true)
-    expect(bush.hp).toBe(bush.maxHp)
+    ctx.interaction.updateAnimations(0.05)
+    expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
+    ctx.interaction.updateAnimations(0.2)
+    expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
+  })
+
+  it('las bayas vuelven de una en una y el arbusto vacío se llena en 6 rebrotes', () => {
+    const bush = firstBush()
+    ctx.aimAt(bush)
+    ctx.hold(HIT_COOLDOWN * BERRIES_PER_BUSH)
+    expect(bush.hp).toBe(0)
+    // El primer rebrote cuenta desde la primera baya recogida.
+    wait(BERRY_REGROW - HIT_COOLDOWN * BERRIES_PER_BUSH - 0.1)
+    expect(bush.hp).toBe(0)
+    wait(0.2)
+    expect(bush.hp).toBe(1)
+    expect(visibleBerries(bush)).toBe(1)
+    wait(BERRY_REGROW)
+    expect(bush.hp).toBe(2)
+    wait(BERRY_REGROW * BERRIES_PER_BUSH)
+    expect(bush.hp).toBe(BERRIES_PER_BUSH)
     const m = new THREE.Matrix4()
     for (const { mesh, index, base } of bush.instances) {
       mesh.getMatrixAt(index, m)
       expect(m.equals(base)).toBe(true)
     }
-    ctx.interaction.updateTarget(ctx.camera)
-    expect(ctx.interaction.target).toBe(bush)
   })
 
   it('árboles y rocas no vuelven a crecer solos', () => {
@@ -174,26 +205,12 @@ describe('bayas y reaparición', () => {
     ctx.hold(1.2)
     ctx.aimAt(rock)
     ctx.hold(1.6)
-    wait(PROP_DEFS.bush.regrow! * 2)
+    wait(BERRY_REGROW * BERRIES_PER_BUSH * 2)
     expect(tree.alive).toBe(false)
     expect(rock.alive).toBe(false)
   })
 
-  it('mientras algo lo impide no reaparece, y lo hace en cuanto se libera', () => {
-    let blocked = true
-    const interaction = new Interaction(ctx.world, ctx.inventory, () => !blocked)
-    const bush = firstBush()
-    interaction.target = bush
-    interaction.step(STEP, true)
-    expect(bush.alive).toBe(false)
-    for (let i = 0; i < Math.round((PROP_DEFS.bush.regrow! + 30) / STEP); i++) interaction.step(STEP, false)
-    expect(bush.alive).toBe(false)
-    blocked = false
-    interaction.step(STEP, false)
-    expect(bush.alive).toBe(true)
-  })
-
-  it('reset restaura props destruidos y dañados y cancela las reapariciones', () => {
+  it('reset restaura props destruidos y dañados y cancela los rebrotes', () => {
     const tree = ctx.world.props.find((p) => p.kind === 'tree')!
     const rock = ctx.world.props.find((p) => p.kind === 'rock')!
     const bush = firstBush()
@@ -209,46 +226,22 @@ describe('bayas y reaparición', () => {
     for (const prop of [tree, rock, bush]) {
       expect(prop.alive).toBe(true)
       expect(prop.hp).toBe(prop.maxHp)
-      expect(isHidden(prop)).toBe(false)
+      expect(prop.instances.some(isHidden)).toBe(false)
     }
     expect(ctx.interaction.target).toBe(null)
   })
 
-  it('tras reset no queda ninguna reaparición antigua pendiente', () => {
+  it('tras reset no queda ningún rebrote antiguo pendiente', () => {
     const bush = firstBush()
-    const regrow = PROP_DEFS.bush.regrow!
     ctx.aimAt(bush)
     ctx.hold(STEP)
-    wait(regrow / 2)
+    wait(BERRY_REGROW / 2)
     ctx.interaction.reset()
     ctx.aimAt(bush)
     ctx.hold(STEP)
     // El temporizador antiguo habría vencido aquí; el nuevo aún no.
-    wait(regrow / 2 + 1)
-    expect(bush.alive).toBe(false)
-  })
-})
-
-describe('canRegrowAt', () => {
-  const world = createProps()
-  const bush = world.props.find((p) => p.kind === 'bush')!
-  const empty = new SpatialGrid<Collider>()
-
-  it('no reaparece encima del jugador ni pegado a él', () => {
-    expect(canRegrowAt(bush, { x: bush.x, z: bush.z }, empty)).toBe(false)
-    const touching = bush.radius + PLAYER_RADIUS + REGROW_CLEARANCE - 0.01
-    expect(canRegrowAt(bush, { x: bush.x + touching, z: bush.z }, empty)).toBe(false)
-    expect(canRegrowAt(bush, { x: bush.x + touching + 0.02, z: bush.z }, empty)).toBe(true)
-  })
-
-  it('no reaparece encima de un collider vivo, como una fogata', () => {
-    const far = { x: bush.x + 20, z: bush.z }
-    const blockers = new SpatialGrid<Collider>()
-    const fire = { x: bush.x + 0.5, z: bush.z, radius: 0.6, alive: true }
-    blockers.insert(fire)
-    expect(canRegrowAt(bush, far, blockers)).toBe(false)
-    fire.alive = false
-    expect(canRegrowAt(bush, far, blockers)).toBe(true)
+    wait(BERRY_REGROW / 2 + 1)
+    expect(bush.hp).toBe(BERRIES_PER_BUSH - 1)
   })
 })
 
