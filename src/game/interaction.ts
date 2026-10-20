@@ -115,15 +115,15 @@ export class Interaction {
     this.pickups.drop(drop.item, drop.amount, prop.x, prop.y + height, prop.z)
   }
 
-  /** Cada clic quita una baya; el arbusto se queda aunque esté vacío. */
+  /** Cada clic quita una baya; el arbusto se queda aunque esté vacío. Sin sitio en la hotbar, la baya se queda. */
   private harvest(bush: PropData): boolean {
-    if (bush.hp <= 0) return false
+    const { drop } = PROP_DEFS[bush.kind]
+    if (bush.hp <= 0 || !this.inventory.canAdd(drop.item)) return false
     bush.hp--
     this.setBerry(bush, bush.hp, false)
     // El rebrote sigue su ritmo: recoger no reinicia el temporizador de la siguiente baya.
     if (!this.regrowing.has(bush)) this.regrowing.set(bush, BERRY_REGROW)
     this.wobbles.set(bush, 0)
-    const { drop } = PROP_DEFS[bush.kind]
     this.inventory.add(drop.item, drop.amount)
     return true
   }

@@ -149,4 +149,27 @@ describe('objetos en el suelo', () => {
     expect(pickups.list).toHaveLength(0)
     expect(pickups.group.children).toHaveLength(0)
   })
+
+  it('cada pieza tiene un id propio que no se reutiliza al recoger otras', () => {
+    const { pickups, run, at, dropAndLand } = setup()
+    dropAndLand('wood', 3)
+    expect(pickups.list.map((p) => p.id)).toEqual([0, 1, 2])
+    const [first] = pickups.list
+    run(STEP, at(first.pos.x, first.pos.z))
+    expect(pickups.list.map((p) => p.id)).not.toContain(0)
+    dropAndLand('stone', 1)
+    expect(pickups.list.at(-1)!.id).toBe(3)
+    pickups.clear()
+    dropAndLand('stone', 1)
+    expect(pickups.list[0].id).toBe(0)
+  })
+
+  it('con la misma semilla caen en el mismo sitio', () => {
+    const positions = () => {
+      const { pickups, dropAndLand } = setup()
+      dropAndLand('wood', 4)
+      return pickups.list.map((p) => p.pos)
+    }
+    expect(positions()).toEqual(positions())
+  })
 })

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProps, type PropData, type PropInstance } from '../world/props'
 import { heightAt } from '../world/terrain'
 import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from './constants'
@@ -170,6 +170,16 @@ describe('bayas', () => {
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
     expect(bush.alive).toBe(true)
     expect(isHidden(bush.instances[0])).toBe(false)
+  })
+
+  it('con la hotbar llena la baya se queda en el arbusto', () => {
+    const bush = firstBush()
+    ctx.aimAt(bush)
+    vi.spyOn(ctx.inventory, 'canAdd').mockReturnValue(false)
+    expect(ctx.interaction.step(STEP, true)).toEqual({ target: bush, dropped: false })
+    expect(bush.hp).toBe(BERRIES_PER_BUSH)
+    expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH)
+    expect(ctx.inventory.count('berry')).toBe(0)
   })
 
   it('vaciado sigue en pie y apuntable, y más clics no dan nada', () => {

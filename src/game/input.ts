@@ -6,6 +6,12 @@ export const CLICK = 'Mouse0'
 export const RIGHT_CLICK = 'Mouse2'
 
 /**
+ * Golpea si el clic está mantenido o si hubo un clic desde el paso anterior: un clic más corto
+ * que un paso suelta el botón antes de que el paso lo vea, pero su pulsación sigue ahí.
+ */
+export const attackRequested = (held: boolean, presses: ReadonlySet<string>) => held || presses.has(CLICK)
+
+/**
  * Convierte la rueda en pasos de -1, 0 o 1. Una muesca de ratón da 100 px (Chrome) o 3 líneas (Firefox)
  * y un trackpad da muchos eventos pequeños; en macOS una muesca lenta da pocos píxeles, por eso el primer
  * evento tras una pausa o un cambio de sentido cuenta sin acumular.

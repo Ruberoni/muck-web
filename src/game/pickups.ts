@@ -21,6 +21,7 @@ const REACH_Y = 1.6
 type Vec3 = { x: number; y: number; z: number }
 
 export interface Pickup {
+  id: number
   item: ItemId
   pos: Vec3
   prev: Vec3
@@ -41,6 +42,7 @@ export class Pickups {
   readonly list: Pickup[] = []
   readonly group = new THREE.Group()
   private models = new Map<ItemId, THREE.Group>()
+  private nextId = 0
 
   /** `grids`: obstáculos de los que se apartan al caer (props, fogatas…). */
   constructor(
@@ -56,6 +58,7 @@ export class Pickups {
       const speed = POP_SPEED + this.rng() * POP_SPEED_RANDOM
       const object = this.model(item).clone()
       const pickup: Pickup = {
+        id: this.nextId++,
         item,
         pos: { x, y, z },
         prev: { x, y, z },
@@ -131,6 +134,7 @@ export class Pickups {
   clear() {
     this.list.length = 0
     this.group.clear()
+    this.nextId = 0
   }
 
   /** Coloca los modelos entre el paso anterior y el actual (alpha = 1: posición simulada). */

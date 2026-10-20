@@ -68,7 +68,10 @@ function buildCampfire(m: Materials, shadows: boolean) {
 }
 
 export interface Campfire extends Collider {
+  id: number
   y: number
+  /** Giro del modelo: cada fogata distinta, sin depender de cuántas haya. */
+  rotY: number
   mesh: THREE.Group
   flame: THREE.Group
 }
@@ -115,6 +118,7 @@ export class Campfires {
   private lights: THREE.PointLight[] = []
   private byDistance: Campfire[] = []
   private sun = new THREE.Vector3()
+  private nextId = 0
 
   constructor(scene: THREE.Scene) {
     const g = this.ghostMaterial
@@ -136,10 +140,11 @@ export class Campfires {
       { log: logMaterial, stone: stoneMaterial, outerFlame: outerFlameMaterial, innerFlame: innerFlameMaterial },
       true,
     )
+    const id = this.nextId++
+    const fire: Campfire = { id, x: spot.x, y: spot.y, z: spot.z, rotY: id * 1.3, radius: CAMPFIRE_RADIUS, alive: true, mesh: root, flame }
     root.position.set(spot.x, spot.y - 0.05, spot.z)
-    root.rotation.y = this.list.length * 1.3
+    root.rotation.y = fire.rotY
     this.group.add(root)
-    const fire: Campfire = { x: spot.x, y: spot.y, z: spot.z, radius: CAMPFIRE_RADIUS, alive: true, mesh: root, flame }
     this.list.push(fire)
     this.grid.insert(fire)
     return true
@@ -149,6 +154,7 @@ export class Campfires {
     for (const fire of this.list) this.group.remove(fire.mesh)
     this.list.length = 0
     this.grid.clear()
+    this.nextId = 0
     for (const light of this.lights) light.intensity = 0
     this.ghost.visible = false
   }
