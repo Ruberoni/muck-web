@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { isNight } from '../sim/world/daycycle'
 import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import { ENEMY_BODY_LIFT, ENEMY_BODY_RADIUS, ENEMY_BODY_SCALE, ENEMY_MODEL_SCALE } from '../sim/aim'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from '../sim/events'
 import { resolveCircle, type Collider, type SpatialGrid } from '../sim/collision'
 import {
@@ -32,12 +33,13 @@ const SPAWN_ATTEMPTS = 12
 const HURT_FLASH = 0.15
 const LUNGE_TIME = 0.2
 const DEATH_TIME = 0.35
-// El modelo mide unos 1,4 sin escalar: escalado, los ojos quedan algo por debajo de los del jugador.
-const MODEL_SCALE = 1.25
 /** Altura del centro del cuerpo: a donde apunta aimAtEnemy. */
-export const ENEMY_AIM_HEIGHT = 0.8 * MODEL_SCALE
+export const ENEMY_AIM_HEIGHT = 0.8 * ENEMY_MODEL_SCALE
 
-const bodyGeometry = new THREE.IcosahedronGeometry(0.5, 0).scale(1, 1.25, 0.9).translate(0, 0.75, 0)
+// El cuerpo es también la hitbox (sim/aim.ts).
+const bodyGeometry = new THREE.IcosahedronGeometry(ENEMY_BODY_RADIUS, 0)
+  .scale(ENEMY_BODY_SCALE.x, ENEMY_BODY_SCALE.y, ENEMY_BODY_SCALE.z)
+  .translate(0, ENEMY_BODY_LIFT, 0)
 // Cuernos y pies, del mismo color oscuro, en una sola geometría.
 const detailGeometry = mergeGeometries([
   new THREE.ConeGeometry(0.08, 0.32, 5).rotateZ(-0.4).translate(0.24, 1.38, 0),
@@ -322,7 +324,7 @@ export class Enemies {
     o.rotation.y = e.yaw
     // Muere encogiéndose y hundiéndose.
     const s = e.alive ? 1 : Math.max(0, e.dying / DEATH_TIME)
-    o.scale.set(1 + (1 - s) * 0.3, s, 1 + (1 - s) * 0.3).multiplyScalar(MODEL_SCALE)
+    o.scale.set(1 + (1 - s) * 0.3, s, 1 + (1 - s) * 0.3).multiplyScalar(ENEMY_MODEL_SCALE)
     e.material.emissive.copy(e.hurt > 0 ? HURT_COLOR : BODY_GLOW)
   }
 }

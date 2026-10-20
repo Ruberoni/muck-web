@@ -8,17 +8,20 @@ import {
   FOLIAGE_BASE,
   FOLIAGE_HEIGHT,
   FOLIAGE_RADIUS,
+  FOLIAGE_SIDES,
   ROCK_RADIUS,
   TRUNK_BOTTOM_RADIUS,
   TRUNK_HEIGHT,
+  TRUNK_SIDES,
   TRUNK_TOP_RADIUS,
   type PropKind,
   type PropPlacement,
 } from '../sim/props'
 
-// Una geometría y un material por tipo, compartidos por todas las instancias.
-const trunkGeometry = new THREE.CylinderGeometry(TRUNK_TOP_RADIUS, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, 6).translate(0, TRUNK_HEIGHT / 2, 0)
-const foliageGeometry = new THREE.ConeGeometry(FOLIAGE_RADIUS, FOLIAGE_HEIGHT, 7).translate(0, FOLIAGE_BASE + FOLIAGE_HEIGHT / 2, 0)
+// Una geometría y un material por tipo, compartidos por todas las instancias. sim/aim.ts construye
+// las hitboxes con las mismas caras (salvo las bayas): una geometría nueva tiene que llevarse también allí.
+const trunkGeometry = new THREE.CylinderGeometry(TRUNK_TOP_RADIUS, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, TRUNK_SIDES).translate(0, TRUNK_HEIGHT / 2, 0)
+const foliageGeometry = new THREE.ConeGeometry(FOLIAGE_RADIUS, FOLIAGE_HEIGHT, FOLIAGE_SIDES).translate(0, FOLIAGE_BASE + FOLIAGE_HEIGHT / 2, 0)
 const rockGeometry = new THREE.IcosahedronGeometry(ROCK_RADIUS, 0)
 const bushGeometry = new THREE.IcosahedronGeometry(BUSH_RADIUS, 0).scale(1, BUSH_SQUASH, 1).translate(0, BUSH_LIFT, 0)
 // Bayas repartidas por la mitad superior del arbusto. Una geometría (y un InstancedMesh) por posición:
@@ -65,7 +68,7 @@ function createInstanced(geometry: THREE.BufferGeometry, material: THREE.Materia
 export class PropView {
   readonly group = new THREE.Group()
   readonly meshes
-  /** Todos los meshes, para el raycast del objetivo. */
+  /** Todos los meshes. */
   readonly allMeshes: THREE.InstancedMesh[]
   /** Instancias de cada prop, por id. */
   private instances: PropInstance[][] = []
@@ -123,7 +126,7 @@ export class PropView {
     return this.instances[id] ?? []
   }
 
-  /** Id del prop al que pertenece una instancia (para el raycast), o -1. */
+  /** Id del prop al que pertenece una instancia (para un raycast contra la vista), o -1. */
   propAt(mesh: THREE.Object3D, instanceId: number | undefined): number {
     if (instanceId === undefined) return -1
     return this.instanceToProp.get(mesh as THREE.InstancedMesh)?.[instanceId] ?? -1

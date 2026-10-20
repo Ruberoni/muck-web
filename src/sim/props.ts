@@ -7,14 +7,16 @@ const TREE_COUNT = 180
 const ROCK_COUNT = 60
 const BUSH_COUNT = 45
 
-// Forma de cada tipo en espacio local (antes de rotar y escalar): la usan la vista y, después, las hitboxes.
+// Forma de cada tipo en espacio local (antes de rotar y escalar): la usan la vista y las hitboxes (aim.ts).
 export const TRUNK_TOP_RADIUS = 0.25
 export const TRUNK_BOTTOM_RADIUS = 0.35
 export const TRUNK_HEIGHT = 2.6
+export const TRUNK_SIDES = 6
 export const FOLIAGE_RADIUS = 1.5
 // La base de la copa queda por encima de los ojos (1,7) incluso con la escala mínima (0,8).
 export const FOLIAGE_BASE = 2.4
 export const FOLIAGE_HEIGHT = 3.4
+export const FOLIAGE_SIDES = 7
 /** Las rocas son un icosaedro de radio 1 escalado. */
 export const ROCK_RADIUS = 1
 /** Los arbustos son un icosaedro de este radio, achatado en Y y subido sobre su base. */

@@ -1,17 +1,16 @@
-import * as THREE from 'three'
+import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes } from '../sim/aim'
 import { resetProp, type PropData, type PropWorld } from '../sim/props'
-import type { PropView } from '../view/PropView'
 import { heightAt } from '../sim/world/terrain'
 import { LOCAL_PLAYER, NO_EMIT, type Emit } from '../sim/events'
-import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS } from '../sim/constants'
+import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, TOOL_DEFS } from '../sim/constants'
 import type { Enemies, EnemyData } from './enemies'
 import type { Inventory, ItemId } from '../sim/inventory'
+import type { Player } from '../sim/player'
 import type { Pickups } from './pickups'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
 export type Target = PropData | EnemyData
 
-const SCREEN_CENTER = new THREE.Vector2(0, 0)
 // Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan.
 const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
 
@@ -23,44 +22,26 @@ const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
 export class Interaction {
   target: Target | null = null
   private cooldown = 0
-  private raycaster = new THREE.Raycaster()
-  private objects: THREE.Object3D[]
+  private hitboxes: PropHitboxes
+  /** El último rayo de puntería: de él sale el retroceso de los enemigos. */
+  private ray: AimRay = aimRay({ pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 })
   /** Segundos que faltan para que le vuelva a crecer una baya a cada arbusto incompleto. */
   private regrowing = new Map<PropData, number>()
-  private hits: THREE.Intersection[] = []
 
   constructor(
     private world: PropWorld,
-    private view: PropView,
     private inventory: Inventory,
     private pickups: Pickups,
     private enemies?: Enemies,
     private emit: Emit = NO_EMIT,
   ) {
-    this.objects = [...view.allMeshes, ...(enemies ? [enemies.group] : [])]
-    this.raycaster.far = REACH
+    this.hitboxes = createPropHitboxes(world.placements)
   }
 
-  /** Requiere camera.matrixWorld actualizada. */
-  updateTarget(camera: THREE.Camera) {
-    this.raycaster.setFromCamera(SCREEN_CENTER, camera)
-    this.hits.length = 0
-    // Recursivo por el grupo de enemigos; los props no tienen hijos. Los impactos vienen ordenados por distancia.
-    this.raycaster.intersectObjects(this.objects, true, this.hits)
-    this.target = null
-    for (const hit of this.hits) {
-      const enemy = hit.object.userData.enemy as EnemyData | undefined
-      if (enemy) {
-        if (!enemy.alive) continue
-        this.target = enemy
-        break
-      }
-      const prop = this.world.props[this.view.propAt(hit.object, hit.instanceId)]
-      if (prop?.alive) {
-        this.target = prop
-        break
-      }
-    }
+  /** Lo que tiene delante el jugador (el centro de la pantalla), a su alcance, desde su posición y su mirada. */
+  updateTarget(player: Pick<Player, 'pos' | 'yaw' | 'pitch'>) {
+    aimRay(player, this.ray)
+    this.target = pickTarget(this.ray, this.world.grid, this.hitboxes, this.enemies?.list ?? [])
   }
 
   /**
@@ -98,8 +79,8 @@ export class Interaction {
   }
 
   private hitEnemy(enemy: EnemyData): boolean {
-    // El raycast salió de la cámara: el retroceso es en sentido contrario al jugador.
-    const from = this.raycaster.ray.origin
+    // El rayo sale de los ojos: el retroceso es en sentido contrario al jugador.
+    const from = { x: this.ray.ox, z: this.ray.oz }
     if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from, LOCAL_PLAYER)) return false
     if (this.target === enemy) this.target = null
     const { x, z } = enemy.pos

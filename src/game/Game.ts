@@ -126,7 +126,7 @@ export class Game {
     this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng, emit)
     this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng, emit)
     scene.add(this.enemies.group, this.pickups.group)
-    this.interaction = new Interaction(world, propView, this.inventory, this.pickups, this.enemies, emit)
+    this.interaction = new Interaction(world, this.inventory, this.pickups, this.enemies, emit)
 
     this.env = {
       heightAt,
@@ -303,10 +303,8 @@ export class Game {
       this.player.health = Math.max(0, this.player.health - damage)
       this.events.emit({ type: 'playerHurt', id: LOCAL_PLAYER, dmg: damage })
     }
-    // Raycast desde la posición simulada (no interpolada): golpear no depende del framerate.
-    this.placeCamera(this.player.pos)
-    this.camera.updateMatrixWorld()
-    this.interaction.updateTarget(this.camera)
+    // Desde la posición simulada (no interpolada): golpear no depende del framerate.
+    this.interaction.updateTarget(this.player)
     // Con la fogata en la mano el clic la coloca en vez de golpear.
     const placing = this.holdingCampfire
     this.interaction.step(STEP, !placing && (this.attackOverride ?? attackRequested(this.input.attackHeld, presses)))

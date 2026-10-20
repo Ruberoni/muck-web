@@ -67,6 +67,7 @@ export function installDebug(game: Game) {
       const pose = aimPose(prop, isFree)
       const eyeY = Math.max(heightAt(pose.x, pose.z), WATER_LEVEL - FLOAT_DEPTH) + EYE_HEIGHT
       game.teleport(pose.x, pose.z, pose.yaw, Math.atan2(pose.aimY - eyeY, pose.horizontal))
+      game.interaction.updateTarget(player)
       game.advance(0)
       return targetPropId()
     },
@@ -94,9 +95,8 @@ export function installDebug(game: Game) {
       const dz = e.pos.z - player.pos.z
       const dy = heightAt(e.pos.x, e.pos.z) + ENEMY_AIM_HEIGHT - (player.pos.y + EYE_HEIGHT)
       game.teleport(player.pos.x, player.pos.z, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)))
+      game.interaction.updateTarget(player)
       game.advance(0)
-      game.camera.updateMatrixWorld()
-      game.interaction.updateTarget(game.camera)
       return game.interaction.target === e
     },
     hand: () => ({ item: game.handheld.item, action: game.handheld.action }),
