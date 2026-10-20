@@ -39,6 +39,23 @@ describe('Inventory', () => {
     expect(inv.remove('berry', 1)).toBe(false)
   })
 
+  it('load solo avisa si el contenido cambia', () => {
+    const inv = new Inventory()
+    inv.add('wood', 2)
+    inv.add('berry', 1)
+    const saved = inv.save()
+    let changes = 0
+    inv.onChange(() => changes++)
+    // Lo mismo con las claves en otro orden (como llega del servidor).
+    inv.load({ ...saved, counts: { berry: 1, wood: 2 } })
+    expect(changes).toBe(0)
+    inv.load({ ...saved, counts: { wood: 3, berry: 1 } })
+    expect(changes).toBe(1)
+    inv.load({ ...saved, counts: { wood: 3, berry: 1 }, selected: 2 })
+    expect(changes).toBe(2)
+    expect(inv.count('wood')).toBe(3)
+  })
+
   it('clear vacía cantidades y casillas y vuelve a la primera', () => {
     const inv = new Inventory()
     let changes = 0

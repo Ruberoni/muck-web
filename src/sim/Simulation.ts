@@ -1,17 +1,17 @@
-import { buttonsInput, Btn, type PlayerCommands } from './commands'
+import type { PlayerCommands } from './commands'
 import { Campfires, campfireSpot, type CampfiresState, type CampfireSpot } from './campfires'
 import { resolveCircle } from './collision'
-import { BERRY_FOOD, PLAYER_RADIUS, STEP } from './constants'
-import { craft, RECIPES } from './crafting'
+import { PLAYER_RADIUS, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
-import { EventLog, type PlayerId, type SimEvent, type TargetRef } from './events'
-import { createCombat, Interaction, type Combat, type Fighter } from './interaction'
+import { EventLog, type PlayerId, type SimEvent } from './events'
+import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, type InventoryState } from './inventory'
 import { Pickups, type PickupsState } from './pickups'
-import { createPlayer, stepPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
+import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
+import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
 import { createPropWorld, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
-import { eat, isDead, stepSurvival } from './survival'
+import { isDead } from './survival'
 import { DAY_LENGTH, DayClock, euclideanModulo, START_PHASE } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
 
@@ -27,14 +27,10 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 export type Connection = 'present' | 'absent' | 'gone'
 
 /** Un jugador en la simulación: su cuerpo, su inventario, sus golpes y lo que lleva aplicado de sus acciones. */
-export interface PlayerSlot extends Fighter {
-  player: Player
+export interface PlayerSlot extends Actor {
   /** Está encima de algo que no cabe en la hotbar. */
   hotbarFull: boolean
-  alive: boolean
   connection: Connection
-  /** `seq` de la última acción aplicada: las de `seq` menor o igual se descartan. */
-  appliedSeq: number
   spawn: { x: number; z: number }
 }
 
@@ -67,16 +63,6 @@ export interface SimState {
 }
 
 const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ...p.prev }, vel: { ...p.vel } })
-
-/** Lo que el jugador quiere hacer en este paso además de moverse. */
-interface Intent {
-  /** Lo que el cliente dice tener delante; sin él (un jugador), lo calcula la simulación. */
-  aim: TargetRef | null | undefined
-  attack: boolean
-  swing: boolean
-  place: boolean
-  eat: boolean
-}
 
 /**
  * La partida sin three.js ni DOM: isla, reloj, enemigos, objetos del suelo, fogatas y los jugadores.
@@ -180,6 +166,7 @@ export class Simulation {
    * Un tick: aplica los comandos de ese tick de cada jugador y avanza el mundo. Devuelve sus eventos.
    * Un jugador sin comandos en este tick se queda quieto, mirando a donde miraba. Elegir casilla y fabricar
    * van antes de moverse; golpear, colocar y comer, después de que se muevan todos y los enemigos.
+   * Lo que toca solo a cada jugador son los trozos de playerTick.ts, los mismos que predice el cliente.
    */
   step(commands: ReadonlyMap<PlayerId, PlayerCommands>): SimEvent[] {
     this.events.tick++
@@ -188,15 +175,10 @@ export class Simulation {
     const intents = new Map<PlayerSlot, Intent>()
     for (const slot of present) {
       const command = commands.get(slot.id)
-      const intent = this.applyActions(slot, command)
+      const intent = applyActions(slot, command, this.events.emit)
       if (!slot.alive) continue
       intents.set(slot, intent)
-      const { player } = slot
-      if (command) {
-        player.yaw = command.move.yaw
-        player.pitch = command.move.pitch
-      }
-      stepPlayer(player, buttonsInput(command?.move.buttons ?? 0), this.env, STEP)
+      movePlayer(slot, command, this.env)
     }
 
     this.syncClock()
@@ -214,11 +196,9 @@ export class Simulation {
       // dice a qué apunta (ve a los enemigos en el pasado) y aquí solo se comprueba que sea creíble.
       if (intent.aim === undefined) this.interaction.updateTarget(slot)
       else this.interaction.validateAim(slot, intent.aim)
-      // Con la fogata en la mano el clic la coloca en vez de golpear, y no queda ningún golpe pendiente.
-      const placing = slot.inventory.selectedItem === 'campfire'
-      if (placing) slot.combat.pendingSwing = false
-      this.interaction.step(slot, STEP, !placing && intent.attack, !placing && intent.swing)
-      if (placing && intent.place) this.placeCampfire(slot)
+      const hands = useHands(slot, intent)
+      if (hands.swing) this.interaction.strike(slot)
+      if (hands.place) this.placeCampfire(slot)
     }
     // Lo que rompió o mató otro jugador en este paso deja de ser objetivo de los demás.
     for (const slot of living) if (slot.target && !slot.target.alive) slot.target = null
@@ -227,8 +207,7 @@ export class Simulation {
     living.forEach((slot, i) => (slot.hotbarFull = collected[i].full))
 
     for (const slot of living) {
-      if (intents.get(slot)!.eat) this.eatBerry(slot)
-      stepSurvival(slot.player, STEP)
+      finishPlayerTick(slot, intents.get(slot)!, this.events.emit)
       if (isDead(slot.player)) {
         slot.alive = false
         this.events.emit({ type: 'playerDied', id: slot.id })
@@ -237,45 +216,9 @@ export class Simulation {
     return this.events.drain()
   }
 
-  /**
-   * Aplica una vez y en orden de `seq` las acciones nuevas de un jugador: elegir casilla y fabricar en el acto;
-   * golpear, colocar y comer se devuelven para su momento del paso. Las de un muerto se descartan.
-   */
-  private applyActions(slot: PlayerSlot, command: PlayerCommands | undefined): Intent {
-    const move = command?.move
-    const intent: Intent = { aim: move?.aim, attack: ((move?.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false }
-    if (!command) return intent
-    for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
-      if (action.seq <= slot.appliedSeq) continue
-      slot.appliedSeq = action.seq
-      if (!slot.alive) continue
-      switch (action.kind) {
-        case 'select':
-          slot.inventory.select(action.slot)
-          break
-        case 'craft':
-          this.craft(slot.id, action.recipe)
-          break
-        case 'swing':
-          intent.swing = true
-          break
-        case 'place':
-          intent.place = true
-          break
-        case 'eat':
-          intent.eat = true
-          break
-      }
-    }
-    return intent
-  }
-
   /** El jugador `id` fabrica la receta por índice (el de su tecla menos 1). */
   craft(id: PlayerId, index: number): boolean {
-    const recipe = RECIPES[index]
-    const ok = recipe ? craft(this.slot(id).inventory, recipe) : false
-    if (ok) this.events.emit({ type: 'playerCrafted', id, recipe: index })
-    return ok
+    return craftRecipe(this.slot(id), index, this.events.emit)
   }
 
   /**
@@ -395,13 +338,6 @@ export class Simulation {
     if (!this.campfires.place(spot, slot.id)) return
     this.events.emit({ type: 'playerPlaced', id: slot.id })
     slot.inventory.remove('campfire', 1)
-  }
-
-  private eatBerry(slot: PlayerSlot) {
-    const { inventory, player, id } = slot
-    if (inventory.count('berry') === 0 || !eat(player, BERRY_FOOD)) return
-    inventory.remove('berry', 1)
-    this.events.emit({ type: 'playerAte', id })
   }
 }
 

@@ -100,13 +100,12 @@ export class Interaction {
    * si soltó algo (lo rompió, lo mató o cogió una baya).
    */
   step(fighter: Fighter, dt: number, attackHeld: boolean, swing = false): { target: Target | null; dropped: boolean } | null {
-    const { combat } = fighter
-    combat.cooldown = Math.max(0, combat.cooldown - dt)
-    if (swing) combat.pendingSwing = true
-    if (!(attackHeld || combat.pendingSwing) || combat.cooldown > 1e-9) return null
+    return startSwing(fighter.combat, dt, attackHeld, swing) ? this.strike(fighter) : null
+  }
+
+  /** El golpe que empieza (ya decidido por `startSwing`) contra el objetivo del jugador, o al aire. */
+  strike(fighter: Fighter): { target: Target | null; dropped: boolean } {
     const target = fighter.target
-    combat.pendingSwing = false
-    combat.cooldown = HIT_COOLDOWN
     this.emit({
       type: 'playerSwing',
       id: fighter.id,
@@ -165,6 +164,19 @@ export class Interaction {
   reset() {
     for (const prop of this.world.props) resetProp(prop)
   }
+}
+
+/**
+ * La espera entre golpes de un paso: baja el cooldown y dice si empieza un golpe (ataque mantenido o `swing`
+ * pendiente con el cooldown acabado). Sin mundo: la predicción del cliente la usa tal cual.
+ */
+export function startSwing(combat: Combat, dt: number, attackHeld: boolean, swing: boolean): boolean {
+  combat.cooldown = Math.max(0, combat.cooldown - dt)
+  if (swing) combat.pendingSwing = true
+  if (!(attackHeld || combat.pendingSwing) || combat.cooldown > 1e-9) return false
+  combat.pendingSwing = false
+  combat.cooldown = HIT_COOLDOWN
+  return true
 }
 
 /** Daño de un golpe con el objeto en la mano (null = mano vacía). */

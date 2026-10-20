@@ -5,6 +5,6 @@
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["src/sim", "src/net/protocol.ts", "server/room.ts"],
+  "include": ["src/sim", "src/net/protocol.ts", "src/net/clock.ts", "src/net/predict.ts", "src/net/interp.ts", "server/room.ts"],
   "exclude": ["src/**/*.test.ts", "server/**/*.test.ts"]
 }

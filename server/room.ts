@@ -18,7 +18,7 @@ import {
   type WorldState,
   type You,
 } from '../src/net/protocol'
-import { Btn, type Action, type Move, type PlayerCommands } from '../src/sim/commands'
+import { missingMove, MOVE_REPEAT, type Action, type Move, type PlayerCommands } from '../src/sim/commands'
 import { STEP } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
 import { generatePropPlacements, type PropPlacement } from '../src/sim/props'
@@ -92,8 +92,7 @@ export const SAVE_MS = 10_000
 export const FORGOTTEN_MS = 10 * 60_000
 /** Una isla sin nadie conectado se borra a las 24 h. */
 export const ISLAND_TTL_MS = 24 * 3600_000
-/** Si falta el `Move` de un tick se repite el último, sin Attack ni Jump, como mucho tantos ticks. */
-export const MOVE_REPEAT = 6
+export { MOVE_REPEAT }
 /** Un `Move` para más de tantos ticks por delante del servidor se ignora (2 s). */
 export const MAX_AHEAD = 2 * TICK_RATE
 /** Ticks por vuelta como mucho: si el proceso se atrasa más, el reloj se rebasa en vez de recuperar. */
@@ -101,8 +100,6 @@ const MAX_CATCHUP = 30
 /** Token bucket de mensajes por socket. */
 const RATE = 60
 const BURST = 120
-/** Sin Attack ni Jump: un golpe o un salto que el cliente no ha predicho no se pueden deshacer. */
-const REPEAT_MASK = ~(Btn.Attack | Btn.Jump)
 
 /** Un hueco en la isla: un jugador que estuvo o está, reconocible por su token. */
 interface Seat {
@@ -407,11 +404,9 @@ export class Room {
       if (move) {
         seat.last = move
         seat.repeated = 0
-      } else if (seat.repeated < MOVE_REPEAT) {
-        seat.repeated++
-        move = { ...seat.last, tick, buttons: seat.last.buttons & REPEAT_MASK }
       } else {
-        move = { ...seat.last, tick, buttons: 0 }
+        move = missingMove(seat.last, seat.repeated, tick)
+        seat.repeated = Math.min(MOVE_REPEAT, seat.repeated + 1)
       }
       // En orden de seq y sin saltarse ninguna: las de su tick o anteriores (las que llegaron tarde, ahora).
       let ready = 0
