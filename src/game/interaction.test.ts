@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createProps, type PropData, type PropInstance } from '../world/props'
+import { createPropWorld, type PropData } from '../sim/props'
+import { PropView, type PropInstance } from '../view/PropView'
 import { heightAt } from '../sim/world/terrain'
 import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from '../sim/constants'
 import { aimPose, hitDamage, Interaction } from './interaction'
@@ -8,10 +9,12 @@ import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from './pickups'
 
 function setup() {
-  const world = createProps()
+  const world = createPropWorld()
+  const view = new PropView(world.placements)
   const inventory = new Inventory()
   const pickups = new Pickups([world.grid], () => 0.5)
-  const interaction = new Interaction(world, inventory, pickups)
+  // La vista recibe cada evento al momento, como si se presentara al final de cada paso.
+  const interaction = new Interaction(world, view, inventory, pickups, undefined, (e) => view.present([e]))
   const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
   camera.rotation.order = 'YXZ'
 
@@ -33,7 +36,11 @@ function setup() {
   }
   /** Piezas de `item` en el suelo. */
   const onGround = (item: ItemId) => pickups.list.filter((p) => p.item === item).length
-  return { world, inventory, pickups, interaction, camera, aimAt, hold, onGround }
+  const reset = () => {
+    interaction.reset()
+    view.reset()
+  }
+  return { world, view, inventory, pickups, interaction, camera, aimAt, hold, onGround, reset }
 }
 
 describe('recolección', () => {
@@ -108,10 +115,10 @@ describe('recolección', () => {
     ctx.aimAt(tree)
     ctx.hold(0.81) // 3 golpes: el último llega con el wobble del segundo aún activo
     expect(tree.alive).toBe(false)
-    ctx.interaction.updateAnimations(0.05)
-    ctx.interaction.updateAnimations(0.2)
+    ctx.view.update(0.05)
+    ctx.view.update(0.2)
     const m = new THREE.Matrix4()
-    for (const { mesh, index } of tree.instances) {
+    for (const { mesh, index } of ctx.view.instancesOf(tree.id)) {
       mesh.getMatrixAt(index, m)
       expect(new THREE.Vector3().setFromMatrixScale(m).length()).toBe(0)
     }
@@ -121,13 +128,13 @@ describe('recolección', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     ctx.hold(STEP)
-    ctx.interaction.updateAnimations(0.05)
+    ctx.view.update(0.05)
     const m = new THREE.Matrix4()
-    const [trunk, foliage] = tree.instances
+    const [trunk, foliage] = ctx.view.instancesOf(tree.id)
     trunk.mesh.getMatrixAt(trunk.index, m)
     expect(m.equals(trunk.base)).toBe(false)
-    ctx.interaction.updateAnimations(0.2)
-    for (const { mesh, index, base } of tree.instances) {
+    ctx.view.update(0.2)
+    for (const { mesh, index, base } of ctx.view.instancesOf(tree.id)) {
       mesh.getMatrixAt(index, m)
       expect(m.equals(base)).toBe(true)
     }
@@ -150,12 +157,12 @@ describe('bayas', () => {
     mesh.getMatrixAt(index, m)
     return new THREE.Vector3().setFromMatrixScale(m).length() === 0
   }
-  const visibleBerries = (bush: PropData) => bush.instances.filter((i) => i.berry !== undefined && !isHidden(i)).length
+  const visibleBerries = (bush: PropData) => ctx.view.instancesOf(bush.id).filter((i) => i.berry !== undefined && !isHidden(i)).length
 
   it('cada arbusto tiene una baya visible por punto de vida', () => {
     const bush = firstBush()
     expect(bush.maxHp).toBe(BERRIES_PER_BUSH)
-    expect(bush.instances.filter((i) => i.berry !== undefined)).toHaveLength(BERRIES_PER_BUSH)
+    expect(ctx.view.instancesOf(bush.id).filter((i) => i.berry !== undefined)).toHaveLength(BERRIES_PER_BUSH)
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH)
   })
 
@@ -169,7 +176,7 @@ describe('bayas', () => {
     expect(bush.hp).toBe(BERRIES_PER_BUSH - 1)
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
     expect(bush.alive).toBe(true)
-    expect(isHidden(bush.instances[0])).toBe(false)
+    expect(isHidden(ctx.view.instancesOf(bush.id)[0])).toBe(false)
   })
 
   it('con la hotbar llena la baya se queda en el arbusto', () => {
@@ -197,9 +204,9 @@ describe('bayas', () => {
     const bush = firstBush()
     ctx.aimAt(bush)
     ctx.hold(STEP)
-    ctx.interaction.updateAnimations(0.05)
+    ctx.view.update(0.05)
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
-    ctx.interaction.updateAnimations(0.2)
+    ctx.view.update(0.2)
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH - 1)
   })
 
@@ -219,7 +226,7 @@ describe('bayas', () => {
     wait(BERRY_REGROW * BERRIES_PER_BUSH)
     expect(bush.hp).toBe(BERRIES_PER_BUSH)
     const m = new THREE.Matrix4()
-    for (const { mesh, index, base } of bush.instances) {
+    for (const { mesh, index, base } of ctx.view.instancesOf(bush.id)) {
       mesh.getMatrixAt(index, m)
       expect(m.equals(base)).toBe(true)
     }
@@ -249,11 +256,11 @@ describe('bayas', () => {
     ctx.hold(STEP)
     expect(rock.hp).toBe(rock.maxHp - 1)
 
-    ctx.interaction.reset()
+    ctx.reset()
     for (const prop of [tree, rock, bush]) {
       expect(prop.alive).toBe(true)
       expect(prop.hp).toBe(prop.maxHp)
-      expect(prop.instances.some(isHidden)).toBe(false)
+      expect(ctx.view.instancesOf(prop.id).some(isHidden)).toBe(false)
     }
     expect(ctx.interaction.target).toBe(null)
   })
@@ -263,7 +270,7 @@ describe('bayas', () => {
     ctx.aimAt(bush)
     ctx.hold(STEP)
     wait(BERRY_REGROW / 2)
-    ctx.interaction.reset()
+    ctx.reset()
     ctx.aimAt(bush)
     ctx.hold(STEP)
     // El temporizador antiguo habría vencido aquí; el nuevo aún no.

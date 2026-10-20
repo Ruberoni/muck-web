@@ -1,5 +1,5 @@
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
-import type { PropKind } from '../world/props'
+import type { PropKind } from '../sim/props'
 import type { SoundOut } from './sound'
 import { spatialize } from './sound'
 

@@ -1,12 +1,12 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { createProps } from '../world/props'
+import { createPropWorld } from '../sim/props'
 import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { Campfires, campfireSpot } from './campfire'
 import { resolveCircle } from '../sim/collision'
 import { CAMPFIRE_LIGHTS, CAMPFIRE_PLACE_DISTANCE, CAMPFIRE_RADIUS, PLAYER_RADIUS } from '../sim/constants'
 
-const world = createProps()
+const world = createPropWorld()
 
 /** Un punto en hierba sin props alrededor, para colocar fogatas sin depender del azar. */
 function clearGround() {

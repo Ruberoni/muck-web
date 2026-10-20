@@ -1,8 +1,9 @@
 import * as THREE from 'three'
-import type { PropData, PropInstance, World } from '../world/props'
+import { resetProp, type PropData, type PropWorld } from '../sim/props'
+import type { PropView } from '../view/PropView'
 import { heightAt } from '../sim/world/terrain'
 import { LOCAL_PLAYER, NO_EMIT, type Emit } from '../sim/events'
-import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from '../sim/constants'
+import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS } from '../sim/constants'
 import type { Enemies, EnemyData } from './enemies'
 import type { Inventory, ItemId } from '../sim/inventory'
 import type { Pickups } from './pickups'
@@ -11,34 +12,32 @@ import type { Pickups } from './pickups'
 export type Target = PropData | EnemyData
 
 const SCREEN_CENTER = new THREE.Vector2(0, 0)
-const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
-const WOBBLE_AMOUNT = 0.12
 // Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan.
 const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
 
 /**
- * Objetivo, golpes, animación de golpe, destrucción de props, recogida y rebrote de bayas; golpes a enemigos.
+ * Objetivo, golpes, destrucción de props, recogida y rebrote de bayas; golpes a enemigos.
  * Lo que sueltan árboles, rocas y enemigos cae al suelo (`pickups`); las bayas van directas al inventario.
+ * Solo cambia el estado: lo que se ve (wobble, props ocultos, bayas) lo dibuja PropView desde los eventos.
  */
 export class Interaction {
   target: Target | null = null
   private cooldown = 0
   private raycaster = new THREE.Raycaster()
   private objects: THREE.Object3D[]
-  private wobbles = new Map<PropData, number>()
   /** Segundos que faltan para que le vuelva a crecer una baya a cada arbusto incompleto. */
   private regrowing = new Map<PropData, number>()
-  private scratch = new THREE.Matrix4()
   private hits: THREE.Intersection[] = []
 
   constructor(
-    private world: World,
+    private world: PropWorld,
+    private view: PropView,
     private inventory: Inventory,
     private pickups: Pickups,
     private enemies?: Enemies,
     private emit: Emit = NO_EMIT,
   ) {
-    this.objects = [...world.allMeshes, ...(enemies ? [enemies.group] : [])]
+    this.objects = [...view.allMeshes, ...(enemies ? [enemies.group] : [])]
     this.raycaster.far = REACH
   }
 
@@ -56,8 +55,7 @@ export class Interaction {
         this.target = enemy
         break
       }
-      const id = hit.instanceId === undefined ? -1 : (this.world.instanceToProp.get(hit.object as THREE.InstancedMesh)?.[hit.instanceId] ?? -1)
-      const prop = this.world.props[id]
+      const prop = this.world.props[this.view.propAt(hit.object, hit.instanceId)]
       if (prop?.alive) {
         this.target = prop
         break
@@ -95,10 +93,7 @@ export class Interaction {
     if (PROP_DEFS[prop.kind].harvest) return this.harvest(prop)
     prop.hp = Math.max(0, prop.hp - hitDamage(this.inventory.selectedItem, prop.kind))
     if (prop.hp <= 0) this.destroy(prop)
-    else {
-      this.wobbles.set(prop, 0)
-      this.emit({ type: 'propHit', id: prop.id, hp: prop.hp, by: LOCAL_PLAYER })
-    }
+    else this.emit({ type: 'propHit', id: prop.id, hp: prop.hp, by: LOCAL_PLAYER })
     return !prop.alive
   }
 
@@ -113,13 +108,7 @@ export class Interaction {
   }
 
   private destroy(prop: PropData) {
-    // Cancelar la animación antes de ocultar: si no, restauraría la escala y el prop "reviviría".
-    this.wobbles.delete(prop)
     prop.alive = false
-    for (const { mesh, index } of prop.instances) {
-      mesh.setMatrixAt(index, HIDDEN)
-      mesh.instanceMatrix.needsUpdate = true
-    }
     if (this.target === prop) this.target = null
     this.emit({ type: 'propDestroyed', id: prop.id, by: LOCAL_PLAYER })
     const { drop } = PROP_DEFS[prop.kind]
@@ -132,73 +121,28 @@ export class Interaction {
     const { drop } = PROP_DEFS[bush.kind]
     if (bush.hp <= 0 || !this.inventory.canAdd(drop.item)) return false
     bush.hp--
-    this.setBerry(bush, bush.hp, false)
     // El rebrote sigue su ritmo: recoger no reinicia el temporizador de la siguiente baya.
     if (!this.regrowing.has(bush)) this.regrowing.set(bush, BERRY_REGROW)
-    this.wobbles.set(bush, 0)
     this.inventory.add(drop.item, drop.amount)
     this.emit({ type: 'berryTaken', id: bush.id, hp: bush.hp, by: LOCAL_PLAYER })
     return true
   }
 
   private growBerry(bush: PropData) {
-    this.setBerry(bush, bush.hp, true)
     bush.hp++
     this.emit({ type: 'berryGrew', id: bush.id, hp: bush.hp })
     if (bush.hp < bush.maxHp) this.regrowing.set(bush, BERRY_REGROW)
     else this.regrowing.delete(bush)
   }
 
-  private setBerry(bush: PropData, berry: number, visible: boolean) {
-    const instance = bush.instances.find((i) => i.berry === berry)
-    if (!instance) return
-    instance.mesh.setMatrixAt(instance.index, visible ? instance.base : HIDDEN)
-    instance.mesh.instanceMatrix.needsUpdate = true
-  }
-
-  /** Devuelve el prop a su estado original (vida llena, matriz base). */
-  private respawn(prop: PropData) {
-    this.regrowing.delete(prop)
-    this.wobbles.delete(prop)
-    prop.hp = prop.maxHp
-    prop.alive = true
-    for (const { mesh, index, base } of prop.instances) {
-      mesh.setMatrixAt(index, base)
-      mesh.instanceMatrix.needsUpdate = true
-    }
-  }
-
   /** Reinicio de partida: todos los props como al generar la isla. */
   reset() {
-    for (const prop of this.world.props) {
-      if (!prop.alive || prop.hp < prop.maxHp || this.wobbles.has(prop)) this.respawn(prop)
-    }
+    for (const prop of this.world.props) resetProp(prop)
     this.regrowing.clear()
     this.cooldown = 0
     this.target = null
   }
-
-  /** Por frame: animación de golpe (tronco y copa a la vez). */
-  updateAnimations(dt: number) {
-    for (const [prop, elapsed] of this.wobbles) {
-      const t = elapsed + dt
-      const done = t >= WOBBLE_DURATION
-      const a = done ? 0 : WOBBLE_AMOUNT * Math.sin((Math.PI * t) / WOBBLE_DURATION)
-      for (const instance of prop.instances) {
-        // Las bayas ya recogidas siguen ocultas durante el wobble.
-        if (!isShown(prop, instance)) continue
-        const { mesh, index, base } = instance
-        this.scratch.makeScale(1 + a, 1 - a * 0.5, 1 + a).premultiply(base)
-        mesh.setMatrixAt(index, this.scratch)
-        mesh.instanceMatrix.needsUpdate = true
-      }
-      if (done) this.wobbles.delete(prop)
-      else this.wobbles.set(prop, t)
-    }
-  }
 }
-
-const isShown = (prop: PropData, instance: PropInstance) => instance.berry === undefined || instance.berry < prop.hp
 
 /** Daño de un golpe con el objeto en la mano (null = mano vacía). */
 export function hitDamage(item: ItemId | null, kind: Target['kind']): number {

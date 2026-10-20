@@ -2,6 +2,8 @@ import * as THREE from 'three'
 import { GameAudio } from '../audio/gameAudio'
 import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
+import type { PropWorld } from '../sim/props'
+import type { PropView } from '../view/PropView'
 import { EventLog, LOCAL_PLAYER, type SimEvent } from '../sim/events'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
@@ -60,7 +62,8 @@ export class Game {
   readonly renderer: THREE.WebGLRenderer
   readonly camera: THREE.PerspectiveCamera
   readonly scene: THREE.Scene
-  readonly world: ReturnType<typeof createScene>['world']
+  readonly world: PropWorld
+  readonly propView: PropView
   readonly inventory = new Inventory()
   readonly interaction: Interaction
   readonly enemies: Enemies
@@ -112,17 +115,18 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(this.settings.fov, window.innerWidth / window.innerHeight, 0.1, 600)
     this.camera.rotation.order = 'YXZ'
 
-    const { scene, sky, water, world } = createScene()
+    const { scene, sky, water, world, propView } = createScene()
     this.scene = scene
     this.sky = sky
     this.water = water
     this.world = world
+    this.propView = propView
     this.campfires = new Campfires(scene)
     const { emit } = this.events
     this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng, emit)
     this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng, emit)
     scene.add(this.enemies.group, this.pickups.group)
-    this.interaction = new Interaction(world, this.inventory, this.pickups, this.enemies, emit)
+    this.interaction = new Interaction(world, propView, this.inventory, this.pickups, this.enemies, emit)
 
     this.env = {
       heightAt,
@@ -182,6 +186,7 @@ export class Game {
     this.inventory.clear()
     this.setCrafting(false)
     this.interaction.reset()
+    this.propView.reset()
     this.enemies.reset()
     this.pickups.clear()
     this.hotbarFull = false
@@ -317,6 +322,7 @@ export class Game {
   private present(events: readonly SimEvent[]) {
     this.audio.step(STEP, this.player, this.enemies.list)
     this.audio.events(events, LOCAL_PLAYER, (id) => this.world.props[id].kind)
+    this.propView.present(events)
     for (const e of events) {
       switch (e.type) {
         case 'playerHurt':
@@ -374,7 +380,7 @@ export class Game {
     this.placeCamera(interpolate(p, alpha, this.renderPos))
     this.enemies.place(alpha)
     this.pickups.place(alpha)
-    this.interaction.updateAnimations(dt)
+    this.propView.update(dt)
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08
 
