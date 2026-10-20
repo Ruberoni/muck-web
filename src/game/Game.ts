@@ -2,8 +2,11 @@ import * as THREE from 'three'
 import { GameAudio } from '../audio/gameAudio'
 import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
-import type { PropWorld } from '../sim/props'
+import { growBerries, type PropWorld } from '../sim/props'
 import type { PropView } from '../view/PropView'
+import { EnemyView } from '../view/EnemyView'
+import { PickupView } from '../view/PickupView'
+import { CampfireView } from '../view/CampfireView'
 import { EventLog, LOCAL_PLAYER, type SimEvent } from '../sim/events'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
@@ -11,7 +14,7 @@ import { DayClock } from '../sim/world/daycycle'
 import { sunDirection } from '../world/daycycle'
 import { mulberry32 } from '../sim/random'
 import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../sim/world/terrain'
-import { Campfires, campfireSpot, type CampfireSpot } from './campfire'
+import { Campfires, campfireSpot, type CampfireSpot } from '../sim/campfires'
 import { resolveCircle } from '../sim/collision'
 import {
   BERRY_FOOD,
@@ -27,12 +30,12 @@ import {
   STEP,
 } from '../sim/constants'
 import { craft, RECIPES } from '../sim/crafting'
-import { Enemies } from './enemies'
+import { Enemies } from '../sim/enemies'
 import { Handheld } from './handheld'
 import { attackRequested, CLICK, Input, RIGHT_CLICK } from './input'
-import { Interaction } from './interaction'
+import { Interaction } from '../sim/interaction'
 import { Inventory, SLOT_COUNT } from '../sim/inventory'
-import { Pickups } from './pickups'
+import { Pickups } from '../sim/pickups'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import {
   createPlayer,
@@ -74,6 +77,9 @@ export class Game {
   readonly input: Input
   readonly clock = new DayClock()
   readonly campfires: Campfires
+  readonly enemyView = new EnemyView()
+  readonly pickupView = new PickupView()
+  readonly campfireView: CampfireView
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
@@ -121,11 +127,12 @@ export class Game {
     this.water = water
     this.world = world
     this.propView = propView
-    this.campfires = new Campfires(scene)
     const { emit } = this.events
+    this.campfires = new Campfires(emit)
+    this.campfireView = new CampfireView(scene)
     this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng, emit)
     this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng, emit)
-    scene.add(this.enemies.group, this.pickups.group)
+    scene.add(this.enemyView.group, this.pickupView.group)
     this.interaction = new Interaction(world, this.inventory, this.pickups, this.enemies, emit)
 
     this.env = {
@@ -188,9 +195,12 @@ export class Game {
     this.interaction.reset()
     this.propView.reset()
     this.enemies.reset()
+    this.enemyView.reset()
     this.pickups.clear()
+    this.pickupView.reset()
     this.hotbarFull = false
     this.campfires.clear()
+    this.campfireView.reset()
     this.clock.reset()
     this.audio.reset()
     // Lo que quedara por presentar es de la partida anterior.
@@ -307,6 +317,7 @@ export class Game {
     this.interaction.updateTarget(this.player)
     // Con la fogata en la mano el clic la coloca en vez de golpear.
     const placing = this.holdingCampfire
+    growBerries(this.world.props, STEP, this.events.emit)
     this.interaction.step(STEP, !placing && (this.attackOverride ?? attackRequested(this.input.attackHeld, presses)))
     if (placing && presses.has(CLICK)) this.placeCampfire()
     this.hotbarFull = this.pickups.step(STEP, this.player.pos, this.inventory).full
@@ -321,6 +332,7 @@ export class Game {
     this.audio.step(STEP, this.player, this.enemies.list)
     this.audio.events(events, LOCAL_PLAYER, (id) => this.world.props[id].kind)
     this.propView.present(events)
+    this.enemyView.present(events)
     for (const e of events) {
       switch (e.type) {
         case 'playerHurt':
@@ -349,9 +361,7 @@ export class Game {
 
   private placeCampfire() {
     const spot = campfireSpot(this.player.pos, this.player.yaw, [this.world.grid, this.campfires.grid], this.spot)
-    if (!this.campfires.place(spot)) return
-    const { id, x, y, z, rotY } = this.campfires.list.at(-1)!
-    this.events.emit({ type: 'campfirePlaced', id, x, y, z, rotY, by: LOCAL_PLAYER })
+    if (!this.campfires.place(spot, LOCAL_PLAYER)) return
     this.events.emit({ type: 'playerPlaced', id: LOCAL_PLAYER })
     this.inventory.remove('campfire', 1)
   }
@@ -376,8 +386,8 @@ export class Game {
   private render(alpha: number, dt: number, time: number) {
     const p = this.player
     this.placeCamera(interpolate(p, alpha, this.renderPos))
-    this.enemies.place(alpha)
-    this.pickups.place(alpha)
+    this.enemyView.update(dt, this.enemies.list, alpha)
+    this.pickupView.update(this.pickups.list, alpha)
     this.propView.update(dt)
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08
@@ -389,10 +399,10 @@ export class Game {
       this.renderPos.z - Math.cos(p.yaw) * SHADOW_LOOK_AHEAD,
     )
     updateSky(this.sky, this.clock.phase, this.shadowCenter)
-    this.campfires.update(time, this.clock.phase, this.renderPos)
+    this.campfireView.update(time, this.clock.phase, this.renderPos, this.campfires.list)
     const placing = this.state === 'playing' && this.holdingCampfire
     const spot = placing ? campfireSpot(this.renderPos, p.yaw, [this.world.grid, this.campfires.grid], this.spot) : null
-    this.campfires.setGhost(spot)
+    this.campfireView.setGhost(spot)
 
     this.hud.setHealth(p.health, HEALTH_MAX)
     this.hud.setHunger(p.hunger, HUNGER_MAX)

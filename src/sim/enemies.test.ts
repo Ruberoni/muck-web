@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DAY_FRACTION } from '../sim/world/daycycle'
-import { createPropWorld } from '../sim/props'
-import { mulberry32 } from '../sim/random'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from '../sim/world/terrain'
+import { DAY_FRACTION } from './world/daycycle'
+import { createPropWorld } from './props'
+import { mulberry32 } from './random'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from './world/terrain'
 import {
   ENEMY_ATTACK_INTERVAL,
   ENEMY_DAMAGE,
@@ -16,10 +16,10 @@ import {
   PLAYER_RADIUS,
   STEP,
   WADE_DEPTH,
-} from '../sim/constants'
+} from './constants'
 import { ENEMY_AIM_HEIGHT, Enemies, enemyCap, type EnemyData } from './enemies'
 import { hitDamage, Interaction } from './interaction'
-import { Inventory, type ItemId } from '../sim/inventory'
+import { Inventory, type ItemId } from './inventory'
 import { Pickups } from './pickups'
 
 const NIGHT = DAY_FRACTION + 0.1
@@ -127,8 +127,6 @@ describe('enemigos nocturnos', () => {
     run(STEP, DAY)
     expect(enemies.list).toHaveLength(0)
     expect(e.alive).toBe(false)
-    run(1, DAY)
-    expect(enemies.group.children).toHaveLength(0)
   })
 
   it('un golpe los empuja hacia atrás y les quita vida; al llegar a 0 mueren', () => {
@@ -146,7 +144,9 @@ describe('enemigos nocturnos', () => {
     run(30)
     enemies.reset()
     expect(enemies.list).toHaveLength(0)
-    expect(enemies.group.children).toHaveLength(0)
+    // La siguiente aparición es inmediata al anochecer.
+    run(STEP)
+    expect(enemies.list).toHaveLength(1)
   })
 })
 

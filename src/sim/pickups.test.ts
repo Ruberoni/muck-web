@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { mulberry32 } from '../sim/random'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
-import { PICKUP_DELAY, PICKUP_MAGNET, PICKUP_RADIUS, STEP } from '../sim/constants'
-import { Inventory, type ItemId } from '../sim/inventory'
+import { mulberry32 } from './random'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
+import { PICKUP_DELAY, PICKUP_MAGNET, PICKUP_RADIUS, STEP } from './constants'
+import { Inventory, type ItemId } from './inventory'
 import { Pickups } from './pickups'
 
 /** Primer punto de hierba en espiral desde el centro. */
@@ -49,7 +49,6 @@ describe('objetos en el suelo', () => {
     const { pickups, dropAndLand } = setup()
     dropAndLand('wood', 4)
     expect(pickups.list).toHaveLength(4)
-    expect(pickups.group.children).toHaveLength(4)
     for (const p of pickups.list) {
       expect(p.grounded).toBe(true)
       expect(p.pos.y).toBeCloseTo(heightAt(p.pos.x, p.pos.z))
@@ -72,7 +71,6 @@ describe('objetos en el suelo', () => {
     run(0.2, at(p.pos.x, p.pos.z))
     expect(inventory.count('stone')).toBe(1)
     expect(pickups.list).toHaveLength(0)
-    expect(pickups.group.children).toHaveLength(0)
   })
 
   it('se recogen al pasar por encima, uno a uno, y entran en la hotbar', () => {
@@ -147,7 +145,25 @@ describe('objetos en el suelo', () => {
     dropAndLand('wood', 4)
     pickups.clear()
     expect(pickups.list).toHaveLength(0)
-    expect(pickups.group.children).toHaveLength(0)
+  })
+
+  it('un montón cae entero y da todas sus unidades de una vez', () => {
+    const { pickups, inventory, run, at } = setup()
+    pickups.dropPile('stone', 5, spot.x, heightAt(spot.x, spot.z) + 1, spot.z)
+    expect(pickups.list).toHaveLength(1)
+    expect(pickups.list[0].amount).toBe(5)
+    run(1, { x: spot.x + 100, y: 0, z: spot.z })
+    const [p] = pickups.list
+    expect(p.grounded).toBe(true)
+    expect(run(STEP, at(p.pos.x, p.pos.z)).collected).toBe(5)
+    expect(inventory.count('stone')).toBe(5)
+    expect(pickups.list).toHaveLength(0)
+  })
+
+  it('lo que sueltan props y enemigos va en piezas de una unidad', () => {
+    const { pickups, dropAndLand } = setup()
+    dropAndLand('wood', 3)
+    expect(pickups.list.map((p) => p.amount)).toEqual([1, 1, 1])
   })
 
   it('cada pieza tiene un id propio que no se reutiliza al recoger otras', () => {
