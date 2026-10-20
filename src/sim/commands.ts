@@ -11,8 +11,8 @@ export interface Move {
   yaw: number
   pitch: number
   /**
-   * Lo que el cliente tiene delante según aim.ts. Con un jugador no hace falta: la simulación calcula
-   * el objetivo desde la posición y la mirada tras moverse. El servidor lo validará (PR 9).
+   * Lo que el cliente tiene delante según aim.ts (null: nada). Sin él (un jugador) la simulación calcula
+   * el objetivo desde la posición y la mirada tras moverse; con él solo comprueba que sea creíble (validateAim).
    */
   aim?: TargetRef | null
 }

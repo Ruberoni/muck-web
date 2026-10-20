@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # En un PR, HEAD es el merge con la base y HEAD^1 la base: hace falta para comparar PROTOCOL_VERSION.
+          fetch-depth: 2
 
       - uses: actions/setup-node@v7
         with:
@@ -26,6 +29,11 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Cliente y servidor de versiones distintas no deben jugar juntos.
+      - name: Check PROTOCOL_VERSION
+        if: github.event_name == 'pull_request'
+        run: scripts/check-protocol-version.sh HEAD^1
 
       - run: npm test
 

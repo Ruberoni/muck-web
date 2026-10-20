@@ -4,7 +4,7 @@ import { resolveCircle } from './collision'
 import { BERRY_FOOD, PLAYER_RADIUS, STEP } from './constants'
 import { craft, RECIPES } from './crafting'
 import { Enemies, type EnemiesState } from './enemies'
-import { EventLog, type PlayerId, type SimEvent } from './events'
+import { EventLog, type PlayerId, type SimEvent, type TargetRef } from './events'
 import { createCombat, Interaction, type Combat, type Fighter } from './interaction'
 import { Inventory, type InventoryState } from './inventory'
 import { Pickups, type PickupsState } from './pickups'
@@ -70,6 +70,8 @@ const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ..
 
 /** Lo que el jugador quiere hacer en este paso además de moverse. */
 interface Intent {
+  /** Lo que el cliente dice tener delante; sin él (un jugador), lo calcula la simulación. */
+  aim: TargetRef | null | undefined
   attack: boolean
   swing: boolean
   place: boolean
@@ -125,6 +127,11 @@ export class Simulation {
   /** Último tick simulado. */
   get tick() {
     return this.events.tick
+  }
+
+  /** Tick en el que empezó el día 1 (lo cambian `setPhase` y `reset`). */
+  get startTick() {
+    return this.worldStartTick
   }
 
   /** El jugador `id`; lanza si no existe. */
@@ -203,8 +210,10 @@ export class Simulation {
     growBerries(this.world.props, STEP, this.events.emit)
     for (const slot of living) {
       const intent = intents.get(slot)!
-      // Desde la posición simulada (no interpolada): golpear no depende del framerate.
-      this.interaction.updateTarget(slot)
+      // Desde la posición simulada (no interpolada): golpear no depende del framerate. En red, el cliente
+      // dice a qué apunta (ve a los enemigos en el pasado) y aquí solo se comprueba que sea creíble.
+      if (intent.aim === undefined) this.interaction.updateTarget(slot)
+      else this.interaction.validateAim(slot, intent.aim)
       // Con la fogata en la mano el clic la coloca en vez de golpear, y no queda ningún golpe pendiente.
       const placing = slot.inventory.selectedItem === 'campfire'
       if (placing) slot.combat.pendingSwing = false
@@ -233,7 +242,8 @@ export class Simulation {
    * golpear, colocar y comer se devuelven para su momento del paso. Las de un muerto se descartan.
    */
   private applyActions(slot: PlayerSlot, command: PlayerCommands | undefined): Intent {
-    const intent: Intent = { attack: ((command?.move.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false }
+    const move = command?.move
+    const intent: Intent = { aim: move?.aim, attack: ((move?.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false }
     if (!command) return intent
     for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
       if (action.seq <= slot.appliedSeq) continue

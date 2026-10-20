@@ -1,10 +1,10 @@
 {
-  // Simulación compartida con el servidor: sin DOM ni tipos de Vite, así `window` o `document` no compilan.
+  // Simulación, protocolo y sala, compartidos con el servidor: sin DOM ni tipos de Vite, así `window` o `document` no compilan.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["src/sim"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src/sim", "src/net/protocol.ts", "server/room.ts"],
+  "exclude": ["src/**/*.test.ts", "server/**/*.test.ts"]
 }
