@@ -1,9 +1,9 @@
 import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes } from './aim'
 import { resetProp, startRegrow, type PropData, type PropWorld } from './props'
 import { heightAt } from './world/terrain'
-import { NO_EMIT, type Emit, type PlayerId } from './events'
-import { BASE_DAMAGE, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, TOOL_DEFS } from './constants'
-import type { Enemies, EnemyData } from './enemies'
+import { NO_EMIT, type Emit, type PlayerId, type TargetRef } from './events'
+import { BASE_DAMAGE, ENEMY_DEF, ENEMY_RADIUS, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS } from './constants'
+import { ENEMY_AIM_HEIGHT, type Enemies, type EnemyData } from './enemies'
 import type { Inventory, ItemId } from './inventory'
 import type { Player } from './player'
 import type { Pickups } from './pickups'
@@ -34,6 +34,13 @@ export const createCombat = (): Combat => ({ cooldown: 0, pendingSwing: false })
 // Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan.
 const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
 
+// Validación permisiva del objetivo que dice tener delante un jugador en red (es cooperativo: no es antitrampas).
+// El cliente ve a los enemigos unos 100 ms en el pasado, de ahí el margen mayor.
+const AIM_SLACK_PROP = 0.5
+const AIM_SLACK_ENEMY = 1.5
+/** Ángulo máximo entre la mirada y el centro del objetivo (60°). */
+const AIM_MIN_COS = Math.cos(Math.PI / 3)
+
 /**
  * Objetivo, golpes, destrucción de props y recogida de bayas (el rebrote es `growBerries`); golpes a enemigos.
  * Lo que sueltan árboles, rocas y enemigos cae al suelo (`pickups`); las bayas van directas al inventario de
@@ -58,6 +65,31 @@ export class Interaction {
   updateTarget(fighter: Fighter) {
     aimRay(fighter.player, this.ray)
     fighter.target = pickTarget(this.ray, this.world.grid, this.hitboxes, this.enemies?.list ?? [])
+  }
+
+  /**
+   * Objetivo que el cliente dice tener delante (`Move.aim`), validado de forma permisiva: existe, está vivo,
+   * a como mucho REACH + su radio + un margen de los ojos y a menos de 60° de la mirada. Si no, golpe al aire.
+   */
+  validateAim(fighter: Fighter, aim: TargetRef | null) {
+    fighter.target = aim && this.checkAim(fighter, aim)
+  }
+
+  private checkAim(fighter: Fighter, aim: TargetRef): Target | null {
+    const target = aim.kind === 'prop' ? this.world.props[aim.id] : this.enemies?.list.find((e) => e.id === aim.id)
+    if (!target?.alive) return null
+    const enemy = target.kind === 'enemy'
+    const { x, z } = enemy ? target.pos : target
+    const y = enemy ? heightAt(x, z) + ENEMY_AIM_HEIGHT : aimHeight(target)
+    const radius = enemy ? ENEMY_RADIUS + AIM_SLACK_ENEMY : target.radius + AIM_SLACK_PROP
+    const ray = aimRay(fighter.player, this.ray)
+    const dx = x - ray.ox
+    const dy = y - ray.oy
+    const dz = z - ray.oz
+    const distance = Math.hypot(dx, dy, dz)
+    if (distance > REACH + radius) return null
+    // Pegado al objetivo cualquier dirección vale.
+    return distance < 1e-6 || (dx * ray.dx + dy * ray.dy + dz * ray.dz) / distance >= AIM_MIN_COS ? target : null
   }
 
   /**
@@ -142,6 +174,9 @@ export function hitDamage(item: ItemId | null, kind: Target['kind']): number {
   return BASE_DAMAGE * (tool?.kind === kind ? tool.multiplier : 1)
 }
 
+/** Altura a la que se apunta a un prop: el tronco, el centro del arbusto o la roca. */
+const aimHeight = (prop: PropData) => (prop.kind === 'tree' ? prop.y + 1.2 : prop.kind === 'bush' ? prop.y + 0.5 : prop.y + 0.2)
+
 /** Posición y orientación para apuntar a un prop desde fuera de su radio (debug y tests). */
 export function aimPose(prop: PropData, isFree: (x: number, z: number) => boolean) {
   const dist = prop.radius + 1.2
@@ -161,6 +196,6 @@ export function aimPose(prop: PropData, isFree: (x: number, z: number) => boolea
   const dz = prop.z - z
   // forward = (-sin(yaw), -cos(yaw))
   const yaw = Math.atan2(-dx, -dz)
-  const aimY = prop.kind === 'tree' ? prop.y + 1.2 : prop.kind === 'bush' ? prop.y + 0.5 : prop.y + 0.2
+  const aimY = aimHeight(prop)
   return { x, z, yaw, aimY, horizontal: Math.hypot(dx, dz) }
 }

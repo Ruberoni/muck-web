@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type PlayerCommands } from './commands'
 import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, STEP } from './constants'
 import { Enemies, enemyCap, enemyCapFor, spawnIntervalFor, type EnemyPrey } from './enemies'
-import type { PlayerId, SimEvent, SimEventData } from './events'
+import type { PlayerId, SimEvent, SimEventData, TargetRef } from './events'
 import { aimPose } from './interaction'
 import { Inventory } from './inventory'
 import { Pickups, type Collector } from './pickups'
@@ -21,6 +21,8 @@ interface Command {
   buttons?: number
   yaw?: number
   pitch?: number
+  /** Lo que el cliente dice tener delante (en red); sin él, lo calcula la simulación. */
+  aim?: TargetRef | null
   actions?: ActionData[]
 }
 
@@ -39,7 +41,13 @@ function stepAll(sim: Simulation, commands: Record<PlayerId, Command> = {}) {
     const slot = sim.slot(Number(key))
     let seq = slot.appliedSeq
     map.set(slot.id, {
-      move: { tick, buttons: c.buttons ?? 0, yaw: c.yaw ?? slot.player.yaw, pitch: c.pitch ?? slot.player.pitch },
+      move: {
+        tick,
+        buttons: c.buttons ?? 0,
+        yaw: c.yaw ?? slot.player.yaw,
+        pitch: c.pitch ?? slot.player.pitch,
+        ...(c.aim !== undefined ? { aim: c.aim } : {}),
+      },
       actions: (c.actions ?? []).map((a): Action => ({ ...a, seq: ++seq, tick })),
     })
   }
@@ -411,5 +419,55 @@ describe('objetos del suelo con varios jugadores', () => {
     const result = pickups.step(STEP, [a, b])
     expect(result.map((r) => r.collected)).toEqual([2, 0])
     expect(a.inventory.count('wood')).toBe(2)
+  })
+})
+
+describe('objetivo que manda el cliente (Move.aim)', () => {
+  const swing = (sim: Simulation, look: Command) => ofType(stepAll(sim, { 0: { ...look, actions: [{ kind: 'swing' }] } }), 'playerSwing')[0]
+
+  it('se acepta si es creíble aunque el rayo no lo toque', () => {
+    const sim = withPlayers(1)
+    const tree = sim.world.props.find((p) => p.kind === 'tree')!
+    const look = aimAt(sim, 0, tree)
+    // Mirando 30° a un lado el rayo ya no toca el tronco, pero sigue dentro del cono.
+    expect(swing(sim, { yaw: look.yaw + Math.PI / 6, pitch: look.pitch, aim: { kind: 'prop', id: tree.id } }).target).toEqual({ kind: 'prop', id: tree.id })
+    expect(tree.hp).toBe(tree.maxHp - 1)
+  })
+
+  it('null es golpe al aire aunque haya algo delante', () => {
+    const sim = withPlayers(1)
+    const tree = sim.world.props.find((p) => p.kind === 'tree')!
+    const look = aimAt(sim, 0, tree)
+    expect(swing(sim, { ...look, aim: null }).target).toBeNull()
+    expect(tree.hp).toBe(tree.maxHp)
+  })
+
+  it('se rechaza lejos, a la espalda, roto o inexistente', () => {
+    const sim = withPlayers(1)
+    const tree = sim.world.props.find((p) => p.kind === 'tree')!
+    const look = aimAt(sim, 0, tree)
+    const far = sim.world.props.find((p) => Math.hypot(p.x - tree.x, p.z - tree.z) > 15)!
+    expect(swing(sim, { ...look, aim: { kind: 'prop', id: far.id } }).target).toBeNull()
+    for (let i = 0; i < 30; i++) stepAll(sim, { 0: look })
+    expect(swing(sim, { yaw: look.yaw + Math.PI, pitch: 0, aim: { kind: 'prop', id: tree.id } }).target).toBeNull()
+    for (let i = 0; i < 30; i++) stepAll(sim, { 0: look })
+    expect(swing(sim, { ...look, aim: { kind: 'enemy', id: 99 } }).target).toBeNull()
+    for (let i = 0; i < 30; i++) stepAll(sim, { 0: look })
+    tree.alive = false
+    expect(swing(sim, { ...look, aim: { kind: 'prop', id: tree.id } }).target).toBeNull()
+    expect(tree.hp).toBe(tree.maxHp)
+  })
+
+  it('a un enemigo con más margen: el cliente lo ve en el pasado', () => {
+    const sim = withPlayers(1)
+    sim.setPhase(NIGHT)
+    sim.teleport(0, spot.x, spot.z, 0, 0)
+    stepAll(sim, { 0: {} })
+    const enemy = sim.enemies.list[0] ?? sim.enemies.spawnAt(spot.x, spot.z - 3)
+    // Delante (−Z) y algo más lejos que el alcance: con el margen de 1,5 m vale.
+    Object.assign(enemy.pos, { x: spot.x + 0.5, z: spot.z - 5 })
+    Object.assign(enemy.prev, enemy.pos)
+    const event = swing(sim, { yaw: 0, pitch: 0, aim: { kind: 'enemy', id: enemy.id } })
+    expect(event.target).toEqual({ kind: 'enemy', id: enemy.id })
   })
 })
