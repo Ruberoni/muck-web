@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DAY_FRACTION } from '../sim/world/daycycle'
-import { createProps } from '../world/props'
+import { createPropWorld } from '../sim/props'
+import { PropView } from '../view/PropView'
 import { mulberry32 } from '../sim/random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from '../sim/world/terrain'
 import {
@@ -27,7 +28,7 @@ const NIGHT = DAY_FRACTION + 0.1
 const DAY = 0.3
 const CONTACT = PLAYER_RADIUS + ENEMY_RADIUS
 
-const world = createProps()
+const world = createPropWorld()
 
 /** Primer punto de hierba, en espiral desde el centro, sin props en `clearance` metros. */
 function clearSpot(clearance: number) {
@@ -156,7 +157,7 @@ describe('combate', () => {
     const inventory = new Inventory()
     const enemies = new Enemies([world.grid], mulberry32(7))
     const pickups = new Pickups([world.grid], mulberry32(3))
-    const interaction = new Interaction(world, inventory, pickups, enemies)
+    const interaction = new Interaction(world, new PropView(world.placements), inventory, pickups, enemies)
     const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
     camera.rotation.order = 'YXZ'
     const enemy = enemies.spawnAt(spot.x + 1.5, spot.z)

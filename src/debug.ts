@@ -3,7 +3,7 @@ import type { Game } from './game/Game'
 import type { ItemId } from './sim/inventory'
 import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
-import { islandMeshes } from './world/props'
+import { islandMeshes } from './view/PropView'
 import { heightAt, WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './sim/constants'
 import { ENEMY_AIM_HEIGHT } from './game/enemies'
@@ -13,7 +13,7 @@ import { campfireSpot } from './game/campfire'
 export function installDebug(game: Game) {
   const { world, player } = game
   // Se calcula antes de que el jugador toque nada: es la huella del mundo generado.
-  const worldHash = computeWorldHash(islandMeshes(world))
+  const worldHash = computeWorldHash(islandMeshes(game.propView))
   // Solo ids de props: los enemigos tienen su propia numeración (ver enemies()).
   const targetPropId = () => {
     const t = game.interaction.target

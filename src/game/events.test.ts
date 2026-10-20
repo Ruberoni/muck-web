@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { EventLog, type SimEventData } from '../sim/events'
 import { DAY_FRACTION } from '../sim/world/daycycle'
-import { createProps, type PropData } from '../world/props'
+import { createPropWorld, type PropData } from '../sim/props'
+import { PropView } from '../view/PropView'
 import { mulberry32 } from '../sim/random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
 import { BERRY_REGROW, ENEMY_RADIUS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from '../sim/constants'
@@ -14,7 +15,8 @@ import { Pickups } from './pickups'
 const NIGHT = DAY_FRACTION + 0.1
 const DAY = 0.3
 
-const world = createProps()
+const world = createPropWorld()
+const view = new PropView(world.placements)
 
 /** Primer punto de hierba, en espiral desde el centro, sin props en `clearance` metros. */
 function clearSpot(clearance: number) {
@@ -41,7 +43,7 @@ function setup() {
   const inventory = new Inventory()
   const enemies = new Enemies([world.grid], mulberry32(7), emit)
   const pickups = new Pickups([world.grid], mulberry32(3), emit)
-  const interaction = new Interaction(world, inventory, pickups, enemies, emit)
+  const interaction = new Interaction(world, view, inventory, pickups, enemies, emit)
   const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
   camera.rotation.order = 'YXZ'
   const aimAt = (prop: PropData) => {

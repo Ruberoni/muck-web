@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { createSkyState, sampleSky } from './world/daycycle'
-import { createProps } from './world/props'
+import { createPropWorld } from './sim/props'
+import { PropView } from './view/PropView'
 import { createTerrain, createWater } from './world/terrain'
 
 const SUN_DISTANCE = 150
@@ -44,11 +45,12 @@ export function createScene() {
 
   const terrain = createTerrain()
   const water = createWater()
-  const world = createProps()
-  scene.add(terrain, water, world.group)
+  const world = createPropWorld()
+  const propView = new PropView(world.placements)
+  scene.add(terrain, water, propView.group)
 
   const sky = { background, fog, hemi, sun }
-  return { scene, sky, water, world }
+  return { scene, sky, water, world, propView }
 }
 
 export type Sky = ReturnType<typeof createScene>['sky']
