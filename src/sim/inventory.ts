@@ -14,6 +14,16 @@ export const ITEM_NAMES: Record<ItemId, string> = {
 // Una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9
 
+/** Casilla a `steps` de `selected`, dando la vuelta al pasar de un extremo. */
+export const cycleSlot = (selected: number, steps: number) => (((selected + steps) % SLOT_COUNT) + SLOT_COUNT) % SLOT_COUNT
+
+/** Todo el inventario como datos: casillas, recuentos y selección. */
+export interface InventoryState {
+  slots: (ItemId | null)[]
+  counts: Partial<Record<ItemId, number>>
+  selected: number
+}
+
 export class Inventory {
   private counts = new Map<ItemId, number>()
   /** Casillas de la hotbar: un objeto nuevo ocupa la primera libre y la deja libre al llegar a 0. */
@@ -72,7 +82,7 @@ export class Inventory {
 
   /** Mueve la selección `steps` casillas, dando la vuelta al pasar de un extremo. */
   cycle(steps: number) {
-    this.select((((this.selected + steps) % SLOT_COUNT) + SLOT_COUNT) % SLOT_COUNT)
+    this.select(cycleSlot(this.selected, steps))
   }
 
   /** Objeto de la casilla seleccionada; null si está vacía. */
@@ -86,6 +96,17 @@ export class Inventory {
 
   toJSON(): Partial<Record<ItemId, number>> {
     return Object.fromEntries(this.counts)
+  }
+
+  save(): InventoryState {
+    return { slots: [...this.slots], counts: this.toJSON(), selected: this.selected }
+  }
+
+  load(state: InventoryState) {
+    this.counts = new Map(Object.entries(state.counts) as [ItemId, number][])
+    for (let i = 0; i < SLOT_COUNT; i++) this.slots[i] = state.slots[i] ?? null
+    this.selected = state.selected
+    this.emit()
   }
 
   private emit() {

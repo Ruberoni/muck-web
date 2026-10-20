@@ -21,7 +21,10 @@ const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
  */
 export class Interaction {
   target: Target | null = null
-  private cooldown = 0
+  /** Segundos hasta poder volver a golpear. */
+  cooldown = 0
+  /** Un golpe pedido (acción `swing`) durante el cooldown: se da en cuanto acabe. */
+  pendingSwing = false
   private hitboxes: PropHitboxes
   /** El último rayo de puntería: de él sale el retroceso de los enemigos. */
   private ray: AimRay = aimRay({ pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 })
@@ -44,13 +47,17 @@ export class Interaction {
 
   /**
    * Paso fijo: mientras se mantiene el ataque, da un golpe cada vez que termina el cooldown,
-   * también al aire (como la animación). Devuelve el golpe que empieza en este paso, si lo hay:
-   * `target` es null al aire y `dropped` dice si soltó algo (lo rompió, lo mató o cogió una baya).
+   * también al aire (como la animación). `swing` pide un golpe (un clic): si el cooldown no ha acabado,
+   * queda pendiente y se da en cuanto acabe, sin sumarse a los del ataque mantenido.
+   * Devuelve el golpe que empieza en este paso, si lo hay: `target` es null al aire y `dropped` dice
+   * si soltó algo (lo rompió, lo mató o cogió una baya).
    */
-  step(dt: number, attackHeld: boolean): { target: Target | null; dropped: boolean } | null {
+  step(dt: number, attackHeld: boolean, swing = false): { target: Target | null; dropped: boolean } | null {
     this.cooldown = Math.max(0, this.cooldown - dt)
-    if (!attackHeld || this.cooldown > 1e-9) return null
+    if (swing) this.pendingSwing = true
+    if (!(attackHeld || this.pendingSwing) || this.cooldown > 1e-9) return null
     const target = this.target
+    this.pendingSwing = false
     this.cooldown = HIT_COOLDOWN
     this.emit({
       type: 'playerSwing',
@@ -107,6 +114,7 @@ export class Interaction {
   reset() {
     for (const prop of this.world.props) resetProp(prop)
     this.cooldown = 0
+    this.pendingSwing = false
     this.target = null
   }
 }

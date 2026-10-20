@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { createSkyState, sampleSky } from './world/daycycle'
-import { createPropWorld } from './sim/props'
+import type { PropPlacement } from './sim/props'
 import { PropView } from './view/PropView'
 import { createTerrain, createWater } from './world/terrain'
 
@@ -17,7 +17,8 @@ const up = new THREE.Object3D().up
 const snapped = new THREE.Vector3()
 const state = createSkyState()
 
-export function createScene() {
+/** Escena con el terreno, el agua, el cielo y los props de la isla (`placements`). */
+export function createScene(placements: readonly PropPlacement[]) {
   const scene = new THREE.Scene()
   const background = new THREE.Color()
   scene.background = background
@@ -45,12 +46,11 @@ export function createScene() {
 
   const terrain = createTerrain()
   const water = createWater()
-  const world = createPropWorld()
-  const propView = new PropView(world.placements)
+  const propView = new PropView(placements)
   scene.add(terrain, water, propView.group)
 
   const sky = { background, fog, hemi, sun }
-  return { scene, sky, water, world, propView }
+  return { scene, sky, water, propView }
 }
 
 export type Sky = ReturnType<typeof createScene>['sky']

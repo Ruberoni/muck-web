@@ -19,6 +19,12 @@ export interface CampfireSpot {
   valid: boolean
 }
 
+/** Las fogatas como datos, para guardar y restaurar la partida. */
+export interface CampfiresState {
+  list: Campfire[]
+  nextId: number
+}
+
 const overlaps = (grid: SpatialGrid<Collider>, x: number, z: number, radius: number) => {
   for (const c of grid.query(x, z, radius + grid.maxRadius)) {
     if (c.alive && Math.hypot(c.x - x, c.z - z) < c.radius + radius) return true
@@ -68,5 +74,19 @@ export class Campfires {
     this.list.length = 0
     this.grid.clear()
     this.nextId = 0
+  }
+
+  save(): CampfiresState {
+    return { list: this.list.map((fire) => ({ ...fire })), nextId: this.nextId }
+  }
+
+  load(state: CampfiresState) {
+    this.clear()
+    for (const fire of state.list) {
+      const copy = { ...fire }
+      this.list.push(copy)
+      this.grid.insert(copy)
+    }
+    this.nextId = state.nextId
   }
 }

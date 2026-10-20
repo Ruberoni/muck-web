@@ -108,7 +108,8 @@ export function interpolate(player: Player, alpha: number, out: Vec3): Vec3 {
   return out
 }
 
-export function rotatePlayer(player: Player, dYaw: number, dPitch: number) {
+/** Gira una orientación (la del jugador o la de la cámara del cliente), con el pitch limitado. */
+export function rotatePlayer(player: Pick<Player, 'yaw' | 'pitch'>, dYaw: number, dPitch: number) {
   player.yaw += dYaw
   player.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, player.pitch + dPitch))
 }
