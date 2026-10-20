@@ -1,5 +1,5 @@
 import type * as THREE from 'three'
-import { heightAt, WORLD_SIZE } from './terrain'
+import { heightAt, WORLD_SIZE } from '../sim/world/terrain'
 
 const SAMPLE_GRID = 16
 

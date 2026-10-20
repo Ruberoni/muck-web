@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { STEP } from '../game/constants'
+import { STEP } from '../sim/constants'
 import type { SimEvent, TargetRef } from '../sim/events'
 import type { PropKind } from '../world/props'
 import { GameAudio, GROWL_DISTANCE, STRIDE } from './gameAudio'

@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DAY_FRACTION } from '../world/daycycle'
+import { DAY_FRACTION } from '../sim/world/daycycle'
 import { createProps } from '../world/props'
-import { mulberry32 } from '../world/random'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from '../world/terrain'
+import { mulberry32 } from '../sim/random'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from '../sim/world/terrain'
 import {
   ENEMY_ATTACK_INTERVAL,
   ENEMY_DAMAGE,
@@ -17,10 +17,10 @@ import {
   PLAYER_RADIUS,
   STEP,
   WADE_DEPTH,
-} from './constants'
+} from '../sim/constants'
 import { ENEMY_AIM_HEIGHT, Enemies, enemyCap, type EnemyData } from './enemies'
 import { hitDamage, Interaction } from './interaction'
-import { Inventory, type ItemId } from './inventory'
+import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from './pickups'
 
 const NIGHT = DAY_FRACTION + 0.1

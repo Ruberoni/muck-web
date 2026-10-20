@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProps, type PropData, type PropInstance } from '../world/props'
-import { heightAt } from '../world/terrain'
-import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from './constants'
+import { heightAt } from '../sim/world/terrain'
+import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from '../sim/constants'
 import { aimPose, hitDamage, Interaction } from './interaction'
-import { Inventory, type ItemId } from './inventory'
+import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from './pickups'
 
 function setup() {

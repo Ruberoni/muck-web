@@ -1,10 +1,10 @@
 import * as THREE from 'three'
-import { heightAt, WATER_LEVEL } from '../world/terrain'
+import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { LOCAL_PLAYER, NO_EMIT, type Emit } from '../sim/events'
-import { resolveCircle, type Collider, type SpatialGrid } from './collision'
-import { GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS, STEP } from './constants'
+import { resolveCircle, type Collider, type SpatialGrid } from '../sim/collision'
+import { GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS, STEP } from '../sim/constants'
 import { itemModel } from './handheld'
-import type { Inventory, ItemId } from './inventory'
+import type { Inventory, ItemId } from '../sim/inventory'
 
 // Los modelos de la mano son pequeños: en el suelo se ven algo más grandes.
 const MODEL_SCALE = 2.2

@@ -1,48 +1,8 @@
 import * as THREE from 'three'
+import { DAY_FRACTION } from '../sim/world/daycycle'
 
-/** Duración de un ciclo completo (día + noche) en segundos de juego. */
-export const DAY_LENGTH = 360
-/** Fracción del ciclo con el sol sobre el horizonte. */
-export const DAY_FRACTION = 0.65
-/** La partida empieza a media mañana del día 1. */
-export const START_PHASE = 0.12
 // Inclinación de la órbita respecto a la vertical: a mediodía el sol queda a unos 60°.
 const ORBIT_TILT = THREE.MathUtils.degToRad(30)
-
-/** Reloj de la partida. Fase 0 = amanecer; el día cambia en cada amanecer. */
-export class DayClock {
-  elapsed = 0
-
-  step(dt: number) {
-    this.elapsed += dt
-  }
-
-  reset() {
-    this.elapsed = 0
-  }
-
-  /** Ciclos completos desde el primer amanecer, con decimales. */
-  private get cycles() {
-    return START_PHASE + this.elapsed / DAY_LENGTH
-  }
-
-  get day() {
-    return Math.floor(this.cycles) + 1
-  }
-
-  /** Posición dentro del ciclo actual, en [0, 1). */
-  get phase() {
-    return this.cycles - Math.floor(this.cycles)
-  }
-
-  set phase(value: number) {
-    const target = Math.floor(this.cycles) + THREE.MathUtils.euclideanModulo(value, 1)
-    this.elapsed = (target - START_PHASE) * DAY_LENGTH
-  }
-}
-
-/** De noche el sol está bajo el horizonte. */
-export const isNight = (phase: number) => THREE.MathUtils.euclideanModulo(phase, 1) >= DAY_FRACTION
 
 /** Dirección hacia el sol: sale por +X, culmina hacia +Z y se pone por -X. */
 export function sunDirection(phase: number, out = new THREE.Vector3()) {

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Sky } from '../scene'
-import type { ItemId } from './inventory'
+import type { ItemId } from '../sim/inventory'
 
 /** Animaciones del objeto en la mano. */
 export type HandAction = 'swing' | 'eat' | 'place'

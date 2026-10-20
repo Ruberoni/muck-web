@@ -1,34 +1,7 @@
 import * as THREE from 'three'
-import { createNoise2D } from 'simplex-noise'
-import { createTerrainRng } from './random'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 
-export const WORLD_SIZE = 200
 const SEGMENTS = 80
-export const WATER_LEVEL = 0
-export const SAND_LEVEL = 1.2
-export const ROCK_LEVEL = 9
-
-const noise2D = createNoise2D(createTerrainRng())
-
-const smoothstep = (edge0: number, edge1: number, x: number) => {
-  const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1)
-  return t * t * (3 - 2 * t)
-}
-
-/** Altura del terreno en (x, z). Fuente única para la malla y para posar objetos. */
-export function heightAt(x: number, z: number): number {
-  const n =
-    0.6 * noise2D(x * 0.012, z * 0.012) +
-    0.3 * noise2D(x * 0.03, z * 0.03) +
-    0.1 * noise2D(x * 0.08, z * 0.08)
-  const hills = Math.pow(n * 0.5 + 0.5, 1.3) * 12
-
-  // Atenuación radial: la isla baja hacia el mar en los bordes.
-  const r = Math.hypot(x, z) / (WORLD_SIZE / 2)
-  const falloff = 1 - smoothstep(0.55, 0.95, r)
-
-  return hills * falloff + falloff * 4 - 3
-}
 
 const SAND = new THREE.Color('#e3cf8e')
 const GRASS_LOW = new THREE.Color('#6fae45')

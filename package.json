@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck:sim": "tsc -p tsconfig.sim.json"
   },
   "dependencies": {
     "simplex-noise": "^4.0.3",

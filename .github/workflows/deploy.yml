@@ -29,6 +29,9 @@ jobs:
 
       - run: npm test
 
+      # src/sim se comparte con el servidor: debe compilar sin DOM.
+      - run: npm run typecheck:sim
+
       - run: npm run build
 
       - name: Configure Pages

@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { createProps } from '../world/props'
-import { heightAt, WATER_LEVEL } from '../world/terrain'
+import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { Campfires, campfireSpot } from './campfire'
-import { resolveCircle } from './collision'
-import { CAMPFIRE_LIGHTS, CAMPFIRE_PLACE_DISTANCE, CAMPFIRE_RADIUS, PLAYER_RADIUS } from './constants'
+import { resolveCircle } from '../sim/collision'
+import { CAMPFIRE_LIGHTS, CAMPFIRE_PLACE_DISTANCE, CAMPFIRE_RADIUS, PLAYER_RADIUS } from '../sim/constants'
 
 const world = createProps()
 

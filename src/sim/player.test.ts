@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WATER_LEVEL, WORLD_SIZE } from '../world/terrain'
+import { WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import { FLOAT_DEPTH, STAMINA_RECOVER_THRESHOLD, STEP, WALK_SPEED, WORLD_BOUND_FACTOR } from './constants'
 import {
   createPlayer,
