@@ -5,6 +5,7 @@ import { createScene, updateSky, type Sky } from '../scene'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { DayClock, sunDirection } from '../world/daycycle'
+import { mulberry32, randomSeed } from '../world/random'
 import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../world/terrain'
 import { Campfires, campfireSpot, type CampfireSpot } from './campfire'
 import { resolveCircle } from './collision'
@@ -24,7 +25,7 @@ import {
 import { craft, RECIPES } from './crafting'
 import { Enemies } from './enemies'
 import { Handheld } from './handheld'
-import { CLICK, Input, RIGHT_CLICK } from './input'
+import { attackRequested, CLICK, Input, RIGHT_CLICK } from './input'
 import { Interaction } from './interaction'
 import { Inventory, SLOT_COUNT } from './inventory'
 import { Pickups } from './pickups'
@@ -68,6 +69,8 @@ export class Game {
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
+  /** Azar de la simulación (enemigos, objetos que caen), con semilla nueva en cada sesión. */
+  private rng = mulberry32(randomSeed())
   readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
@@ -108,8 +111,8 @@ export class Game {
     this.water = water
     this.world = world
     this.campfires = new Campfires(scene)
-    this.enemies = new Enemies([world.grid, this.campfires.grid])
-    this.pickups = new Pickups([world.grid, this.campfires.grid])
+    this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng)
+    this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng)
     scene.add(this.enemies.group, this.pickups.group)
     this.interaction = new Interaction(world, this.inventory, this.pickups, this.enemies)
 
@@ -286,7 +289,7 @@ export class Game {
     this.interaction.updateTarget(this.camera)
     // Con la fogata en la mano el clic la coloca en vez de golpear.
     const placing = this.holdingCampfire
-    const hit = this.interaction.step(STEP, !placing && (this.attackOverride ?? this.input.attackHeld))
+    const hit = this.interaction.step(STEP, !placing && (this.attackOverride ?? attackRequested(this.input.attackHeld, presses)))
     if (hit) {
       this.handheld.play('swing')
       this.audio.hit(hit.target, hit.dropped)

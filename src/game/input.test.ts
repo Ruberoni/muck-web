@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WHEEL_GESTURE_GAP_MS, WHEEL_STEP_PX } from './constants'
-import { WheelStepper } from './input'
+import { attackRequested, CLICK, WheelStepper } from './input'
 
 describe('WheelStepper', () => {
   it('cada muesca de ratón da un paso, también al girar rápido', () => {
@@ -30,5 +30,14 @@ describe('WheelStepper', () => {
     w.reset()
     expect(w.push(-10, 48)).toBe(-1)
     expect(w.push(0, 64)).toBe(0)
+  })
+})
+
+describe('attackRequested', () => {
+  it('un clic más corto que un paso también golpea', () => {
+    // El botón ya está suelto cuando llega el paso, pero la pulsación sigue pendiente.
+    expect(attackRequested(false, new Set([CLICK]))).toBe(true)
+    expect(attackRequested(true, new Set())).toBe(true)
+    expect(attackRequested(false, new Set(['KeyF']))).toBe(false)
   })
 })

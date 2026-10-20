@@ -76,13 +76,13 @@ export function installDebug(game: Game) {
     select: (index: number) => game.inventory.select(index),
     craft: (index: number) => game.craft(index),
     setCrafting: (open: boolean) => game.setCrafting(open),
-    campfires: () => game.campfires.list.map(({ x, y, z }) => ({ x, y, z })),
+    campfires: () => game.campfires.list.map(({ id, x, y, z }) => ({ id, x, y, z })),
     /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo. */
     placeCampfire: (x: number, z: number, yaw = 0) => game.campfires.place(campfireSpot({ x, z }, yaw, [world.grid, game.campfires.grid])),
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: targetPropId,
     /** Objetos en el suelo, por recoger. */
-    pickups: () => game.pickups.list.map(({ item, pos, grounded }) => ({ item, x: pos.x, y: pos.y, z: pos.z, grounded })),
+    pickups: () => game.pickups.list.map(({ id, item, pos, grounded }) => ({ id, item, x: pos.x, y: pos.y, z: pos.z, grounded })),
     enemies: () =>
       game.enemies.list.map(({ id, pos, hp }) => ({ id, x: pos.x, z: pos.z, hp, targeted: game.interaction.target?.kind === 'enemy' && game.interaction.target.id === id })),
     spawnEnemy: (x: number, z: number) => game.enemies.spawnAt(x, z).id,

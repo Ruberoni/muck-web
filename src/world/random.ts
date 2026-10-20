@@ -12,6 +12,9 @@ export function mulberry32(seed: number): () => number {
   }
 }
 
+/** Semilla nueva para cada partida: la isla es fija, pero enemigos y objetos que caen varían. */
+export const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]
+
 // Streams independientes: cambiar el terreno no reordena los props y viceversa.
 export const createTerrainRng = () => mulberry32(WORLD_SEED)
 export const createPropsRng = () => mulberry32(WORLD_SEED ^ 0x9e3779b9)

@@ -66,6 +66,18 @@ describe('colocar fogatas', () => {
     expect(Math.hypot(walker.x - spot.x, walker.z - spot.z)).toBeCloseTo(PLAYER_RADIUS + CAMPFIRE_RADIUS)
   })
 
+  it('cada fogata tiene id y giro propios, guardados en el dato', () => {
+    const fires = new Campfires(new THREE.Scene())
+    fires.place({ x: 0, y: 5, z: 0, valid: true })
+    fires.place({ x: 5, y: 5, z: 0, valid: true })
+    expect(fires.list.map((f) => f.id)).toEqual([0, 1])
+    expect(fires.list[1].rotY).toBeCloseTo(1.3)
+    expect(fires.list[1].mesh.rotation.y).toBe(fires.list[1].rotY)
+    fires.clear()
+    fires.place({ x: 0, y: 5, z: 0, valid: true })
+    expect(fires.list[0].id).toBe(0)
+  })
+
   it('clear quita todas las fogatas y sus colliders', () => {
     const scene = new THREE.Scene()
     const fires = new Campfires(scene)
