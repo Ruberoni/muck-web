@@ -102,11 +102,18 @@ export class Inventory {
     return { slots: [...this.slots], counts: this.toJSON(), selected: this.selected }
   }
 
+  /** Solo avisa si el contenido cambia: el cliente en red copia el suyo del servidor 20 veces por segundo. */
   load(state: InventoryState) {
+    const before = this.key()
     this.counts = new Map(Object.entries(state.counts) as [ItemId, number][])
     for (let i = 0; i < SLOT_COUNT; i++) this.slots[i] = state.slots[i] ?? null
     this.selected = state.selected
-    this.emit()
+    if (this.key() !== before) this.emit()
+  }
+
+  /** Casillas, recuentos y selección como texto, para comparar (sin depender del orden del Map). */
+  private key(): string {
+    return JSON.stringify([this.slots, this.slots.map((item) => (item ? this.count(item) : 0)), this.selected])
   }
 
   private emit() {

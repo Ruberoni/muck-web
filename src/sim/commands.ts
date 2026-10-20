@@ -61,3 +61,17 @@ export function buttonsInput(buttons: number): PlayerInput {
     jump: (buttons & Btn.Jump) !== 0,
   }
 }
+
+/** Si falta el `Move` de un tick se repite el último, sin Attack ni Jump, como mucho tantos ticks. */
+export const MOVE_REPEAT = 6
+/** Sin Attack ni Jump: un golpe o un salto que el cliente no ha predicho no se pueden deshacer. */
+const REPEAT_MASK = ~(Btn.Attack | Btn.Jump)
+
+/**
+ * El `Move` de un tick que no ha llegado, cuando el anterior ya se ha repetido `repeated` veces: el último sin
+ * Attack ni Jump durante MOVE_REPEAT ticks y luego uno neutro con la misma mirada. La sala lo usa con los que
+ * faltan y la predicción con los ticks que el cliente se salta, así los dos simulan lo mismo.
+ */
+export function missingMove(last: Move, repeated: number, tick: number): Move {
+  return { ...last, tick, buttons: repeated < MOVE_REPEAT ? last.buttons & REPEAT_MASK : 0 }
+}

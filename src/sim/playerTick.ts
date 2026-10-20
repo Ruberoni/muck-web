@@ -1,0 +1,136 @@
+import { buttonsInput, Btn, type PlayerCommands } from './commands'
+import { BERRY_FOOD, STEP } from './constants'
+import { craft, RECIPES } from './crafting'
+import type { Emit, TargetRef } from './events'
+import { startSwing, type Fighter } from './interaction'
+import { stepPlayer, type Player, type PlayerEnv } from './player'
+import { eat, stepSurvival } from './survival'
+
+// La parte de un tick que toca solo al jugador y que el cliente predice: acciones sobre su inventario,
+// movimiento, espera entre golpes, comer y hambre. `Simulation.step` la ejecuta por trozos alrededor de lo que
+// pasa en el mundo (enemigos, golpes, objetos del suelo); `predictPlayer` la ejecuta de una vez, sin mundo.
+
+/**
+ * Lo que la parte propia del tick necesita de un jugador (un PlayerSlot lo cumple): su cuerpo, inventario,
+ * golpes, si está vivo y lo que lleva aplicado de sus acciones.
+ */
+export interface Actor extends Fighter {
+  player: Player
+  alive: boolean
+  /** `seq` de la última acción aplicada: las de `seq` menor o igual se descartan. */
+  appliedSeq: number
+}
+
+/** Lo que el jugador quiere hacer en este paso además de moverse. */
+export interface Intent {
+  /** Lo que el cliente dice tener delante; sin él (un jugador), lo calcula la simulación. */
+  aim: TargetRef | null | undefined
+  attack: boolean
+  swing: boolean
+  place: boolean
+  eat: boolean
+}
+
+/**
+ * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla y fabricar en el acto;
+ * golpear, colocar y comer se devuelven para su momento del paso. Las de un muerto se descartan.
+ */
+export function applyActions(actor: Actor, command: PlayerCommands | undefined, emit: Emit): Intent {
+  const move = command?.move
+  const intent: Intent = { aim: move?.aim, attack: ((move?.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false }
+  if (!command) return intent
+  for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
+    if (action.seq <= actor.appliedSeq) continue
+    actor.appliedSeq = action.seq
+    if (!actor.alive) continue
+    switch (action.kind) {
+      case 'select':
+        actor.inventory.select(action.slot)
+        break
+      case 'craft':
+        craftRecipe(actor, action.recipe, emit)
+        break
+      case 'swing':
+        intent.swing = true
+        break
+      case 'place':
+        intent.place = true
+        break
+      case 'eat':
+        intent.eat = true
+        break
+    }
+  }
+  return intent
+}
+
+/** Fabrica la receta por índice (el de su tecla menos 1). */
+export function craftRecipe(actor: Actor, index: number, emit: Emit): boolean {
+  const recipe = RECIPES[index]
+  const ok = recipe ? craft(actor.inventory, recipe) : false
+  if (ok) emit({ type: 'playerCrafted', id: actor.id, recipe: index })
+  return ok
+}
+
+/** Orienta al jugador como dice su `Move` (sin él, mira a donde miraba) y lo mueve un paso. */
+export function movePlayer(actor: Actor, command: PlayerCommands | undefined, env: PlayerEnv) {
+  const { player } = actor
+  if (command) {
+    player.yaw = command.move.yaw
+    player.pitch = command.move.pitch
+  }
+  stepPlayer(player, buttonsInput(command?.move.buttons ?? 0), env, STEP)
+}
+
+/**
+ * Lo que hacen las manos en este paso: si empieza un golpe y si toca colocar la fogata. Con la fogata en la mano
+ * el clic la coloca en vez de golpear, y no queda ningún golpe pendiente.
+ */
+export function useHands(actor: Actor, intent: Intent): { swing: boolean; place: boolean } {
+  const placing = actor.inventory.selectedItem === 'campfire'
+  if (placing) actor.combat.pendingSwing = false
+  const swing = startSwing(actor.combat, STEP, !placing && intent.attack, !placing && intent.swing)
+  return { swing, place: placing && intent.place }
+}
+
+/** Final del paso del jugador: comer y hambre (morir lo decide la simulación). */
+export function finishPlayerTick(actor: Actor, intent: Intent, emit: Emit) {
+  if (intent.eat) eatBerry(actor, emit)
+  stepSurvival(actor.player, STEP)
+}
+
+function eatBerry(actor: Actor, emit: Emit) {
+  const { inventory, player, id } = actor
+  if (inventory.count('berry') === 0 || !eat(player, BERRY_FOOD)) return
+  inventory.remove('berry', 1)
+  emit({ type: 'playerAte', id })
+}
+
+/** Lo que la predicción necesita del mundo del cliente. */
+export interface PredictWorld {
+  env: PlayerEnv
+  /** Si una fogata colocada desde aquí caería en un sitio válido (campfireSpot contra las rejillas del cliente). */
+  canPlace(player: Player): boolean
+  emit: Emit
+}
+
+/**
+ * Un tick del jugador del cliente sin tocar el mundo: lo mismo que hace `Simulation.step` con él, salvo lo que
+ * depende de los demás (daño de enemigos, golpes que aciertan, recogidas y bayas) y sin consumir el azar.
+ * `place` gasta la fogata si el sitio es válido, pero no la crea: la crea el servidor y llega en su evento.
+ * Emite lo que el jugador hace (golpe con el objetivo que dice tener delante, fabricar, comer, colocar).
+ * Devuelve si empieza un golpe.
+ */
+export function predictPlayer(actor: Actor, command: PlayerCommands | undefined, world: PredictWorld): boolean {
+  const intent = applyActions(actor, command, world.emit)
+  if (!actor.alive) return false
+  movePlayer(actor, command, world.env)
+  const hands = useHands(actor, intent)
+  if (hands.swing) world.emit({ type: 'playerSwing', id: actor.id, item: actor.inventory.selectedItem, target: intent.aim ?? null })
+  if (hands.place && world.canPlace(actor.player)) {
+    world.emit({ type: 'playerPlaced', id: actor.id })
+    actor.inventory.remove('campfire', 1)
+  }
+  finishPlayerTick(actor, intent, world.emit)
+  return hands.swing
+}
