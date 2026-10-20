@@ -30,6 +30,8 @@ import { Simulation, type PlayerSlot, type SimState } from '../src/sim/Simulatio
 export interface Conn {
   send(data: string): void
   close(code: number, reason?: string): void
+  /** El socket ya tiene hueco: la DO guarda token y pestaña en el propio socket para recuperarlo tras hibernar. */
+  seated?(token: string, tab: string): void
 }
 
 /** Un único blob por sala (en la DO, una fila de SQLite). Síncrono, como el almacenamiento de la DO. */
@@ -137,7 +139,7 @@ interface RoomBlob {
 }
 
 /**
- * Una sala: una isla y sus jugadores. Agnóstica de plataforma: la DO (PR 11) le pasa los sockets y los mensajes,
+ * Una sala: una isla y sus jugadores. Agnóstica de plataforma: la DO (server/cf.ts) le pasa los sockets y los mensajes,
  * y ella habla solo a través de Conn, Storage, Clock, Scheduler y Random.
  *
  * - `hello` → `welcome` (o `reject` y cierre). `cmds` llena el buffer por tick de cada jugador; el bucle aplica
@@ -445,6 +447,7 @@ export class Room {
     const now = this.deps.clock.now()
     Object.assign(seat, blankSeat(seat.token, seat.id, seat.name, slot), { conn, tab, lastCmdsAt: now, ackTick: sim.tick })
     this.conns.set(conn, seat)
+    conn.seated?.(seat.token, tab)
     sim.setConnection(seat.id, connection)
     this.emptySince = null
   }
