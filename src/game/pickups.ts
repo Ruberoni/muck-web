@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { heightAt, WATER_LEVEL } from '../world/terrain'
+import { LOCAL_PLAYER, NO_EMIT, type Emit } from '../sim/events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import { GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS, STEP } from './constants'
 import { itemModel } from './handheld'
@@ -48,6 +49,7 @@ export class Pickups {
   constructor(
     private grids: SpatialGrid<Collider>[] = [],
     private rng: () => number = Math.random,
+    private emit: Emit = NO_EMIT,
   ) {}
 
   /** Suelta `amount` piezas de `item` desde (x, y, z), repartidas alrededor. */
@@ -71,6 +73,7 @@ export class Pickups {
       this.list.push(pickup)
       this.group.add(object)
       this.placeOne(pickup, 1)
+      this.emit({ type: 'pickupSpawn', id: pickup.id, item, amount: 1 })
     }
   }
 
@@ -100,6 +103,7 @@ export class Pickups {
         if (inventory.add(p.item, 1)) {
           this.remove(i)
           collected++
+          this.emit({ type: 'pickupCollected', id: p.id, by: LOCAL_PLAYER })
         } else full = true
         continue
       }

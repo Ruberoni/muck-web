@@ -134,11 +134,11 @@ describe('enemigos nocturnos', () => {
 
   it('un golpe los empuja hacia atrás y les quita vida; al llegar a 0 mueren', () => {
     const e = enemies.spawnAt(player.x + 1.5, player.z)
-    expect(enemies.hit(e, 2, player)).toBe(false)
+    expect(enemies.hit(e, 2, player, 0)).toBe(false)
     expect(e.hp).toBe(ENEMY_DEF.hp - 2)
     run(0.3)
     expect(dist(e, player)).toBeGreaterThan(1.5)
-    expect(enemies.hit(e, 10, player)).toBe(true)
+    expect(enemies.hit(e, 10, player, 0)).toBe(true)
     expect(e.hp).toBe(0)
     expect(enemies.list).not.toContain(e)
   })

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { PropData, PropInstance, World } from '../world/props'
 import { heightAt } from '../world/terrain'
+import { LOCAL_PLAYER, NO_EMIT, type Emit } from '../sim/events'
 import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from './constants'
 import type { Enemies, EnemyData } from './enemies'
 import type { Inventory, ItemId } from './inventory'
@@ -35,6 +36,7 @@ export class Interaction {
     private inventory: Inventory,
     private pickups: Pickups,
     private enemies?: Enemies,
+    private emit: Emit = NO_EMIT,
   ) {
     this.objects = [...world.allMeshes, ...(enemies ? [enemies.group] : [])]
     this.raycaster.far = REACH
@@ -77,6 +79,12 @@ export class Interaction {
     if (!attackHeld || this.cooldown > 1e-9) return null
     const target = this.target
     this.cooldown = HIT_COOLDOWN
+    this.emit({
+      type: 'playerSwing',
+      id: LOCAL_PLAYER,
+      item: this.inventory.selectedItem,
+      target: target && { kind: target.kind === 'enemy' ? 'enemy' : 'prop', id: target.id },
+    })
     return { target, dropped: target ? this.hit(target) : false }
   }
 
@@ -87,14 +95,17 @@ export class Interaction {
     if (PROP_DEFS[prop.kind].harvest) return this.harvest(prop)
     prop.hp = Math.max(0, prop.hp - hitDamage(this.inventory.selectedItem, prop.kind))
     if (prop.hp <= 0) this.destroy(prop)
-    else this.wobbles.set(prop, 0)
+    else {
+      this.wobbles.set(prop, 0)
+      this.emit({ type: 'propHit', id: prop.id, hp: prop.hp, by: LOCAL_PLAYER })
+    }
     return !prop.alive
   }
 
   private hitEnemy(enemy: EnemyData): boolean {
     // El raycast salió de la cámara: el retroceso es en sentido contrario al jugador.
     const from = this.raycaster.ray.origin
-    if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from)) return false
+    if (!this.enemies?.hit(enemy, hitDamage(this.inventory.selectedItem, 'enemy'), from, LOCAL_PLAYER)) return false
     if (this.target === enemy) this.target = null
     const { x, z } = enemy.pos
     this.pickups.drop(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount, x, heightAt(x, z) + DROP_HEIGHT.enemy, z)
@@ -110,6 +121,7 @@ export class Interaction {
       mesh.instanceMatrix.needsUpdate = true
     }
     if (this.target === prop) this.target = null
+    this.emit({ type: 'propDestroyed', id: prop.id, by: LOCAL_PLAYER })
     const { drop } = PROP_DEFS[prop.kind]
     const height = prop.kind === 'tree' || prop.kind === 'rock' ? DROP_HEIGHT[prop.kind] : 0
     this.pickups.drop(drop.item, drop.amount, prop.x, prop.y + height, prop.z)
@@ -125,12 +137,14 @@ export class Interaction {
     if (!this.regrowing.has(bush)) this.regrowing.set(bush, BERRY_REGROW)
     this.wobbles.set(bush, 0)
     this.inventory.add(drop.item, drop.amount)
+    this.emit({ type: 'berryTaken', id: bush.id, hp: bush.hp, by: LOCAL_PLAYER })
     return true
   }
 
   private growBerry(bush: PropData) {
     this.setBerry(bush, bush.hp, true)
     bush.hp++
+    this.emit({ type: 'berryGrew', id: bush.id, hp: bush.hp })
     if (bush.hp < bush.maxHp) this.regrowing.set(bush, BERRY_REGROW)
     else this.regrowing.delete(bush)
   }

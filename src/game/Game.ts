@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { GameAudio } from '../audio/gameAudio'
 import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
+import { EventLog, LOCAL_PLAYER, type SimEvent } from '../sim/events'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { DayClock, sunDirection } from '../world/daycycle'
@@ -71,6 +72,8 @@ export class Game {
   private audio = new GameAudio(this.sound)
   /** Azar de la simulación (enemigos, objetos que caen), con semilla nueva en cada sesión. */
   private rng = mulberry32(randomSeed())
+  /** Lo que pasa en cada paso; se presenta (HUD, mano, sonido) al terminar el paso. */
+  private events = new EventLog()
   readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
@@ -111,10 +114,11 @@ export class Game {
     this.water = water
     this.world = world
     this.campfires = new Campfires(scene)
-    this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng)
-    this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng)
+    const { emit } = this.events
+    this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng, emit)
+    this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng, emit)
     scene.add(this.enemies.group, this.pickups.group)
-    this.interaction = new Interaction(world, this.inventory, this.pickups, this.enemies)
+    this.interaction = new Interaction(world, this.inventory, this.pickups, this.enemies, emit)
 
     this.env = {
       heightAt,
@@ -180,6 +184,8 @@ export class Game {
     this.campfires.clear()
     this.clock.reset()
     this.audio.reset()
+    // Lo que quedara por presentar es de la partida anterior.
+    this.events.drain()
     Object.assign(this.player, createPlayer(this.env, this.spawn.x, this.spawn.z))
     this.acc = 0
     this.placeCamera(this.player.pos)
@@ -204,7 +210,7 @@ export class Game {
   craft(index: number): boolean {
     const recipe = RECIPES[index]
     const ok = recipe ? craft(this.inventory, recipe) : false
-    if (ok) this.sound.play('craft')
+    if (ok) this.events.emit({ type: 'playerCrafted', id: LOCAL_PLAYER, recipe: index })
     return ok
   }
 
@@ -270,18 +276,23 @@ export class Game {
     if (wheel && !this.craftingOpen) this.inventory.cycle(wheel)
   }
 
+  /** Un paso fijo: simula y después presenta lo que ha pasado en él. */
   private step() {
+    this.events.tick++
+    this.simulate()
+    this.present(this.events.drain())
+  }
+
+  private simulate() {
     const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
     const presses = this.input.takePresses()
     this.handlePresses(presses, this.input.takeWheel())
     stepPlayer(this.player, input, this.env, STEP)
     this.clock.step(STEP)
     const damage = this.enemies.step(STEP, this.player.pos, this.clock.phase, this.clock.day)
-    this.audio.step(STEP, this.player, this.enemies.list)
     if (damage > 0) {
       this.player.health = Math.max(0, this.player.health - damage)
-      this.hud.flashHurt()
-      this.sound.play('hurt')
+      this.events.emit({ type: 'playerHurt', id: LOCAL_PLAYER, dmg: damage })
     }
     // Raycast desde la posición simulada (no interpolada): golpear no depende del framerate.
     this.placeCamera(this.player.pos)
@@ -289,19 +300,39 @@ export class Game {
     this.interaction.updateTarget(this.camera)
     // Con la fogata en la mano el clic la coloca en vez de golpear.
     const placing = this.holdingCampfire
-    const hit = this.interaction.step(STEP, !placing && (this.attackOverride ?? attackRequested(this.input.attackHeld, presses)))
-    if (hit) {
-      this.handheld.play('swing')
-      this.audio.hit(hit.target, hit.dropped)
-    }
+    this.interaction.step(STEP, !placing && (this.attackOverride ?? attackRequested(this.input.attackHeld, presses)))
     if (placing && presses.has(CLICK)) this.placeCampfire()
-    const picked = this.pickups.step(STEP, this.player.pos, this.inventory)
-    if (picked.collected > 0) this.audio.pickup()
-    this.hotbarFull = picked.full
+    this.hotbarFull = this.pickups.step(STEP, this.player.pos, this.inventory).full
 
     if (presses.has(EAT_KEY) || presses.has(RIGHT_CLICK)) this.eatBerry()
     stepSurvival(this.player, STEP)
-    if (isDead(this.player)) this.die()
+    if (isDead(this.player)) this.events.emit({ type: 'playerDied', id: LOCAL_PLAYER })
+  }
+
+  /** Efectos de los eventos de un paso: HUD, mano y sonido. La simulación no los llama directamente. */
+  private present(events: readonly SimEvent[]) {
+    this.audio.step(STEP, this.player, this.enemies.list)
+    this.audio.events(events, LOCAL_PLAYER, (id) => this.world.props[id].kind)
+    for (const e of events) {
+      switch (e.type) {
+        case 'playerHurt':
+          this.hud.flashHurt()
+          break
+        case 'playerSwing':
+          this.handheld.play('swing')
+          break
+        case 'playerPlaced':
+          this.handheld.play('place', 'campfire')
+          break
+        case 'playerAte':
+          // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
+          this.handheld.play('eat', 'berry')
+          break
+        case 'playerDied':
+          this.die()
+          break
+      }
+    }
   }
 
   private get holdingCampfire() {
@@ -311,22 +342,20 @@ export class Game {
   private placeCampfire() {
     const spot = campfireSpot(this.player.pos, this.player.yaw, [this.world.grid, this.campfires.grid], this.spot)
     if (!this.campfires.place(spot)) return
-    this.handheld.play('place', 'campfire')
+    const { id, x, y, z, rotY } = this.campfires.list.at(-1)!
+    this.events.emit({ type: 'campfirePlaced', id, x, y, z, rotY, by: LOCAL_PLAYER })
+    this.events.emit({ type: 'playerPlaced', id: LOCAL_PLAYER })
     this.inventory.remove('campfire', 1)
-    this.sound.play('place')
   }
 
   private eatBerry() {
     if (this.inventory.count('berry') === 0 || !eat(this.player, BERRY_FOOD)) return
     this.inventory.remove('berry', 1)
-    // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
-    this.handheld.play('eat', 'berry')
-    this.sound.play('eat')
+    this.events.emit({ type: 'playerAte', id: LOCAL_PLAYER })
   }
 
   private die() {
     this.setState('dead')
-    this.sound.play('death')
     // Con el estado ya en 'dead', perder el ratón no lo cambia a pausa.
     if (this.input.locked) document.exitPointerLock()
   }
