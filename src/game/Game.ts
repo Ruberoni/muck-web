@@ -5,11 +5,12 @@ import { createScene, updateSky, type Sky } from '../scene'
 import { EventLog, LOCAL_PLAYER, type SimEvent } from '../sim/events'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
-import { DayClock, sunDirection } from '../world/daycycle'
-import { mulberry32, randomSeed } from '../world/random'
-import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../world/terrain'
+import { DayClock } from '../sim/world/daycycle'
+import { sunDirection } from '../world/daycycle'
+import { mulberry32 } from '../sim/random'
+import { heightAt, SAND_LEVEL, ROCK_LEVEL, WATER_LEVEL } from '../sim/world/terrain'
 import { Campfires, campfireSpot, type CampfireSpot } from './campfire'
-import { resolveCircle } from './collision'
+import { resolveCircle } from '../sim/collision'
 import {
   BERRY_FOOD,
   EAT_KEY,
@@ -22,13 +23,13 @@ import {
   PLAYER_RADIUS,
   STAMINA_MAX,
   STEP,
-} from './constants'
-import { craft, RECIPES } from './crafting'
+} from '../sim/constants'
+import { craft, RECIPES } from '../sim/crafting'
 import { Enemies } from './enemies'
 import { Handheld } from './handheld'
 import { attackRequested, CLICK, Input, RIGHT_CLICK } from './input'
 import { Interaction } from './interaction'
-import { Inventory, SLOT_COUNT } from './inventory'
+import { Inventory, SLOT_COUNT } from '../sim/inventory'
 import { Pickups } from './pickups'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import {
@@ -42,8 +43,8 @@ import {
   type Player,
   type PlayerEnv,
   type PlayerInput,
-} from './player'
-import { eat, isDead, stepSurvival } from './survival'
+} from '../sim/player'
+import { eat, isDead, stepSurvival } from '../sim/survival'
 
 export type GameState = 'menu' | 'playing' | 'paused' | 'dead'
 
@@ -51,6 +52,9 @@ const SHADOW_LOOK_AHEAD = 25
 const SPAWN_CLEARANCE = 3
 // Distancia a la que deja de oírse una fogata.
 const CAMPFIRE_HEARING = 14
+
+/** Semilla nueva para cada partida: la isla es fija, pero enemigos y objetos que caen varían. */
+const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]
 
 export class Game {
   readonly renderer: THREE.WebGLRenderer

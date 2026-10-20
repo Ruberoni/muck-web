@@ -1,4 +1,4 @@
-import type { ItemId } from '../game/inventory'
+import type { ItemId } from './inventory'
 
 /** Identificador de jugador. Con un jugador siempre es LOCAL_PLAYER. */
 export type PlayerId = number

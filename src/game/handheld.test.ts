@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACTION_DURATION, actionPose, Handheld, type HandAction } from './handheld'
-import { ITEM_NAMES, type ItemId } from './inventory'
+import { ITEM_NAMES, type ItemId } from '../sim/inventory'
 
 describe('objeto en la mano', () => {
   it('hay modelo para cada objeto', () => {

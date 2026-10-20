@@ -1,4 +1,4 @@
-import { WATER_LEVEL, WORLD_SIZE } from '../world/terrain'
+import { WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import {
   FLOAT_DEPTH,
   GRAVITY,

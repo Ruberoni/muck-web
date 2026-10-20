@@ -1,15 +1,14 @@
 import * as THREE from 'three'
 import { sunDirection } from '../world/daycycle'
-import { MAX_SLOPE, slopeAt } from '../world/props'
-import { heightAt, WATER_LEVEL } from '../world/terrain'
-import { SpatialGrid, type Collider } from './collision'
+import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from '../sim/world/terrain'
+import { SpatialGrid, type Collider } from '../sim/collision'
 import {
   CAMPFIRE_LIGHT_DISTANCE,
   CAMPFIRE_LIGHT_INTENSITY,
   CAMPFIRE_LIGHTS,
   CAMPFIRE_PLACE_DISTANCE,
   CAMPFIRE_RADIUS,
-} from './constants'
+} from '../sim/constants'
 
 const LIGHT_HEIGHT = 0.8
 // De día la fogata casi no se nota: a pleno sol la luz baja a esta fracción.

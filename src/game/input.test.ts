@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WHEEL_GESTURE_GAP_MS, WHEEL_STEP_PX } from './constants'
+import { WHEEL_GESTURE_GAP_MS, WHEEL_STEP_PX } from '../sim/constants'
 import { attackRequested, CLICK, WheelStepper } from './input'
 
 describe('WheelStepper', () => {

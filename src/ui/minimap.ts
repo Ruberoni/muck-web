@@ -1,4 +1,4 @@
-import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../world/terrain'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 
 /** Radio del mundo (en unidades) que cabe entre el centro y el borde del minimapa. */
 export const VIEW_RADIUS = 75

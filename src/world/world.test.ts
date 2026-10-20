@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { computeWorldHash } from './hash'
 import { createProps, islandMeshes } from './props'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './terrain'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
 
 describe('mundo determinista', () => {
   const world = createProps()

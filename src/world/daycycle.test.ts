@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { createSkyState, DAY_FRACTION, DAY_LENGTH, DayClock, sampleSky, START_PHASE, sunDirection } from './daycycle'
+import { DAY_FRACTION, DAY_LENGTH, DayClock, START_PHASE } from '../sim/world/daycycle'
+import { createSkyState, sampleSky, sunDirection } from './daycycle'
 
 describe('reloj del día', () => {
   it('empieza de día en el día 1', () => {

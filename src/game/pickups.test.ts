@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { mulberry32 } from '../world/random'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL } from '../world/terrain'
-import { PICKUP_DELAY, PICKUP_MAGNET, PICKUP_RADIUS, STEP } from './constants'
-import { Inventory, type ItemId } from './inventory'
+import { mulberry32 } from '../sim/random'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
+import { PICKUP_DELAY, PICKUP_MAGNET, PICKUP_RADIUS, STEP } from '../sim/constants'
+import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from './pickups'
 
 /** Primer punto de hierba en espiral desde el centro. */

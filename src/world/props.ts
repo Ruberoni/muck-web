@@ -1,13 +1,12 @@
 import * as THREE from 'three'
-import { BERRIES_PER_BUSH, PROP_DEFS } from '../game/constants'
-import { SpatialGrid } from '../game/collision'
-import { createBushRng, createPropsRng } from './random'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL, WORLD_SIZE } from './terrain'
+import { BERRIES_PER_BUSH, PROP_DEFS } from '../sim/constants'
+import { SpatialGrid } from '../sim/collision'
+import { createBushRng, createPropsRng } from '../sim/random'
+import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WORLD_SIZE } from '../sim/world/terrain'
 
 const TREE_COUNT = 180
 const ROCK_COUNT = 60
 const BUSH_COUNT = 45
-export const MAX_SLOPE = 1.6
 
 const TRUNK_BOTTOM_RADIUS = 0.35
 const TRUNK_HEIGHT = 2.6
@@ -62,10 +61,6 @@ export interface PropData {
   alive: boolean
   instances: PropInstance[]
 }
-
-/** Diferencia de altura en un entorno de ±1 unidad: aproxima la pendiente. */
-export const slopeAt = (x: number, z: number) =>
-  Math.abs(heightAt(x + 1, z) - heightAt(x - 1, z)) + Math.abs(heightAt(x, z + 1) - heightAt(x, z - 1))
 
 function createInstanced(geometry: THREE.BufferGeometry, material: THREE.Material, count: number) {
   const mesh = new THREE.InstancedMesh(geometry, material, count)

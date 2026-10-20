@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import type { PropData, PropInstance, World } from '../world/props'
-import { heightAt } from '../world/terrain'
+import { heightAt } from '../sim/world/terrain'
 import { LOCAL_PLAYER, NO_EMIT, type Emit } from '../sim/events'
-import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from './constants'
+import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS, WOBBLE_DURATION } from '../sim/constants'
 import type { Enemies, EnemyData } from './enemies'
-import type { Inventory, ItemId } from './inventory'
+import type { Inventory, ItemId } from '../sim/inventory'
 import type { Pickups } from './pickups'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */

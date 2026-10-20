@@ -1,5 +1,5 @@
-import { MOUSE_SPIKE_LIMIT, WHEEL_GESTURE_GAP_MS, WHEEL_LINE_PX, WHEEL_STEP_PX } from './constants'
-import type { PlayerInput } from './player'
+import { MOUSE_SPIKE_LIMIT, WHEEL_GESTURE_GAP_MS, WHEEL_LINE_PX, WHEEL_STEP_PX } from '../sim/constants'
+import type { PlayerInput } from '../sim/player'
 
 /** Códigos de pulsación única del clic izquierdo y derecho (no son e.code reales). */
 export const CLICK = 'Mouse0'

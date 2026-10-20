@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { clampToRim, terrainColor, toMinimap } from './minimap'
-import { ROCK_LEVEL, SAND_LEVEL } from '../world/terrain'
+import { ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
 
 /** Punto a `dist` por delante (forward) y `side` a la derecha de quien mira a `yaw`. */
 const offset = (yaw: number, dist: number, side = 0) => ({

@@ -1,6 +1,6 @@
-import { ENEMY_DEF, PROP_DEFS } from '../game/constants'
-import { canCraft, RECIPES } from '../game/crafting'
-import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../game/inventory'
+import { ENEMY_DEF, PROP_DEFS } from '../sim/constants'
+import { canCraft, RECIPES } from '../sim/crafting'
+import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Target } from '../game/interaction'
 import { Minimap } from './minimap'
 

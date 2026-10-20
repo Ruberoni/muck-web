@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { isNight } from '../world/daycycle'
-import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../world/terrain'
+import { isNight } from '../sim/world/daycycle'
+import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from '../sim/events'
-import { resolveCircle, type Collider, type SpatialGrid } from './collision'
+import { resolveCircle, type Collider, type SpatialGrid } from '../sim/collision'
 import {
   ENEMY_ATTACK_INTERVAL,
   ENEMY_BASE_COUNT,
@@ -24,7 +24,7 @@ import {
   PLAYER_RADIUS,
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
-} from './constants'
+} from '../sim/constants'
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
 const CONTACT = PLAYER_RADIUS + ENEMY_RADIUS

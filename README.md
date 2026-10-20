@@ -64,14 +64,16 @@ En el menú y en la pausa hay deslizadores para la sensibilidad del ratón, el c
 
 ## Mundo
 
-El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/world/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, un tercero, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.
+El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/sim/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, un tercero, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.
+
+La lógica que no depende de three.js ni del DOM (jugador, supervivencia, colisiones, inventario, fabricación, constantes, generador aleatorio, altura del terreno y reloj del día) vive en `src/sim/`, para que la pueda ejecutar también un servidor. `npm run typecheck:sim` la compila sin la librería del DOM y un test comprueba que no importa three ni nada de fuera de `src/sim/`.
 
 ## Despliegue
 
 El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
 
-- en cada **push a `main`** corre los tests, hace el build y despliega `dist/` a GitHub Pages;
-- en cada **pull request** hacia `main` solo corre los tests y el build (sin desplegar);
+- en cada **push a `main`** corre los tests, comprueba `src/sim/` sin DOM, hace el build y despliega `dist/` a GitHub Pages;
+- en cada **pull request** hacia `main` solo corre los tests, esa comprobación y el build (sin desplegar);
 - también se puede lanzar a mano desde la pestaña Actions (solo despliega si se lanza sobre `main`).
 
 Configuración única en GitHub:
