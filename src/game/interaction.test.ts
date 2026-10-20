@@ -14,23 +14,21 @@ function setup() {
   const inventory = new Inventory()
   const pickups = new Pickups([world.grid], () => 0.5)
   // La vista recibe cada evento al momento, como si se presentara al final de cada paso.
-  const interaction = new Interaction(world, view, inventory, pickups, undefined, (e) => view.present([e]))
-  const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
-  camera.rotation.order = 'YXZ'
+  const interaction = new Interaction(world, inventory, pickups, undefined, (e) => view.present([e]))
+  // Desde dónde y hacia dónde mira el jugador.
+  const viewer = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }
 
   const aimAt = (prop: PropData) => {
     const isFree = (x: number, z: number) =>
       world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
     const pose = aimPose(prop, isFree)
-    const eyeY = heightAt(pose.x, pose.z) + EYE_HEIGHT
-    camera.position.set(pose.x, eyeY, pose.z)
-    camera.rotation.set(Math.atan2(pose.aimY - eyeY, pose.horizontal), pose.yaw, 0)
-    camera.updateMatrixWorld()
-    interaction.updateTarget(camera)
+    const y = heightAt(pose.x, pose.z)
+    Object.assign(viewer, { pos: { x: pose.x, y, z: pose.z }, yaw: pose.yaw, pitch: Math.atan2(pose.aimY - y - EYE_HEIGHT, pose.horizontal) })
+    interaction.updateTarget(viewer)
   }
   const hold = (seconds: number) => {
     for (let i = 0; i < Math.round(seconds / STEP); i++) {
-      interaction.updateTarget(camera)
+      interaction.updateTarget(viewer)
       interaction.step(STEP, true)
     }
   }
@@ -40,7 +38,7 @@ function setup() {
     interaction.reset()
     view.reset()
   }
-  return { world, view, inventory, pickups, interaction, camera, aimAt, hold, onGround, reset }
+  return { world, view, inventory, pickups, interaction, viewer, aimAt, hold, onGround, reset }
 }
 
 describe('recolección', () => {
@@ -67,7 +65,7 @@ describe('recolección', () => {
     ctx.aimAt(tree)
     const hits: { kind: string; dropped: boolean }[] = []
     for (let i = 0; i < Math.round(1.2 / STEP); i++) {
-      ctx.interaction.updateTarget(ctx.camera)
+      ctx.interaction.updateTarget(ctx.viewer)
       const hit = ctx.interaction.step(STEP, true)
       if (hit) hits.push({ kind: hit.target?.kind ?? 'aire', dropped: hit.dropped })
     }
@@ -106,7 +104,7 @@ describe('recolección', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     ctx.hold(1.2)
-    ctx.interaction.updateTarget(ctx.camera)
+    ctx.interaction.updateTarget(ctx.viewer)
     expect(ctx.interaction.target).not.toBe(tree)
   })
 

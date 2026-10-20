@@ -1,8 +1,6 @@
-import * as THREE from 'three'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DAY_FRACTION } from '../sim/world/daycycle'
 import { createPropWorld } from '../sim/props'
-import { PropView } from '../view/PropView'
 import { mulberry32 } from '../sim/random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from '../sim/world/terrain'
 import {
@@ -157,20 +155,16 @@ describe('combate', () => {
     const inventory = new Inventory()
     const enemies = new Enemies([world.grid], mulberry32(7))
     const pickups = new Pickups([world.grid], mulberry32(3))
-    const interaction = new Interaction(world, new PropView(world.placements), inventory, pickups, enemies)
-    const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
-    camera.rotation.order = 'YXZ'
+    const interaction = new Interaction(world, inventory, pickups, enemies)
     const enemy = enemies.spawnAt(spot.x + 1.5, spot.z)
     const eyeY = heightAt(spot.x, spot.z) + EYE_HEIGHT
     const aimY = heightAt(enemy.pos.x, enemy.pos.z) + ENEMY_AIM_HEIGHT
-    camera.position.set(spot.x, eyeY, spot.z)
     // forward = (-sin(yaw), -cos(yaw)): yaw = -π/2 mira hacia +X.
-    camera.rotation.set(Math.atan2(aimY - eyeY, 1.5), -Math.PI / 2, 0)
-    camera.updateMatrixWorld()
-    interaction.updateTarget(camera)
+    const viewer = { pos: { x: spot.x, y: eyeY - EYE_HEIGHT, z: spot.z }, yaw: -Math.PI / 2, pitch: Math.atan2(aimY - eyeY, 1.5) }
+    interaction.updateTarget(viewer)
     const hold = (seconds: number) => {
       for (let i = 0; i < Math.round(seconds / STEP); i++) {
-        interaction.updateTarget(camera)
+        interaction.updateTarget(viewer)
         interaction.step(STEP, true)
       }
     }

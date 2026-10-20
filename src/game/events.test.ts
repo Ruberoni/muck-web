@@ -1,9 +1,7 @@
-import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { EventLog, type SimEventData } from '../sim/events'
 import { DAY_FRACTION } from '../sim/world/daycycle'
 import { createPropWorld, type PropData } from '../sim/props'
-import { PropView } from '../view/PropView'
 import { mulberry32 } from '../sim/random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
 import { BERRY_REGROW, ENEMY_RADIUS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from '../sim/constants'
@@ -16,7 +14,6 @@ const NIGHT = DAY_FRACTION + 0.1
 const DAY = 0.3
 
 const world = createPropWorld()
-const view = new PropView(world.placements)
 
 /** Primer punto de hierba, en espiral desde el centro, sin props en `clearance` metros. */
 function clearSpot(clearance: number) {
@@ -43,21 +40,18 @@ function setup() {
   const inventory = new Inventory()
   const enemies = new Enemies([world.grid], mulberry32(7), emit)
   const pickups = new Pickups([world.grid], mulberry32(3), emit)
-  const interaction = new Interaction(world, view, inventory, pickups, enemies, emit)
-  const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 600)
-  camera.rotation.order = 'YXZ'
+  const interaction = new Interaction(world, inventory, pickups, enemies, emit)
+  const viewer = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }
   const aimAt = (prop: PropData) => {
     const isFree = (x: number, z: number) => world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
     const pose = aimPose(prop, isFree)
-    const eyeY = heightAt(pose.x, pose.z) + EYE_HEIGHT
-    camera.position.set(pose.x, eyeY, pose.z)
-    camera.rotation.set(Math.atan2(pose.aimY - eyeY, pose.horizontal), pose.yaw, 0)
-    camera.updateMatrixWorld()
-    interaction.updateTarget(camera)
+    const y = heightAt(pose.x, pose.z)
+    Object.assign(viewer, { pos: { x: pose.x, y, z: pose.z }, yaw: pose.yaw, pitch: Math.atan2(pose.aimY - y - EYE_HEIGHT, pose.horizontal) })
+    interaction.updateTarget(viewer)
   }
   const hold = (seconds: number, attack = true) => {
     for (let i = 0; i < Math.round(seconds / STEP); i++) {
-      interaction.updateTarget(camera)
+      interaction.updateTarget(viewer)
       interaction.step(STEP, attack)
     }
   }
