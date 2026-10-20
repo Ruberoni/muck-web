@@ -27,7 +27,7 @@ function setup() {
     let collected = 0
     let full = false
     for (let i = 0; i < Math.round(seconds / STEP); i++) {
-      const r = pickups.step(STEP, player, inventory)
+      const [r] = pickups.step(STEP, [{ id: 0, pos: player, inventory }])
       collected += r.collected
       full = r.full
     }
@@ -109,13 +109,13 @@ describe('objetos en el suelo', () => {
     const [p] = pickups.list
     const start = { ...p.pos }
     const near = at(p.pos.x + (PICKUP_MAGNET + PICKUP_RADIUS) / 2, p.pos.z)
-    for (let i = 0; i < 30; i++) pickups.step(STEP, near, hotbar)
+    for (let i = 0; i < 30; i++) pickups.step(STEP, [{ id: 0, pos: near, inventory: hotbar }])
     expect(p.pos).toEqual(start)
-    expect(pickups.step(STEP, at(p.pos.x, p.pos.z), hotbar)).toEqual({ collected: 0, full: true })
+    expect(pickups.step(STEP, [{ id: 0, pos: at(p.pos.x, p.pos.z), inventory: hotbar }])[0]).toEqual({ collected: 0, full: true })
     expect(pickups.list).toHaveLength(1)
 
     room = true
-    expect(pickups.step(STEP, at(p.pos.x, p.pos.z), hotbar)).toEqual({ collected: 1, full: false })
+    expect(pickups.step(STEP, [{ id: 0, pos: at(p.pos.x, p.pos.z), inventory: hotbar }])[0]).toEqual({ collected: 1, full: false })
     expect(inventory.count('wood')).toBe(1)
   })
 

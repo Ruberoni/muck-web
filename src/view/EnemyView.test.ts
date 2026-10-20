@@ -55,7 +55,7 @@ describe('EnemyView', () => {
     enemies.spawnAt(10, 20)
     enemies.spawnAt(-10, 20)
     frame()
-    enemies.step(STEP, { x: 0, z: 0 }, DAY_FRACTION / 2, 1)
+    enemies.step(STEP, [{ id: 0, pos: { x: 0, z: 0 }, alive: true }], DAY_FRACTION / 2, 1)
     frame(0.5)
     expect(view.group.children).toHaveLength(0)
   })

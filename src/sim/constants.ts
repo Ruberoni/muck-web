@@ -116,6 +116,12 @@ export const ENEMY_SPAWN_MAX = 40
 export const ENEMY_BASE_COUNT = 3
 export const ENEMY_PER_NIGHT = 2
 export const ENEMY_MAX = 12
+/** Con N jugadores caben ENEMY_PER_PLAYER más por cada uno a partir del segundo, hasta ENEMY_HARD_MAX. */
+export const ENEMY_PER_PLAYER = 4
+export const ENEMY_HARD_MAX = 24
+/** Cada cuánto vuelve a elegir a quién persigue, y cuánto más cerca debe estar otro para cambiar. */
+export const ENEMY_RETARGET = 0.5
+export const ENEMY_RETARGET_MARGIN = 3
 
 export const CAMPFIRE_RADIUS = 0.6
 // Distancia por delante del jugador a la que se coloca la fogata.

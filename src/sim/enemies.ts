@@ -1,7 +1,7 @@
 import { isNight } from './world/daycycle'
 import { heightAt, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import { ENEMY_MODEL_SCALE } from './aim'
-import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
+import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import {
   ENEMY_ATTACK_INTERVAL,
@@ -9,11 +9,15 @@ import {
   ENEMY_DAMAGE,
   ENEMY_DEF,
   ENEMY_GAP,
+  ENEMY_HARD_MAX,
   ENEMY_KNOCKBACK,
   ENEMY_MAX,
   ENEMY_PER_NIGHT,
+  ENEMY_PER_PLAYER,
   ENEMY_RADIUS,
   ENEMY_REACH,
+  ENEMY_RETARGET,
+  ENEMY_RETARGET_MARGIN,
   ENEMY_SPAWN_INTERVAL,
   ENEMY_SPAWN_MAX,
   ENEMY_SPAWN_MIN,
@@ -47,6 +51,23 @@ export interface EnemyData {
   /** Tras un golpe retrocede con `knock` y no persigue ni ataca durante este tiempo. */
   stagger: number
   knock: { x: number; z: number }
+  /** A quién persigue (null: a nadie todavía). */
+  target: PlayerId | null
+  /** Segundos hasta volver a elegir a quién persigue. */
+  retarget: number
+}
+
+/** Lo que los enemigos ven de un jugador que está en el mundo. Los muertos no son objetivo, pero cuentan para N. */
+export interface EnemyPrey {
+  id: PlayerId
+  pos: { x: number; z: number }
+  alive: boolean
+}
+
+/** Daño que recibe un jugador en un paso. */
+export interface EnemyDamage {
+  playerId: PlayerId
+  damage: number
 }
 
 /** Los enemigos como datos, para guardar y restaurar la partida. */
@@ -54,12 +75,20 @@ export interface EnemiesState {
   list: EnemyData[]
   spawnTimer: number
   nextId: number
+  spawnTurn: number
 }
 
 const copyEnemy = (e: EnemyData): EnemyData => ({ ...e, pos: { ...e.pos }, prev: { ...e.prev }, knock: { ...e.knock } })
 
 /** Número máximo de enemigos a la vez en la noche del día `day`. */
 export const enemyCap = (day: number) => Math.min(ENEMY_MAX, ENEMY_BASE_COUNT + (day - 1) * ENEMY_PER_NIGHT)
+
+/** Máximo a la vez con `players` jugadores en el mundo: ENEMY_PER_PLAYER más por cada uno desde el segundo. */
+export const enemyCapFor = (day: number, players: number) =>
+  Math.min(ENEMY_HARD_MAX, enemyCap(day) + ENEMY_PER_PLAYER * Math.max(0, players - 1))
+
+/** Segundos entre apariciones: con más jugadores salen antes. */
+export const spawnIntervalFor = (players: number) => ENEMY_SPAWN_INTERVAL / Math.sqrt(Math.max(1, players))
 
 /** No se mueve a agua profunda: si el jugador nada lejos de la orilla, lo esperan en ella. */
 const walkable = (x: number, z: number) => heightAt(x, z) >= WATER_LEVEL - WADE_DEPTH
@@ -70,6 +99,8 @@ export class Enemies {
   readonly list: EnemyData[] = []
   private spawnTimer = 0
   private nextId = 0
+  /** A qué jugador vivo le toca la siguiente aparición (por turnos). */
+  private spawnTurn = 0
 
   /** `grids`: obstáculos que rodean (props, fogatas…). */
   constructor(
@@ -78,13 +109,21 @@ export class Enemies {
     private emit: Emit = NO_EMIT,
   ) {}
 
-  /** Paso fijo: aparece, persigue y ataca. Devuelve el daño total que recibe el jugador. */
-  step(dt: number, player: { x: number; z: number }, phase: number, day: number): number {
+  /**
+   * Paso fijo: aparece, persigue y ataca. `players` son los jugadores que están en el mundo (ordenados por id);
+   * persiguen al vivo más cercano. Devuelve el daño que recibe cada jugador en este paso (solo los que reciben).
+   */
+  step(dt: number, players: readonly EnemyPrey[], phase: number, day: number): EnemyDamage[] {
+    const prey = players.filter((p) => p.alive)
     if (isNight(phase)) {
       this.spawnTimer -= dt
       if (this.spawnTimer <= 1e-9) {
-        if (this.list.length < enemyCap(day)) this.trySpawn(player.x, player.z)
-        this.spawnTimer = ENEMY_SPAWN_INTERVAL
+        if (prey.length && this.list.length < enemyCapFor(day, players.length)) {
+          // Por turnos: cada aparición elige a un jugador vivo distinto.
+          const around = prey[this.spawnTurn++ % prey.length]
+          this.trySpawn(around, prey)
+        }
+        this.spawnTimer = spawnIntervalFor(players.length)
       }
     } else {
       // Al amanecer se desvanecen sin soltar nada.
@@ -93,24 +132,50 @@ export class Enemies {
       while (this.list.length) this.kill(this.list[0])
     }
 
-    let damage = 0
+    const damage: EnemyDamage[] = []
     for (const e of this.list) {
       e.prev.x = e.pos.x
       e.prev.z = e.pos.z
-      if (this.chase(e, player, dt)) damage += ENEMY_DAMAGE
+      const target = this.chooseTarget(e, prey, dt)
+      if (!this.chase(e, target, dt) || !target) continue
+      const hurt = damage.find((d) => d.playerId === target.id)
+      if (hurt) hurt.damage += ENEMY_DAMAGE
+      else damage.push({ playerId: target.id, damage: ENEMY_DAMAGE })
     }
-    this.separate(player)
+    this.separate(prey)
     return damage
   }
 
-  /** Mueve un enemigo y devuelve si ataca en este paso. */
-  private chase(e: EnemyData, player: { x: number; z: number }, dt: number): boolean {
+  /**
+   * El jugador vivo más cercano, reevaluado cada ENEMY_RETARGET segundos: solo cambia si otro está
+   * ENEMY_RETARGET_MARGIN metros más cerca, para que no dude entre dos. Si el suyo ya no está, elige al momento.
+   */
+  private chooseTarget(e: EnemyData, prey: readonly EnemyPrey[], dt: number): EnemyPrey | null {
+    let current = e.target === null ? undefined : prey.find((p) => p.id === e.target)
+    e.retarget -= dt
+    if (current && e.retarget > 1e-9) return current
+    e.retarget = ENEMY_RETARGET
+    const distance = (p: EnemyPrey) => Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z)
+    let nearest: EnemyPrey | undefined
+    for (const p of prey) if (!nearest || distance(p) < distance(nearest)) nearest = p
+    if (nearest && (!current || distance(nearest) < distance(current) - ENEMY_RETARGET_MARGIN)) current = nearest
+    e.target = current?.id ?? null
+    return current ?? null
+  }
+
+  /** Mueve un enemigo hacia `prey` (o lo deja quieto si no hay nadie) y devuelve si ataca en este paso. */
+  private chase(e: EnemyData, prey: EnemyPrey | null, dt: number): boolean {
     if (e.stagger > 0) {
       const k = e.stagger / ENEMY_STAGGER
       this.move(e, e.knock.x * k * dt, e.knock.z * k * dt)
       e.stagger = Math.max(0, e.stagger - dt)
       return false
     }
+    if (!prey) {
+      e.attackCooldown = Math.max(e.attackCooldown - dt, ENEMY_WINDUP)
+      return false
+    }
+    const player = prey.pos
     const dx = player.x - e.pos.x
     const dz = player.z - e.pos.z
     const dist = Math.hypot(dx, dz)
@@ -126,7 +191,7 @@ export class Enemies {
     e.attackCooldown -= dt
     if (e.attackCooldown > 1e-9) return false
     e.attackCooldown = ENEMY_ATTACK_INTERVAL
-    this.emit({ type: 'enemyAttack', id: e.id, target: LOCAL_PLAYER })
+    this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return true
   }
 
@@ -152,8 +217,8 @@ export class Enemies {
     }
   }
 
-  /** Ni se amontonan entre ellos ni se meten dentro del jugador. */
-  private separate(player: { x: number; z: number }) {
+  /** Ni se amontonan entre ellos ni se meten dentro de ningún jugador vivo. */
+  private separate(prey: readonly EnemyPrey[]) {
     const push = (pos: { x: number; z: number }, ox: number, oz: number, min: number, share: number) => {
       const dx = pos.x - ox
       const dz = pos.z - oz
@@ -174,18 +239,20 @@ export class Enemies {
       }
     }
     for (const e of this.list) {
-      push(e.pos, player.x, player.z, CONTACT, 1)
+      for (const { pos } of prey) push(e.pos, pos.x, pos.z, CONTACT, 1)
       this.settle(e, e.prev.x, e.prev.z)
     }
   }
 
-  private trySpawn(px: number, pz: number) {
+  /** Alrededor de `around` y a ENEMY_SPAWN_MIN como poco de todos los jugadores vivos. */
+  private trySpawn(around: EnemyPrey, prey: readonly EnemyPrey[]) {
     for (let i = 0; i < SPAWN_ATTEMPTS; i++) {
       const angle = this.rng() * Math.PI * 2
       const r = ENEMY_SPAWN_MIN + this.rng() * (ENEMY_SPAWN_MAX - ENEMY_SPAWN_MIN)
-      const x = px + Math.cos(angle) * r
-      const z = pz + Math.sin(angle) * r
+      const x = around.pos.x + Math.cos(angle) * r
+      const z = around.pos.z + Math.sin(angle) * r
       if (Math.hypot(x, z) > BOUND || heightAt(x, z) < WATER_LEVEL + 0.2) continue
+      if (prey.some((p) => p !== around && Math.hypot(p.pos.x - x, p.pos.z - z) < ENEMY_SPAWN_MIN)) continue
       const pos = { x, z }
       if (this.grids.some((grid) => resolveCircle(pos, ENEMY_RADIUS, grid))) continue
       return this.spawnAt(x, z)
@@ -207,13 +274,15 @@ export class Enemies {
       attackCooldown: ENEMY_WINDUP,
       stagger: 0,
       knock: { x: 0, z: 0 },
+      target: null,
+      retarget: 0,
     }
     this.list.push(e)
     this.emit({ type: 'enemySpawn', id: e.id, x, z })
     return e
   }
 
-  /** Golpe de `by` desde `from` (la posición del jugador). Devuelve true si lo mata. */
+  /** Golpe de `by` desde `from` (la posición del atacante). Devuelve true si lo mata. */
   hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId): boolean {
     if (!e.alive) return false
     e.hp = Math.max(0, e.hp - damage)
@@ -242,10 +311,11 @@ export class Enemies {
   reset() {
     for (const e of [...this.list]) this.kill(e)
     this.spawnTimer = 0
+    this.spawnTurn = 0
   }
 
   save(): EnemiesState {
-    return { list: this.list.map(copyEnemy), spawnTimer: this.spawnTimer, nextId: this.nextId }
+    return { list: this.list.map(copyEnemy), spawnTimer: this.spawnTimer, nextId: this.nextId, spawnTurn: this.spawnTurn }
   }
 
   load(state: EnemiesState) {
@@ -253,5 +323,6 @@ export class Enemies {
     this.list.push(...state.list.map(copyEnemy))
     this.spawnTimer = state.spawnTimer
     this.nextId = state.nextId
+    this.spawnTurn = state.spawnTurn
   }
 }

@@ -18,7 +18,7 @@ import {
   WADE_DEPTH,
 } from './constants'
 import { ENEMY_AIM_HEIGHT, Enemies, enemyCap, type EnemyData } from './enemies'
-import { hitDamage, Interaction } from './interaction'
+import { createCombat, hitDamage, Interaction, type Fighter } from './interaction'
 import { Inventory, type ItemId } from './inventory'
 import { Pickups } from './pickups'
 
@@ -56,7 +56,9 @@ describe('enemigos nocturnos', () => {
   /** Simula `seconds` y devuelve el daño total al jugador. */
   const run = (seconds: number, phase = NIGHT, day = 1) => {
     let damage = 0
-    for (let i = 0; i < Math.round(seconds / STEP); i++) damage += enemies.step(STEP, player, phase, day)
+    for (let i = 0; i < Math.round(seconds / STEP); i++) {
+      for (const d of enemies.step(STEP, [{ id: 0, pos: player, alive: true }], phase, day)) damage += d.damage
+    }
     return damage
   }
 
@@ -155,17 +157,18 @@ describe('combate', () => {
     const inventory = new Inventory()
     const enemies = new Enemies([world.grid], mulberry32(7))
     const pickups = new Pickups([world.grid], mulberry32(3))
-    const interaction = new Interaction(world, inventory, pickups, enemies)
+    const interaction = new Interaction(world, pickups, enemies)
     const enemy = enemies.spawnAt(spot.x + 1.5, spot.z)
     const eyeY = heightAt(spot.x, spot.z) + EYE_HEIGHT
     const aimY = heightAt(enemy.pos.x, enemy.pos.z) + ENEMY_AIM_HEIGHT
     // forward = (-sin(yaw), -cos(yaw)): yaw = -π/2 mira hacia +X.
     const viewer = { pos: { x: spot.x, y: eyeY - EYE_HEIGHT, z: spot.z }, yaw: -Math.PI / 2, pitch: Math.atan2(aimY - eyeY, 1.5) }
-    interaction.updateTarget(viewer)
+    const fighter: Fighter = { id: 0, player: viewer, inventory, combat: createCombat(), target: null }
+    interaction.updateTarget(fighter)
     const hold = (seconds: number) => {
       for (let i = 0; i < Math.round(seconds / STEP); i++) {
-        interaction.updateTarget(viewer)
-        interaction.step(STEP, true)
+        interaction.updateTarget(fighter)
+        interaction.step(fighter, STEP, true)
       }
     }
     const equip = (item: ItemId) => {
@@ -173,7 +176,7 @@ describe('combate', () => {
       inventory.select(inventory.slots.indexOf(item))
     }
     const meat = () => pickups.list.filter((p) => p.item === 'raw_meat')
-    return { inventory, enemies, interaction, enemy, hold, equip, meat }
+    return { inventory, enemies, fighter, enemy, hold, equip, meat }
   }
 
   it('las herramientas pegan más fuerte que la mano, sea hacha o pico', () => {
@@ -186,12 +189,12 @@ describe('combate', () => {
   })
 
   it('el raycast apunta al enemigo', () => {
-    const { interaction, enemy } = setup()
-    expect(interaction.target).toBe(enemy)
+    const { fighter, enemy } = setup()
+    expect(fighter.target).toBe(enemy)
   })
 
   it('con hacha de piedra cae en 2 golpes y suelta carne cruda al suelo', () => {
-    const { inventory, enemies, interaction, enemy, hold, equip, meat } = setup()
+    const { inventory, enemies, fighter, enemy, hold, equip, meat } = setup()
     const { x, z } = enemy.pos
     equip('stone_axe')
     hold(STEP)
@@ -202,7 +205,7 @@ describe('combate', () => {
     expect(inventory.count('raw_meat')).toBe(0)
     expect(meat()).toHaveLength(ENEMY_DEF.drop.amount)
     expect(Math.hypot(meat()[0].pos.x - x, meat()[0].pos.z - z)).toBeLessThan(0.01)
-    expect(interaction.target).not.toBe(enemy)
+    expect(fighter.target).not.toBe(enemy)
   })
 
   it('a mano hacen falta 6 golpes', () => {
