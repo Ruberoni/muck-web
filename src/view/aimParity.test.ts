@@ -6,7 +6,8 @@ import { EYE_HEIGHT, REACH } from '../sim/constants'
 import { createPropWorld, type PropData, type PropKind } from '../sim/props'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
-import { Enemies } from '../game/enemies'
+import { Enemies } from '../sim/enemies'
+import { EnemyView } from './EnemyView'
 import { PropView } from './PropView'
 
 // Paridad de src/sim/aim.ts con el raycast de three contra los meshes, que era como se buscaba el objetivo.
@@ -24,7 +25,7 @@ function meshTarget(objects: THREE.Object3D[], ray: AimRay): number | 'enemy' | 
   hits.length = 0
   raycaster.intersectObjects(objects, true, hits)
   for (const hit of hits) {
-    if (hit.object.userData.enemy) return 'enemy'
+    if (hit.object.userData.enemy !== undefined) return 'enemy'
     const id = view.propAt(hit.object, hit.instanceId)
     if (id >= 0) return id
   }
@@ -114,15 +115,17 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
 
   it('enemigo: el cuerpo sin bote ni embestida; solo faltan cuernos, pies y ojos', () => {
     const enemies = new Enemies([])
+    const enemyView = new EnemyView()
     const rng = mulberry32(5)
     const grid = new SpatialGrid<PropData>()
     const [ex, ez] = [10, 10]
     const samples: { mesh: boolean | null; box: boolean | null }[] = []
     for (let i = 0; i < 1000; i++) {
       enemies.reset()
+      enemyView.reset()
       const enemy = enemies.spawnAt(ex, ez)
       enemy.yaw = rng() * Math.PI * 2
-      enemies.place(1)
+      enemyView.update(0, enemies.list, 1)
       const angle = rng() * Math.PI * 2
       const dist = 0.9 + rng() * 2.5
       const ray = rayTowards(
@@ -132,7 +135,7 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
         heightAt(ex, ez) + rng() * 2.2,
         ez + (rng() - 0.5) * 1.6,
       )
-      samples.push({ mesh: meshTarget([enemies.group], ray) === 'enemy' || null, box: pickTarget(ray, grid, hitboxes, enemies.list) === enemy || null })
+      samples.push({ mesh: meshTarget([enemyView.group], ray) === 'enemy' || null, box: pickTarget(ray, grid, hitboxes, enemies.list) === enemy || null })
     }
     const result = compare(samples)
     expect(result.touched).toBeGreaterThan(300)

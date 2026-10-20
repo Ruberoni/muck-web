@@ -1,5 +1,6 @@
-import { PROP_DEFS } from './constants'
+import { BERRY_REGROW, PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
+import type { Emit } from './events'
 import { createBushRng, createPropsRng } from './random'
 import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WORLD_SIZE } from './world/terrain'
 
@@ -51,6 +52,8 @@ export interface PropPlacement {
 export interface PropState {
   hp: number
   alive: boolean
+  /** Arbustos incompletos: segundos que faltan para que les vuelva a crecer una baya (0: ninguna pendiente). */
+  regrowLeft: number
 }
 
 export interface PropData extends PropPlacement, PropState {
@@ -132,7 +135,7 @@ export function generatePropPlacements(): PropPlacement[] {
 export function createPropWorld(placements: readonly PropPlacement[] = generatePropPlacements()) {
   const props: PropData[] = placements.map((placement) => {
     const { hp } = PROP_DEFS[placement.kind]
-    return { ...placement, hp, maxHp: hp, alive: true }
+    return { ...placement, hp, maxHp: hp, alive: true, regrowLeft: 0 }
   })
   const grid = new SpatialGrid<PropData>()
   for (const prop of props) grid.insert(prop)
@@ -145,4 +148,24 @@ export type PropWorld = ReturnType<typeof createPropWorld>
 export function resetProp(prop: PropData) {
   prop.hp = prop.maxHp
   prop.alive = true
+  prop.regrowLeft = 0
+}
+
+/** Paso fijo del rebrote: a cada arbusto incompleto le vuelve a crecer una baya cada BERRY_REGROW segundos. */
+export function growBerries(props: readonly PropData[], dt: number, emit: Emit) {
+  for (const bush of props) {
+    if (bush.regrowLeft <= 0) continue
+    if (bush.regrowLeft - dt > 1e-9) {
+      bush.regrowLeft -= dt
+      continue
+    }
+    bush.hp++
+    bush.regrowLeft = bush.hp < bush.maxHp ? BERRY_REGROW : 0
+    emit({ type: 'berryGrew', id: bush.id, hp: bush.hp })
+  }
+}
+
+/** Empieza a contar el rebrote de un arbusto al quitarle una baya; si ya contaba, sigue su ritmo. */
+export function startRegrow(bush: PropData) {
+  if (bush.regrowLeft <= 0) bush.regrowLeft = BERRY_REGROW
 }

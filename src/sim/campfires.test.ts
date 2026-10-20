@@ -1,10 +1,10 @@
-import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { createPropWorld } from '../sim/props'
-import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
-import { Campfires, campfireSpot } from './campfire'
-import { resolveCircle } from '../sim/collision'
-import { CAMPFIRE_LIGHTS, CAMPFIRE_PLACE_DISTANCE, CAMPFIRE_RADIUS, PLAYER_RADIUS } from '../sim/constants'
+import { createPropWorld } from './props'
+import { heightAt, WATER_LEVEL } from './world/terrain'
+import { Campfires, campfireSpot } from './campfires'
+import { resolveCircle } from './collision'
+import { CAMPFIRE_PLACE_DISTANCE, CAMPFIRE_RADIUS, PLAYER_RADIUS } from './constants'
+import type { SimEventData } from './events'
 
 const world = createPropWorld()
 
@@ -54,11 +54,12 @@ describe('colocar fogatas', () => {
   })
 
   it('una fogata colocada bloquea el paso y otra fogata en el mismo sitio', () => {
-    const fires = new Campfires(new THREE.Scene())
+    const fires = new Campfires()
     const pos = clearGround()
     const spot = campfireSpot(pos, 0, [world.grid, fires.grid])
-    expect(fires.place(spot)).toBe(true)
+    expect(fires.place(spot)).toBe(fires.list[0])
     expect(fires.list).toHaveLength(1)
+    expect(fires.place(campfireSpot(pos, 0, [world.grid, fires.grid]))).toBeNull()
     expect(campfireSpot(pos, 0, [world.grid, fires.grid]).valid).toBe(false)
 
     const walker = { x: spot.x + 0.1, z: spot.z }
@@ -67,61 +68,30 @@ describe('colocar fogatas', () => {
   })
 
   it('cada fogata tiene id y giro propios, guardados en el dato', () => {
-    const fires = new Campfires(new THREE.Scene())
+    const fires = new Campfires()
     fires.place({ x: 0, y: 5, z: 0, valid: true })
     fires.place({ x: 5, y: 5, z: 0, valid: true })
     expect(fires.list.map((f) => f.id)).toEqual([0, 1])
     expect(fires.list[1].rotY).toBeCloseTo(1.3)
-    expect(fires.list[1].mesh.rotation.y).toBe(fires.list[1].rotY)
     fires.clear()
     fires.place({ x: 0, y: 5, z: 0, valid: true })
     expect(fires.list[0].id).toBe(0)
   })
 
+  it('colocarla emite campfirePlaced con quién la puso', () => {
+    const events: SimEventData[] = []
+    const fires = new Campfires((e) => void events.push(e))
+    const fire = fires.place({ x: 1, y: 5, z: 2, valid: true }, 3)!
+    fires.place({ x: 9, y: 5, z: 9, valid: false }, 3)
+    expect(events).toEqual([{ type: 'campfirePlaced', id: 0, x: 1, y: 5, z: 2, rotY: fire.rotY, by: 3 }])
+  })
+
   it('clear quita todas las fogatas y sus colliders', () => {
-    const scene = new THREE.Scene()
-    const fires = new Campfires(scene)
+    const fires = new Campfires()
     const pos = clearGround()
     fires.place(campfireSpot(pos, 0, [world.grid, fires.grid]))
     fires.clear()
     expect(fires.list).toHaveLength(0)
-    expect(fires.group.children).toHaveLength(0)
     expect(campfireSpot(pos, 0, [world.grid, fires.grid]).valid).toBe(true)
-  })
-})
-
-describe('luz de las fogatas', () => {
-  const lightsOf = (scene: THREE.Scene) => scene.children.filter((c): c is THREE.PointLight => c instanceof THREE.PointLight)
-
-  it('el número de luces es fijo e iluminan las fogatas más cercanas', () => {
-    const scene = new THREE.Scene()
-    const fires = new Campfires(scene)
-    const lights = lightsOf(scene)
-    expect(lights).toHaveLength(CAMPFIRE_LIGHTS)
-    fires.update(0, 0.8, { x: 0, z: 0 })
-    expect(lights.every((l) => l.intensity === 0)).toBe(true)
-
-    const base = clearGround()
-    for (let i = 0; i <= CAMPFIRE_LIGHTS; i++) {
-      fires.place({ x: base.x + i * 3, y: 5, z: base.z, valid: true })
-    }
-    fires.update(0, 0.8, { x: base.x, z: base.z })
-    expect(lightsOf(scene)).toHaveLength(CAMPFIRE_LIGHTS)
-    expect(lights.every((l) => l.intensity > 0)).toBe(true)
-    // La más lejana se queda sin luz.
-    const farthest = base.x + CAMPFIRE_LIGHTS * 3
-    expect(lights.some((l) => l.position.x === farthest)).toBe(false)
-  })
-
-  it('de noche ilumina bastante más que a mediodía', () => {
-    const scene = new THREE.Scene()
-    const fires = new Campfires(scene)
-    const [light] = lightsOf(scene)
-    fires.place({ x: 0, y: 5, z: 0, valid: true })
-    fires.update(0, 0.325, { x: 0, z: 0 })
-    const noon = light.intensity
-    fires.update(0, 0.825, { x: 0, z: 0 })
-    const midnight = light.intensity
-    expect(midnight).toBeGreaterThan(noon * 3)
   })
 })

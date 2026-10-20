@@ -1,19 +1,11 @@
 import * as THREE from 'three'
 import { sunDirection } from '../world/daycycle'
-import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from '../sim/world/terrain'
-import { SpatialGrid, type Collider } from '../sim/collision'
-import {
-  CAMPFIRE_LIGHT_DISTANCE,
-  CAMPFIRE_LIGHT_INTENSITY,
-  CAMPFIRE_LIGHTS,
-  CAMPFIRE_PLACE_DISTANCE,
-  CAMPFIRE_RADIUS,
-} from '../sim/constants'
+import { CAMPFIRE_LIGHT_DISTANCE, CAMPFIRE_LIGHT_INTENSITY, CAMPFIRE_LIGHTS } from '../sim/constants'
+import type { Campfire, CampfireSpot } from '../sim/campfires'
 
 const LIGHT_HEIGHT = 0.8
 // De día la fogata casi no se nota: a pleno sol la luz baja a esta fracción.
 const DAY_LIGHT_FACTOR = 0.1
-const MIN_GROUND = WATER_LEVEL + 0.2
 
 const logGeometry = new THREE.CylinderGeometry(0.07, 0.08, 0.9, 5)
 const stoneGeometry = new THREE.IcosahedronGeometry(0.14, 0)
@@ -66,58 +58,24 @@ function buildCampfire(m: Materials, shadows: boolean) {
   return { root, flame }
 }
 
-export interface Campfire extends Collider {
-  id: number
-  y: number
-  /** Giro del modelo: cada fogata distinta, sin depender de cuántas haya. */
-  rotY: number
-  mesh: THREE.Group
+export interface CampfireModel {
+  root: THREE.Group
   flame: THREE.Group
 }
 
-export interface CampfireSpot {
-  x: number
-  y: number
-  z: number
-  valid: boolean
-}
-
-const overlaps = (grid: SpatialGrid<Collider>, x: number, z: number, radius: number) => {
-  for (const c of grid.query(x, z, radius + grid.maxRadius)) {
-    if (c.alive && Math.hypot(c.x - x, c.z - z) < c.radius + radius) return true
-  }
-  return false
-}
-
-/** Dónde caería una fogata colocada desde `pos` mirando a `yaw`, y si se puede poner ahí. */
-export function campfireSpot(
-  pos: { x: number; z: number },
-  yaw: number,
-  blockers: SpatialGrid<Collider>[],
-  out: CampfireSpot = { x: 0, y: 0, z: 0, valid: false },
-): CampfireSpot {
-  // forward = (-sin(yaw), -cos(yaw))
-  out.x = pos.x - Math.sin(yaw) * CAMPFIRE_PLACE_DISTANCE
-  out.z = pos.z - Math.cos(yaw) * CAMPFIRE_PLACE_DISTANCE
-  out.y = heightAt(out.x, out.z)
-  out.valid =
-    out.y > MIN_GROUND &&
-    slopeAt(out.x, out.z) <= MAX_SLOPE &&
-    blockers.every((grid) => !overlaps(grid, out.x, out.z, CAMPFIRE_RADIUS))
-  return out
-}
-
-/** Fogatas colocadas: modelo, collider y un grupo fijo de luces para las más cercanas. */
-export class Campfires {
-  readonly list: Campfire[] = []
-  readonly grid = new SpatialGrid<Campfire>()
+/**
+ * Las fogatas dibujadas: un modelo por fogata de la simulación, la vista previa al colocar y un grupo
+ * fijo de luces para las más cercanas.
+ */
+export class CampfireView {
   readonly group = new THREE.Group()
+  private models = new Map<number, CampfireModel>()
+  private seen = new Set<number>()
   private ghost: THREE.Group
   private ghostMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false })
   private lights: THREE.PointLight[] = []
   private byDistance: Campfire[] = []
   private sun = new THREE.Vector3()
-  private nextId = 0
 
   constructor(scene: THREE.Scene) {
     const g = this.ghostMaterial
@@ -132,30 +90,9 @@ export class Campfires {
     scene.add(this.group, this.ghost)
   }
 
-  /** Coloca una fogata si el sitio es válido. */
-  place(spot: CampfireSpot): boolean {
-    if (!spot.valid) return false
-    const { root, flame } = buildCampfire(
-      { log: logMaterial, stone: stoneMaterial, outerFlame: outerFlameMaterial, innerFlame: innerFlameMaterial },
-      true,
-    )
-    const id = this.nextId++
-    const fire: Campfire = { id, x: spot.x, y: spot.y, z: spot.z, rotY: id * 1.3, radius: CAMPFIRE_RADIUS, alive: true, mesh: root, flame }
-    root.position.set(spot.x, spot.y - 0.05, spot.z)
-    root.rotation.y = fire.rotY
-    this.group.add(root)
-    this.list.push(fire)
-    this.grid.insert(fire)
-    return true
-  }
-
-  clear() {
-    for (const fire of this.list) this.group.remove(fire.mesh)
-    this.list.length = 0
-    this.grid.clear()
-    this.nextId = 0
-    for (const light of this.lights) light.intensity = 0
-    this.ghost.visible = false
+  /** Modelo de la fogata `id`, si ya se ha dibujado. */
+  modelOf(id: number): CampfireModel | undefined {
+    return this.models.get(id)
   }
 
   /** Vista previa de dónde se colocaría (verde si se puede, roja si no); null la oculta. */
@@ -166,18 +103,19 @@ export class Campfires {
     this.ghostMaterial.color.set(spot.valid ? '#7dff8a' : '#ff5a4f')
   }
 
-  /** Por frame: parpadeo de llamas y luces, que iluminan más cuanto más oscuro está. */
-  update(time: number, phase: number, viewer: { x: number; z: number }) {
+  /** Por frame: modelos de las fogatas, parpadeo de llamas y luces, que iluminan más cuanto más oscuro está. */
+  update(time: number, phase: number, viewer: { x: number; z: number }, fires: readonly Campfire[]) {
+    this.sync(fires)
     const t = time / 1000
     const night = 1 - THREE.MathUtils.smoothstep(sunDirection(phase, this.sun).y, -0.1, 0.25)
     const level = DAY_LIGHT_FACTOR + (1 - DAY_LIGHT_FACTOR) * night
     const flicker = (k: number) => 0.85 + 0.1 * Math.sin(t * 11 + k * 1.7) + 0.05 * Math.sin(t * 23 + k * 3.1)
 
-    this.list.forEach((fire, k) => fire.flame.scale.set(1, flicker(k) + 0.1, 1))
+    fires.forEach((fire, k) => this.models.get(fire.id)!.flame.scale.set(1, flicker(k) + 0.1, 1))
 
     const d = (f: Campfire) => (f.x - viewer.x) ** 2 + (f.z - viewer.z) ** 2
     this.byDistance.length = 0
-    this.byDistance.push(...this.list)
+    this.byDistance.push(...fires)
     this.byDistance.sort((a, b) => d(a) - d(b))
     this.lights.forEach((light, i) => {
       const fire = this.byDistance[i]
@@ -186,7 +124,37 @@ export class Campfires {
         return
       }
       light.position.set(fire.x, fire.y + LIGHT_HEIGHT, fire.z)
-      light.intensity = CAMPFIRE_LIGHT_INTENSITY * level * flicker(this.list.indexOf(fire))
+      light.intensity = CAMPFIRE_LIGHT_INTENSITY * level * flicker(fires.indexOf(fire))
     })
+  }
+
+  /** Reinicio de partida: sin fogatas, luces apagadas y sin vista previa. */
+  reset() {
+    for (const { root } of this.models.values()) this.group.remove(root)
+    this.models.clear()
+    for (const light of this.lights) light.intensity = 0
+    this.ghost.visible = false
+  }
+
+  /** Crea el modelo de las fogatas nuevas y quita el de las que ya no están. */
+  private sync(fires: readonly Campfire[]) {
+    this.seen.clear()
+    for (const fire of fires) {
+      this.seen.add(fire.id)
+      if (this.models.has(fire.id)) continue
+      const model = buildCampfire(
+        { log: logMaterial, stone: stoneMaterial, outerFlame: outerFlameMaterial, innerFlame: innerFlameMaterial },
+        true,
+      )
+      model.root.position.set(fire.x, fire.y - 0.05, fire.z)
+      model.root.rotation.y = fire.rotY
+      this.group.add(model.root)
+      this.models.set(fire.id, model)
+    }
+    for (const [id, { root }] of this.models) {
+      if (this.seen.has(id)) continue
+      this.models.delete(id)
+      this.group.remove(root)
+    }
   }
 }

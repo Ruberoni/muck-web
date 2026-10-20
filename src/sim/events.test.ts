@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { EventLog, type SimEventData } from '../sim/events'
-import { DAY_FRACTION } from '../sim/world/daycycle'
-import { createPropWorld, type PropData } from '../sim/props'
-import { mulberry32 } from '../sim/random'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
-import { BERRY_REGROW, ENEMY_RADIUS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from '../sim/constants'
+import { EventLog, type SimEventData } from './events'
+import { DAY_FRACTION } from './world/daycycle'
+import { createPropWorld, growBerries, type PropData } from './props'
+import { mulberry32 } from './random'
+import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
+import { BERRY_REGROW, ENEMY_RADIUS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from './constants'
 import { Enemies } from './enemies'
 import { aimPose, Interaction } from './interaction'
-import { Inventory } from '../sim/inventory'
+import { Inventory } from './inventory'
 import { Pickups } from './pickups'
 
 const NIGHT = DAY_FRACTION + 0.1
@@ -52,6 +52,7 @@ function setup() {
   const hold = (seconds: number, attack = true) => {
     for (let i = 0; i < Math.round(seconds / STEP); i++) {
       interaction.updateTarget(viewer)
+      growBerries(world.props, STEP, emit)
       interaction.step(STEP, attack)
     }
   }

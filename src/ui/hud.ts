@@ -1,7 +1,7 @@
 import { ENEMY_DEF, PROP_DEFS } from '../sim/constants'
 import { canCraft, RECIPES } from '../sim/crafting'
 import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
-import type { Target } from '../game/interaction'
+import type { Target } from '../sim/interaction'
 import { Minimap } from './minimap'
 
 const HANDLE = `<polygon points="7,28 10,29.5 22,8 19,6.5" fill="#8a5a32"/>`

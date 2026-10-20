@@ -1,11 +1,11 @@
-import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes } from '../sim/aim'
-import { resetProp, type PropData, type PropWorld } from '../sim/props'
-import { heightAt } from '../sim/world/terrain'
-import { LOCAL_PLAYER, NO_EMIT, type Emit } from '../sim/events'
-import { BASE_DAMAGE, BERRY_REGROW, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, TOOL_DEFS } from '../sim/constants'
+import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes } from './aim'
+import { resetProp, startRegrow, type PropData, type PropWorld } from './props'
+import { heightAt } from './world/terrain'
+import { LOCAL_PLAYER, NO_EMIT, type Emit } from './events'
+import { BASE_DAMAGE, ENEMY_DEF, HIT_COOLDOWN, PROP_DEFS, TOOL_DEFS } from './constants'
 import type { Enemies, EnemyData } from './enemies'
-import type { Inventory, ItemId } from '../sim/inventory'
-import type { Player } from '../sim/player'
+import type { Inventory, ItemId } from './inventory'
+import type { Player } from './player'
 import type { Pickups } from './pickups'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
@@ -15,7 +15,7 @@ export type Target = PropData | EnemyData
 const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
 
 /**
- * Objetivo, golpes, destrucción de props, recogida y rebrote de bayas; golpes a enemigos.
+ * Objetivo, golpes, destrucción de props y recogida de bayas (el rebrote es `growBerries`); golpes a enemigos.
  * Lo que sueltan árboles, rocas y enemigos cae al suelo (`pickups`); las bayas van directas al inventario.
  * Solo cambia el estado: lo que se ve (wobble, props ocultos, bayas) lo dibuja PropView desde los eventos.
  */
@@ -25,8 +25,6 @@ export class Interaction {
   private hitboxes: PropHitboxes
   /** El último rayo de puntería: de él sale el retroceso de los enemigos. */
   private ray: AimRay = aimRay({ pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 })
-  /** Segundos que faltan para que le vuelva a crecer una baya a cada arbusto incompleto. */
-  private regrowing = new Map<PropData, number>()
 
   constructor(
     private world: PropWorld,
@@ -50,10 +48,6 @@ export class Interaction {
    * `target` es null al aire y `dropped` dice si soltó algo (lo rompió, lo mató o cogió una baya).
    */
   step(dt: number, attackHeld: boolean): { target: Target | null; dropped: boolean } | null {
-    for (const [bush, left] of this.regrowing) {
-      if (left - dt > 1e-9) this.regrowing.set(bush, left - dt)
-      else this.growBerry(bush)
-    }
     this.cooldown = Math.max(0, this.cooldown - dt)
     if (!attackHeld || this.cooldown > 1e-9) return null
     const target = this.target
@@ -103,23 +97,15 @@ export class Interaction {
     if (bush.hp <= 0 || !this.inventory.canAdd(drop.item)) return false
     bush.hp--
     // El rebrote sigue su ritmo: recoger no reinicia el temporizador de la siguiente baya.
-    if (!this.regrowing.has(bush)) this.regrowing.set(bush, BERRY_REGROW)
+    startRegrow(bush)
     this.inventory.add(drop.item, drop.amount)
     this.emit({ type: 'berryTaken', id: bush.id, hp: bush.hp, by: LOCAL_PLAYER })
     return true
   }
 
-  private growBerry(bush: PropData) {
-    bush.hp++
-    this.emit({ type: 'berryGrew', id: bush.id, hp: bush.hp })
-    if (bush.hp < bush.maxHp) this.regrowing.set(bush, BERRY_REGROW)
-    else this.regrowing.delete(bush)
-  }
-
-  /** Reinicio de partida: todos los props como al generar la isla. */
+  /** Reinicio de partida: todos los props como al generar la isla, sin rebrotes pendientes. */
   reset() {
     for (const prop of this.world.props) resetProp(prop)
-    this.regrowing.clear()
     this.cooldown = 0
     this.target = null
   }

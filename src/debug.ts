@@ -1,4 +1,4 @@
-import { aimPose } from './game/interaction'
+import { aimPose } from './sim/interaction'
 import type { Game } from './game/Game'
 import type { ItemId } from './sim/inventory'
 import type { PlayerInput } from './sim/player'
@@ -6,8 +6,8 @@ import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
 import { heightAt, WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './sim/constants'
-import { ENEMY_AIM_HEIGHT } from './game/enemies'
-import { campfireSpot } from './game/campfire'
+import { ENEMY_AIM_HEIGHT } from './sim/enemies'
+import { campfireSpot } from './sim/campfires'
 
 /** Helpers de depuración y pruebas, solo en desarrollo. */
 export function installDebug(game: Game) {
@@ -79,7 +79,7 @@ export function installDebug(game: Game) {
     setCrafting: (open: boolean) => game.setCrafting(open),
     campfires: () => game.campfires.list.map(({ id, x, y, z }) => ({ id, x, y, z })),
     /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo. */
-    placeCampfire: (x: number, z: number, yaw = 0) => game.campfires.place(campfireSpot({ x, z }, yaw, [world.grid, game.campfires.grid])),
+    placeCampfire: (x: number, z: number, yaw = 0) => game.campfires.place(campfireSpot({ x, z }, yaw, [world.grid, game.campfires.grid])) !== null,
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: targetPropId,
     /** Objetos en el suelo, por recoger. */

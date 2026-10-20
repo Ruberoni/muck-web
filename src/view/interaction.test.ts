@@ -1,12 +1,13 @@
 import * as THREE from 'three'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPropWorld, type PropData } from '../sim/props'
-import { PropView, type PropInstance } from '../view/PropView'
+import { createPropWorld, growBerries, type PropData } from '../sim/props'
+import { PropView, type PropInstance } from './PropView'
 import { heightAt } from '../sim/world/terrain'
 import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from '../sim/constants'
-import { aimPose, hitDamage, Interaction } from './interaction'
+import type { SimEventData } from '../sim/events'
+import { aimPose, hitDamage, Interaction } from '../sim/interaction'
 import { Inventory, type ItemId } from '../sim/inventory'
-import { Pickups } from './pickups'
+import { Pickups } from '../sim/pickups'
 
 function setup() {
   const world = createPropWorld()
@@ -14,7 +15,8 @@ function setup() {
   const inventory = new Inventory()
   const pickups = new Pickups([world.grid], () => 0.5)
   // La vista recibe cada evento al momento, como si se presentara al final de cada paso.
-  const interaction = new Interaction(world, inventory, pickups, undefined, (e) => view.present([e]))
+  const emit = (e: SimEventData) => view.present([e])
+  const interaction = new Interaction(world, inventory, pickups, undefined, emit)
   // Desde dónde y hacia dónde mira el jugador.
   const viewer = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }
 
@@ -29,8 +31,13 @@ function setup() {
   const hold = (seconds: number) => {
     for (let i = 0; i < Math.round(seconds / STEP); i++) {
       interaction.updateTarget(viewer)
-      interaction.step(STEP, true)
+      step(true)
     }
+  }
+  /** Un paso fijo: rebrote y golpe, en el orden de Game. */
+  const step = (attack: boolean) => {
+    growBerries(world.props, STEP, emit)
+    return interaction.step(STEP, attack)
   }
   /** Piezas de `item` en el suelo. */
   const onGround = (item: ItemId) => pickups.list.filter((p) => p.item === item).length
@@ -38,7 +45,7 @@ function setup() {
     interaction.reset()
     view.reset()
   }
-  return { world, view, inventory, pickups, interaction, viewer, aimAt, hold, onGround, reset }
+  return { world, view, inventory, pickups, interaction, viewer, aimAt, hold, step, onGround, reset }
 }
 
 describe('recolección', () => {
@@ -148,7 +155,7 @@ describe('bayas', () => {
 
   const firstBush = () => ctx.world.props.find((p) => p.kind === 'bush')!
   const wait = (seconds: number) => {
-    for (let i = 0; i < Math.round(seconds / STEP); i++) ctx.interaction.step(STEP, false)
+    for (let i = 0; i < Math.round(seconds / STEP); i++) ctx.step(false)
   }
   const isHidden = ({ mesh, index }: PropInstance) => {
     const m = new THREE.Matrix4()
