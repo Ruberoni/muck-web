@@ -6,7 +6,7 @@ import type { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
 import { CampfireView } from '../view/CampfireView'
-import { LOCAL_PLAYER, type SimEvent } from '../sim/events'
+import type { SimEvent } from '../sim/events'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
@@ -19,7 +19,7 @@ import { CLICK, Input, RIGHT_CLICK } from './input'
 import { cycleSlot, SLOT_COUNT } from '../sim/inventory'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/player'
-import type { Simulation } from '../sim/Simulation'
+import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import { LocalSession, type Session } from '../net/session'
 
 export type GameState = 'menu' | 'playing' | 'paused' | 'dead'
@@ -94,7 +94,7 @@ export class Game {
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
-    const { inventory } = this.sim.slot
+    const { inventory } = this.slot
     this.hud.setInventory(inventory)
     inventory.onChange(() => this.hud.setInventory(inventory))
     this.sound.setVolume(this.settings.volume)
@@ -131,6 +131,11 @@ export class Game {
     return this.session.sim
   }
 
+  /** El jugador de este cliente. */
+  get slot(): PlayerSlot {
+    return this.session.slot
+  }
+
   setState(state: GameState) {
     if (state === 'playing' && this.state !== 'playing') {
       // Al empezar o reanudar no se interpola desde la posición de antes de la pausa.
@@ -153,7 +158,7 @@ export class Game {
     this.audio.reset()
     this.lookFromPlayer()
     this.acc = 0
-    this.placeCamera(this.sim.slot.player.pos)
+    this.placeCamera(this.slot.player.pos)
     if (this.state === 'dead') this.setState('menu')
   }
 
@@ -173,11 +178,11 @@ export class Game {
 
   /** Truco de debug: mueve al jugador y la cámara. */
   teleport(x: number, z: number, yaw = this.look.yaw, pitch = this.look.pitch) {
-    this.sim.teleport(x, z, yaw, pitch)
+    this.sim.teleport(this.session.me, x, z, yaw, pitch)
     this.lookFromPlayer()
     this.acc = 0
     this.audio.reset()
-    this.placeCamera(this.sim.slot.player.pos)
+    this.placeCamera(this.slot.player.pos)
   }
 
   /** Ejecuta pasos fijos de forma síncrona y renderiza un frame (debug y pruebas). */
@@ -227,7 +232,7 @@ export class Game {
    */
   private actions(presses: ReadonlySet<string>, wheel: number): ActionData[] {
     const actions: ActionData[] = []
-    const { inventory } = this.sim.slot
+    const { inventory } = this.slot
     // La casilla que quedará elegida tras las acciones de este paso.
     let selected = inventory.selected
     if (presses.has('KeyC')) this.setCrafting(!this.craftingOpen)
@@ -265,9 +270,9 @@ export class Game {
 
   /** Efectos de los eventos de un paso: HUD, mano y sonido. La simulación no los llama directamente. */
   private present(events: readonly SimEvent[]) {
-    const { sim } = this
-    this.audio.step(STEP, sim.slot.player, sim.enemies.list)
-    this.audio.events(events, LOCAL_PLAYER, (id) => sim.world.props[id].kind)
+    const { sim, slot } = this
+    this.audio.step(STEP, slot.player, sim.enemies.list)
+    this.audio.events(events, slot.id, (id) => sim.world.props[id].kind)
     this.propView.present(events)
     this.enemyView.present(events)
     for (const e of events) {
@@ -300,7 +305,7 @@ export class Game {
 
   /** La cámara mira hacia donde mira el jugador (al empezar, al reiniciar o tras un teletransporte). */
   private lookFromPlayer() {
-    const { yaw, pitch } = this.sim.slot.player
+    const { yaw, pitch } = this.slot.player
     this.look.yaw = yaw
     this.look.pitch = pitch
   }
@@ -311,8 +316,8 @@ export class Game {
   }
 
   private render(alpha: number, dt: number, time: number) {
-    const { sim, look } = this
-    const { slot, campfires, enemies } = sim
+    const { sim, look, slot } = this
+    const { campfires, enemies } = sim
     const p = slot.player
     this.placeCamera(interpolate(p, this.snapPlayer ? 1 : alpha, this.renderPos))
     this.enemyView.update(dt, enemies.list, alpha)
@@ -337,8 +342,8 @@ export class Game {
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
-    else if (slot.hotbarFull && !sim.interaction.target) this.hud.setPrompt('Hotbar llena')
-    else this.hud.setTarget(sim.interaction.target)
+    else if (slot.hotbarFull && !slot.target) this.hud.setPrompt('Hotbar llena')
+    else this.hud.setTarget(slot.target)
     this.hud.setDay(sim.clock.day)
     this.hud.minimap.draw({ x: this.renderPos.x, z: this.renderPos.z, yaw: look.yaw, campfires: campfires.list, enemies: enemies.list })
     this.updateAmbient(dt)

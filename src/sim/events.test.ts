@@ -6,7 +6,7 @@ import { mulberry32 } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
 import { BERRY_REGROW, ENEMY_RADIUS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from './constants'
 import { Enemies } from './enemies'
-import { aimPose, Interaction } from './interaction'
+import { aimPose, createCombat, Interaction, type Fighter } from './interaction'
 import { Inventory } from './inventory'
 import { Pickups } from './pickups'
 
@@ -40,20 +40,21 @@ function setup() {
   const inventory = new Inventory()
   const enemies = new Enemies([world.grid], mulberry32(7), emit)
   const pickups = new Pickups([world.grid], mulberry32(3), emit)
-  const interaction = new Interaction(world, inventory, pickups, enemies, emit)
+  const interaction = new Interaction(world, pickups, enemies, emit)
   const viewer = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }
+  const fighter: Fighter = { id: 0, player: viewer, inventory, combat: createCombat(), target: null }
   const aimAt = (prop: PropData) => {
     const isFree = (x: number, z: number) => world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
     const pose = aimPose(prop, isFree)
     const y = heightAt(pose.x, pose.z)
     Object.assign(viewer, { pos: { x: pose.x, y, z: pose.z }, yaw: pose.yaw, pitch: Math.atan2(pose.aimY - y - EYE_HEIGHT, pose.horizontal) })
-    interaction.updateTarget(viewer)
+    interaction.updateTarget(fighter)
   }
   const hold = (seconds: number, attack = true) => {
     for (let i = 0; i < Math.round(seconds / STEP); i++) {
-      interaction.updateTarget(viewer)
+      interaction.updateTarget(fighter)
       growBerries(world.props, STEP, emit)
-      interaction.step(STEP, attack)
+      interaction.step(fighter, STEP, attack)
     }
   }
   return { events, inventory, enemies, pickups, interaction, aimAt, hold }
@@ -101,10 +102,10 @@ describe('eventos de la simulación', () => {
     const y = heightAt(spot.x, spot.z)
     ctx.pickups.drop('stone', 2, spot.x, y + 1, spot.z)
     const away = { x: spot.x + 100, y: 0, z: spot.z }
-    for (let i = 0; i < Math.round((PICKUP_DELAY + 0.5) / STEP); i++) ctx.pickups.step(STEP, away, ctx.inventory)
+    for (let i = 0; i < Math.round((PICKUP_DELAY + 0.5) / STEP); i++) ctx.pickups.step(STEP, [{ id: 0, pos: away, inventory: ctx.inventory }])
     const ids = ctx.pickups.list.map((p) => p.id)
     ctx.events.length = 0
-    for (const p of [...ctx.pickups.list]) ctx.pickups.step(STEP, { ...p.pos }, ctx.inventory)
+    for (const p of [...ctx.pickups.list]) ctx.pickups.step(STEP, [{ id: 0, pos: { ...p.pos }, inventory: ctx.inventory }])
     expect(ctx.events).toEqual(ids.map((id) => ({ type: 'pickupCollected', id, by: 0 })))
   })
 
@@ -112,7 +113,7 @@ describe('eventos de la simulación', () => {
     const ctx = setup()
     const player = { ...spot }
     const run = (seconds: number, phase = NIGHT) => {
-      for (let i = 0; i < Math.round(seconds / STEP); i++) ctx.enemies.step(STEP, player, phase, 1)
+      for (let i = 0; i < Math.round(seconds / STEP); i++) ctx.enemies.step(STEP, [{ id: 0, pos: player, alive: true }], phase, 1)
     }
     run(STEP)
     // Aparece y en el mismo paso ya da el primer paso: `prev` es donde apareció.

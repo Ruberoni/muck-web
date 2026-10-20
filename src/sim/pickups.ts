@@ -1,5 +1,5 @@
 import { heightAt, WATER_LEVEL } from './world/terrain'
-import { LOCAL_PLAYER, NO_EMIT, type Emit } from './events'
+import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import { GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS } from './constants'
 import type { Inventory, ItemId } from './inventory'
@@ -27,6 +27,21 @@ export interface Pickup {
   age: number
   /** Giro inicial del modelo, para que no giren todas a la vez. */
   spin: number
+  /** Hacia quién se desliza con el imán: lo sigue mientras pueda cogerlo, aunque otro se acerque más. */
+  claimedBy: PlayerId | null
+}
+
+/** Un jugador que puede recoger: está en el mundo y vivo. */
+export interface Collector {
+  id: PlayerId
+  pos: Vec3
+  inventory: Pick<Inventory, 'add' | 'canAdd'>
+}
+
+/** Lo que pasa a un jugador en un paso: unidades recogidas y si está encima de algo que no le cabe. */
+export interface CollectResult {
+  collected: number
+  full: boolean
 }
 
 /** Los objetos del suelo como datos, para guardar y restaurar la partida. */
@@ -41,7 +56,7 @@ const copyPickup = (p: Pickup): Pickup => ({ ...p, pos: { ...p.pos }, prev: { ..
 const groundAt = (x: number, z: number) => Math.max(heightAt(x, z), WATER_LEVEL)
 
 /**
- * Objetos en el suelo: caen al soltarse, se deslizan hacia el jugador si caben y se recogen al pasar por encima.
+ * Objetos en el suelo: caen al soltarse, se deslizan hacia un jugador si le caben y se recogen al pasar por encima.
  * Los dibuja PickupView.
  */
 export class Pickups {
@@ -80,18 +95,20 @@ export class Pickups {
       grounded: false,
       age: 0,
       spin: this.rng() * Math.PI * 2,
+      claimedBy: null,
     }
     this.list.push(pickup)
     this.emit({ type: 'pickupSpawn', id: pickup.id, item, amount })
   }
 
   /**
-   * Paso fijo: caída, imán y recogida. Devuelve cuántas unidades se recogieron y si el jugador
-   * está encima de alguna que no cabe en la hotbar (se queda en el suelo).
+   * Paso fijo: caída, imán y recogida. `collectors` van ordenados por id. Cada objeto lo recoge el más cercano
+   * que lo tenga encima y le quepa; si no, se desliza hacia el más cercano dentro del imán al que le quepa
+   * (empate: el de menor id) y le sigue hasta que deje de caberle o se aleje. Devuelve, para cada jugador
+   * (en el mismo orden), cuántas unidades recogió y si está encima de alguna que no le cabe (se queda en el suelo).
    */
-  step(dt: number, player: Vec3, inventory: Pick<Inventory, 'add' | 'canAdd'>): { collected: number; full: boolean } {
-    let collected = 0
-    let full = false
+  step(dt: number, collectors: readonly Collector[]): CollectResult[] {
+    const results = collectors.map((): CollectResult => ({ collected: 0, full: false }))
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i]
       p.prev.x = p.pos.x
@@ -102,26 +119,44 @@ export class Pickups {
         this.fall(p, dt)
         continue
       }
-      if (p.age < PICKUP_DELAY - 1e-9 || Math.abs(player.y - p.pos.y) > REACH_Y) continue
-      const dx = player.x - p.pos.x
-      const dz = player.z - p.pos.z
-      const d = Math.hypot(dx, dz)
-      if (d > PICKUP_MAGNET) continue
-      if (d <= PICKUP_RADIUS) {
-        if (inventory.add(p.item, p.amount)) {
-          this.list.splice(i, 1)
-          collected += p.amount
-          this.emit({ type: 'pickupCollected', id: p.id, by: LOCAL_PLAYER })
-        } else full = true
+      if (p.age < PICKUP_DELAY - 1e-9) continue
+      // Quién lo tiene a su alcance, del más cercano al más lejano.
+      const near: { index: number; d: number }[] = []
+      collectors.forEach((c, index) => {
+        if (Math.abs(c.pos.y - p.pos.y) > REACH_Y) return
+        const d = Math.hypot(c.pos.x - p.pos.x, c.pos.z - p.pos.z)
+        if (d <= PICKUP_MAGNET) near.push({ index, d })
+      })
+      if (!near.length) {
+        p.claimedBy = null
         continue
       }
-      if (!inventory.canAdd(p.item)) continue
-      const move = Math.min(PICKUP_MAGNET_SPEED * dt, d)
-      p.pos.x += (dx / d) * move
-      p.pos.z += (dz / d) * move
+      near.sort((a, b) => a.d - b.d || a.index - b.index)
+      const onTop = near.filter(({ d }) => d <= PICKUP_RADIUS)
+      const taker = onTop.find(({ index }) => collectors[index].inventory.add(p.item, p.amount))
+      if (taker) {
+        const c = collectors[taker.index]
+        this.list.splice(i, 1)
+        results[taker.index].collected += p.amount
+        this.emit({ type: 'pickupCollected', id: p.id, by: c.id })
+        continue
+      }
+      // A quien lo tiene encima sin que le quepa se le avisa; si a otro le cabe, se va hacia él.
+      for (const { index } of onTop) results[index].full = true
+      const fits = near.filter(({ index }) => collectors[index].inventory.canAdd(p.item))
+      const claim = fits.find(({ index }) => collectors[index].id === p.claimedBy) ?? fits[0]
+      if (!claim) {
+        p.claimedBy = null
+        continue
+      }
+      const c = collectors[claim.index]
+      p.claimedBy = c.id
+      const move = Math.min(PICKUP_MAGNET_SPEED * dt, claim.d)
+      p.pos.x += ((c.pos.x - p.pos.x) / claim.d) * move
+      p.pos.z += ((c.pos.z - p.pos.z) / claim.d) * move
       p.pos.y = groundAt(p.pos.x, p.pos.z)
     }
-    return { collected, full }
+    return results
   }
 
   private fall(p: Pickup, dt: number) {

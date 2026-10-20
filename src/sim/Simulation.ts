@@ -1,11 +1,11 @@
-import { buttonsInput, Btn, type Action, type Move } from './commands'
+import { buttonsInput, Btn, type PlayerCommands } from './commands'
 import { Campfires, campfireSpot, type CampfiresState, type CampfireSpot } from './campfires'
 import { resolveCircle } from './collision'
 import { BERRY_FOOD, PLAYER_RADIUS, STEP } from './constants'
 import { craft, RECIPES } from './crafting'
 import { Enemies, type EnemiesState } from './enemies'
-import { EventLog, LOCAL_PLAYER, type PlayerId, type SimEvent } from './events'
-import { Interaction } from './interaction'
+import { EventLog, type PlayerId, type SimEvent } from './events'
+import { createCombat, Interaction, type Combat, type Fighter } from './interaction'
 import { Inventory, type InventoryState } from './inventory'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, stepPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
@@ -16,16 +16,37 @@ import { DAY_LENGTH, DayClock, euclideanModulo, START_PHASE } from './world/dayc
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
 
 const SPAWN_CLEARANCE = 3
+/** Los jugadores que no son el primero aparecen en un anillo a esta distancia del punto de aparición. */
+const SPAWN_RING = 2.5
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 
-/** Un jugador en la simulación: su cuerpo, su inventario y lo que lleva aplicado de sus acciones. */
-export interface PlayerSlot {
-  id: PlayerId
+/**
+ * Conexión de un jugador. `present` y `absent` (conectado pero sin mandar comandos) están en el mundo;
+ * `gone` (socket cerrado) no: ni se mueve, ni es objetivo, ni cuenta, pero conserva su hueco para cuando vuelva.
+ */
+export type Connection = 'present' | 'absent' | 'gone'
+
+/** Un jugador en la simulación: su cuerpo, su inventario, sus golpes y lo que lleva aplicado de sus acciones. */
+export interface PlayerSlot extends Fighter {
   player: Player
-  inventory: Inventory
   /** Está encima de algo que no cabe en la hotbar. */
   hotbarFull: boolean
   alive: boolean
+  connection: Connection
   /** `seq` de la última acción aplicada: las de `seq` menor o igual se descartan. */
+  appliedSeq: number
+  spawn: { x: number; z: number }
+}
+
+/** Un PlayerSlot como datos (el objetivo no se guarda: se recalcula en cada paso). */
+export interface PlayerSlotState {
+  id: PlayerId
+  player: Player
+  inventory: InventoryState
+  combat: Combat
+  hotbarFull: boolean
+  alive: boolean
+  connection: Connection
   appliedSeq: number
   spawn: { x: number; z: number }
 }
@@ -40,24 +61,26 @@ export interface SimState {
   enemies: EnemiesState
   pickups: PickupsState
   campfires: CampfiresState
-  combat: { cooldown: number; pendingSwing: boolean }
-  player: {
-    id: PlayerId
-    player: Player
-    inventory: InventoryState
-    hotbarFull: boolean
-    alive: boolean
-    appliedSeq: number
-    spawn: { x: number; z: number }
-  }
+  /** Todos los jugadores, también los `gone`, por id. */
+  players: PlayerSlotState[]
+  nextPlayerId: number
 }
 
 const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ...p.prev }, vel: { ...p.vel } })
 
+/** Lo que el jugador quiere hacer en este paso además de moverse. */
+interface Intent {
+  attack: boolean
+  swing: boolean
+  place: boolean
+  eat: boolean
+}
+
 /**
- * La partida sin three.js ni DOM: isla, reloj, enemigos, objetos del suelo, fogatas y un jugador (PR 8: N).
- * Avanza con `step(move, actions)` y devuelve lo que ha pasado como eventos; la vista, el HUD y el sonido
+ * La partida sin three.js ni DOM: isla, reloj, enemigos, objetos del suelo, fogatas y los jugadores.
+ * Avanza con `step(commands)` y devuelve lo que ha pasado como eventos; la vista, el HUD y el sonido
  * solo leen su estado y sus eventos. Determinista para una misma semilla y unos mismos comandos.
+ * Los jugadores se recorren siempre por id, así el resultado no depende del orden en que llegan los comandos.
  */
 export class Simulation {
   readonly world: PropWorld
@@ -66,14 +89,18 @@ export class Simulation {
   readonly enemies: Enemies
   readonly pickups: Pickups
   readonly interaction: Interaction
-  readonly slot: PlayerSlot
+  /** Todos los jugadores con hueco en la isla, también los `gone`. Se añaden con `addPlayer`. */
+  readonly players = new Map<PlayerId, PlayerSlot>()
   readonly env: PlayerEnv
+  /** Punto de aparición: el primer jugador aparece aquí y los demás en un anillo alrededor. */
+  readonly spawnCenter: { x: number; z: number }
   /** Azar de la simulación (enemigos, objetos que caen). */
   private rng: Rng
   /** Lo que pasa en cada paso, sellado con su tick. Lo emitido fuera de un paso sale con el siguiente. */
   private events = new EventLog()
   /** Tick en el que empezó el día 1: el reloj sale de `tick - worldStartTick`. */
   private worldStartTick = 0
+  private nextPlayerId = 0
   private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
 
   constructor(seed: number, placements: readonly PropPlacement[] = generatePropPlacements()) {
@@ -84,8 +111,7 @@ export class Simulation {
     this.campfires = new Campfires(emit)
     this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng, emit)
     this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng, emit)
-    const inventory = new Inventory()
-    this.interaction = new Interaction(world, inventory, this.pickups, this.enemies, emit)
+    this.interaction = new Interaction(world, this.pickups, this.enemies, emit)
     this.env = {
       heightAt,
       collide: (pos) => {
@@ -93,16 +119,7 @@ export class Simulation {
         return resolveCircle(pos, PLAYER_RADIUS, this.campfires.grid) || props
       },
     }
-    const spawn = findSpawn(world)
-    this.slot = {
-      id: LOCAL_PLAYER,
-      player: createPlayer(this.env, spawn.x, spawn.z),
-      inventory,
-      hotbarFull: false,
-      alive: true,
-      appliedSeq: 0,
-      spawn,
-    }
+    this.spawnCenter = findSpawn(world)
   }
 
   /** Último tick simulado. */
@@ -110,90 +127,166 @@ export class Simulation {
     return this.events.tick
   }
 
+  /** El jugador `id`; lanza si no existe. */
+  slot(id: PlayerId): PlayerSlot {
+    const slot = this.players.get(id)
+    if (!slot) throw new Error(`no existe el jugador ${id}`)
+    return slot
+  }
+
+  /** Jugadores que están en el mundo (no `gone`), por id. */
+  inWorld(): PlayerSlot[] {
+    return [...this.players.values()].filter((s) => s.connection !== 'gone').sort((a, b) => a.id - b.id)
+  }
+
+  /** Un jugador nuevo en su punto de aparición, presente y con el inventario vacío. */
+  addPlayer(id: PlayerId = this.nextPlayerId): PlayerSlot {
+    if (this.players.has(id)) throw new Error(`ya existe el jugador ${id}`)
+    this.nextPlayerId = Math.max(this.nextPlayerId, id + 1)
+    const spawn = this.spawnPoint(id)
+    const slot: PlayerSlot = {
+      id,
+      player: createPlayer(this.env, spawn.x, spawn.z),
+      inventory: new Inventory(),
+      combat: createCombat(),
+      target: null,
+      hotbarFull: false,
+      alive: true,
+      connection: 'present',
+      appliedSeq: 0,
+      spawn,
+    }
+    this.players.set(id, slot)
+    return slot
+  }
+
+  /** Quita del todo el hueco de un jugador (la sala decide cuándo; mientras, `gone` lo conserva). */
+  removePlayer(id: PlayerId) {
+    this.players.delete(id)
+  }
+
+  setConnection(id: PlayerId, connection: Connection) {
+    this.slot(id).connection = connection
+  }
+
   /**
-   * Un tick: aplica el `Move` y las acciones de ese tick y avanza el mundo. Devuelve sus eventos.
-   * Elegir casilla y fabricar van antes de moverse; golpear, colocar y comer, en el mismo punto del paso
-   * que antes de haber comandos.
+   * Un tick: aplica los comandos de ese tick de cada jugador y avanza el mundo. Devuelve sus eventos.
+   * Un jugador sin comandos en este tick se queda quieto, mirando a donde miraba. Elegir casilla y fabricar
+   * van antes de moverse; golpear, colocar y comer, después de que se muevan todos y los enemigos.
    */
-  step(move: Move, actions: readonly Action[]): SimEvent[] {
+  step(commands: ReadonlyMap<PlayerId, PlayerCommands>): SimEvent[] {
     this.events.tick++
-    const { slot, interaction } = this
-    const { player, inventory } = slot
-    player.yaw = move.yaw
-    player.pitch = move.pitch
-
-    let swing = false
-    let place = false
-    let eatBerry = false
-    for (const action of [...actions].sort((a, b) => a.seq - b.seq)) {
-      if (action.seq <= slot.appliedSeq) continue
-      slot.appliedSeq = action.seq
-      switch (action.kind) {
-        case 'select':
-          inventory.select(action.slot)
-          break
-        case 'craft':
-          this.craft(action.recipe)
-          break
-        case 'swing':
-          swing = true
-          break
-        case 'place':
-          place = true
-          break
-        case 'eat':
-          eatBerry = true
-          break
+    const present = this.inWorld()
+    const living = present.filter((s) => s.alive)
+    const intents = new Map<PlayerSlot, Intent>()
+    for (const slot of present) {
+      const command = commands.get(slot.id)
+      const intent = this.applyActions(slot, command)
+      if (!slot.alive) continue
+      intents.set(slot, intent)
+      const { player } = slot
+      if (command) {
+        player.yaw = command.move.yaw
+        player.pitch = command.move.pitch
       }
+      stepPlayer(player, buttonsInput(command?.move.buttons ?? 0), this.env, STEP)
     }
 
-    stepPlayer(player, buttonsInput(move.buttons), this.env, STEP)
     this.syncClock()
-    const damage = this.enemies.step(STEP, player.pos, this.clock.phase, this.clock.day)
-    if (damage > 0) {
+    const prey = present.map(({ id, player, alive }) => ({ id, pos: player.pos, alive }))
+    for (const { playerId, damage } of this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)) {
+      const { player } = this.slot(playerId)
       player.health = Math.max(0, player.health - damage)
-      this.events.emit({ type: 'playerHurt', id: slot.id, dmg: damage })
+      this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
     }
-    // Desde la posición simulada (no interpolada): golpear no depende del framerate.
-    interaction.updateTarget(player)
-    // Con la fogata en la mano el clic la coloca en vez de golpear, y no queda ningún golpe pendiente.
-    const placing = inventory.selectedItem === 'campfire'
-    if (placing) interaction.pendingSwing = false
-    growBerries(this.world.props, STEP, this.events.emit)
-    interaction.step(STEP, !placing && (move.buttons & Btn.Attack) !== 0, !placing && swing)
-    if (placing && place) this.placeCampfire()
-    slot.hotbarFull = this.pickups.step(STEP, player.pos, inventory).full
 
-    if (eatBerry) this.eatBerry()
-    stepSurvival(player, STEP)
-    if (isDead(player)) {
-      slot.alive = false
-      this.events.emit({ type: 'playerDied', id: slot.id })
+    growBerries(this.world.props, STEP, this.events.emit)
+    for (const slot of living) {
+      const intent = intents.get(slot)!
+      // Desde la posición simulada (no interpolada): golpear no depende del framerate.
+      this.interaction.updateTarget(slot)
+      // Con la fogata en la mano el clic la coloca en vez de golpear, y no queda ningún golpe pendiente.
+      const placing = slot.inventory.selectedItem === 'campfire'
+      if (placing) slot.combat.pendingSwing = false
+      this.interaction.step(slot, STEP, !placing && intent.attack, !placing && intent.swing)
+      if (placing && intent.place) this.placeCampfire(slot)
+    }
+    // Lo que rompió o mató otro jugador en este paso deja de ser objetivo de los demás.
+    for (const slot of living) if (slot.target && !slot.target.alive) slot.target = null
+
+    const collected = this.pickups.step(STEP, living.map(({ id, player, inventory }) => ({ id, pos: player.pos, inventory })))
+    living.forEach((slot, i) => (slot.hotbarFull = collected[i].full))
+
+    for (const slot of living) {
+      if (intents.get(slot)!.eat) this.eatBerry(slot)
+      stepSurvival(slot.player, STEP)
+      if (isDead(slot.player)) {
+        slot.alive = false
+        this.events.emit({ type: 'playerDied', id: slot.id })
+      }
     }
     return this.events.drain()
   }
 
-  /** Fabrica la receta por índice (el de su tecla menos 1). */
-  craft(index: number): boolean {
+  /**
+   * Aplica una vez y en orden de `seq` las acciones nuevas de un jugador: elegir casilla y fabricar en el acto;
+   * golpear, colocar y comer se devuelven para su momento del paso. Las de un muerto se descartan.
+   */
+  private applyActions(slot: PlayerSlot, command: PlayerCommands | undefined): Intent {
+    const intent: Intent = { attack: ((command?.move.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false }
+    if (!command) return intent
+    for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
+      if (action.seq <= slot.appliedSeq) continue
+      slot.appliedSeq = action.seq
+      if (!slot.alive) continue
+      switch (action.kind) {
+        case 'select':
+          slot.inventory.select(action.slot)
+          break
+        case 'craft':
+          this.craft(slot.id, action.recipe)
+          break
+        case 'swing':
+          intent.swing = true
+          break
+        case 'place':
+          intent.place = true
+          break
+        case 'eat':
+          intent.eat = true
+          break
+      }
+    }
+    return intent
+  }
+
+  /** El jugador `id` fabrica la receta por índice (el de su tecla menos 1). */
+  craft(id: PlayerId, index: number): boolean {
     const recipe = RECIPES[index]
-    const ok = recipe ? craft(this.slot.inventory, recipe) : false
-    if (ok) this.events.emit({ type: 'playerCrafted', id: this.slot.id, recipe: index })
+    const ok = recipe ? craft(this.slot(id).inventory, recipe) : false
+    if (ok) this.events.emit({ type: 'playerCrafted', id, recipe: index })
     return ok
   }
 
-  /** Partida nueva: inventario vacío, isla restaurada, reloj al principio y jugador en el punto de aparición. */
+  /**
+   * Partida nueva: isla restaurada, reloj al principio y todos los jugadores (también los `gone`) vivos,
+   * con el inventario vacío y en su punto de aparición.
+   */
   reset() {
     // Lo que quedara por presentar es de la partida anterior.
     this.events.drain()
-    const { slot } = this
-    slot.inventory.clear()
     this.interaction.reset()
     this.enemies.reset()
     this.pickups.clear()
     this.campfires.clear()
-    slot.hotbarFull = false
-    slot.alive = true
-    Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
+    for (const slot of this.players.values()) {
+      slot.inventory.clear()
+      Object.assign(slot.combat, createCombat())
+      slot.target = null
+      slot.hotbarFull = false
+      slot.alive = true
+      Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
+    }
     this.worldStartTick = this.tick
     this.syncClock()
     this.events.emit({ type: 'worldReset', worldStartTick: this.worldStartTick })
@@ -208,15 +301,14 @@ export class Simulation {
     this.events.emit({ type: 'clockSet', worldStartTick: this.worldStartTick })
   }
 
-  teleport(x: number, z: number, yaw: number, pitch: number) {
-    const { player } = this.slot
+  teleport(id: PlayerId, x: number, z: number, yaw: number, pitch: number) {
+    const { player } = this.slot(id)
     teleportPlayer(player, this.env, x, z, yaw)
     player.pitch = pitch
   }
 
   /** Estado completo como datos JSON (sin referencias a la simulación): basta con él y la isla para seguir. */
   toJSON(): SimState {
-    const { slot, interaction } = this
     return {
       tick: this.tick,
       worldStartTick: this.worldStartTick,
@@ -227,16 +319,20 @@ export class Simulation {
       enemies: this.enemies.save(),
       pickups: this.pickups.save(),
       campfires: this.campfires.save(),
-      combat: { cooldown: interaction.cooldown, pendingSwing: interaction.pendingSwing },
-      player: {
-        id: slot.id,
-        player: copyPlayer(slot.player),
-        inventory: slot.inventory.save(),
-        hotbarFull: slot.hotbarFull,
-        alive: slot.alive,
-        appliedSeq: slot.appliedSeq,
-        spawn: { ...slot.spawn },
-      },
+      players: [...this.players.values()]
+        .sort((a, b) => a.id - b.id)
+        .map((slot) => ({
+          id: slot.id,
+          player: copyPlayer(slot.player),
+          inventory: slot.inventory.save(),
+          combat: { ...slot.combat },
+          hotbarFull: slot.hotbarFull,
+          alive: slot.alive,
+          connection: slot.connection,
+          appliedSeq: slot.appliedSeq,
+          spawn: { ...slot.spawn },
+        })),
+      nextPlayerId: this.nextPlayerId,
     }
   }
 
@@ -256,33 +352,43 @@ export class Simulation {
     this.enemies.load(state.enemies)
     this.pickups.load(state.pickups)
     this.campfires.load(state.campfires)
-    this.interaction.cooldown = state.combat.cooldown
-    this.interaction.pendingSwing = state.combat.pendingSwing
-    const { slot } = this
-    const saved = state.player
-    slot.id = saved.id
-    Object.assign(slot.player, copyPlayer(saved.player))
-    slot.inventory.load(saved.inventory)
-    slot.hotbarFull = saved.hotbarFull
-    slot.alive = saved.alive
-    slot.appliedSeq = saved.appliedSeq
-    slot.spawn = { ...saved.spawn }
+    this.players.clear()
+    for (const saved of state.players) {
+      const slot = this.addPlayer(saved.id)
+      Object.assign(slot.player, copyPlayer(saved.player))
+      slot.inventory.load(saved.inventory)
+      Object.assign(slot.combat, saved.combat)
+      slot.hotbarFull = saved.hotbarFull
+      slot.alive = saved.alive
+      slot.connection = saved.connection
+      slot.appliedSeq = saved.appliedSeq
+      slot.spawn = { ...saved.spawn }
+    }
+    this.nextPlayerId = state.nextPlayerId
   }
 
   private syncClock() {
     this.clock.elapsed = (this.tick - this.worldStartTick) * STEP
   }
 
-  private placeCampfire() {
-    const { slot } = this
+  /** El primero (id 0) en el centro; los demás en un anillo alrededor, cada id en su ángulo. */
+  private spawnPoint(id: PlayerId) {
+    const { x, z } = this.spawnCenter
+    if (id === 0) return { x, z }
+    const angle = id * GOLDEN_ANGLE
+    return { x: x + Math.cos(angle) * SPAWN_RING, z: z + Math.sin(angle) * SPAWN_RING }
+  }
+
+  /** Desde la posición y el yaw del jugador en este tick; dos en el mismo tick se validan por orden de id. */
+  private placeCampfire(slot: PlayerSlot) {
     const spot = campfireSpot(slot.player.pos, slot.player.yaw, [this.world.grid, this.campfires.grid], this.spot)
     if (!this.campfires.place(spot, slot.id)) return
     this.events.emit({ type: 'playerPlaced', id: slot.id })
     slot.inventory.remove('campfire', 1)
   }
 
-  private eatBerry() {
-    const { inventory, player, id } = this.slot
+  private eatBerry(slot: PlayerSlot) {
+    const { inventory, player, id } = slot
     if (inventory.count('berry') === 0 || !eat(player, BERRY_FOOD)) return
     inventory.remove('berry', 1)
     this.events.emit({ type: 'playerAte', id })

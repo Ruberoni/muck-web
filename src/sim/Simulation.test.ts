@@ -18,15 +18,19 @@ interface Command {
   actions?: ActionData[]
 }
 
+/** Simulación con un solo jugador, el 0, como la de LocalSession. */
+function solo(seed: number) {
+  const sim = new Simulation(seed, placements)
+  sim.addPlayer(0)
+  return sim
+}
+
 /** Como LocalSession: numera las acciones a continuación de la última aplicada. */
-function step(sim: Simulation, { buttons = 0, yaw = sim.slot.player.yaw, pitch = sim.slot.player.pitch, actions = [] }: Command = {}) {
+function step(sim: Simulation, { buttons = 0, yaw = sim.slot(0).player.yaw, pitch = sim.slot(0).player.pitch, actions = [] }: Command = {}) {
   const tick = sim.tick + 1
-  let seq = sim.slot.appliedSeq
+  let seq = sim.slot(0).appliedSeq
   const move: Move = { tick, buttons, yaw, pitch }
-  return sim.step(
-    move,
-    actions.map((a): Action => ({ ...a, seq: ++seq, tick })),
-  )
+  return sim.step(new Map([[0, { move, actions: actions.map((a): Action => ({ ...a, seq: ++seq, tick })) }]]))
 }
 
 /** Teletransporta al jugador delante del prop, mirándolo, y devuelve la orientación para los `Move`. */
@@ -34,7 +38,7 @@ function aimAt(sim: Simulation, prop: PropData) {
   const isFree = (x: number, z: number) => sim.world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
   const pose = aimPose(prop, isFree)
   const pitch = Math.atan2(pose.aimY - heightAt(pose.x, pose.z) - EYE_HEIGHT, pose.horizontal)
-  sim.teleport(pose.x, pose.z, pose.yaw, pitch)
+  sim.teleport(0, pose.x, pose.z, pose.yaw, pitch)
   return { yaw: pose.yaw, pitch }
 }
 
@@ -43,7 +47,7 @@ const firstTree = (sim: Simulation) => sim.world.props.find((p) => p.kind === 't
 describe('Simulation', () => {
   it('con la misma semilla y los mismos comandos da el mismo resultado', () => {
     const run = () => {
-      const sim = new Simulation(42, placements)
+      const sim = solo(42)
       const look = aimAt(sim, firstTree(sim))
       sim.setPhase(NIGHT)
       const events = []
@@ -54,7 +58,7 @@ describe('Simulation', () => {
   })
 
   it('un clic (swing) golpea aunque el ataque no esté mantenido', () => {
-    const sim = new Simulation(1, placements)
+    const sim = solo(1)
     const tree = firstTree(sim)
     const look = aimAt(sim, tree)
     const events = step(sim, { ...look, actions: [{ kind: 'swing' }] })
@@ -63,7 +67,7 @@ describe('Simulation', () => {
   })
 
   it('un clic durante el cooldown queda pendiente y golpea al acabar, sin duplicar con el ataque mantenido', () => {
-    const sim = new Simulation(1, placements)
+    const sim = solo(1)
     const look = aimAt(sim, firstTree(sim))
     const swings: number[] = []
     const run = (ticks: number, command: Command) => {
@@ -83,38 +87,38 @@ describe('Simulation', () => {
   })
 
   it('una acción con seq ya aplicado se descarta', () => {
-    const sim = new Simulation(1, placements)
-    sim.slot.inventory.add('wood', 1)
-    sim.slot.inventory.add('stone', 1)
+    const sim = solo(1)
+    sim.slot(0).inventory.add('wood', 1)
+    sim.slot(0).inventory.add('stone', 1)
     const move = (tick: number): Move => ({ tick, buttons: 0, yaw: 0, pitch: 0 })
-    sim.step(move(1), [{ seq: 1, tick: 1, kind: 'select', slot: 1 }])
-    expect(sim.slot.inventory.selected).toBe(1)
+    sim.step(new Map([[0, { move: move(1), actions: [{ seq: 1, tick: 1, kind: 'select', slot: 1 }] }]]))
+    expect(sim.slot(0).inventory.selected).toBe(1)
     // Reenviada (p. ej. porque no llegó el ack): no se vuelve a aplicar.
-    sim.slot.inventory.select(0)
-    sim.step(move(2), [{ seq: 1, tick: 1, kind: 'select', slot: 1 }])
-    expect(sim.slot.inventory.selected).toBe(0)
-    expect(sim.slot.appliedSeq).toBe(1)
+    sim.slot(0).inventory.select(0)
+    sim.step(new Map([[0, { move: move(2), actions: [{ seq: 1, tick: 1, kind: 'select', slot: 1 }] }]]))
+    expect(sim.slot(0).inventory.selected).toBe(0)
+    expect(sim.slot(0).appliedSeq).toBe(1)
   })
 
   it('el reloj sale del tick; setPhase y reset lo cambian y lo avisan con un evento', () => {
-    const sim = new Simulation(1, placements)
+    const sim = solo(1)
     for (let i = 0; i < 60; i++) step(sim)
     expect(sim.clock.elapsed).toBeCloseTo(1, 9)
     sim.setPhase(NIGHT)
     expect(sim.clock.phase).toBeCloseTo(NIGHT, 4)
     expect(step(sim).map((e) => e.type)).toContain('clockSet')
 
-    sim.slot.inventory.add('wood', 3)
+    sim.slot(0).inventory.add('wood', 3)
     sim.reset()
     expect(sim.clock.elapsed).toBe(0)
-    expect(sim.slot.inventory.toJSON()).toEqual({})
+    expect(sim.slot(0).inventory.toJSON()).toEqual({})
     const events = step(sim)
     expect(events[0]).toMatchObject({ type: 'worldReset', worldStartTick: sim.tick - 1 })
   })
 
   it('serializar, restaurar y seguir da lo mismo que no serializar', () => {
-    const a = new Simulation(7, placements)
-    const { inventory, player } = a.slot
+    const a = solo(7)
+    const { inventory, player } = a.slot(0)
     inventory.add('wood', 20)
     inventory.add('stone', 10)
     inventory.add('berry', 3)
@@ -125,7 +129,7 @@ describe('Simulation', () => {
     // Lo que se hace en cada tick; lo mismo para las dos simulaciones a partir del corte.
     const script = (sim: Simulation, t: number): Command => {
       if (t === 150) sim.setPhase(NIGHT)
-      const slot = sim.slot.inventory.slots.indexOf('campfire')
+      const slot = sim.slot(0).inventory.slots.indexOf('campfire')
       const actions: ActionData[] =
         t === 100 ? [{ kind: 'craft', recipe: 4 }]
         : t === 101 && slot >= 0 ? [{ kind: 'select', slot }]
@@ -159,6 +163,6 @@ describe('Simulation', () => {
     // Tras el corte siguen pasando cosas que dependen del estado restaurado.
     expect([...seen]).toEqual(expect.arrayContaining(['enemySpawn', 'enemyAttack', 'playerHurt', 'playerSwing']))
     expect(JSON.stringify(b.toJSON())).toBe(JSON.stringify(a.toJSON()))
-    expect(b.slot.inventory.slots).toEqual(a.slot.inventory.slots)
+    expect(b.slot(0).inventory.slots).toEqual(a.slot(0).inventory.slots)
   })
 })

@@ -31,6 +31,12 @@ export type ActionData =
 
 export type Action = ActionData & { seq: number; tick: number }
 
+/** Lo que manda un jugador para un tick: su `Move` y las acciones de ese tick. */
+export interface PlayerCommands {
+  move: Move
+  actions: readonly Action[]
+}
+
 /** Botones de un `Move` a partir de las teclas y el clic mantenido. */
 export function inputButtons(input: PlayerInput, attack: boolean): number {
   return (

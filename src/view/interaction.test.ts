@@ -5,7 +5,7 @@ import { PropView, type PropInstance } from './PropView'
 import { heightAt } from '../sim/world/terrain'
 import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from '../sim/constants'
 import type { SimEventData } from '../sim/events'
-import { aimPose, hitDamage, Interaction } from '../sim/interaction'
+import { aimPose, createCombat, hitDamage, Interaction, type Fighter } from '../sim/interaction'
 import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from '../sim/pickups'
 
@@ -16,9 +16,10 @@ function setup() {
   const pickups = new Pickups([world.grid], () => 0.5)
   // La vista recibe cada evento al momento, como si se presentara al final de cada paso.
   const emit = (e: SimEventData) => view.present([e])
-  const interaction = new Interaction(world, inventory, pickups, undefined, emit)
+  const interaction = new Interaction(world, pickups, undefined, emit)
   // Desde dónde y hacia dónde mira el jugador.
   const viewer = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }
+  const fighter: Fighter = { id: 0, player: viewer, inventory, combat: createCombat(), target: null }
 
   const aimAt = (prop: PropData) => {
     const isFree = (x: number, z: number) =>
@@ -26,26 +27,28 @@ function setup() {
     const pose = aimPose(prop, isFree)
     const y = heightAt(pose.x, pose.z)
     Object.assign(viewer, { pos: { x: pose.x, y, z: pose.z }, yaw: pose.yaw, pitch: Math.atan2(pose.aimY - y - EYE_HEIGHT, pose.horizontal) })
-    interaction.updateTarget(viewer)
+    interaction.updateTarget(fighter)
   }
   const hold = (seconds: number) => {
     for (let i = 0; i < Math.round(seconds / STEP); i++) {
-      interaction.updateTarget(viewer)
+      interaction.updateTarget(fighter)
       step(true)
     }
   }
   /** Un paso fijo: rebrote y golpe, en el orden de Game. */
   const step = (attack: boolean) => {
     growBerries(world.props, STEP, emit)
-    return interaction.step(STEP, attack)
+    return interaction.step(fighter, STEP, attack)
   }
   /** Piezas de `item` en el suelo. */
   const onGround = (item: ItemId) => pickups.list.filter((p) => p.item === item).length
   const reset = () => {
     interaction.reset()
+    fighter.combat = createCombat()
+    fighter.target = null
     view.reset()
   }
-  return { world, view, inventory, pickups, interaction, viewer, aimAt, hold, step, onGround, reset }
+  return { world, view, inventory, pickups, interaction, viewer, fighter, aimAt, hold, step, onGround, reset }
 }
 
 describe('recolección', () => {
@@ -59,7 +62,7 @@ describe('recolección', () => {
   it('apunta al prop y mantener el ataque 1,2 s da exactamente 3 golpes y la madera cae al suelo', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
-    expect(ctx.interaction.target).toBe(tree)
+    expect(ctx.fighter.target).toBe(tree)
     ctx.hold(1.2)
     expect(tree.alive).toBe(false)
     expect(tree.hp).toBe(0)
@@ -72,8 +75,8 @@ describe('recolección', () => {
     ctx.aimAt(tree)
     const hits: { kind: string; dropped: boolean }[] = []
     for (let i = 0; i < Math.round(1.2 / STEP); i++) {
-      ctx.interaction.updateTarget(ctx.viewer)
-      const hit = ctx.interaction.step(STEP, true)
+      ctx.interaction.updateTarget(ctx.fighter)
+      const hit = ctx.interaction.step(ctx.fighter, STEP, true)
       if (hit) hits.push({ kind: hit.target?.kind ?? 'aire', dropped: hit.dropped })
     }
     expect(hits).toEqual([
@@ -84,12 +87,12 @@ describe('recolección', () => {
   })
 
   it('sin objetivo también golpea al aire y espera el cooldown', () => {
-    ctx.interaction.target = null
-    expect(ctx.interaction.step(STEP, true)).toEqual({ target: null, dropped: false })
-    expect(ctx.interaction.step(STEP, true)).toBeNull()
+    ctx.fighter.target = null
+    expect(ctx.interaction.step(ctx.fighter, STEP, true)).toEqual({ target: null, dropped: false })
+    expect(ctx.interaction.step(ctx.fighter, STEP, true)).toBeNull()
     const tree = firstOf('tree')
     ctx.aimAt(tree)
-    ctx.interaction.step(STEP, true)
+    ctx.interaction.step(ctx.fighter, STEP, true)
     expect(tree.hp).toBe(tree.maxHp)
     ctx.hold(HIT_COOLDOWN)
     expect(tree.hp).toBe(tree.maxHp - 1)
@@ -98,7 +101,7 @@ describe('recolección', () => {
   it('una roca necesita 4 golpes y da piedra', () => {
     const rock = firstOf('rock')
     ctx.aimAt(rock)
-    expect(ctx.interaction.target).toBe(rock)
+    expect(ctx.fighter.target).toBe(rock)
     ctx.hold(1.2)
     expect(rock.hp).toBe(1)
     expect(rock.alive).toBe(true)
@@ -111,8 +114,8 @@ describe('recolección', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     ctx.hold(1.2)
-    ctx.interaction.updateTarget(ctx.viewer)
-    expect(ctx.interaction.target).not.toBe(tree)
+    ctx.interaction.updateTarget(ctx.fighter)
+    expect(ctx.fighter.target).not.toBe(tree)
   })
 
   it('un wobble activo no revive un prop destruido', () => {
@@ -174,7 +177,7 @@ describe('bayas', () => {
   it('cada clic quita una baya y da una; el arbusto se queda', () => {
     const bush = firstBush()
     ctx.aimAt(bush)
-    expect(ctx.interaction.target).toBe(bush)
+    expect(ctx.fighter.target).toBe(bush)
     ctx.hold(STEP)
     expect(ctx.inventory.count('berry')).toBe(1)
     expect(ctx.pickups.list).toHaveLength(0)
@@ -188,7 +191,7 @@ describe('bayas', () => {
     const bush = firstBush()
     ctx.aimAt(bush)
     vi.spyOn(ctx.inventory, 'canAdd').mockReturnValue(false)
-    expect(ctx.interaction.step(STEP, true)).toEqual({ target: bush, dropped: false })
+    expect(ctx.interaction.step(ctx.fighter, STEP, true)).toEqual({ target: bush, dropped: false })
     expect(bush.hp).toBe(BERRIES_PER_BUSH)
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH)
     expect(ctx.inventory.count('berry')).toBe(0)
@@ -202,7 +205,7 @@ describe('bayas', () => {
     expect(bush.hp).toBe(0)
     expect(bush.alive).toBe(true)
     expect(visibleBerries(bush)).toBe(0)
-    expect(ctx.interaction.target).toBe(bush)
+    expect(ctx.fighter.target).toBe(bush)
   })
 
   it('el wobble no vuelve a mostrar las bayas recogidas', () => {
@@ -267,7 +270,7 @@ describe('bayas', () => {
       expect(prop.hp).toBe(prop.maxHp)
       expect(ctx.view.instancesOf(prop.id).some(isHidden)).toBe(false)
     }
-    expect(ctx.interaction.target).toBe(null)
+    expect(ctx.fighter.target).toBe(null)
   })
 
   it('tras reset no queda ningún rebrote antiguo pendiente', () => {

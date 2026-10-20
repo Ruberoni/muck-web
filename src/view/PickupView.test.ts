@@ -25,7 +25,7 @@ describe('PickupView', () => {
     const pickups = new Pickups([], mulberry32(1))
     const view = new PickupView()
     pickups.drop('stone', 1, 0, 20, 0)
-    pickups.step(STEP, { x: 100, y: 0, z: 0 }, { add: () => false, canAdd: () => false })
+    pickups.step(STEP, [{ id: 0, pos: { x: 100, y: 0, z: 0 }, inventory: { add: () => false, canAdd: () => false } }])
     const [p] = pickups.list
     view.update(pickups.list, 0.5)
     expect(view.group.children[0].position.x).toBeCloseTo((p.prev.x + p.pos.x) / 2)

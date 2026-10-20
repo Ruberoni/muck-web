@@ -14,14 +14,14 @@ import { campfireSpot } from './sim/campfires'
  * local directamente (en red pasarán por el servidor, PR 12).
  */
 export function installDebug(game: Game) {
-  const { sim } = game
-  const { world, slot, interaction } = sim
+  const { sim, slot } = game
+  const { world, interaction } = sim
   const { player, inventory } = slot
   // Se calcula antes de que el jugador toque nada: es la huella del mundo generado.
   const worldHash = computeWorldHash(islandMeshes(game.propView))
   // Solo ids de props: los enemigos tienen su propia numeración (ver enemies()).
   const targetPropId = () => {
-    const t = interaction.target
+    const t = slot.target
     return t && t.kind !== 'enemy' ? t.id : null
   }
 
@@ -72,7 +72,7 @@ export function installDebug(game: Game) {
       const pose = aimPose(prop, isFree)
       const eyeY = Math.max(heightAt(pose.x, pose.z), WATER_LEVEL - FLOAT_DEPTH) + EYE_HEIGHT
       game.teleport(pose.x, pose.z, pose.yaw, Math.atan2(pose.aimY - eyeY, pose.horizontal))
-      interaction.updateTarget(player)
+      interaction.updateTarget(slot)
       game.advance(0)
       return targetPropId()
     },
@@ -80,17 +80,17 @@ export function installDebug(game: Game) {
     hotbar: () => ({ slots: [...inventory.slots], selected: inventory.selected }),
     give: (item: ItemId, amount = 1) => inventory.add(item, amount),
     select: (index: number) => inventory.select(index),
-    craft: (index: number) => sim.craft(index),
+    craft: (index: number) => sim.craft(slot.id, index),
     setCrafting: (open: boolean) => game.setCrafting(open),
     campfires: () => sim.campfires.list.map(({ id, x, y, z }) => ({ id, x, y, z })),
     /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo. */
-    placeCampfire: (x: number, z: number, yaw = 0) => sim.campfires.place(campfireSpot({ x, z }, yaw, [world.grid, sim.campfires.grid])) !== null,
+    placeCampfire: (x: number, z: number, yaw = 0) => sim.campfires.place(campfireSpot({ x, z }, yaw, [world.grid, sim.campfires.grid]), slot.id) !== null,
     props: () => world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: targetPropId,
     /** Objetos en el suelo, por recoger. */
     pickups: () => sim.pickups.list.map(({ id, item, pos, grounded }) => ({ id, item, x: pos.x, y: pos.y, z: pos.z, grounded })),
     enemies: () =>
-      sim.enemies.list.map(({ id, pos, hp }) => ({ id, x: pos.x, z: pos.z, hp, targeted: interaction.target?.kind === 'enemy' && interaction.target.id === id })),
+      sim.enemies.list.map(({ id, pos, hp }) => ({ id, x: pos.x, z: pos.z, hp, targeted: slot.target?.kind === 'enemy' && slot.target.id === id })),
     spawnEnemy: (x: number, z: number) => sim.enemies.spawnAt(x, z).id,
     /** Gira la cámara hacia el enemigo sin mover al jugador; devuelve si queda apuntado. */
     aimAtEnemy(id: number) {
@@ -100,9 +100,9 @@ export function installDebug(game: Game) {
       const dz = e.pos.z - player.pos.z
       const dy = heightAt(e.pos.x, e.pos.z) + ENEMY_AIM_HEIGHT - (player.pos.y + EYE_HEIGHT)
       game.teleport(player.pos.x, player.pos.z, Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)))
-      interaction.updateTarget(player)
+      interaction.updateTarget(slot)
       game.advance(0)
-      return interaction.target === e
+      return slot.target === e
     },
     hand: () => ({ item: game.handheld.item, action: game.handheld.action }),
     heightAt,
