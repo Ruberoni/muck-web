@@ -49,6 +49,15 @@ export interface EnemyData {
   knock: { x: number; z: number }
 }
 
+/** Los enemigos como datos, para guardar y restaurar la partida. */
+export interface EnemiesState {
+  list: EnemyData[]
+  spawnTimer: number
+  nextId: number
+}
+
+const copyEnemy = (e: EnemyData): EnemyData => ({ ...e, pos: { ...e.pos }, prev: { ...e.prev }, knock: { ...e.knock } })
+
 /** Número máximo de enemigos a la vez en la noche del día `day`. */
 export const enemyCap = (day: number) => Math.min(ENEMY_MAX, ENEMY_BASE_COUNT + (day - 1) * ENEMY_PER_NIGHT)
 
@@ -233,5 +242,16 @@ export class Enemies {
   reset() {
     for (const e of [...this.list]) this.kill(e)
     this.spawnTimer = 0
+  }
+
+  save(): EnemiesState {
+    return { list: this.list.map(copyEnemy), spawnTimer: this.spawnTimer, nextId: this.nextId }
+  }
+
+  load(state: EnemiesState) {
+    this.list.length = 0
+    this.list.push(...state.list.map(copyEnemy))
+    this.spawnTimer = state.spawnTimer
+    this.nextId = state.nextId
   }
 }

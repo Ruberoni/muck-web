@@ -29,6 +29,14 @@ export interface Pickup {
   spin: number
 }
 
+/** Los objetos del suelo como datos, para guardar y restaurar la partida. */
+export interface PickupsState {
+  list: Pickup[]
+  nextId: number
+}
+
+const copyPickup = (p: Pickup): Pickup => ({ ...p, pos: { ...p.pos }, prev: { ...p.prev }, vel: { ...p.vel } })
+
 /** Encima del agua flotan: se pueden recoger vadeando. */
 const groundAt = (x: number, z: number) => Math.max(heightAt(x, z), WATER_LEVEL)
 
@@ -133,5 +141,15 @@ export class Pickups {
   clear() {
     this.list.length = 0
     this.nextId = 0
+  }
+
+  save(): PickupsState {
+    return { list: this.list.map(copyPickup), nextId: this.nextId }
+  }
+
+  load(state: PickupsState) {
+    this.list.length = 0
+    this.list.push(...state.list.map(copyPickup))
+    this.nextId = state.nextId
   }
 }

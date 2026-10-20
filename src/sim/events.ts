@@ -31,6 +31,8 @@ export type SimEventData =
   | { type: 'playerPlaced'; id: PlayerId }
   | { type: 'playerHurt'; id: PlayerId; dmg: number }
   | { type: 'playerDied'; id: PlayerId }
+  | { type: 'clockSet'; worldStartTick: number }
+  | { type: 'worldReset'; worldStartTick: number }
 
 export type SimEvent = SimEventData & { tick: number }
 
