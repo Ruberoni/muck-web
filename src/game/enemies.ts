@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { isNight } from '../world/daycycle'
 import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../world/terrain'
+import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from '../sim/events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import {
   ENEMY_ATTACK_INTERVAL,
@@ -99,6 +100,7 @@ export class Enemies {
   constructor(
     private grids: SpatialGrid<Collider>[],
     private rng: () => number = Math.random,
+    private emit: Emit = NO_EMIT,
   ) {}
 
   /** Paso fijo: aparece, persigue y ataca. Devuelve el daño total que recibe el jugador. */
@@ -112,6 +114,7 @@ export class Enemies {
     } else {
       // Al amanecer se desvanecen sin soltar nada.
       this.spawnTimer = 0
+      if (this.list.length) this.emit({ type: 'enemiesDespawn' })
       while (this.list.length) this.kill(this.list[0])
     }
 
@@ -157,6 +160,7 @@ export class Enemies {
     if (e.attackCooldown > 1e-9) return false
     e.attackCooldown = ENEMY_ATTACK_INTERVAL
     e.lunge = LUNGE_TIME
+    this.emit({ type: 'enemyAttack', id: e.id, target: LOCAL_PLAYER })
     return true
   }
 
@@ -255,16 +259,18 @@ export class Enemies {
     this.list.push(e)
     this.group.add(object)
     this.place(1)
+    this.emit({ type: 'enemySpawn', id: e.id, x, z })
     return e
   }
 
-  /** Golpe desde `from` (la posición del jugador). Devuelve true si lo mata. */
-  hit(e: EnemyData, damage: number, from: { x: number; z: number }): boolean {
+  /** Golpe de `by` desde `from` (la posición del jugador). Devuelve true si lo mata. */
+  hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId): boolean {
     if (!e.alive) return false
     e.hp = Math.max(0, e.hp - damage)
     e.hurt = HURT_FLASH
     if (e.hp <= 0) {
       this.kill(e)
+      this.emit({ type: 'enemyDied', id: e.id, by })
       return true
     }
     const dx = e.pos.x - from.x
@@ -274,6 +280,7 @@ export class Enemies {
     e.knock.z = (dz / d) * ENEMY_KNOCKBACK
     e.stagger = ENEMY_STAGGER
     e.attackCooldown = Math.max(e.attackCooldown, ENEMY_WINDUP)
+    this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by })
     return false
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { STEP } from '../game/constants'
-import type { Target } from '../game/interaction'
+import type { SimEvent, TargetRef } from '../sim/events'
+import type { PropKind } from '../world/props'
 import { GameAudio, GROWL_DISTANCE, STRIDE } from './gameAudio'
 import { spatialize, volumeToGain, type PlayOptions, type SoundName } from './sound'
 
@@ -104,19 +105,52 @@ describe('sonido', () => {
     expect(growls[0].options!.gain).toBeCloseTo(spatialize(5, 0, 0, GROWL_DISTANCE).gain)
   })
 
-  it('cada golpe suena según lo que golpea; solo la baya suena al recogerla en el golpe', () => {
+  it('cada golpe suena según lo que golpea; si lo rompe o lo mata, solo la rotura o la muerte', () => {
     const { audio, names } = setup()
-    const t = (kind: Target['kind']) => ({ kind }) as Target
-    audio.hit(null, false)
-    audio.hit(t('tree'), false)
-    audio.hit(t('tree'), true)
-    audio.hit(t('rock'), false)
-    audio.hit(t('bush'), true)
-    audio.hit(t('bush'), false)
-    audio.hit(t('enemy'), false)
-    audio.hit(t('enemy'), true)
-    expect(names()).toEqual(['swing', 'hitWood', 'breakWood', 'hitStone', 'hitBush', 'pickup', 'hitBush', 'enemyHit', 'enemyDeath'])
-    audio.pickup()
-    expect(names().at(-1)).toBe('pickup')
+    const kinds: PropKind[] = ['tree', 'rock', 'bush']
+    const propKind = (id: number) => kinds[id]
+    const swing = (target: TargetRef | null): SimEvent => ({ tick: 1, type: 'playerSwing', id: 0, item: null, target })
+    const step = (...list: SimEvent[]) => audio.events(list, 0, propKind)
+    step(swing(null))
+    step(swing({ kind: 'prop', id: 0 }), { tick: 1, type: 'propHit', id: 0, hp: 2, by: 0 })
+    step(swing({ kind: 'prop', id: 0 }), { tick: 1, type: 'propDestroyed', id: 0, by: 0 })
+    step(swing({ kind: 'prop', id: 1 }), { tick: 1, type: 'propHit', id: 1, hp: 2, by: 0 })
+    step(swing({ kind: 'prop', id: 1 }), { tick: 1, type: 'propDestroyed', id: 1, by: 0 })
+    step(swing({ kind: 'prop', id: 2 }), { tick: 1, type: 'berryTaken', id: 2, hp: 1, by: 0 })
+    step(swing({ kind: 'prop', id: 2 }))
+    step(swing({ kind: 'enemy', id: 0 }), { tick: 1, type: 'enemyHit', id: 0, hp: 3, kx: 1, kz: 0, by: 0 })
+    step(swing({ kind: 'enemy', id: 0 }), { tick: 1, type: 'enemyDied', id: 0, by: 0 })
+    expect(names()).toEqual(['swing', 'hitWood', 'breakWood', 'hitStone', 'breakStone', 'hitBush', 'pickup', 'hitBush', 'enemyHit', 'enemyDeath'])
+  })
+
+  it('varias piezas recogidas en un paso suenan una vez; lo que hace otro jugador no suena como propio', () => {
+    const { audio, names } = setup()
+    const step = (...list: SimEvent[]) => audio.events(list, 0, () => 'tree')
+    step({ tick: 1, type: 'pickupCollected', id: 0, by: 0 }, { tick: 1, type: 'pickupCollected', id: 1, by: 0 })
+    expect(names()).toEqual(['pickup'])
+    step(
+      { tick: 2, type: 'pickupCollected', id: 2, by: 1 },
+      { tick: 2, type: 'playerSwing', id: 1, item: null, target: null },
+      { tick: 2, type: 'playerHurt', id: 1, dmg: 10 },
+      { tick: 2, type: 'playerAte', id: 1 },
+    )
+    expect(names()).toEqual(['pickup'])
+  })
+
+  it('daño, comer, fabricar, colocar una fogata y morir', () => {
+    const { audio, names } = setup()
+    audio.events(
+      [
+        { tick: 1, type: 'playerHurt', id: 0, dmg: 10 },
+        { tick: 1, type: 'playerAte', id: 0 },
+        { tick: 1, type: 'playerCrafted', id: 0, recipe: 2 },
+        { tick: 1, type: 'campfirePlaced', id: 0, x: 0, y: 0, z: 0, rotY: 0, by: 0 },
+        { tick: 1, type: 'playerPlaced', id: 0 },
+        { tick: 1, type: 'playerDied', id: 0 },
+      ],
+      0,
+      () => 'tree',
+    )
+    expect(names()).toEqual(['hurt', 'eat', 'craft', 'place', 'death'])
   })
 })

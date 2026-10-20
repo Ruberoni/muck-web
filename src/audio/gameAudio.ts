@@ -1,4 +1,5 @@
-import type { Target } from '../game/interaction'
+import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
+import type { PropKind } from '../world/props'
 import type { SoundOut } from './sound'
 import { spatialize } from './sound'
 
@@ -11,6 +12,7 @@ const MIN_AIR_TIME = 0.3
 export const GROWL_DISTANCE = 28
 const GROWL_MIN_INTERVAL = 2.5
 const GROWL_RANDOM_INTERVAL = 4
+const IMPACT = { tree: 'hitWood', rock: 'hitStone', bush: 'hitBush' } as const
 
 interface PlayerLike {
   pos: { x: number; z: number }
@@ -68,34 +70,63 @@ export class GameAudio {
   }
 
   /**
-   * Un golpe con la herramienta (o la mano) sobre `target`, o al aire si es null;
-   * `dropped` si soltó algo (lo rompió, lo mató o cogió una baya).
+   * Sonidos de los eventos de un paso, tal como los oye el jugador `me`. Un golpe suena según lo que
+   * golpea; si lo rompe o lo mata, solo suena la rotura o la muerte (que llegan en su propio evento).
    */
-  hit(target: Target | null, dropped: boolean) {
+  events(list: readonly SimEvent[], me: PlayerId, propKind: (id: number) => PropKind) {
     const s = this.sound
-    switch (target?.kind) {
-      case undefined:
-        s.play('swing')
-        break
-      case 'tree':
-        s.play(dropped ? 'breakWood' : 'hitWood')
-        break
-      case 'rock':
-        s.play(dropped ? 'breakStone' : 'hitStone')
-        break
-      case 'bush':
-        s.play('hitBush')
-        break
-      case 'enemy':
-        s.play(dropped ? 'enemyDeath' : 'enemyHit')
-        break
+    // Recoger varias piezas en el mismo paso suena una sola vez.
+    let collected = false
+    for (const e of list) {
+      switch (e.type) {
+        case 'playerSwing':
+          if (e.id === me) this.swing(e.target, list, propKind)
+          break
+        case 'propDestroyed':
+          s.play(propKind(e.id) === 'rock' ? 'breakStone' : 'breakWood')
+          break
+        case 'enemyDied':
+          s.play('enemyDeath')
+          break
+        // Las bayas van directas al inventario; lo demás suena al recogerlo del suelo.
+        case 'berryTaken':
+          if (e.by === me) this.pickup()
+          break
+        case 'pickupCollected':
+          if (e.by === me && !collected) this.pickup()
+          collected ||= e.by === me
+          break
+        case 'campfirePlaced':
+          s.play('place')
+          break
+        case 'playerHurt':
+          if (e.id === me) s.play('hurt')
+          break
+        case 'playerAte':
+          if (e.id === me) s.play('eat')
+          break
+        case 'playerCrafted':
+          if (e.id === me) s.play('craft')
+          break
+        case 'playerDied':
+          if (e.id === me) s.play('death')
+          break
+      }
     }
-    // Las bayas van directas al inventario; lo demás suena al recogerlo del suelo (pickup()).
-    if (dropped && target?.kind === 'bush') this.pickup()
   }
 
-  /** Se mete algo en el inventario al recogerlo. */
-  pickup() {
+  /** Impacto de un golpe propio, o al aire si `target` es null. */
+  private swing(target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind) {
+    if (!target) return this.sound.play('swing')
+    const killed = list.some(
+      (e) => ((e.type === 'propDestroyed' && target.kind === 'prop') || (e.type === 'enemyDied' && target.kind === 'enemy')) && e.id === target.id,
+    )
+    if (killed) return
+    if (target.kind === 'enemy') return this.sound.play('enemyHit')
+    this.sound.play(IMPACT[propKind(target.id)])
+  }
+
+  private pickup() {
     this.sound.play('pickup', { gain: 0.8 })
   }
 
