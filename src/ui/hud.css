@@ -399,3 +399,22 @@ kbd {
 .lobby button.primary:hover:not(:disabled) { background: #ffe38f; }
 .lobby .status { margin: 0; font-size: 13px; opacity: 0.9; }
 .lobby .status.error { color: #ffb3ab; opacity: 1; }
+
+/* Muerto en una sala (espectador) o game over. */
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+  pointer-events: none;
+}
+
+.banner[hidden] { display: none; }
+.banner .title { font-size: 30px; font-weight: 700; color: #ffb3ab; }
+.banner .detail { font-size: 15px; padding: 4px 12px; border-radius: 8px; background: rgb(0 0 0 / 0.35); }

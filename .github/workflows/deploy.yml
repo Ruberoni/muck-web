@@ -50,6 +50,8 @@ jobs:
         env:
           # wss://… del Worker (variable del repo); el cliente le añade /room/:code.
           VITE_SERVER_URL: ${{ vars.SERVER_URL }}
+          # El lobby y el cliente en red van en el build publicado.
+          VITE_MULTIPLAYER: '1'
 
       - name: Configure Pages
         if: github.ref == 'refs/heads/main'

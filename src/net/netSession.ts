@@ -6,7 +6,7 @@ import { botMove, driveClient } from './bot'
 import { NetClient, type ClientHello } from './client'
 import { cleanName, ROOM_ALPHABET, ROOM_CODE_LENGTH, type DevOp, type Reject } from './protocol'
 import type { MoveInput, Session } from './session'
-import { explainClose } from './status'
+import { explainClose, RECONNECT_FOR_MS, reconnectDelay, shouldReconnect } from './status'
 import { WebSocketTransport } from './transport'
 
 /** El Worker (`wss://…`, sin ruta). En desarrollo, el de `npm run dev:server`. */
@@ -44,6 +44,9 @@ function saveToken(room: string, token: string) {
     // Sin almacenamiento: la próxima vez entrará como un jugador nuevo.
   }
 }
+
+/** `reconnecting`: se ha cortado y se está volviendo a entrar con el mismo token; `lost`: no hay vuelta atrás. */
+export type NetStatus = 'online' | 'reconnecting' | 'lost'
 
 /** No se pudo entrar en la sala: rechazada (`reject`) o cerrada antes del `welcome`. */
 export class NetError extends Error {
@@ -89,27 +92,35 @@ async function connectClient(hello: ClientHello, url: string): Promise<{ client:
  * `slot` el jugador predicho. A diferencia de LocalSession, el ritmo lo marca el reloj de red: cada frame
  * `advance()` dice cuántos ticks predecir con `step`, `flush()` envía y `render()` deja el espejo listo para dibujar.
  * En pausa (`suspend`) deja de predecir y de enviar, y manda un `ping` cada 30 s; al volver (`wake`) pide el estado.
+ *
+ * Si se corta (`reconnecting`), vuelve a entrar con el mismo token y la misma pestaña, con esperas crecientes durante
+ * un minuto: el NetClient nuevo sustituye al viejo y `generation` sube (Game rehace la vista). En pausa espera a
+ * `wake` para reintentar. Si la sala lo rechaza o el corte no tiene arreglo (otra pestaña, otra versión…), `lost`.
  */
 export class NetSession implements Session {
   readonly networked = true
-  /** Por qué se cortó la conexión, para el HUD (al cerrarse; tras preguntar a `/status` si hace falta). */
+  status: NetStatus = 'online'
+  /** Por qué se cortó la conexión, para el HUD (al perderla; tras preguntar a `/status` si hace falta). */
   closeReason: string | null = null
+  /** Sube cada vez que un NetClient nuevo sustituye al anterior (al reconectar). */
+  generation = 0
   private pinger: ReturnType<typeof setInterval> | null = null
   private devWaits: { sentAt: number; until: number; resolve: () => void }[] = []
+  private suspended = false
+  private leaving = false
+  private attempt = 0
+  private reconnectSince = 0
+  private retry: ReturnType<typeof setTimeout> | null = null
 
   private constructor(
-    readonly client: NetClient,
-    readonly transport: WebSocketTransport,
+    public client: NetClient,
+    public transport: WebSocketTransport,
     readonly room: string,
     /** El nombre propio (como lo guarda la sala). */
     readonly name: string,
-    url: string,
+    private url: string,
   ) {
-    client.onchange = () => {
-      if (client.state !== 'closed' || this.closeReason) return
-      this.closeReason = 'Sin conexión con el servidor.'
-      explainClose(client.rejected, client.closeCode, room, url).then((reason) => (this.closeReason = reason))
-    }
+    this.watch(client)
   }
 
   /** Entra en la sala `room` (o la crea) con el token guardado de una visita anterior, si lo hay. */
@@ -154,8 +165,9 @@ export class NetSession implements Session {
     return this.client.predictor!.offset
   }
 
+  /** Conexión perdida sin vuelta atrás. */
   get closed(): boolean {
-    return this.client.state === 'closed'
+    return this.status === 'lost'
   }
 
   advance(): number {
@@ -174,25 +186,28 @@ export class NetSession implements Session {
     const now = performance.now()
     const echo = this.client.lastEcho
     this.devWaits = this.devWaits.filter((wait) => {
-      const done = echo > wait.sentAt || now >= wait.until || this.closed
+      const done = echo > wait.sentAt || now >= wait.until || this.status !== 'online'
       if (done) wait.resolve()
       return !done
     })
     return this.client.render()
   }
 
-  /** La isla es del servidor: no se reinicia desde aquí (con todos muertos lo hará él, PR 14). */
+  /** La isla es del servidor: no se reinicia desde aquí (con todos muertos lo hace él). */
   reset() {}
 
   suspend() {
+    this.suspended = true
     this.client.suspend()
     this.pinger ??= setInterval(() => this.client.ping(), PING_MS)
   }
 
   wake() {
+    this.suspended = false
     if (this.pinger !== null) clearInterval(this.pinger)
     this.pinger = null
     this.client.wake()
+    if (this.status === 'reconnecting' && this.retry === null) this.startReconnecting()
   }
 
   /**
@@ -206,11 +221,74 @@ export class NetSession implements Session {
   }
 
   close() {
+    this.leaving = true
     if (this.pinger !== null) clearInterval(this.pinger)
-    this.pinger = null
+    if (this.retry !== null) clearTimeout(this.retry)
+    this.pinger = this.retry = null
     for (const wait of this.devWaits) wait.resolve()
     this.devWaits = []
     this.client.close()
+  }
+
+  private watch(client: NetClient) {
+    client.onchange = () => {
+      if (client !== this.client || client.state !== 'closed' || this.leaving) return
+      if (!shouldReconnect(client.rejected, client.closeCode)) return this.lose(client.rejected, client.closeCode)
+      this.status = 'reconnecting'
+      // En pausa (o con la pestaña olvidada) no hace falta volver ya: al reanudar.
+      if (!this.suspended) this.startReconnecting()
+    }
+  }
+
+  private startReconnecting() {
+    this.attempt = 0
+    this.reconnectSince = performance.now()
+    this.scheduleRetry()
+  }
+
+  private scheduleRetry() {
+    this.retry = setTimeout(() => {
+      this.retry = null
+      void this.reconnect()
+    }, reconnectDelay(this.attempt++))
+  }
+
+  private async reconnect() {
+    if (this.leaving || this.status !== 'reconnecting') return
+    const { room, name, url } = this
+    const token = this.client.token
+    try {
+      const { client, transport } = await connectClient({ intent: 'join', room, name, tab: TAB, ...(token ? { token } : {}) }, url)
+      if (this.leaving) return client.close()
+      this.adopt(client, transport)
+    } catch (error) {
+      if (this.leaving) return
+      const reject = error instanceof NetError ? error.reject : null
+      const code = error instanceof NetError ? error.code : null
+      if (shouldReconnect(reject, code) && performance.now() - this.reconnectSince < RECONNECT_FOR_MS) this.scheduleRetry()
+      else this.lose(reject, code)
+    }
+  }
+
+  /** Un NetClient nuevo, ya dentro de la sala, sustituye al cortado. */
+  private adopt(client: NetClient, transport: WebSocketTransport) {
+    saveToken(this.room, client.token!)
+    transport.latency = this.transport.latency
+    transport.jitter = this.transport.jitter
+    for (const wait of this.devWaits) wait.resolve()
+    this.devWaits = []
+    this.client = client
+    this.transport = transport
+    this.status = 'online'
+    this.generation++
+    this.watch(client)
+    if (this.suspended) client.suspend()
+  }
+
+  private lose(reject: Reject | null, code: number | null) {
+    this.status = 'lost'
+    this.closeReason = 'Sin conexión con el servidor.'
+    explainClose(reject, code, this.room, this.url).then((reason) => (this.closeReason = reason))
   }
 }
 

@@ -134,7 +134,13 @@ export function installLobby(game: Game) {
     join.disabled = busy || !isRoomCode(codeInput.value)
     if (net) roomCode.textContent = net.room
     status.classList.toggle('error', !!error || !!net?.closed)
-    status.textContent = busy ? 'Conectando…' : net?.closed ? (net.closeReason ?? 'Sin conexión con el servidor.') : error
+    status.textContent = busy
+      ? 'Conectando…'
+      : net?.closed
+        ? (net.closeReason ?? 'Sin conexión con el servidor.')
+        : net?.status === 'reconnecting'
+          ? 'Se ha cortado la conexión. Reconectando…'
+          : error
     status.hidden = !status.textContent
   }
 

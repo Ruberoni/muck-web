@@ -130,3 +130,11 @@ export const CAMPFIRE_PLACE_DISTANCE = 2.2
 export const CAMPFIRE_LIGHTS = 4
 export const CAMPFIRE_LIGHT_INTENSITY = 30
 export const CAMPFIRE_LIGHT_DISTANCE = 22
+
+// Muerte en una sala (§9 del plan): el muerto mira a los demás y reaparece; con un jugador se reinicia como siempre.
+/** Quien muere de día reaparece a los tantos segundos; de noche, al amanecer. */
+export const RESPAWN_DAY_DELAY = 30
+/** Con todos muertos, segundos de "Game over" antes de reiniciar la isla. */
+export const GAME_OVER_DELAY = 6
+/** Los montones del inventario de un muerto salen desde esta altura sobre sus pies. */
+export const DEATH_DROP_HEIGHT = 1

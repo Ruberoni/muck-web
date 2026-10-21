@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CloseCode } from './protocol'
-import { closeMessage, explainClose, QUOTA, SERVER_DOWN, statusUrl } from './status'
+import { closeMessage, explainClose, QUOTA, reconnectDelay, SERVER_DOWN, shouldReconnect, statusUrl } from './status'
 
 const answer = (ok: boolean) => (async () => ({ ok }) as Response) as typeof fetch
 const unreachable = (async () => {
@@ -29,5 +29,14 @@ describe('estado de la conexión', () => {
   it('la URL de /status sale de la del WebSocket', () => {
     expect(statusUrl('wss://muck-web.ruben-pardes25.workers.dev')).toBe('https://muck-web.ruben-pardes25.workers.dev/status')
     expect(statusUrl('ws://localhost:8787/')).toBe('http://localhost:8787/status')
+  })
+
+  it('reintenta tras un corte, pero no si la sala lo ha rechazado o no tiene arreglo', () => {
+    for (const code of [1000, 1001, 1005, 1006, 1011, null]) expect(shouldReconnect(null, code)).toBe(true)
+    for (const code of [CloseCode.Version, CloseCode.OtherTab, CloseCode.RoomDeleted, CloseCode.RoomFull, CloseCode.Quota, CloseCode.Invalid]) {
+      expect(shouldReconnect(null, code)).toBe(false)
+    }
+    expect(shouldReconnect({ type: 'reject', reason: 'not-found' }, 1000)).toBe(false)
+    expect([0, 1, 2, 3, 4, 10].map(reconnectDelay)).toEqual([500, 1000, 2000, 4000, 5000, 5000])
   })
 })

@@ -386,6 +386,43 @@ describe('el espejo de NetClient', () => {
   })
 })
 
+describe('muerte en red', () => {
+  it('el muerto envía a 1 Hz sin pasar a ausente, y su reaparición le llega como propia', () => {
+    const { room, time, connect } = setup()
+    const { client: a, sent } = connect('a', 'create')
+    const { client: b } = connect('b')
+    run(time, 1500, [[a, idle], [b, idle]])
+    // Lo que presenta como propio, al llegar.
+    const own: string[] = []
+    const render = a.render.bind(a)
+    a.render = () => {
+      const shown = render()
+      own.push(...shown.own.map((e) => e.type))
+      return shown
+    }
+    a.dev({ op: 'setVitals', health: 0, hunger: 0 })
+    let deadAt = 0
+    run(time, 1000, [[a, roam], [b, idle]], () => {
+      if (!deadAt && !a.predictor!.slot.alive) deadAt = time.now()
+    })
+    expect(own).toContain('playerDied')
+    expect(a.predictor!.slot.respawnAt).toBeGreaterThan(room.sim!.tick)
+    expect(a.predictor!.slot.inventory.toJSON()).toEqual({})
+
+    // Aunque siga pulsando teclas, muerto solo manda el keepalive.
+    const from = sent.length
+    run(time, 10_000, [[a, roam], [b, idle]])
+    const gaps = sent.slice(from + 1).map((s, i) => s.at - sent[from + i].at)
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1000)
+    expect(room.sim!.slot(a.id).connection).toBe('present')
+
+    run(time, 21_000, [[a, idle], [b, idle]])
+    expect(own).toContain('playerRespawn')
+    expect(a.predictor!.slot.alive).toBe(true)
+    expect(time.now() - deadAt).toBeGreaterThanOrEqual(29_000)
+  })
+})
+
 describe('compactMoves', () => {
   it('junta los Move seguidos e iguales con n', () => {
     const m = (tick: number, buttons = 0) => ({ tick, buttons, yaw: 0, pitch: 0 })

@@ -10,7 +10,7 @@ if (import.meta.env.DEV) {
   import('./debug').then(({ installDebug }) => installDebug(game))
 }
 
-// Multijugador, aún oculto: solo en desarrollo o en un build con VITE_MULTIPLAYER=1 (en producción, desde el PR 14).
+// Multijugador: en desarrollo y en los builds con VITE_MULTIPLAYER=1 (el de GitHub Pages lo lleva, ver deploy.yml).
 // El lobby (con `?room=CODIGO` en la URL, "Unirse a CODIGO") va en un import dinámico: sin la bandera, el build
 // no incluye nada de red.
 if (import.meta.env.DEV || import.meta.env.VITE_MULTIPLAYER === '1') {

@@ -57,7 +57,8 @@ export class Input {
     private callbacks: InputCallbacks,
   ) {
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') e.preventDefault()
+      // Tab cambia a quién mira el espectador: con el ratón capturado no debe mover el foco.
+      if (e.code === 'Space' || (e.code === 'Tab' && this.locked)) e.preventDefault()
       this.keys.add(e.code)
       if (!e.repeat) this.press(e.code)
     })

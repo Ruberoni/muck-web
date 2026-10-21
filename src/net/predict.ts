@@ -168,6 +168,7 @@ export class Predictor {
     Object.assign(this.slot.combat, you.combat)
     this.slot.hotbarFull = you.hotbarFull
     this.slot.alive = you.alive
+    this.slot.respawnAt = you.respawnAt
     this.slot.appliedSeq = you.appliedSeq
   }
 

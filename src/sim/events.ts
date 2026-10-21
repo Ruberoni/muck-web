@@ -31,6 +31,9 @@ export type SimEventData =
   | { type: 'playerPlaced'; id: PlayerId }
   | { type: 'playerHurt'; id: PlayerId; dmg: number }
   | { type: 'playerDied'; id: PlayerId }
+  | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }
+  /** En una sala, todos muertos: la isla se reinicia a los pocos segundos (`worldReset`). */
+  | { type: 'gameOver'; day: number }
   | { type: 'clockSet'; worldStartTick: number }
   | { type: 'worldReset'; worldStartTick: number }
 
