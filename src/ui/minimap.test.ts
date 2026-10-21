@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampToRim, terrainColor, toMinimap } from './minimap'
+import { clampToRim, teammateMark, terrainColor, toMinimap } from './minimap'
 import { ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
 
 /** Punto a `dist` por delante (forward) y `side` a la derecha de quien mira a `yaw`. */
@@ -55,5 +55,34 @@ describe('terrainColor', () => {
   it('el agua profunda es más oscura que la de la orilla', () => {
     const sum = (c: number[]) => c.reduce((a, b) => a + b)
     expect(sum(terrainColor(-4, false))).toBeLessThan(sum(terrainColor(-0.2, false)))
+  })
+})
+
+describe('teammateMark', () => {
+  it('cerca: en su sitio, apuntando hacia donde mira respecto a la vista', () => {
+    const viewYaw = 0.7
+    const ahead = offset(viewYaw, 10)
+    // Mira igual que yo: flecha hacia arriba.
+    const same = teammateMark(ahead.dx, ahead.dz, viewYaw, viewYaw, 60)
+    expect(same.far).toBe(false)
+    expect(same.x).toBeCloseTo(0)
+    expect(same.y).toBeCloseTo(-10)
+    expect(same.angle).toBeCloseTo(0)
+    // Mira 90° a mi derecha (yaw menor): la flecha gira 90° en el sentido de las agujas del reloj.
+    const right = teammateMark(ahead.dx, ahead.dz, viewYaw - Math.PI / 2, viewYaw, 60)
+    expect(right.angle).toBeCloseTo(Math.PI / 2)
+    // La flecha girada apunta en pantalla donde queda su frente en el mapa.
+    const front = toMinimap(-Math.sin(viewYaw - Math.PI / 2), -Math.cos(viewYaw - Math.PI / 2), viewYaw)
+    expect(Math.sin(right.angle)).toBeCloseTo(front.x)
+    expect(-Math.cos(right.angle)).toBeCloseTo(front.y)
+  })
+
+  it('lejos: fijado al borde y apuntando hacia él, mire a donde mire', () => {
+    const behind = offset(0, -200)
+    const mark = teammateMark(behind.dx, behind.dz, 1.2, 0, 60)
+    expect(mark.far).toBe(true)
+    expect(Math.hypot(mark.x, mark.y)).toBeCloseTo(60)
+    expect(mark.y).toBeCloseTo(60)
+    expect(Math.abs(mark.angle)).toBeCloseTo(Math.PI)
   })
 })

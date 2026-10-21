@@ -2,12 +2,13 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import type { RemotePlayer } from '../net/client'
 import type { Shown } from '../net/interp'
+import { playerCss } from '../ui/playerColor'
 import { playerColor, RemotePlayerView } from './RemotePlayerView'
 
 const shown = (id: number, x: number, data: Partial<RemotePlayer> = {}): Shown<RemotePlayer> => ({
   id,
   pose: { x, y: 2, z: 5, yaw: 1, pitch: 0.3 },
-  data: { item: null, health: 100, alive: true, connection: 'present', ...data },
+  data: { item: null, health: 100, alive: true, connection: 'present', ping: 0, ...data },
 })
 
 /** Las mallas de un modelo con el color de su cuerpo. */
@@ -26,6 +27,13 @@ describe('RemotePlayerView', () => {
     view.update(0.016, [shown(2, -2)])
     expect(view.group.children).toEqual([second])
     expect(second.position.x).toBe(-2)
+  })
+
+  it('el color del avatar es el mismo que el del HUD', () => {
+    for (const id of [0, 1, 2, 7]) {
+      const css = new THREE.Color(playerCss(id))
+      expect(css.getHex()).toBe(playerColor(id).getHex())
+    }
   })
 
   it('lleva en la mano lo que dice el snap y lo cambia al cambiar', () => {

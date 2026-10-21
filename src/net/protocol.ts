@@ -13,7 +13,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 4
+export const PROTOCOL_VERSION = 5
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -33,6 +33,8 @@ export const MAX_MOVES = 10
 /** Un `Move` compactado se repite como mucho estos ticks (2 s). */
 export const MAX_MOVE_REPEAT = 120
 export const MAX_ACTIONS = 32
+/** RTT máximo que se acepta en `cmds` (ms). */
+export const MAX_RTT = 60_000
 const MAX_TOKEN = 64
 
 /** Códigos de cierre del WebSocket. */
@@ -78,6 +80,8 @@ export interface Cmds {
   t: number
   moves: MoveMsg[]
   actions: Action[]
+  /** El RTT que mide el cliente (ms, redondeado): la sala lo reparte para la lista de jugadores. */
+  rtt?: number
 }
 
 export interface Resync {
@@ -122,6 +126,8 @@ export interface PlayerSnap {
   health: number
   alive: boolean
   connection: Connection
+  /** El último RTT que contó (ms); 0 si aún no ha dicho ninguno. */
+  ping: number
 }
 
 export interface EnemySnap {
@@ -295,7 +301,10 @@ function parseCmds(raw: Obj): Cmds | null {
     if (!action) return null
     actions.push(action)
   }
-  return { type: 'cmds', t: raw.t, moves, actions }
+  if (raw.rtt !== undefined && !isInt(raw.rtt, 0, MAX_RTT)) return null
+  const cmds: Cmds = { type: 'cmds', t: raw.t, moves, actions }
+  if (raw.rtt !== undefined) cmds.rtt = raw.rtt
+  return cmds
 }
 
 function parseMove(m: unknown): MoveMsg | null {

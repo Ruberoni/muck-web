@@ -129,6 +129,8 @@ interface Seat {
   ackTick: number
   ackSeq: number
   slack: number
+  /** El RTT que dijo en su último `cmds`. */
+  ping: number
   bucket: number
   bucketAt: number
 }
@@ -302,6 +304,7 @@ export class Room {
     const now = this.deps.clock.now()
     seat.lastCmdsAt = now
     seat.lastT = msg.t
+    if (msg.rtt !== undefined) seat.ping = msg.rtt
     if (this.slotOf(seat).connection === 'absent') {
       sim.setConnection(seat.id, 'present')
       this.scheduleAlarm()
@@ -591,6 +594,7 @@ export class Room {
 
   /** Los jugadores en el mundo, como los ven los demás (sin inventario, en cm). */
   private playerSnaps(): PlayerSnap[] {
+    const pings = new Map([...this.seats.values()].map((s) => [s.id, s.ping]))
     return this.sim!.inWorld().map(({ id, player, inventory, alive, connection }) => ({
       id,
       pos: { x: cm(player.pos.x), y: cm(player.pos.y), z: cm(player.pos.z) },
@@ -600,6 +604,7 @@ export class Room {
       health: Math.round(player.health),
       alive,
       connection,
+      ping: pings.get(id) ?? 0,
     }))
   }
 
@@ -665,6 +670,7 @@ function blankSeat(token: string, id: PlayerId, name: string, slot: PlayerSlot):
     ackTick: 0,
     ackSeq: slot.appliedSeq,
     slack: 0,
+    ping: 0,
     bucket: BURST,
     bucketAt: 0,
   }

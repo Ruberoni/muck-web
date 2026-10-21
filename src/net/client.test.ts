@@ -364,6 +364,26 @@ describe('el espejo de NetClient', () => {
     expect(Math.hypot(seen.pose.x - real.x, seen.pose.z - real.z)).toBeLessThan(2)
     expect(bot.predictor!.stats.corrections).toBe(0)
   })
+
+  it('avisa de quién entra y sale, y cada uno ve el ping del otro', () => {
+    const { time, connect } = setup()
+    const a = connect('a', 'create')
+    run(time, 500, [[a.client, idle]])
+    expect(a.client.takeNotices()).toEqual([])
+    const b = connect('b')
+    run(time, 3000, [[a.client, roam], [b.client, roam]])
+    expect(a.client.takeNotices()).toEqual([{ type: 'join', id: b.client.id, name: 'b' }])
+    expect(a.client.takeNotices()).toEqual([])
+    // Con 100 ms ± 30 en cada sentido el RTT ronda los 200 ms (más la espera hasta el siguiente envío).
+    expect(a.sent.at(-1)!.msg.rtt).toBeGreaterThan(150)
+    const ping = a.client.shownPlayers.find((p) => p.id === b.client.id)!.data.ping
+    expect(ping).toBeGreaterThan(150)
+    expect(ping).toBeLessThan(400)
+    b.client.close()
+    run(time, 500, [[a.client, idle]])
+    expect(a.client.takeNotices()).toEqual([{ type: 'leave', id: b.client.id, name: 'b' }])
+    expect(a.client.shownPlayers).toEqual([])
+  })
 })
 
 describe('compactMoves', () => {

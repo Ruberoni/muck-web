@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { STEP } from '../sim/constants'
 import type { SimEvent, TargetRef } from '../sim/events'
 import type { PropKind } from '../sim/props'
-import { GameAudio, GROWL_DISTANCE, STRIDE } from './gameAudio'
+import { GameAudio, GROWL_DISTANCE, REMOTE_DEATH_GAIN, REMOTE_HEARING, STRIDE, type RemoteWalker } from './gameAudio'
 import { spatialize, volumeToGain, type PlayOptions, type SoundName } from './sound'
 
 function setup() {
@@ -152,5 +152,60 @@ describe('sonido', () => {
       () => 'tree',
     )
     expect(names()).toEqual(['hurt', 'eat', 'craft', 'place', 'death'])
+  })
+})
+
+describe('sonido de los demás', () => {
+  const listener = { x: 0, z: 0, yaw: 0 }
+  const kinds: PropKind[] = ['tree', 'rock']
+
+  it('cada evento suena donde pasa: por su lado, más bajo de lejos y nada fuera de su alcance', () => {
+    const { audio, played } = setup()
+    // El jugador 1 a 10 m a la derecha; el 2, a 25 m (fuera del alcance del daño, dentro del de los golpes).
+    const where: Record<number, { x: number; z: number }> = { 1: { x: 10, z: 0 }, 2: { x: 25, z: 0 } }
+    const locate = (e: SimEvent) => ('id' in e && e.type.startsWith('player') ? where[e.id] : 'by' in e ? where[e.by] : null)
+    audio.remote(
+      [
+        { tick: 1, type: 'playerSwing', id: 1, item: null, target: { kind: 'prop', id: 0 } },
+        { tick: 1, type: 'playerHurt', id: 2, dmg: 5 },
+        { tick: 1, type: 'playerSwing', id: 2, item: null, target: { kind: 'prop', id: 1 } },
+        { tick: 1, type: 'propDestroyed', id: 1, by: 2 },
+        { tick: 1, type: 'pickupCollected', id: 4, by: 1 },
+      ],
+      listener,
+      locate,
+      (id) => kinds[id],
+    )
+    expect(played.map((p) => p.name)).toEqual(['hitWood', 'breakStone'])
+    expect(played[0].options!.gain).toBeCloseTo(spatialize(10, 0, 0, REMOTE_HEARING.hit).gain)
+    expect(played[0].options!.pan).toBeGreaterThan(0.5)
+    expect(played[1].options!.gain).toBeLessThan(played[0].options!.gain!)
+  })
+
+  it('la muerte de otro se oye siempre, aunque esté lejísimos', () => {
+    const { audio, played } = setup()
+    audio.remote([{ tick: 1, type: 'playerDied', id: 3 }], listener, () => ({ x: -500, z: 0 }), () => 'tree')
+    expect(played).toEqual([{ name: 'death', options: { gain: REMOTE_DEATH_GAIN, pan: expect.any(Number) } }])
+    expect(played[0].options!.pan).toBeLessThan(0)
+  })
+
+  it('pasos de cada uno por separado, solo andando por el suelo y hasta 15 m', () => {
+    const { audio, played } = setup()
+    const near: RemoteWalker = { id: 1, x: 5, z: 0, grounded: true, inWater: false, alive: true }
+    const far: RemoteWalker = { id: 2, x: 40, z: 0, grounded: true, inWater: false, alive: true }
+    const air: RemoteWalker = { id: 3, x: -5, z: 0, grounded: false, inWater: false, alive: true }
+    for (let i = 0; i <= 100; i++) {
+      audio.remoteSteps([near, far, air], listener)
+      near.z += 0.1
+      far.z += 0.1
+      air.z += 0.1
+    }
+    expect(played.map((p) => p.name)).toEqual(Array(Math.floor(10 / STRIDE)).fill('step'))
+    expect(played[0].options!.pan).toBeGreaterThan(0)
+    // Un salto de 30 m (teletransporte) no es un paso.
+    played.length = 0
+    near.z += 30
+    audio.remoteSteps([near], listener)
+    expect(played).toEqual([])
   })
 })

@@ -4,8 +4,9 @@ import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import type { Vec3 } from '../sim/player'
 import { botMove, driveClient } from './bot'
 import { NetClient, type ClientHello } from './client'
-import { ROOM_ALPHABET, ROOM_CODE_LENGTH, type DevOp, type Reject } from './protocol'
+import { cleanName, ROOM_ALPHABET, ROOM_CODE_LENGTH, type DevOp, type Reject } from './protocol'
 import type { MoveInput, Session } from './session'
+import { explainClose } from './status'
 import { WebSocketTransport } from './transport'
 
 /** El Worker (`wss://…`, sin ruta). En desarrollo, el de `npm run dev:server`. */
@@ -55,6 +56,13 @@ export class NetError extends Error {
   }
 }
 
+/** Por qué no se pudo entrar en `room`, para mostrarlo en el lobby. */
+export function failureMessage(error: unknown, room: string, url = SERVER_URL): Promise<string> {
+  if (!url) return Promise.resolve('Este build no tiene servidor de multijugador.')
+  if (error instanceof NetError) return explainClose(error.reject, error.code, room, url)
+  return Promise.resolve(String(error))
+}
+
 /** Un NetClient conectado a la sala por WebSocket, ya con su `welcome`. */
 async function connectClient(hello: ClientHello, url: string): Promise<{ client: NetClient; transport: WebSocketTransport }> {
   if (!url) throw new NetError('sin servidor (VITE_SERVER_URL)', null, null)
@@ -84,6 +92,8 @@ async function connectClient(hello: ClientHello, url: string): Promise<{ client:
  */
 export class NetSession implements Session {
   readonly networked = true
+  /** Por qué se cortó la conexión, para el HUD (al cerrarse; tras preguntar a `/status` si hace falta). */
+  closeReason: string | null = null
   private pinger: ReturnType<typeof setInterval> | null = null
   private devWaits: { sentAt: number; until: number; resolve: () => void }[] = []
 
@@ -91,14 +101,24 @@ export class NetSession implements Session {
     readonly client: NetClient,
     readonly transport: WebSocketTransport,
     readonly room: string,
-  ) {}
+    /** El nombre propio (como lo guarda la sala). */
+    readonly name: string,
+    url: string,
+  ) {
+    client.onchange = () => {
+      if (client.state !== 'closed' || this.closeReason) return
+      this.closeReason = 'Sin conexión con el servidor.'
+      explainClose(client.rejected, client.closeCode, room, url).then((reason) => (this.closeReason = reason))
+    }
+  }
 
   /** Entra en la sala `room` (o la crea) con el token guardado de una visita anterior, si lo hay. */
   static async open(intent: 'create' | 'join', room: string, name: string, url = SERVER_URL): Promise<NetSession> {
     const token = loadToken(room)
-    const { client, transport } = await connectClient({ intent, room, name, tab: TAB, ...(token ? { token } : {}) }, url)
+    const clean = cleanName(name) ?? ''
+    const { client, transport } = await connectClient({ intent, room, name: clean, tab: TAB, ...(token ? { token } : {}) }, url)
     saveToken(room, client.token!)
-    return new NetSession(client, transport, room)
+    return new NetSession(client, transport, room, clean, url)
   }
 
   /** Crea una sala con un código nuevo (otro si ya existe). */
