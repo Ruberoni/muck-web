@@ -171,7 +171,7 @@
   font-size: 14px;
 }
 
-.crafting[hidden] { display: none; }
+.crafting[hidden], .crosshair[hidden] { display: none; }
 .crafting .title { margin: 0 0 2px; font-size: 16px; }
 .crafting .hint { margin: 2px 0 0; font-size: 12px; opacity: 0.7; }
 
@@ -333,6 +333,55 @@ kbd {
   background: rgb(0 0 0 / 0.4);
   animation: notice 5s ease-out forwards;
   white-space: nowrap;
+}
+
+/* Encima de las barras de vida, hambre y aguante (3 × 12 px + 2 huecos de 6). */
+.chat {
+  position: absolute;
+  left: 16px;
+  bottom: calc(16px + 48px + 12px);
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.chat-log { display: grid; gap: 2px; justify-items: start; }
+
+.chat-line {
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.35);
+  overflow-wrap: anywhere;
+  animation: chat-line 10s ease-out forwards;
+}
+
+.chat-line .who { font-weight: 600; }
+
+/* Con el chat abierto se ven las últimas líneas aunque ya se hubieran desvanecido. */
+.chat.open .chat-line { animation: none; opacity: 1; }
+
+.chat-input {
+  pointer-events: auto;
+  font: inherit;
+  color: #fff;
+  padding: 6px 8px;
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.55);
+  outline: none;
+}
+
+.chat-input[hidden] { display: none; }
+
+@keyframes chat-line {
+  0%, 90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (max-width: 1060px) {
+  .chat { bottom: calc(16px + var(--slot) + 12px + 48px + 12px); }
 }
 
 @keyframes notice {

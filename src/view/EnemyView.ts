@@ -31,15 +31,18 @@ const eyeGeometry = mergeGeometries([
 // Un poco de emisivo para que la silueta se lea de noche.
 const BODY_GLOW = new THREE.Color('#2b1240')
 const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#9558bd', emissive: BODY_GLOW, flatShading: true })
+const HURT_COLOR = new THREE.Color('#ff3b2f')
+// Compartidos por todos (hasta 24 a la vez): el destello de un golpe cambia de material en vez de clonar uno por enemigo.
+const hurtMaterial = bodyMaterial.clone()
+hurtMaterial.emissive.copy(HURT_COLOR)
 const detailMaterial = new THREE.MeshStandardMaterial({ color: '#3a2348', flatShading: true })
 // Sin iluminación: los ojos se ven de noche.
 const eyeMaterial = new THREE.MeshBasicMaterial({ color: '#ffe066' })
-const HURT_COLOR = new THREE.Color('#ff3b2f')
 
 /** Modelo de un enemigo y sus animaciones, que solo existen en la vista. */
 interface EnemyModel {
   object: THREE.Group
-  material: THREE.MeshStandardMaterial
+  body: THREE.Mesh
   /** Dónde se dibujó en el último frame (al morir se queda ahí). */
   x: number
   z: number
@@ -130,9 +133,8 @@ export class EnemyView {
   }
 
   private create(id: number, x: number, z: number): EnemyModel {
-    const material = bodyMaterial.clone()
     const object = new THREE.Group()
-    const body = new THREE.Mesh(bodyGeometry, material)
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
     const detail = new THREE.Mesh(detailGeometry, detailMaterial)
     const eyes = new THREE.Mesh(eyeGeometry, eyeMaterial)
     body.castShadow = detail.castShadow = true
@@ -140,7 +142,7 @@ export class EnemyView {
     // Para reconocerlo en un raycast contra la vista (test de paridad con sim/aim.ts).
     for (const mesh of object.children) mesh.userData.enemy = id
     this.group.add(object)
-    const model: EnemyModel = { object, material, x, z, yaw: 0, walk: 0, hurt: 0, lunge: 0, stagger: 0, dying: null }
+    const model: EnemyModel = { object, body, x, z, yaw: 0, walk: 0, hurt: 0, lunge: 0, stagger: 0, dying: null }
     this.models.set(id, model)
     return model
   }
@@ -148,7 +150,6 @@ export class EnemyView {
   private remove(id: number, model: EnemyModel) {
     this.models.delete(id)
     this.group.remove(model.object)
-    model.material.dispose()
   }
 
   private place(model: EnemyModel) {
@@ -162,6 +163,6 @@ export class EnemyView {
     // Muere encogiéndose y hundiéndose.
     const s = model.dying === null ? 1 : Math.max(0, model.dying / DEATH_TIME)
     o.scale.set(1 + (1 - s) * 0.3, s, 1 + (1 - s) * 0.3).multiplyScalar(ENEMY_MODEL_SCALE)
-    model.material.emissive.copy(model.hurt > 0 ? HURT_COLOR : BODY_GLOW)
+    model.body.material = model.hurt > 0 ? hurtMaterial : bodyMaterial
   }
 }

@@ -50,6 +50,7 @@ const CONTROLS = `
     <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
     <li><kbd>C</kbd> crafteo (con él abierto, 1–5 fabrica)</li>
     <li><kbd>Clic</kbd> con la fogata en la mano: colocarla</li>
+    <li><kbd>Enter</kbd> chat (en una sala)</li>
     <li><kbd>Esc</kbd> pausa</li>
   </ul>`
 
@@ -79,6 +80,7 @@ export class Hud {
   private crafting: HTMLElement
   private recipes: HTMLElement[] = []
   private hurt: HTMLElement
+  private crosshair: HTMLElement
   private overlay: HTMLElement
   private overlayTitle: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
@@ -88,7 +90,7 @@ export class Hud {
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
     this.hurt = el('div', 'hurt', root)
-    el('div', 'crosshair', root)
+    this.crosshair = el('div', 'crosshair', root)
     this.prompt = el('div', 'prompt', root)
     this.day = el('div', 'day', root)
     this.minimap = new Minimap(root)
@@ -192,6 +194,11 @@ export class Hud {
     this.last.prompt = text
     this.prompt.textContent = text
     this.prompt.hidden = !text
+  }
+
+  /** La mira (el espectador no apunta a nada). */
+  setCrosshair(visible: boolean) {
+    this.crosshair.hidden = !visible
   }
 
   /** Destello rojo en los bordes al recibir daño. */

@@ -9,13 +9,14 @@ import {
   PROTOCOL_VERSION,
   type Cmds,
   type Dev,
-  type EnemySnap,
+  enemyTuple,
+  pickupTuple,
+  playerTuple,
   type Hello,
-  type PickupSnap,
   type PlayerSnap,
   type RejectReason,
   type ServerMessage,
-  type Snap,
+  type SnapWire,
   type WorldState,
   type You,
 } from '../src/net/protocol'
@@ -103,6 +104,8 @@ export { MOVE_REPEAT }
 export const MAX_AHEAD = 2 * TICK_RATE
 /** Ticks por vuelta como mucho: si el proceso se atrasa más, el reloj se rebasa en vez de recuperar. */
 const MAX_CATCHUP = 30
+/** Un mensaje de chat por jugador como mucho cada tanto (ms). */
+export const CHAT_MS = 400
 /** Token bucket de mensajes por socket. */
 const RATE = 60
 const BURST = 120
@@ -131,6 +134,9 @@ interface Seat {
   slack: number
   /** El RTT que dijo en su último `cmds`. */
   ping: number
+  /** El último inventario que se le mandó (JSON): un `snap` solo lo lleva si ha cambiado. */
+  sentInventory: string
+  lastChatAt: number
   bucket: number
   bucketAt: number
 }
@@ -209,6 +215,8 @@ export class Room {
       this.kick(conn)
     } else if (msg.type === 'cmds') {
       this.cmds(seat, msg)
+    } else if (msg.type === 'say') {
+      this.say(seat, msg.text)
     } else if (msg.type === 'dev') {
       if (this.deps.dev) this.dev(seat, msg)
       else this.kick(conn)
@@ -282,6 +290,8 @@ export class Room {
     if (!this.loop) this.resume()
     this.attach(seat, conn, msg.tab, 'present')
     seat.lastT = msg.t
+    const own = you(this.slotOf(seat))
+    seat.sentInventory = JSON.stringify(own.inventory)
     this.send(conn, {
       type: 'welcome',
       id: seat.id,
@@ -292,7 +302,7 @@ export class Room {
       worldStartTick: sim.startTick,
       placements: this.placements,
       state: this.worldState(seat.id),
-      you: you(this.slotOf(seat)),
+      you: own,
       ...(islandReset ? { islandReset: true as const } : {}),
     })
     if (!reconnecting) this.broadcast({ type: 'join', id: seat.id, name: seat.name }, seat)
@@ -330,6 +340,14 @@ export class Room {
       seat.ackSeq = action.seq
       seat.actions.push(action)
     }
+  }
+
+  /** Chat: a todos, también a quien lo dice. Más de uno cada CHAT_MS se ignora (sin cerrar: es fácil pulsar Enter dos veces). */
+  private say(seat: Seat, text: string) {
+    const now = this.deps.clock.now()
+    if (now - seat.lastChatAt < CHAT_MS) return
+    seat.lastChatAt = now
+    this.broadcast({ type: 'chat', id: seat.id, name: seat.name, text })
   }
 
   /** Un truco de `__debug`, al momento (fuera del bucle). */
@@ -409,12 +427,13 @@ export class Room {
 
     if (events.length) this.broadcast({ type: 'ev', list: events })
     const players = this.playerSnaps()
-    const enemies: EnemySnap[] = sim.enemies.list.map((e) => ({ id: e.id, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp }))
-    const movingPickups: PickupSnap[] = sim.pickups.list
+    const tuples = players.map(playerTuple)
+    const enemies = sim.enemies.list.map((e) => enemyTuple({ id: e.id, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp }))
+    const movingPickups = sim.pickups.list
       .filter((p) => this.movedPickups.has(p.id))
-      .map((p) => ({ id: p.id, pos: { x: cm(p.pos.x), y: cm(p.pos.y), z: cm(p.pos.z) }, grounded: p.grounded }))
+      .map((p) => pickupTuple({ id: p.id, pos: { x: cm(p.pos.x), y: cm(p.pos.y), z: cm(p.pos.z) }, grounded: p.grounded }))
     for (const seat of this.connected()) {
-      const snap: Snap = {
+      const snap: SnapWire = {
         type: 'snap',
         tick: sim.tick,
         t: seat.lastT,
@@ -422,12 +441,12 @@ export class Room {
         ackTick: seat.ackTick,
         ackSeq: seat.ackSeq,
         slack: seat.slack,
-        you: you(this.slotOf(seat)),
-        players: players.filter((p) => p.id !== seat.id),
+        you: this.snapYou(seat),
+        players: tuples.filter((p) => p[0] !== seat.id),
         enemies,
         movingPickups,
       }
-      this.send(seat.conn!, snap)
+      seat.conn!.send(JSON.stringify(snap))
     }
   }
 
@@ -597,7 +616,29 @@ export class Room {
 
   private fullState(seat: Seat) {
     const sim = this.sim!
-    return { tick: sim.tick, worldStartTick: sim.startTick, state: this.worldState(seat.id), you: you(this.slotOf(seat)) }
+    const own = you(this.slotOf(seat))
+    seat.sentInventory = JSON.stringify(own.inventory)
+    return { tick: sim.tick, worldStartTick: sim.startTick, state: this.worldState(seat.id), you: own }
+  }
+
+  /** Su `you` para un `snap`: sin la orientación ni `prev`, y sin el inventario si no ha cambiado desde el último enviado. */
+  private snapYou(seat: Seat): SnapWire['you'] {
+    const slot = this.slotOf(seat)
+    // Se convierte a JSON enseguida: no hace falta copiar.
+    const { yaw: _yaw, pitch: _pitch, prev: _prev, ...player } = slot.player
+    const inventory = slot.inventory.save()
+    const json = JSON.stringify(inventory)
+    const changed = json !== seat.sentInventory
+    seat.sentInventory = json
+    return {
+      player,
+      ...(changed ? { inventory } : {}),
+      combat: slot.combat,
+      hotbarFull: slot.hotbarFull,
+      alive: slot.alive,
+      respawnAt: slot.respawnAt,
+      appliedSeq: slot.appliedSeq,
+    }
   }
 
   /** Los jugadores en el mundo, como los ven los demás (sin inventario, en cm). */
@@ -679,6 +720,8 @@ function blankSeat(token: string, id: PlayerId, name: string, slot: PlayerSlot):
     ackSeq: slot.appliedSeq,
     slack: 0,
     ping: 0,
+    sentInventory: '',
+    lastChatAt: -Infinity,
     bucket: BURST,
     bucketAt: 0,
   }

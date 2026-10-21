@@ -13,7 +13,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 6
+export const PROTOCOL_VERSION = 7
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -35,6 +35,8 @@ export const MAX_MOVE_REPEAT = 120
 export const MAX_ACTIONS = 32
 /** RTT máximo que se acepta en `cmds` (ms). */
 export const MAX_RTT = 60_000
+/** Caracteres de un mensaje de chat. */
+export const MAX_CHAT = 120
 const MAX_TOKEN = 64
 
 /** Códigos de cierre del WebSocket. */
@@ -88,6 +90,12 @@ export interface Resync {
   type: 'resync'
 }
 
+/** Un mensaje de chat: la sala lo reparte a todos (también a quien lo manda) como `chat`. */
+export interface Say {
+  type: 'say'
+  text: string
+}
+
 /**
  * Los trucos de `__debug` en red (solo en desarrollo: la sala de producción cierra el socket con 4005).
  * Se aplican al llegar, fuera del bucle; lo que emiten sale en el siguiente `ev`.
@@ -102,7 +110,7 @@ export type DevOp =
 
 export type Dev = { type: 'dev' } & DevOp
 
-export type ClientMessage = Hello | Cmds | Resync | Dev
+export type ClientMessage = Hello | Cmds | Resync | Say | Dev
 
 // --- Servidor → cliente ---
 
@@ -116,6 +124,14 @@ export interface You {
   /** Muerto: tick en que reaparece (ver `Simulation`). */
   respawnAt: number | null
   appliedSeq: number
+}
+
+/** El jugador sin la orientación ni `prev`: lo que reconcilia la predicción (la orientación la decide el ratón). */
+export type PlayerState = Omit<Player, 'yaw' | 'pitch' | 'prev'>
+
+/** `you` de un `snap`, ya leído: sin la orientación ni `prev` del jugador. */
+export interface SnapYou extends Omit<You, 'player'> {
+  player: PlayerState
 }
 
 /** Otro jugador, como se ve desde fuera (sin inventario). Posiciones en cm. */
@@ -189,7 +205,7 @@ export interface Snap {
   ackSeq: number
   /** Ticks de margen que tenía el último `Move` al llegar (negativo: llegó tarde). */
   slack: number
-  you: You
+  you: SnapYou
   players: PlayerSnap[]
   enemies: EnemySnap[]
   movingPickups: PickupSnap[]
@@ -222,7 +238,94 @@ export interface Leave {
   name: string
 }
 
-export type ServerMessage = Welcome | Reject | Snap | Ev | StateMsg | Join | Leave
+export interface Chat {
+  type: 'chat'
+  id: PlayerId
+  name: string
+  text: string
+}
+
+/** Los mensajes del servidor ya leídos (un `snap` llega en `SnapWire` y lo lee `ServerDecoder`). */
+export type ServerMessage = Welcome | Reject | Snap | Ev | StateMsg | Join | Leave | Chat
+
+// --- `snap` en el cable ---
+
+/**
+ * El `snap` tal como viaja, 20 veces por segundo a cada jugador: los demás, los enemigos y los objetos que se mueven
+ * en tuplas en vez de objetos con claves, y `you` sin la orientación ni `prev` y sin el inventario si no ha cambiado
+ * desde el último que se le mandó (en `welcome`, `state` o un `snap`; el socket es fiable y ordenado).
+ */
+export interface SnapWire extends Omit<Snap, 'you' | 'players' | 'enemies' | 'movingPickups'> {
+  you: Omit<SnapYou, 'inventory'> & { inventory?: InventoryState }
+  players: PlayerTuple[]
+  enemies: EnemyTuple[]
+  movingPickups: PickupTuple[]
+}
+
+/** `[id, x, y, z, yaw, pitch, item, health, vivo (1/0), ausente (1/0), ping]`: solo van los que están en el mundo. */
+export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number]
+/** `[id, x, z, yaw, hp]` */
+export type EnemyTuple = [number, number, number, number, number]
+/** `[id, x, y, z, en el suelo (1/0)]` */
+export type PickupTuple = [number, number, number, number, 0 | 1]
+
+export const playerTuple = (p: PlayerSnap): PlayerTuple => [
+  p.id,
+  p.pos.x,
+  p.pos.y,
+  p.pos.z,
+  p.yaw,
+  p.pitch,
+  p.item,
+  p.health,
+  p.alive ? 1 : 0,
+  p.connection === 'absent' ? 1 : 0,
+  p.ping,
+]
+export const enemyTuple = (e: EnemySnap): EnemyTuple => [e.id, e.pos.x, e.pos.z, e.yaw, e.hp]
+export const pickupTuple = (p: PickupSnap): PickupTuple => [p.id, p.pos.x, p.pos.y, p.pos.z, p.grounded ? 1 : 0]
+
+/**
+ * Lee lo que llega del servidor por un socket. Recuerda el último inventario propio que le llegó, para los `snap`
+ * que no lo traen: hay que pasarle todos los mensajes, en orden, también los que luego se ignoran.
+ */
+export class ServerDecoder {
+  private inventory: InventoryState | null = null
+
+  decode(data: string): ServerMessage {
+    const msg = JSON.parse(data) as Exclude<ServerMessage, Snap> | SnapWire
+    switch (msg.type) {
+      case 'welcome':
+      case 'state':
+        this.inventory = msg.you.inventory
+        return msg
+      case 'snap': {
+        const inventory = msg.you.inventory ?? this.inventory
+        if (!inventory) throw new Error('snap sin inventario antes de welcome')
+        this.inventory = inventory
+        return {
+          ...msg,
+          you: { ...msg.you, inventory },
+          players: msg.players.map(([id, x, y, z, yaw, pitch, item, health, alive, absent, ping]) => ({
+            id,
+            pos: { x, y, z },
+            yaw,
+            pitch,
+            item,
+            health,
+            alive: alive === 1,
+            connection: absent === 1 ? 'absent' : 'present',
+            ping,
+          })),
+          enemies: msg.enemies.map(([id, x, z, yaw, hp]) => ({ id, pos: { x, z }, yaw, hp })),
+          movingPickups: msg.movingPickups.map(([id, x, y, z, grounded]) => ({ id, pos: { x, y, z }, grounded: grounded === 1 })),
+        }
+      }
+      default:
+        return msg
+    }
+  }
+}
 
 // --- Validación ---
 
@@ -243,6 +346,13 @@ export function cleanName(name: unknown): string | null {
   if (typeof name !== 'string' || CONTROL.test(name)) return null
   const trimmed = name.trim()
   return trimmed.length <= MAX_NAME ? trimmed : null
+}
+
+/** Texto de chat limpio, o null si no vale: de 1 a MAX_CHAT caracteres sin caracteres de control. */
+export function cleanChat(text: unknown): string | null {
+  if (typeof text !== 'string' || CONTROL.test(text)) return null
+  const trimmed = text.trim()
+  return trimmed.length > 0 && trimmed.length <= MAX_CHAT ? trimmed : null
 }
 
 /**
@@ -267,6 +377,10 @@ export function parseClientMessage(data: string): Parsed {
     }
     case 'resync':
       return { ok: true, msg: { type: 'resync' } }
+    case 'say': {
+      const text = cleanChat(raw.text)
+      return text ? { ok: true, msg: { type: 'say', text } } : INVALID
+    }
     case 'dev': {
       const msg = parseDev(raw)
       return msg ? { ok: true, msg } : INVALID

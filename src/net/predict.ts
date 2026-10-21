@@ -5,7 +5,7 @@ import type { InventoryState } from '../sim/inventory'
 import type { Player, Vec3 } from '../sim/player'
 import { predictPlayer, type PredictWorld } from '../sim/playerTick'
 import type { PlayerSlot } from '../sim/Simulation'
-import type { You } from './protocol'
+import type { PlayerState, SnapYou, You } from './protocol'
 
 /** Un error de posición menor que este se suaviza al dibujar; uno mayor, salta. */
 export const SMOOTH_MAX = 0.3
@@ -103,7 +103,7 @@ export class Predictor {
    * El estado del servidor al final de `tick`: corrige la predicción y re-simula lo que va por delante.
    * Devuelve el error de posición en `tick` respecto a lo predicho (0 si coincide o no hay con qué comparar).
    */
-  reconcile(tick: number, you: You): number {
+  reconcile(tick: number, you: SnapYou): number {
     const { player } = this.slot
     let error = 0
     const predicted = this.history.find((h) => h.move.tick === tick)
@@ -159,11 +159,11 @@ export class Predictor {
     return { move, actions }
   }
 
-  /** Copia `you` en el jugador salvo la orientación y `prev`. */
-  private load(you: You) {
+  /** Copia `you` en el jugador salvo la orientación y `prev` (un `snap` ni los trae). */
+  private load(you: SnapYou) {
     const { player } = this.slot
     const { yaw, pitch, prev } = player
-    Object.assign(player, copyPlayer(you.player), { yaw, pitch, prev })
+    Object.assign(player, you.player, { pos: { ...you.player.pos }, vel: { ...you.player.vel } }, { yaw, pitch, prev })
     this.slot.inventory.load(you.inventory)
     Object.assign(this.slot.combat, you.combat)
     this.slot.hotbarFull = you.hotbarFull
@@ -190,8 +190,8 @@ export class Predictor {
   }
 }
 
-/** Lo predicho y lo del servidor coinciden (salvo `prev`, que solo sirve para dibujar). */
-function samePrediction(a: Predicted, you: You): boolean {
+/** Lo predicho y lo del servidor coinciden (salvo la orientación, que decide el ratón, y `prev`, que solo sirve para dibujar). */
+function samePrediction(a: Predicted, you: SnapYou): boolean {
   return (
     samePlayer(a.player, you.player) &&
     sameInventory(a.inventory, you.inventory) &&
@@ -202,12 +202,12 @@ function samePrediction(a: Predicted, you: You): boolean {
   )
 }
 
-function samePlayer(a: Player, b: Player): boolean {
+function samePlayer(a: Player, b: PlayerState): boolean {
   const same = (u: Vec3, v: Vec3) => u.x === v.x && u.y === v.y && u.z === v.z
   return (Object.keys(b) as (keyof Player)[]).every((key) => {
-    if (key === 'prev') return true
-    if (key === 'pos' || key === 'vel') return same(a[key], b[key])
-    return a[key] === b[key]
+    if (key === 'prev' || key === 'yaw' || key === 'pitch') return true
+    if (key === 'pos' || key === 'vel') return same(a[key], (b as Player)[key])
+    return a[key] === (b as Player)[key]
   })
 }
 

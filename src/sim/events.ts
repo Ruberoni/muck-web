@@ -34,6 +34,8 @@ export type SimEventData =
   | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }
   /** En una sala, todos muertos: la isla se reinicia a los pocos segundos (`worldReset`). */
   | { type: 'gameOver'; day: number }
+  /** Durante la cuenta atrás del game over ha entrado o vuelto alguien vivo: la isla no se reinicia. */
+  | { type: 'gameOverCancelled' }
   | { type: 'clockSet'; worldStartTick: number }
   | { type: 'worldReset'; worldStartTick: number }
 

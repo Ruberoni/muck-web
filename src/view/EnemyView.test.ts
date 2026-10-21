@@ -71,6 +71,21 @@ describe('EnemyView', () => {
     expect(body().material.emissive.equals(HURT)).toBe(false)
   })
 
+  it('todos comparten material, también el del destello', () => {
+    const { enemies, view, frame } = setup()
+    const a = enemies.spawnAt(10, 20)
+    enemies.spawnAt(-10, 20)
+    const c = enemies.spawnAt(0, 30)
+    frame()
+    view.present([{ type: 'enemyHit', id: a.id, hp: 4, kx: 1, kz: 0, by: 0 }, { type: 'enemyHit', id: c.id, hp: 4, kx: 1, kz: 0, by: 0 }])
+    frame(0.05)
+    const materials = view.group.children.map((m) => ((m as THREE.Group).children[0] as THREE.Mesh).material)
+    expect(materials[0]).toBe(materials[2])
+    expect(materials[1]).not.toBe(materials[0])
+    frame(0.2)
+    expect(new Set(view.group.children.map((m) => ((m as THREE.Group).children[0] as THREE.Mesh).material)).size).toBe(1)
+  })
+
   it('al atacar se lanza hacia delante y vuelve', () => {
     const { enemies, view, frame, model } = setup()
     const e = enemies.spawnAt(10, 20)

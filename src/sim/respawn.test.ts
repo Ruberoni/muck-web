@@ -128,6 +128,29 @@ describe('muerte en una sala', () => {
     expect(idle(sim).some((e) => e.type === 'gameOver')).toBe(true)
   })
 
+  it('si entra o vuelve alguien vivo durante la cuenta atrás, el game over se cancela', () => {
+    const sim = withPlayers(2)
+    kill(sim, 0)
+    sim.setConnection(1, 'gone')
+    expect(idle(sim).some((e) => e.type === 'gameOver')).toBe(true)
+    idle(sim)
+    // Vuelve el que estaba vivo (una reconexión, por ejemplo).
+    sim.setConnection(1, 'present')
+    const events = idle(sim)
+    expect(events.map((e) => e.type)).toContain('gameOverCancelled')
+    // El muerto sigue esperando su reaparición y la isla no se reinicia.
+    const respawn = until(sim, 'playerRespawn', DAY_TICKS + 1)
+    expect(respawn.some((e) => e.type === 'worldReset')).toBe(false)
+    expect(sim.slot(0).alive).toBe(true)
+
+    // Un jugador nuevo también lo cancela.
+    kill(sim, 0)
+    kill(sim, 1)
+    sim.addPlayer()
+    expect(idle(sim).map((e) => e.type)).toContain('gameOverCancelled')
+    for (let i = 0; i < GAME_OVER_TICKS + 1; i++) expect(idle(sim).some((e) => e.type === 'worldReset')).toBe(false)
+  })
+
   it('respawnAt y el game over pendiente sobreviven a toJSON/fromJSON', () => {
     const sim = withPlayers(2)
     kill(sim, 0)

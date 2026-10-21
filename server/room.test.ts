@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CloseCode,
+  MAX_CHAT,
   MAX_PLAYERS,
   MAX_SEATS,
   PROTOCOL_VERSION,
+  ServerDecoder,
   type Hello,
   type MoveMsg,
   type ServerMessage,
@@ -20,7 +22,7 @@ import type { PropData } from '../src/sim/props'
 import type { Simulation } from '../src/sim/Simulation'
 import { DAY_FRACTION } from '../src/sim/world/daycycle'
 import { heightAt } from '../src/sim/world/terrain'
-import { ABSENT_MS, FORGOTTEN_MS, ISLAND_TTL_MS, LOOP_MS, MAX_AHEAD, MemoryStorage, MOVE_REPEAT, Room, SAVE_MS } from './room'
+import { ABSENT_MS, CHAT_MS, FORGOTTEN_MS, ISLAND_TTL_MS, LOOP_MS, MAX_AHEAD, MemoryStorage, MOVE_REPEAT, Room, SAVE_MS } from './room'
 
 const CODE = 'K7QX2'
 
@@ -44,6 +46,7 @@ class Client {
   token?: string
   /** Última `seq` usada: tras `welcome`, la de `you.appliedSeq`. */
   seq = 0
+  private decoder = new ServerDecoder()
 
   constructor(
     readonly room: Room,
@@ -54,7 +57,7 @@ class Client {
     this.transport = new LaggyTransport(room, time, lag)
     this.transport.onmessage = (data) => {
       this.raw.push(data)
-      const msg = JSON.parse(data) as ServerMessage
+      const msg = this.decoder.decode(data)
       this.msgs.push(msg)
       if (msg.type === 'welcome') {
         this.id = msg.id
@@ -185,6 +188,47 @@ describe('Room', () => {
     expect(b.snap.players[0].item).toBe('wood')
     for (const raw of b.raw) expect(raw).not.toContain('stone_pickaxe')
     expect(b.snap.you.inventory.counts).toEqual({})
+  })
+
+  it('un snap lleva el inventario solo si ha cambiado, y nunca la orientación ni prev de `you`', () => {
+    const { room, time } = setup()
+    const a = new Client(room, time)
+    join(a)
+    play(time, 300, [[a]])
+    const raw = () => a.raw.filter((r) => r.startsWith('{"type":"snap"')).map((r) => JSON.parse(r))
+    expect(raw().every((s) => s.you.inventory === undefined)).toBe(true)
+    expect(raw().every((s) => !('yaw' in s.you.player) && !('prev' in s.you.player))).toBe(true)
+    room.sim!.slot(a.id).inventory.add('wood', 3)
+    play(time, 300, [[a]])
+    expect(raw().filter((s) => s.you.inventory)).toHaveLength(1)
+    // Leído, todos lo llevan.
+    expect(a.snap.you.inventory.counts).toEqual({ wood: 3 })
+    // Tras un estado completo (que ya lo lleva), tampoco se repite.
+    a.send({ type: 'resync' })
+    play(time, 300, [[a]])
+    expect(raw().filter((s) => s.you.inventory)).toHaveLength(1)
+  })
+
+  it('el chat llega a todos con el nombre de quien escribe; más de uno cada 400 ms se ignora', () => {
+    const { room, time } = setup()
+    const a = new Client(room, time)
+    const b = new Client(room, time, 'b')
+    join(a, b)
+    b.send({ type: 'say', text: '  hola  ' })
+    b.send({ type: 'say', text: 'otra vez' })
+    time.advance(CHAT_MS)
+    b.send({ type: 'say', text: 'ya' })
+    time.advance(0)
+    const chat = (text: string) => ({ type: 'chat', id: b.id, name: 'Ana', text })
+    expect(a.of('chat')).toEqual([chat('hola'), chat('ya')])
+    expect(b.of('chat')).toEqual([chat('hola'), chat('ya')])
+    for (const text of ['', ' ', 'x'.repeat(MAX_CHAT + 1), 'a\u0007b', 3]) {
+      const c = new Client(room, time, 'c')
+      c.hello('join')
+      c.send({ type: 'say', text })
+      time.advance(0)
+      expect(c.closed, String(text)).toBe(CloseCode.Invalid)
+    }
   })
 
   it('las acciones se aplican en su tick, una vez, en orden, y las que llegan tarde en el siguiente', () => {
@@ -644,6 +688,25 @@ describe('Room', () => {
     expect(a.events.filter((e) => e.type === 'gameOver')).toHaveLength(1)
     expect(b.events.filter((e) => e.type === 'worldReset')).toHaveLength(1)
     expect(b.snap.you.alive).toBe(true)
+  })
+
+  it('si el único vivo se corta y vuelve antes de los 6 s, el game over se cancela', () => {
+    const { room, time } = setup(new MemoryStorage(), true)
+    const a = new Client(room, time, 'a')
+    const b = new Client(room, time, 'b')
+    join(a, b)
+    b.send({ type: 'dev', op: 'setVitals', health: 0, hunger: 0 })
+    play(time, 200, [[a], [b]])
+    a.transport.close()
+    play(time, 1000, [[b]])
+    expect(b.events.filter((e) => e.type === 'gameOver')).toHaveLength(1)
+    const back = new Client(room, time, 'a')
+    back.token = a.token
+    back.hello('join')
+    play(time, 10_000, [[back], [b]])
+    expect(b.events.filter((e) => e.type === 'gameOverCancelled')).toHaveLength(1)
+    expect(b.events.some((e) => e.type === 'worldReset')).toBe(false)
+    expect(b.snap.you.alive).toBe(false)
   })
 
   it('funciona igual con latencia y jitter', () => {
