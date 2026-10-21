@@ -6,6 +6,7 @@ import type { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
 import { CampfireView } from '../view/CampfireView'
+import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
@@ -21,6 +22,7 @@ import { loadSettings, saveSettings, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/player'
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import { LocalSession, type Session } from '../net/session'
+import type { NetSession } from '../net/netSession'
 
 export type GameState = 'menu' | 'playing' | 'paused' | 'dead'
 
@@ -31,18 +33,24 @@ const CAMPFIRE_HEARING = 14
 /**
  * El cliente: convierte la entrada en comandos para la sesión y dibuja, suena y muestra lo que pasa.
  * El estado de la partida vive en `session.sim`; Game solo lo lee (salvo los trucos de debug).
+ *
+ * Con un jugador (LocalSession) los pasos fijos salen de un acumulador. En red (NetSession) el ritmo lo marca su
+ * reloj, `sim` es un espejo y hay más que presentar: los eventos del servidor que tratan del jugador local (al
+ * llegar, con sonido) y los de los demás (en el tick de render, sin sonido hasta el audio remoto, PR 13).
  */
 export class Game {
   readonly renderer: THREE.WebGLRenderer
   readonly camera: THREE.PerspectiveCamera
   readonly scene: THREE.Scene
-  readonly session: Session = new LocalSession()
+  /** Se cambia con setSession (al entrar en una sala o volver a jugar solo). */
+  session: Session = new LocalSession()
   readonly propView: PropView
   readonly hud: Hud
   readonly input: Input
   readonly enemyView = new EnemyView()
   readonly pickupView = new PickupView()
   readonly campfireView: CampfireView
+  readonly remotePlayers = new RemotePlayerView()
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
@@ -70,6 +78,10 @@ export class Game {
   private shadowCenter = new THREE.Vector3()
   private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
   private sun = new THREE.Vector3()
+  /** Acciones de `__debug` (select, craft) para el siguiente paso, como si fueran teclas. */
+  private queued: ActionData[] = []
+  /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
+  private worldVersion = -1
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -90,13 +102,11 @@ export class Game {
     this.water = water
     this.propView = propView
     this.campfireView = new CampfireView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
-    const { inventory } = this.slot
-    this.hud.setInventory(inventory)
-    inventory.onChange(() => this.hud.setInventory(inventory))
+    this.bindInventory()
     this.sound.setVolume(this.settings.volume)
     createSettingsPanel(
       this.hud.panel,
@@ -136,30 +146,65 @@ export class Game {
     return this.session.slot
   }
 
+  /** La sesión en red, si se está jugando en una sala. */
+  get net(): NetSession | null {
+    return this.session.networked ? (this.session as NetSession) : null
+  }
+
+  /** Cambia de partida (entrar en una sala, o volver a jugar solo): la vista se rehace desde la nueva. */
+  setSession(session: Session) {
+    if (session === this.session) return
+    this.net?.close()
+    this.session = session
+    this.bindInventory()
+    this.setCrafting(false)
+    this.resetViews()
+    this.worldVersion = -1
+    this.lookFromPlayer()
+    this.acc = 0
+    this.snapPlayer = true
+    this.placeCamera(this.slot.player.pos)
+    // En el menú o en pausa no predice ni envía: al empezar a jugar pide el estado.
+    if (this.state !== 'playing') this.net?.suspend()
+  }
+
   setState(state: GameState) {
     if (state === 'playing' && this.state !== 'playing') {
       // Al empezar o reanudar no se interpola desde la posición de antes de la pausa.
       this.snapPlayer = true
       this.acc = 0
+      this.net?.wake()
     }
-    if (state !== 'playing') this.input.clear()
+    if (state !== 'playing') {
+      this.input.clear()
+      // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue.
+      this.net?.suspend()
+    }
     this.state = state
     this.hud.showOverlay(state === 'playing' ? null : state)
   }
 
-  /** Partida nueva: inventario vacío, isla restaurada y jugador en el punto de aparición. */
+  /** Partida nueva: inventario vacío, isla restaurada y jugador en el punto de aparición. En red no hace nada (la isla es del servidor). */
   restart() {
+    if (this.net) return
     this.session.reset()
     this.setCrafting(false)
-    this.propView.reset()
-    this.enemyView.reset()
-    this.pickupView.reset()
-    this.campfireView.reset()
-    this.audio.reset()
+    this.resetViews()
     this.lookFromPlayer()
     this.acc = 0
     this.placeCamera(this.slot.player.pos)
     if (this.state === 'dead') this.setState('menu')
+  }
+
+  /** Una acción para el siguiente paso, como si se hubiera pulsado su tecla (`__debug.select`/`craft`). */
+  queueAction(action: ActionData) {
+    this.queued.push(action)
+  }
+
+  /** Orienta la cámara (y lo que se manda en cada `Move`). */
+  setLook(yaw: number, pitch: number) {
+    this.look.yaw = yaw
+    this.look.pitch = pitch
   }
 
   /** Aplica los ajustes actuales (al mover un deslizador). */
@@ -176,8 +221,13 @@ export class Game {
     this.hud.setCrafting(open)
   }
 
-  /** Truco de debug: mueve al jugador y la cámara. */
-  teleport(x: number, z: number, yaw = this.look.yaw, pitch = this.look.pitch) {
+  /** Truco de debug: mueve al jugador y la cámara. En red lo hace el servidor: se cumple cuando la predicción lo recoge. */
+  teleport(x: number, z: number, yaw = this.look.yaw, pitch = this.look.pitch): Promise<void> | void {
+    const { net } = this
+    if (net) {
+      this.setLook(yaw, pitch)
+      return net.dev({ op: 'teleport', x, z, yaw, pitch }).then(() => this.audio.reset())
+    }
     this.sim.teleport(this.session.me, x, z, yaw, pitch)
     this.lookFromPlayer()
     this.acc = 0
@@ -187,6 +237,7 @@ export class Game {
 
   /** Ejecuta pasos fijos de forma síncrona y renderiza un frame (debug y pruebas). */
   advance(seconds: number) {
+    if (this.net) throw new Error('advance solo con un jugador: en red el ritmo es del servidor')
     const steps = Math.round(seconds / STEP)
     for (let i = 0; i < steps && this.state !== 'dead'; i++) this.step()
     this.acc = 0
@@ -197,7 +248,11 @@ export class Game {
     if (this.state === 'playing') return
     // El clic es el gesto que permite al navegador empezar a sonar.
     this.sound.unlock()
-    if (this.state === 'dead') this.restart()
+    if (this.state === 'dead') {
+      // En red el muerto espera (reaparecer y espectador llegan en el PR 14).
+      if (this.net) return
+      this.restart()
+    }
     const ok = await this.input.requestLock()
     if (!ok) this.hud.showOverlay('retry')
   }
@@ -210,6 +265,19 @@ export class Game {
     const { dx, dy } = this.input.consumeMouse()
     const sensitivity = MOUSE_SENSITIVITY * this.settings.sensitivity
     if (this.state === 'playing') rotatePlayer(this.look, -dx * sensitivity, -dy * sensitivity)
+
+    const { net } = this
+    if (net) {
+      // El reloj de red dice cuántos ticks predecir (0 en pausa: está suspendida).
+      for (let i = 0, n = net.advance(); i < n && this.state === 'playing'; i++) this.step()
+      net.flush()
+      const { own, remote } = net.render()
+      if (own.some((e) => e.type === 'worldReset')) this.resetViews()
+      this.present(own)
+      this.present(remote, false)
+      this.render(net.alpha, dt, time)
+      return
+    }
 
     if (this.state === 'playing' && !this.manualClock) {
       this.acc += dt
@@ -231,10 +299,11 @@ export class Game {
    * donde se ignora. El clic coloca la fogata si es lo que queda en la mano y, si no, golpea.
    */
   private actions(presses: ReadonlySet<string>, wheel: number): ActionData[] {
-    const actions: ActionData[] = []
+    const actions = this.queued.splice(0)
     const { inventory } = this.slot
     // La casilla que quedará elegida tras las acciones de este paso.
     let selected = inventory.selected
+    for (const action of actions) if (action.kind === 'select') selected = action.slot
     if (presses.has('KeyC')) this.setCrafting(!this.craftingOpen)
     for (let i = 0; i < SLOT_COUNT; i++) {
       if (!presses.has(`Digit${i + 1}`)) continue
@@ -265,36 +334,62 @@ export class Game {
     const { yaw, pitch } = this.look
     const events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, actions)
     this.snapPlayer = false
+    const { sim, slot } = this
+    // Una vez por tick real (en red, por tick predicho; nunca al re-simular).
+    this.audio.step(STEP, slot.player, sim.enemies.list)
     this.present(events)
   }
 
-  /** Efectos de los eventos de un paso: HUD, mano y sonido. La simulación no los llama directamente. */
-  private present(events: readonly SimEvent[]) {
+  /**
+   * Efectos de unos eventos: HUD, mano, vistas y, con `sound`, sonido. La simulación no los llama directamente.
+   * Los del jugador local tocan el HUD y la mano; los de los demás, sus avatares.
+   */
+  private present(events: readonly SimEvent[], sound = true) {
+    if (!events.length) return
     const { sim, slot } = this
-    this.audio.step(STEP, slot.player, sim.enemies.list)
-    this.audio.events(events, slot.id, (id) => sim.world.props[id].kind)
+    if (sound) this.audio.events(events, slot.id, (id) => sim.world.props[id].kind)
     this.propView.present(events)
     this.enemyView.present(events)
+    this.remotePlayers.present(events)
     for (const e of events) {
       switch (e.type) {
         case 'playerHurt':
-          this.hud.flashHurt()
+          if (e.id === slot.id) this.hud.flashHurt()
           break
         case 'playerSwing':
-          this.handheld.play('swing')
+          if (e.id === slot.id) this.handheld.play('swing')
           break
         case 'playerPlaced':
-          this.handheld.play('place', 'campfire')
+          if (e.id === slot.id) this.handheld.play('place', 'campfire')
           break
         case 'playerAte':
           // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
-          this.handheld.play('eat', 'berry')
+          if (e.id === slot.id) this.handheld.play('eat', 'berry')
           break
         case 'playerDied':
-          this.die()
+          if (e.id === slot.id) this.die()
           break
       }
     }
+  }
+
+  /** El HUD sigue el inventario del jugador de la sesión actual. */
+  private bindInventory() {
+    const { inventory } = this.slot
+    this.hud.setInventory(inventory)
+    inventory.onChange(() => {
+      if (inventory === this.slot.inventory) this.hud.setInventory(inventory)
+    })
+  }
+
+  /** Vistas como la isla recién generada, sin enemigos, objetos, fogatas ni otros jugadores. */
+  private resetViews() {
+    this.propView.reset()
+    this.enemyView.reset()
+    this.pickupView.reset()
+    this.campfireView.reset()
+    this.remotePlayers.reset()
+    this.audio.reset()
   }
 
   private die() {
@@ -316,13 +411,26 @@ export class Game {
   }
 
   private render(alpha: number, dt: number, time: number) {
-    const { sim, look, slot } = this
+    const { sim, look, slot, net } = this
     const { campfires, enemies } = sim
     const p = slot.player
-    this.placeCamera(interpolate(p, this.snapPlayer ? 1 : alpha, this.renderPos))
+    interpolate(p, this.snapPlayer ? 1 : alpha, this.renderPos)
+    if (net) {
+      // La corrección de la última reconciliación se desvanece al dibujar, sin tocar la predicción.
+      this.renderPos.x += net.offset.x
+      this.renderPos.y += net.offset.y
+      this.renderPos.z += net.offset.z
+      // Un estado completo (al entrar, al volver de la pausa): los props se dibujan como dice.
+      if (net.client.worldVersion !== this.worldVersion) {
+        this.worldVersion = net.client.worldVersion
+        this.propView.sync(sim.world.props)
+      }
+    }
+    this.placeCamera(this.renderPos)
     this.enemyView.update(dt, enemies.list, alpha)
     this.pickupView.update(sim.pickups.list, alpha)
     this.propView.update(dt)
+    this.remotePlayers.update(dt, net ? net.client.shownPlayers : [])
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08
 
@@ -341,7 +449,8 @@ export class Game {
     this.hud.setHealth(p.health, HEALTH_MAX)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
-    if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
+    if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
+    else if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
     else if (slot.hotbarFull && !slot.target) this.hud.setPrompt('Hotbar llena')
     else this.hud.setTarget(slot.target)
     this.hud.setDay(sim.clock.day)

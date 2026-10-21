@@ -3,7 +3,7 @@ import { MAX_PITCH } from '../sim/constants'
 import { RECIPES } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { Combat } from '../sim/interaction'
-import { SLOT_COUNT, type InventoryState, type ItemId } from '../sim/inventory'
+import { ITEM_NAMES, SLOT_COUNT, type InventoryState, type ItemId } from '../sim/inventory'
 import type { Player, Vec3 } from '../sim/player'
 import type { PropPlacement } from '../sim/props'
 import type { Connection, SimState } from '../sim/Simulation'
@@ -13,7 +13,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 3
+export const PROTOCOL_VERSION = 4
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -84,7 +84,21 @@ export interface Resync {
   type: 'resync'
 }
 
-export type ClientMessage = Hello | Cmds | Resync
+/**
+ * Los trucos de `__debug` en red (solo en desarrollo: la sala de producción cierra el socket con 4005).
+ * Se aplican al llegar, fuera del bucle; lo que emiten sale en el siguiente `ev`.
+ */
+export type DevOp =
+  | { op: 'give'; item: ItemId; amount: number }
+  | { op: 'teleport'; x: number; z: number; yaw: number; pitch: number }
+  | { op: 'setVitals'; health?: number; hunger?: number }
+  | { op: 'spawnEnemy'; x: number; z: number }
+  | { op: 'placeCampfire'; x: number; z: number; yaw: number }
+  | { op: 'setPhase'; phase: number }
+
+export type Dev = { type: 'dev' } & DevOp
+
+export type ClientMessage = Hello | Cmds | Resync | Dev
 
 // --- Servidor → cliente ---
 
@@ -245,6 +259,10 @@ export function parseClientMessage(data: string): Parsed {
     }
     case 'resync':
       return { ok: true, msg: { type: 'resync' } }
+    case 'dev': {
+      const msg = parseDev(raw)
+      return msg ? { ok: true, msg } : INVALID
+    }
     default:
       return INVALID
   }
@@ -322,6 +340,39 @@ function parseAction(a: unknown): Action | null {
       return null
   }
   return { ...data, seq: a.seq, tick: a.tick }
+}
+
+const ITEMS = Object.keys(ITEM_NAMES) as ItemId[]
+const MAX_GIVE = 999
+/** Vida y hambre de `setVitals`: de sobra para cualquier máximo. */
+const MAX_VITAL = 1000
+
+function parseDev(raw: Obj): Dev | null {
+  const nums = (...keys: string[]) => keys.every((k) => isFiniteNum(raw[k]))
+  switch (raw.op) {
+    case 'give':
+      if (!ITEMS.includes(raw.item as ItemId) || !isInt(raw.amount, 1, MAX_GIVE)) return null
+      return { type: 'dev', op: 'give', item: raw.item as ItemId, amount: raw.amount }
+    case 'teleport':
+      if (!nums('x', 'z', 'yaw', 'pitch') || Math.abs(raw.pitch as number) > MAX_PITCH + 1e-9) return null
+      return { type: 'dev', op: 'teleport', x: raw.x as number, z: raw.z as number, yaw: raw.yaw as number, pitch: raw.pitch as number }
+    case 'setVitals': {
+      const vital = (x: unknown) => x === undefined || (isFiniteNum(x) && x >= 0 && x <= MAX_VITAL)
+      if (!vital(raw.health) || !vital(raw.hunger)) return null
+      const dev: Dev = { type: 'dev', op: 'setVitals' }
+      if (raw.health !== undefined) dev.health = raw.health as number
+      if (raw.hunger !== undefined) dev.hunger = raw.hunger as number
+      return dev
+    }
+    case 'spawnEnemy':
+      return nums('x', 'z') ? { type: 'dev', op: 'spawnEnemy', x: raw.x as number, z: raw.z as number } : null
+    case 'placeCampfire':
+      return nums('x', 'z', 'yaw') ? { type: 'dev', op: 'placeCampfire', x: raw.x as number, z: raw.z as number, yaw: raw.yaw as number } : null
+    case 'setPhase':
+      return nums('phase') ? { type: 'dev', op: 'setPhase', phase: raw.phase as number } : null
+    default:
+      return null
+  }
 }
 
 /** Redondeo a cm (y a centésimas de radián) de lo que se manda de los demás. */

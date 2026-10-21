@@ -14,6 +14,7 @@ import { LaggyTransport, ManualTime, type Lag } from '../src/net/transport'
 import { Btn, type Action, type ActionData, type PlayerCommands } from '../src/sim/commands'
 import { EYE_HEIGHT } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
+import { campfireSpot } from '../src/sim/campfires'
 import { aimPose } from '../src/sim/interaction'
 import type { PropData } from '../src/sim/props'
 import type { Simulation } from '../src/sim/Simulation'
@@ -24,10 +25,10 @@ import { ABSENT_MS, FORGOTTEN_MS, ISLAND_TTL_MS, LOOP_MS, MAX_AHEAD, MemoryStora
 const CODE = 'K7QX2'
 
 /** Una sala con reloj manual, almacenamiento en memoria y tokens y semillas previsibles. */
-function setup(storage = new MemoryStorage()) {
+function setup(storage = new MemoryStorage(), dev = false) {
   const time = new ManualTime(1_000_000)
   let tokens = 0
-  const room = new Room(CODE, { storage, clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 } })
+  const room = new Room(CODE, { storage, clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev })
   return { room, time, storage }
 }
 
@@ -561,6 +562,48 @@ describe('Room', () => {
     }
     expect(pongs.filter((p) => p === 'pong').length).toBeGreaterThan(10)
     expect(room.sim!.slot(a.id).connection).toBe('absent')
+  })
+
+  it('los trucos de desarrollo se aplican al llegar y lo que emiten sale en el siguiente ev', () => {
+    const { room, time } = setup(new MemoryStorage(), true)
+    const a = new Client(room, time)
+    join(a)
+    const sim = room.sim!
+    const { x, z } = sim.spawnCenter
+    const spot = campfireSpot({ x: x - 2, z }, 0, [sim.world.grid, sim.campfires.grid])
+    a.send({ type: 'dev', op: 'give', item: 'wood', amount: 5 })
+    a.send({ type: 'dev', op: 'teleport', x: x + 1, z: z + 1, yaw: 1, pitch: 0.2 })
+    a.send({ type: 'dev', op: 'setVitals', health: 50, hunger: 20 })
+    a.send({ type: 'dev', op: 'setPhase', phase: 0.8 })
+    a.send({ type: 'dev', op: 'spawnEnemy', x: x + 8, z })
+    a.send({ type: 'dev', op: 'placeCampfire', x: x - 2, z, yaw: 0 })
+    time.advance(0)
+    const slot = sim.slot(a.id)
+    expect(slot.inventory.count('wood')).toBe(5)
+    expect(slot.player.pos.x).toBeCloseTo(x + 1)
+    expect(slot.player.pos.z).toBeCloseTo(z + 1)
+    expect(slot.player.pitch).toBe(0.2)
+    expect(slot.player.health).toBe(50)
+    expect(slot.player.hunger).toBe(20)
+    expect(sim.clock.phase).toBeCloseTo(0.8, 3)
+    expect(sim.enemies.list).toHaveLength(1)
+    expect(sim.campfires.list).toHaveLength(spot.valid ? 1 : 0)
+    play(time, LOOP_MS * 2, [[a]])
+    const types = a.events.map((e) => e.type)
+    expect(types).toContain('clockSet')
+    expect(types).toContain('enemySpawn')
+    if (spot.valid) expect(types).toContain('campfirePlaced')
+    expect(a.closed).toBeNull()
+  })
+
+  it('sin modo de desarrollo, un truco cierra el socket con 4005', () => {
+    const { room, time } = setup()
+    const a = new Client(room, time)
+    join(a)
+    a.send({ type: 'dev', op: 'give', item: 'wood', amount: 5 })
+    time.advance(0)
+    expect(a.closed).toBe(CloseCode.Invalid)
+    expect(room.sim!.slot(a.id).inventory.count('wood')).toBe(0)
   })
 
   it('funciona igual con latencia y jitter', () => {

@@ -14,6 +14,7 @@ import {
   TRUNK_HEIGHT,
   TRUNK_SIDES,
   TRUNK_TOP_RADIUS,
+  type PropData,
   type PropKind,
   type PropPlacement,
 } from '../sim/props'
@@ -181,6 +182,15 @@ export class PropView {
       for (const { mesh, index, base } of instances) mesh.setMatrixAt(index, base)
     }
     for (const mesh of this.allMeshes) mesh.instanceMatrix.needsUpdate = true
+  }
+
+  /** Los props como dice un estado completo (al entrar en una sala o volver de la pausa en red), sin animar. */
+  sync(props: readonly Pick<PropData, 'id' | 'kind' | 'hp' | 'alive'>[]) {
+    this.reset()
+    for (const { id, kind, hp, alive } of props) {
+      if (!alive) this.destroy(id)
+      else if (kind === 'bush' && hp !== this.berries[id]) this.setBerries(id, hp)
+    }
   }
 
   private wobble(id: number) {

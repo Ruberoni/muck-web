@@ -97,4 +97,27 @@ describe('protocolo', () => {
     expect(parseClientMessage('[1]').ok).toBe(false)
     expect(parseClientMessage('null').ok).toBe(false)
   })
+
+  it('trucos de desarrollo: solo los conocidos y con sus campos', () => {
+    const dev = (extra: object) => parse({ type: 'dev', ...extra })
+    expect(dev({ op: 'give', item: 'wood', amount: 3, extra: 1 })).toEqual({ ok: true, msg: { type: 'dev', op: 'give', item: 'wood', amount: 3 } })
+    expect(dev({ op: 'teleport', x: 1, z: 2, yaw: 3, pitch: 0.1 }).ok).toBe(true)
+    expect(dev({ op: 'setVitals', hunger: 10 })).toEqual({ ok: true, msg: { type: 'dev', op: 'setVitals', hunger: 10 } })
+    expect(dev({ op: 'spawnEnemy', x: 1, z: 2 }).ok).toBe(true)
+    expect(dev({ op: 'placeCampfire', x: 1, z: 2, yaw: 0 }).ok).toBe(true)
+    expect(dev({ op: 'setPhase', phase: 0.5 }).ok).toBe(true)
+    const bad = [
+      { op: 'give', item: 'diamante', amount: 1 },
+      { op: 'give', item: 'wood', amount: 0 },
+      { op: 'give', item: 'wood', amount: 1.5 },
+      { op: 'teleport', x: 1, z: Infinity, yaw: 0, pitch: 0 },
+      { op: 'teleport', x: 1, z: 2, yaw: 0, pitch: MAX_PITCH + 0.1 },
+      { op: 'setVitals', health: -1 },
+      { op: 'setVitals', hunger: 'mucha' },
+      { op: 'spawnEnemy', x: 1 },
+      { op: 'setPhase' },
+      { op: 'fly' },
+    ]
+    for (const extra of bad) expect(dev(extra).ok, JSON.stringify(extra)).toBe(false)
+  })
 })
