@@ -1,7 +1,7 @@
 import type { PlayerCommands } from './commands'
 import { Campfires, campfireSpot, type CampfiresState, type CampfireSpot } from './campfires'
 import { resolveCircle } from './collision'
-import { PLAYER_RADIUS, STEP } from './constants'
+import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
@@ -12,7 +12,7 @@ import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type
 import { createPropWorld, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
 import { isDead } from './survival'
-import { DAY_LENGTH, DayClock, euclideanModulo, START_PHASE } from './world/daycycle'
+import { DAY_LENGTH, DayClock, euclideanModulo, isNight, START_PHASE } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
 
 const SPAWN_CLEARANCE = 3
@@ -32,6 +32,8 @@ export interface PlayerSlot extends Actor {
   hotbarFull: boolean
   connection: Connection
   spawn: { x: number; z: number }
+  /** Muerto en una sala: tick en que reaparece. null si está vivo (o con un jugador, donde no se reaparece). */
+  respawnAt: number | null
 }
 
 /** Un PlayerSlot como datos (el objetivo no se guarda: se recalcula en cada paso). */
@@ -45,6 +47,7 @@ export interface PlayerSlotState {
   connection: Connection
   appliedSeq: number
   spawn: { x: number; z: number }
+  respawnAt: number | null
 }
 
 /** Todo lo que cambia durante la partida, como datos (ver Simulation.toJSON). */
@@ -60,6 +63,8 @@ export interface SimState {
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
   nextPlayerId: number
+  /** Todos muertos en una sala: tick en que se reinicia la isla. */
+  gameOverAt: number | null
 }
 
 const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ...p.prev }, vel: { ...p.vel } })
@@ -69,6 +74,11 @@ const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ..
  * Avanza con `step(commands)` y devuelve lo que ha pasado como eventos; la vista, el HUD y el sonido
  * solo leen su estado y sus eventos. Determinista para una misma semilla y unos mismos comandos.
  * Los jugadores se recorren siempre por id, así el resultado no depende del orden en que llegan los comandos.
+ *
+ * Morir depende de `coop`. Con un jugador (false) el muerto se queda muerto y el cliente reinicia la isla.
+ * En una sala (true, lo pone la sala) el inventario cae al suelo en un montón por objeto, el muerto mira a los
+ * demás y reaparece en su punto de aparición a los 30 s o, si murió de noche, al amanecer; si mueren todos los
+ * que están en el mundo, `gameOver` y a los pocos segundos la isla se reinicia (`worldReset`).
  */
 export class Simulation {
   readonly world: PropWorld
@@ -82,6 +92,8 @@ export class Simulation {
   readonly env: PlayerEnv
   /** Punto de aparición: el primer jugador aparece aquí y los demás en un anillo alrededor. */
   readonly spawnCenter: { x: number; z: number }
+  /** Reglas de una sala: reaparecer y reiniciar la isla con todos muertos (ver la clase). */
+  coop = false
   /** Azar de la simulación (enemigos, objetos que caen). */
   private rng: Rng
   /** Lo que pasa en cada paso, sellado con su tick. Lo emitido fuera de un paso sale con el siguiente. */
@@ -89,6 +101,8 @@ export class Simulation {
   /** Tick en el que empezó el día 1: el reloj sale de `tick - worldStartTick`. */
   private worldStartTick = 0
   private nextPlayerId = 0
+  /** Todos muertos: tick en que se reinicia la isla. */
+  private gameOverAt: number | null = null
   private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
 
   constructor(seed: number, placements: readonly PropPlacement[] = generatePropPlacements()) {
@@ -148,6 +162,7 @@ export class Simulation {
       connection: 'present',
       appliedSeq: 0,
       spawn,
+      respawnAt: null,
     }
     this.players.set(id, slot)
     return slot
@@ -170,7 +185,12 @@ export class Simulation {
    */
   step(commands: ReadonlyMap<PlayerId, PlayerCommands>): SimEvent[] {
     this.events.tick++
+    // Lo que quedara por presentar de antes (trucos de debug) es de la partida que acaba.
+    if (this.gameOverAt !== null && this.tick >= this.gameOverAt) this.reset()
     const present = this.inWorld()
+    if (this.gameOverAt === null) {
+      for (const slot of present) if (!slot.alive && slot.respawnAt !== null && this.tick >= slot.respawnAt) this.respawn(slot)
+    }
     const living = present.filter((s) => s.alive)
     const intents = new Map<PlayerSlot, Intent>()
     for (const slot of present) {
@@ -208,10 +228,11 @@ export class Simulation {
 
     for (const slot of living) {
       finishPlayerTick(slot, intents.get(slot)!, this.events.emit)
-      if (isDead(slot.player)) {
-        slot.alive = false
-        this.events.emit({ type: 'playerDied', id: slot.id })
-      }
+      if (isDead(slot.player)) this.die(slot)
+    }
+    if (this.coop && this.gameOverAt === null && present.length > 0 && present.every((s) => !s.alive)) {
+      this.gameOverAt = this.tick + Math.round(GAME_OVER_DELAY / STEP)
+      this.events.emit({ type: 'gameOver', day: this.clock.day })
     }
     return this.events.drain()
   }
@@ -219,6 +240,12 @@ export class Simulation {
   /** El jugador `id` fabrica la receta por índice (el de su tecla menos 1). */
   craft(id: PlayerId, index: number): boolean {
     return craftRecipe(this.slot(id), index, this.events.emit)
+  }
+
+  /** Tick del próximo amanecer. */
+  nextDawnTick(): number {
+    const cycles = START_PHASE + this.clock.elapsed / DAY_LENGTH
+    return this.worldStartTick + Math.round(((Math.floor(cycles) + 1 - START_PHASE) * DAY_LENGTH) / STEP)
   }
 
   /**
@@ -238,8 +265,10 @@ export class Simulation {
       slot.target = null
       slot.hotbarFull = false
       slot.alive = true
+      slot.respawnAt = null
       Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
     }
+    this.gameOverAt = null
     this.worldStartTick = this.tick
     this.syncClock()
     this.events.emit({ type: 'worldReset', worldStartTick: this.worldStartTick })
@@ -284,8 +313,10 @@ export class Simulation {
           connection: slot.connection,
           appliedSeq: slot.appliedSeq,
           spawn: { ...slot.spawn },
+          respawnAt: slot.respawnAt,
         })),
       nextPlayerId: this.nextPlayerId,
+      gameOverAt: this.gameOverAt,
     }
   }
 
@@ -316,8 +347,35 @@ export class Simulation {
       slot.connection = saved.connection
       slot.appliedSeq = saved.appliedSeq
       slot.spawn = { ...saved.spawn }
+      slot.respawnAt = saved.respawnAt
     }
     this.nextPlayerId = state.nextPlayerId
+    this.gameOverAt = state.gameOverAt
+  }
+
+  /** Muere: con un jugador, nada más; en una sala suelta su inventario y espera para reaparecer. */
+  private die(slot: PlayerSlot) {
+    slot.alive = false
+    this.events.emit({ type: 'playerDied', id: slot.id })
+    if (!this.coop) return
+    const { pos } = slot.player
+    for (const item of slot.inventory.slots) {
+      if (item) this.pickups.dropPile(item, slot.inventory.count(item), pos.x, pos.y + DEATH_DROP_HEIGHT, pos.z)
+    }
+    slot.inventory.clear()
+    Object.assign(slot.combat, createCombat())
+    slot.target = null
+    slot.hotbarFull = false
+    slot.respawnAt = isNight(this.clock.phase) ? this.nextDawnTick() : this.tick + Math.round(RESPAWN_DAY_DELAY / STEP)
+  }
+
+  /** Vuelve vivo a su punto de aparición, con la vida y el hambre llenas y el inventario vacío. */
+  private respawn(slot: PlayerSlot) {
+    const { yaw, pitch } = slot.player
+    Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z, yaw), { pitch })
+    slot.alive = true
+    slot.respawnAt = null
+    this.events.emit({ type: 'playerRespawn', id: slot.id, x: slot.player.pos.x, z: slot.player.pos.z })
   }
 
   private syncClock() {

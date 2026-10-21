@@ -618,6 +618,34 @@ describe('Room', () => {
     expect(room.sim!.slot(a.id).inventory.count('wood')).toBe(0)
   })
 
+  it('con las reglas de una sala: el muerto reaparece y, con todos muertos, la isla se reinicia', () => {
+    const { room, time } = setup(new MemoryStorage(), true)
+    const a = new Client(room, time, 'a')
+    const b = new Client(room, time, 'b')
+    join(a, b)
+    expect(room.sim!.coop).toBe(true)
+    a.send({ type: 'dev', op: 'give', item: 'wood', amount: 3 })
+    a.send({ type: 'dev', op: 'setVitals', health: 0, hunger: 0 })
+    play(time, 200, [[a], [b]])
+    expect(b.events.filter((e) => e.type === 'playerDied').map((e) => e.id)).toEqual([a.id])
+    expect(b.events.some((e) => e.type === 'pickupSpawn' && e.item === 'wood' && e.amount === 3)).toBe(true)
+    const { you } = a.snap
+    expect(you).toMatchObject({ alive: false, inventory: expect.objectContaining({ counts: {} }) })
+    expect(you.respawnAt).toBeGreaterThan(a.snap.tick)
+
+    // El muerto sigue mandando `cmds` (el cliente, a 1 Hz) y reaparece a los 30 s.
+    play(time, 31_000, [[a], [b]])
+    expect(a.events.some((e) => e.type === 'playerRespawn' && e.id === a.id)).toBe(true)
+    expect(a.snap.you).toMatchObject({ alive: true, respawnAt: null })
+
+    a.send({ type: 'dev', op: 'setVitals', health: 0, hunger: 0 })
+    b.send({ type: 'dev', op: 'setVitals', health: 0, hunger: 0 })
+    play(time, 10_000, [[a], [b]])
+    expect(a.events.filter((e) => e.type === 'gameOver')).toHaveLength(1)
+    expect(b.events.filter((e) => e.type === 'worldReset')).toHaveLength(1)
+    expect(b.snap.you.alive).toBe(true)
+  })
+
   it('funciona igual con latencia y jitter', () => {
     const { room, time } = setup()
     let seed = 1

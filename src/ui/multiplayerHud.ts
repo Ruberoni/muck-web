@@ -80,6 +80,9 @@ export class MultiplayerHud {
   private list: HTMLElement
   private notices: HTMLElement
   private names: HTMLElement
+  private banner: HTMLElement
+  private bannerTitle: HTMLElement
+  private bannerDetail: HTMLElement
   private rows = new Map<PlayerId, { root: HTMLElement; key: string }>()
   private tags = new Map<PlayerId, HTMLElement>()
   private lastStatus = ''
@@ -94,6 +97,9 @@ export class MultiplayerHud {
     this.statusText = el('span', 'text', this.status)
     this.list = el('ul', 'players', this.root)
     this.notices = el('div', 'notices', parent)
+    this.banner = el('div', 'banner', parent)
+    this.bannerTitle = el('div', 'title', this.banner)
+    this.bannerDetail = el('div', 'detail', this.banner)
     this.setVisible(false)
   }
 
@@ -105,7 +111,16 @@ export class MultiplayerHud {
     this.setPlayers([])
     this.setNames([])
     this.notices.replaceChildren()
+    this.setBanner(null)
     this.lastStatus = ''
+  }
+
+  /** Cartel en el centro de la pantalla ("Has muerto", "Game over"); null lo quita. El detalle puede llevar nombres ajenos. */
+  setBanner(banner: { title: string; detail: string } | null) {
+    this.banner.hidden = !banner
+    if (!banner) return
+    if (this.bannerTitle.textContent !== banner.title) this.bannerTitle.textContent = banner.title
+    if (this.bannerDetail.textContent !== banner.detail) this.bannerDetail.textContent = banner.detail
   }
 
   setStatus(light: ConnectionLight, text: string) {

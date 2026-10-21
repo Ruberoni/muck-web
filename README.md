@@ -84,7 +84,7 @@ Configuración única en GitHub:
 
 ## Servidor de multijugador
 
-El multijugador (en construcción) usa un servidor autoritativo en [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/): un Worker (`server/cf.ts`, configurado en `server/wrangler.jsonc`) recibe `GET /room/:code` y pasa el WebSocket a la Durable Object de esa sala, que ejecuta la misma simulación que el navegador (`server/room.ts` sobre `src/sim/`). La isla se guarda en el SQLite de la Durable Object cada 10 s, al pararse la sala y al irse el último jugador, y se borra a las 24 h sin nadie. `GET /status` responde `{"ok": true, "v": <PROTOCOL_VERSION>}`.
+El multijugador cooperativo usa un servidor autoritativo en [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/): un Worker (`server/cf.ts`, configurado en `server/wrangler.jsonc`) recibe `GET /room/:code` y pasa el WebSocket a la Durable Object de esa sala, que ejecuta la misma simulación que el navegador (`server/room.ts` sobre `src/sim/`). La isla se guarda en el SQLite de la Durable Object cada 10 s, al pararse la sala y al irse el último jugador, y se borra a las 24 h sin nadie. `GET /status` responde `{"ok": true, "v": <PROTOCOL_VERSION>}`.
 
 ```bash
 npm run dev:server        # el Worker en local con wrangler dev (ws://localhost:8787/room/CODIGO), acepta localhost
@@ -92,11 +92,13 @@ npm run test:server       # humo del Worker y la Durable Object en workerd, y la
 npm run typecheck:server  # server/cf.ts con los tipos de Cloudflare
 ```
 
-Para probarlo en local (el multijugador aún está oculto: solo funciona en desarrollo o en un build con `VITE_MULTIPLAYER=1`), con `npm run dev` y `npm run dev:server` a la vez:
+En GitHub Pages el menú ya ofrece "Crear partida" y "Unirse" (el build publicado lleva `VITE_MULTIPLAYER=1` y se conecta a `SERVER_URL`). Reglas en una sala: la pausa es solo tuya (sigues en el mundo como "ausente"); al morir tu inventario cae al suelo y miras a un compañero (Tab cambia) hasta reaparecer a los 30 s o, si es de noche, al amanecer; si mueren todos, "Game over" y la isla se reinicia. Si se corta la conexión, el juego vuelve a entrar solo durante un minuto.
+
+Para probarlo en local, con `npm run dev` y `npm run dev:server` a la vez:
 
 - El menú tiene el lobby: tu nombre, "Jugar solo", "Crear partida" (deja el código en la URL y en la pausa sale "Copiar enlace") y "Unirse" con un código. `http://localhost:5173/?room=CODIGO` ofrece "Unirse a CODIGO" (con varias pestañas o navegadores se juega con varios).
 - En una sala, arriba a la izquierda salen la conexión y la lista de jugadores (vida, ping, ausente); los nombres flotan sobre los demás, los compañeros salen en el minimapa con su color y lo que hacen suena donde pasa.
-- Desde la consola: `await __debug.net.create()` crea una sala y deja su código en la URL; `__debug.net.join('CODIGO')`, `__debug.net.players()`, `__debug.net.addBot()` (otro jugador en la misma pestaña que anda en círculos), `__debug.net.setLatency(100, 30)` (retraso artificial en ms) y `__debug.net.stats()` (RTT, margen y correcciones de la predicción).
+- Desde la consola: `await __debug.net.create()` crea una sala y deja su código en la URL; `__debug.net.join('CODIGO')`, `__debug.net.players()`, `__debug.net.addBot()` (otro jugador en la misma pestaña que anda en círculos), `__debug.net.setLatency(100, 30)` (retraso artificial en ms), `__debug.net.drop()` (corta la conexión para probar la reconexión) y `__debug.net.stats()` (RTT, margen y correcciones de la predicción).
 - En una sala, los trucos de `__debug` (`give`, `teleport`, `setVitals`, `spawnEnemy`, `placeCampfire`, `setPhase`, `aimAt`) los hace el servidor de desarrollo y devuelven una promesa; el de producción los rechaza.
 
-**Desplegar el servidor corta las partidas abiertas unos segundos**: Cloudflare cierra los WebSockets al cambiar el código. Los clientes se reconectan con su token y siguen con la isla guardada (se pierden como mucho los últimos 10 s). Por eso el workflow solo lo despliega cuando cambia lo que el servidor ejecuta.
+**Desplegar el servidor corta las partidas abiertas unos segundos**: Cloudflare cierra los WebSockets al cambiar el código. Los clientes se reconectan solos con su token y siguen con la isla guardada (se pierden como mucho los últimos 10 s). Por eso el workflow solo lo despliega cuando cambia lo que el servidor ejecuta.

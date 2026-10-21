@@ -90,6 +90,14 @@ export function installDebug(game: Game) {
       bots.push(bot)
       return bot.id
     },
+    /** Corta la conexión como si se cayera la red: la sesión vuelve a entrar sola (`reconnecting`). */
+    drop() {
+      const transport = game.net?.transport
+      if (!transport) throw new Error('no se está en una sala')
+      transport.close(4999)
+    },
+    /** online | reconnecting | lost */
+    status: () => game.net?.status ?? null,
     removeBots() {
       for (const bot of bots.splice(0)) bot.stop()
     },

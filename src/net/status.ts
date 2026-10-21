@@ -67,3 +67,29 @@ export async function explainClose(reject: Reject | null, code: number | null, r
   if (code === CloseCode.Normal) return NO_CONNECTION
   return (await probeServer(serverUrl, fetchFn)) ? NO_CONNECTION : SERVER_DOWN
 }
+
+/**
+ * Si tras este cierre (o este fallo al volver a entrar) se reintenta: sí tras un corte (1006, 1001, 1011, un
+ * redespliegue del servidor o la pestaña olvidada, 1000); no si la sala lo ha rechazado, si es otra versión, si se ha
+ * abierto en otra pestaña, si la sala está llena o borrada, si se ha agotado la cuota o por un mensaje no válido.
+ */
+export function shouldReconnect(reject: Reject | null, code: number | null): boolean {
+  if (reject) return false
+  switch (code) {
+    case CloseCode.Version:
+    case CloseCode.OtherTab:
+    case CloseCode.RoomDeleted:
+    case CloseCode.RoomFull:
+    case CloseCode.Quota:
+    case CloseCode.Invalid:
+      return false
+    default:
+      return true
+  }
+}
+
+/** Reintentos durante como mucho este tiempo (ms): un redespliegue del servidor tarda unos segundos. */
+export const RECONNECT_FOR_MS = 60_000
+
+/** Espera antes del intento `attempt` (0, 1, …): 0,5 s, 1 s, 2 s, 4 s y después cada 5 s. */
+export const reconnectDelay = (attempt: number) => Math.min(5000, 500 * 2 ** attempt)

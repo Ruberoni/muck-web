@@ -257,7 +257,7 @@ export class Room {
     if (!this.sim) {
       // Si se descartó una isla de otra versión, quien vuelve con el enlace empieza una nueva con el mismo código.
       if (msg.intent === 'join' && !this.discardedOldIsland) return this.reject(conn, 'not-found', CloseCode.Normal)
-      this.sim = new Simulation(this.deps.random.seed(), this.placements)
+      this.sim = this.newSimulation()
     } else if (msg.intent === 'create') {
       return this.reject(conn, 'exists', CloseCode.Normal)
     }
@@ -535,6 +535,7 @@ export class Room {
       const blob = JSON.parse(raw) as RoomBlob
       if (blob?.schema !== PROTOCOL_VERSION) throw new Error('isla de otra versión')
       const sim = Simulation.fromJSON(blob.sim, this.placements)
+      sim.coop = true
       // Nadie está conectado hasta que vuelva (con `hello`) o la plataforma devuelva su socket (`adopt`).
       for (const slot of sim.players.values()) sim.setConnection(slot.id, 'gone')
       for (const { token, id, name, lastSeen } of blob.seats) {
@@ -552,6 +553,13 @@ export class Room {
       return
     }
     this.scheduleAlarm()
+  }
+
+  /** Una isla nueva, con las reglas de una sala: los muertos reaparecen y con todos muertos se reinicia. */
+  private newSimulation() {
+    const sim = new Simulation(this.deps.random.seed(), this.placements)
+    sim.coop = true
+    return sim
   }
 
   private deleteIsland() {
@@ -685,6 +693,7 @@ function you(slot: PlayerSlot): You {
     combat: { ...slot.combat },
     hotbarFull: slot.hotbarFull,
     alive: slot.alive,
+    respawnAt: slot.respawnAt,
     appliedSeq: slot.appliedSeq,
   }
 }

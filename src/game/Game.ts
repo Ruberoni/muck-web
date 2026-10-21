@@ -8,9 +8,10 @@ import { PickupView } from '../view/PickupView'
 import { CampfireView } from '../view/CampfireView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
-import { Hud } from '../ui/hud'
+import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
+import { euclideanModulo } from '../sim/world/daycycle'
 import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { campfireSpot, type CampfireSpot } from '../sim/campfires'
 import { EAT_KEY, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
@@ -23,11 +24,17 @@ import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/pl
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import { LocalSession, type Session } from '../net/session'
 import type { NetSession } from '../net/netSession'
-import type { Notice } from '../net/client'
+import type { Notice, RemotePlayer } from '../net/client'
+import type { Shown } from '../net/interp'
 import { pickNameTags, type PlayerRow } from '../ui/multiplayerHud'
 import { playerCss } from '../ui/playerColor'
 
-export type GameState = 'menu' | 'playing' | 'paused' | 'dead'
+/** `spectating`: muerto en una sala, mirando a los demás hasta reaparecer (con un jugador, morir es `dead`). */
+export type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'spectating'
+
+/** Se juega (con el ratón capturado): vivo o, en una sala, muerto mirando a los demás. */
+const isActive = (state: GameState) => state === 'playing' || state === 'spectating'
+const overlayFor = (state: GameState): OverlayKind => (state === 'playing' || state === 'spectating' ? null : state)
 
 const SHADOW_LOOK_AHEAD = 25
 // Distancia a la que deja de oírse una fogata.
@@ -36,6 +43,10 @@ const CAMPFIRE_HEARING = 14
 const NAME_HEIGHT = EYE_HEIGHT + 0.55
 /** Por encima del suelo a esta altura (m), otro jugador está en el aire o flotando: sus pasos no suenan. */
 const REMOTE_GROUNDED = 0.2
+/** Cámara del espectador: por detrás y por encima del jugador al que mira, y lo que tarda en girar con él. */
+const SPECTATOR_BACK = 3.5
+const SPECTATOR_UP = 0.9
+const SPECTATOR_TURN = 5
 
 /**
  * El cliente: convierte la entrada en comandos para la sesión y dibuja, suena y muestra lo que pasa.
@@ -43,7 +54,8 @@ const REMOTE_GROUNDED = 0.2
  *
  * Con un jugador (LocalSession) los pasos fijos salen de un acumulador. En red (NetSession) el ritmo lo marca su
  * reloj, `sim` es un espejo y hay más que presentar: los eventos del servidor que tratan del jugador local (al
- * llegar, con sonido) y los de los demás (en el tick de render, sin sonido hasta el audio remoto, PR 13).
+ * llegar, con sonido) y los de los demás (en el tick de render, con sonido según dónde pasan). Muerto en una sala,
+ * mira a los demás (`spectating`, Tab cambia) hasta que el servidor lo hace reaparecer.
  */
 export class Game {
   readonly renderer: THREE.WebGLRenderer
@@ -96,6 +108,14 @@ export class Game {
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
   private retrying = false
   private projected = new THREE.Vector3()
+  /** El `generation` de la sesión en red que ya refleja la vista (sube al reconectar). */
+  private netGeneration = 0
+  /** Espectador: a quién mira y hacia dónde mira la cámara (sigue su yaw con retraso). */
+  private spectated: number | null = null
+  private spectatorYaw = 0
+  private snapSpectator = true
+  /** Todos muertos en la sala: el día al que se llegó, hasta que se reinicia la isla. */
+  private gameOverDay: number | null = null
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -136,7 +156,7 @@ export class Game {
       isPlaying: () => this.state === 'playing',
       onLockChange: (locked) => {
         if (locked) this.setState('playing')
-        else if (this.state === 'playing') this.setState('paused')
+        else if (isActive(this.state)) this.setState('paused')
       },
     })
 
@@ -174,32 +194,38 @@ export class Game {
     this.setCrafting(false)
     this.resetViews()
     this.worldVersion = -1
+    // El espectador es de la sala que se deja: en la nueva se vuelve a decidir con su `you`.
+    if (this.state === 'spectating') this.state = 'playing'
+    this.netGeneration = this.net?.generation ?? 0
+    this.gameOverDay = null
     this.lookFromPlayer()
     this.acc = 0
     this.snapPlayer = true
     this.placeCamera(this.slot.player.pos)
     // En el menú o en pausa no predice ni envía: al empezar a jugar pide el estado.
-    if (this.state !== 'playing') this.net?.suspend()
+    if (!isActive(this.state)) this.net?.suspend()
     this.hud.net.setVisible(this.net !== null)
-    if (this.state !== 'playing') this.hud.showOverlay(this.state, this.net !== null)
+    if (this.state !== 'playing') this.hud.showOverlay(overlayFor(this.state), this.net !== null)
     this.onchange?.()
   }
 
   setState(state: GameState) {
     if (state === 'playing' && this.state !== 'playing') {
-      // Al empezar o reanudar no se interpola desde la posición de antes de la pausa.
+      // Al empezar, reanudar o reaparecer no se interpola desde la posición de antes.
       this.snapPlayer = true
       this.acc = 0
       this.retrying = false
-      this.net?.wake()
     }
-    if (state !== 'playing') {
-      this.input.clear()
-      // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue.
-      this.net?.suspend()
+    if (state === 'spectating') {
+      this.snapSpectator = true
+      this.setCrafting(false)
     }
+    if (state !== 'playing') this.input.clear()
+    // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue. El espectador sigue conectado.
+    if (isActive(state)) this.net?.wake()
+    else this.net?.suspend()
     this.state = state
-    this.hud.showOverlay(state === 'playing' ? null : state, this.net !== null)
+    this.hud.showOverlay(overlayFor(state), this.net !== null)
     this.onchange?.()
   }
 
@@ -276,8 +302,8 @@ export class Game {
   private async onOverlayClick() {
     if (this.state === 'playing') return
     if (this.state === 'menu' && !this.menuClickStarts && !this.retrying) return
+    // En red no se llega a `dead` (el muerto es espectador); por si acaso, la isla no se reinicia desde aquí.
     if (this.state === 'dead') {
-      // En red el muerto espera (reaparecer y espectador llegan en el PR 14).
       if (this.net) return
       this.restart()
     }
@@ -295,15 +321,22 @@ export class Game {
 
     const { net } = this
     if (net) {
+      if (net.generation !== this.netGeneration) this.reconnected(net)
       // El reloj de red dice cuántos ticks predecir (0 en pausa: está suspendida).
-      for (let i = 0, n = net.advance(); i < n && this.state === 'playing'; i++) this.step()
+      for (let i = 0, n = net.advance(); i < n && isActive(this.state); i++) this.step()
       net.flush()
       const { own, remote } = net.render()
-      if (own.some((e) => e.type === 'worldReset')) this.resetViews()
+      if (own.some((e) => e.type === 'worldReset')) {
+        this.resetViews()
+        this.gameOverDay = null
+      }
       this.present(own)
       this.present(remote, false)
       this.presentRemote(net, remote)
       for (const notice of net.client.takeNotices()) this.hud.net.notice(noticeText(notice))
+      // Muerto, mira a los demás hasta que el servidor dice (en `you`) que ha reaparecido.
+      if (this.state === 'playing' && !this.slot.alive) this.setState('spectating')
+      else if (this.state === 'spectating' && this.slot.alive) this.setState('playing')
       this.render(net.alpha, dt, time)
       return
     }
@@ -357,6 +390,7 @@ export class Game {
 
   /** Un paso fijo: manda el movimiento y las acciones a la sesión y presenta lo que ha pasado. */
   private step() {
+    if (this.state === 'spectating') return this.spectatorStep()
     const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
     const actions = this.actions(this.input.takePresses(), this.input.takeWheel())
     const attack = this.attackOverride ?? this.input.attackHeld
@@ -367,6 +401,51 @@ export class Game {
     // Una vez por tick real (en red, por tick predicho; nunca al re-simular).
     this.audio.step(STEP, slot.player, sim.enemies.list)
     this.present(events)
+  }
+
+  /** Muerto en una sala: quieto y sin acciones (el `Move` sirve de keepalive); Tab cambia a quién se mira. */
+  private spectatorStep() {
+    const presses = this.input.takePresses()
+    this.input.takeWheel()
+    this.queued.length = 0
+    if (presses.has('Tab')) this.spectateNext()
+    const { yaw, pitch } = this.look
+    this.session.step({ buttons: 0, yaw, pitch }, [])
+  }
+
+  /** Los compañeros vivos a los que se puede mirar, por id. */
+  private watchable(net: NetSession): Shown<RemotePlayer>[] {
+    return net.client.shownPlayers.filter((p) => p.data.alive).sort((a, b) => a.id - b.id)
+  }
+
+  /** A quién mira el espectador: el mismo mientras siga vivo y, si no, el primero. */
+  private watched(net: NetSession): Shown<RemotePlayer> | null {
+    const alive = this.watchable(net)
+    const target = alive.find((p) => p.id === this.spectated) ?? alive[0] ?? null
+    if (target?.id !== this.spectated) this.snapSpectator = true
+    this.spectated = target?.id ?? null
+    return target
+  }
+
+  private spectateNext() {
+    const { net } = this
+    if (!net) return
+    const alive = this.watchable(net)
+    if (alive.length < 2) return
+    const i = alive.findIndex((p) => p.id === this.spectated)
+    this.spectated = alive[(i + 1) % alive.length].id
+    this.snapSpectator = true
+  }
+
+  /** Se cortó y se ha vuelto a entrar: otro cliente, otro jugador predicho y la isla como la cuenta el servidor. */
+  private reconnected(net: NetSession) {
+    this.netGeneration = net.generation
+    this.bindInventory()
+    this.resetViews()
+    this.worldVersion = -1
+    this.snapPlayer = true
+    this.gameOverDay = null
+    this.hud.net.notice('Conexión recuperada')
   }
 
   /**
@@ -396,7 +475,11 @@ export class Game {
           if (e.id === slot.id) this.handheld.play('eat', 'berry')
           break
         case 'playerDied':
-          if (e.id === slot.id) this.die()
+          // En una sala el muerto pasa a espectador cuando lo dice su `you` (ver frame).
+          if (e.id === slot.id && !this.net) this.die()
+          break
+        case 'gameOver':
+          this.gameOverDay = e.day
           break
       }
     }
@@ -444,7 +527,9 @@ export class Game {
     const shown = net.client.shownPlayers
     const rtt = Math.round(net.client.clock.rtt)
     if (net.closed) hud.net.setStatus('lost', net.closeReason ?? 'Sin conexión con el servidor.')
+    else if (net.status === 'reconnecting') hud.net.setStatus('connecting', `Sala ${net.room} · reconectando…`)
     else hud.net.setStatus('online', `Sala ${net.room}${rtt > 0 ? ` · ${rtt} ms` : ''}`)
+    hud.net.setBanner(this.banner(net))
 
     const rows: PlayerRow[] = [
       {
@@ -453,7 +538,7 @@ export class Game {
         health: slot.player.health,
         maxHealth: HEALTH_MAX,
         ping: rtt,
-        absent: this.state !== 'playing' && slot.alive,
+        absent: !isActive(this.state) && slot.alive,
         alive: slot.alive,
         me: true,
       },
@@ -472,7 +557,7 @@ export class Game {
       window.innerWidth,
       window.innerHeight,
     )
-    hud.net.setNames(this.state === 'playing' ? tags : [])
+    hud.net.setNames(isActive(this.state) ? tags : [])
 
     this.audio.remoteSteps(
       shown.map(({ id, pose, data }) => {
@@ -481,6 +566,19 @@ export class Game {
       }),
       this.listener(),
     )
+  }
+
+  /** "Has muerto" con la cuenta atrás y a quién se mira, o "Game over" con todos muertos. */
+  private banner(net: NetSession): { title: string; detail: string } | null {
+    if (this.gameOverDay !== null) return { title: 'Game over', detail: `Habéis llegado al día ${this.gameOverDay}. La isla se reinicia…` }
+    if (this.state !== 'spectating') return null
+    const { respawnAt } = this.slot
+    const left = respawnAt === null ? 0 : Math.max(0, Math.ceil((respawnAt - net.client.clock.serverTick(performance.now())) * STEP))
+    const parts = [left > 0 ? `Reapareces en ${left} s` : 'Reapareciendo…']
+    const watched = this.spectated === null ? null : this.nameOf(net, this.spectated)
+    if (watched) parts.push(this.watchable(net).length > 1 ? `Viendo a ${watched} (Tab: cambiar)` : `Viendo a ${watched}`)
+    else parts.push('No queda nadie en pie')
+    return { title: 'Has muerto', detail: parts.join(' · ') }
   }
 
   /** El HUD sigue el inventario del jugador de la sesión actual. */
@@ -521,9 +619,12 @@ export class Game {
   }
 
   private render(alpha: number, dt: number, time: number) {
-    const { sim, look, slot, net } = this
+    const { sim, slot, net } = this
     const { campfires, enemies } = sim
     const p = slot.player
+    // Espectador: la cámara (y el minimapa, las sombras y el oído) siguen al compañero al que mira.
+    const watched = net && this.state === 'spectating' ? this.watched(net) : null
+    const look = watched ? { yaw: this.spectatorYaw, pitch: 0 } : this.look
     interpolate(p, this.snapPlayer ? 1 : alpha, this.renderPos)
     if (net) {
       // La corrección de la última reconciliación se desvanece al dibujar, sin tocar la predicción.
@@ -536,7 +637,8 @@ export class Game {
         this.propView.sync(sim.world.props)
       }
     }
-    this.placeCamera(this.renderPos)
+    if (watched) this.placeSpectatorCamera(watched.pose, dt)
+    else this.placeCamera(this.renderPos)
     this.enemyView.update(dt, enemies.list, alpha)
     this.pickupView.update(sim.pickups.list, alpha)
     this.propView.update(dt)
@@ -560,6 +662,8 @@ export class Game {
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
+    else if (net?.status === 'reconnecting') this.hud.setPrompt('Reconectando…')
+    else if (this.state === 'spectating') this.hud.setPrompt('')
     else if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
     else if (slot.hotbarFull && !slot.target) this.hud.setPrompt('Hotbar llena')
     else this.hud.setTarget(slot.target)
@@ -579,7 +683,23 @@ export class Game {
     this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
     this.renderer.clear()
     this.renderer.render(this.scene, this.camera)
-    if (this.state !== 'dead') this.handheld.render(this.renderer)
+    if (this.state !== 'dead' && this.state !== 'spectating') this.handheld.render(this.renderer)
+  }
+
+  /** Detrás y por encima del compañero, girando con él poco a poco; nunca bajo el suelo ni bajo el agua. */
+  private placeSpectatorCamera(pose: { x: number; y: number; z: number; yaw: number }, dt: number) {
+    if (this.snapSpectator) this.spectatorYaw = pose.yaw
+    else this.spectatorYaw += (euclideanModulo(pose.yaw - this.spectatorYaw + Math.PI, 2 * Math.PI) - Math.PI) * (1 - Math.exp(-dt * SPECTATOR_TURN))
+    this.snapSpectator = false
+    const yaw = this.spectatorYaw
+    const x = pose.x + Math.sin(yaw) * SPECTATOR_BACK
+    const z = pose.z + Math.cos(yaw) * SPECTATOR_BACK
+    const y = Math.max(pose.y + EYE_HEIGHT + SPECTATOR_UP, heightAt(x, z) + 0.6, WATER_LEVEL + 0.6)
+    this.renderPos.x = pose.x
+    this.renderPos.y = pose.y
+    this.renderPos.z = pose.z
+    this.camera.position.set(x, y, z)
+    this.camera.lookAt(pose.x, pose.y + EYE_HEIGHT, pose.z)
   }
 
   private updateAmbient(dt: number) {

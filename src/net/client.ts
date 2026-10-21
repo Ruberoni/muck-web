@@ -82,9 +82,11 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
     case 'playerPlaced':
     case 'playerHurt':
     case 'playerDied':
+    case 'playerRespawn':
       return e.id === me
     case 'clockSet':
     case 'worldReset':
+    case 'gameOver':
       return true
     default:
       return false
@@ -93,6 +95,8 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
 
 /** Ticks entre el `Move` más viejo y el más nuevo de un envío normal a 20 Hz (con frames lentos, algo más). */
 const MAX_SPAN = 6
+/** Muerto (espectador): `cmds` a 1 Hz, para no contar como ausente y que el mundo siga hasta que reaparezca (§5.2). */
+export const SPECTATOR_SEND_MS = 1000
 
 const sameAim = (a: TargetRef | null | undefined, b: TargetRef | null | undefined) => a === b || (!!a && !!b && a.kind === b.kind && a.id === b.id)
 const sameMove = (a: Omit<Move, 'tick'>, b: Omit<Move, 'tick'>) => a.buttons === b.buttons && a.yaw === b.yaw && a.pitch === b.pitch
@@ -117,7 +121,8 @@ export function compactMoves(moves: readonly Move[]): MoveMsg[] {
  * Cada frame: `advance()` dice cuántos ticks predecir, `step(move, actions)` predice cada uno y `flush()` envía
  * si toca: a 20 Hz mientras el jugador hace algo; a 4 Hz cuando está quieto (botones sueltos, sin girar ni
  * acciones pendientes) y ya ha enviado ese `Move` quieto, así el servidor repite justo ese; al volver a moverse,
- * en el acto. Después, `render()` pone el espejo en el tick de render y da los eventos que toca presentar.
+ * en el acto. Muerto, a 1 Hz (keepalive del espectador). Después, `render()` pone el espejo en el tick de render y da
+ * los eventos que toca presentar.
  *
  * `sim` es un espejo de la partida para dibujarla y predecir: los props y las fogatas se actualizan con los eventos
  * en cuanto llegan (la predicción choca con lo que hay de verdad); los enemigos, los objetos del suelo y el reloj
@@ -224,7 +229,8 @@ export class NetClient {
       predictor.history.every((h) => h.move.tick <= last.tick || sameMove(h.move, last)) &&
       actions.length === 0 &&
       !predictor.slot.combat.pendingSwing
-    if (!(this.quiet && !quiet) && now - this.lastSentAt < (quiet ? QUIET_SEND_MS : SEND_MS)) return
+    const interval = !predictor.slot.alive ? SPECTATOR_SEND_MS : quiet ? QUIET_SEND_MS : SEND_MS
+    if (!(this.quiet && !quiet) && now - this.lastSentAt < interval) return
     // Los nuevos y los no confirmados; los que el reloj se saltó no (el servidor los rellena igual).
     const moves = compactMoves(predictor.history.filter((h) => !h.filled && h.move.tick > this.ackTick).map((h) => h.move)).slice(-MAX_MOVES)
     const rtt = Math.min(MAX_RTT, Math.round(this.clock.rtt))
