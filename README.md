@@ -92,4 +92,10 @@ npm run test:server       # humo del Worker y la Durable Object en workerd, y la
 npm run typecheck:server  # server/cf.ts con los tipos de Cloudflare
 ```
 
+Para probarlo en local (el multijugador aún está oculto: solo funciona en desarrollo o en un build con `VITE_MULTIPLAYER=1`), con `npm run dev` y `npm run dev:server` a la vez:
+
+- `http://localhost:5173/?room=CODIGO` entra en la sala `CODIGO` (con varias pestañas o navegadores se juega con varios).
+- Desde la consola: `await __debug.net.create()` crea una sala y deja su código en la URL; `__debug.net.join('CODIGO')`, `__debug.net.players()`, `__debug.net.addBot()` (otro jugador en la misma pestaña que anda en círculos), `__debug.net.setLatency(100, 30)` (retraso artificial en ms) y `__debug.net.stats()` (RTT, margen y correcciones de la predicción).
+- En una sala, los trucos de `__debug` (`give`, `teleport`, `setVitals`, `spawnEnemy`, `placeCampfire`, `setPhase`, `aimAt`) los hace el servidor de desarrollo y devuelven una promesa; el de producción los rechaza.
+
 **Desplegar el servidor corta las partidas abiertas unos segundos**: Cloudflare cierra los WebSockets al cambiar el código. Los clientes se reconectan con su token y siguen con la isla guardada (se pierden como mucho los últimos 10 s). Por eso el workflow solo lo despliega cuando cambia lo que el servidor ejecuta.

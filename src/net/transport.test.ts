@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Conn } from '../../server/room'
-import { LaggyTransport, ManualTime } from './transport'
+import { LaggyTransport, ManualTime, WebSocketTransport, type SocketLike } from './transport'
 
 /** Una sala que devuelve cada mensaje y apunta los cierres. */
 function echo(time: ManualTime) {
@@ -91,5 +91,86 @@ describe('LaggyTransport', () => {
     expect(got.map(([, d]) => d)).toEqual(['a'])
     expect(log).toEqual(['eco a', 'cerrado 4001'])
     expect(closed).toEqual([t.conn])
+  })
+})
+
+/** Llama a un manejador del socket falso (los del DOM esperan `this: WebSocket`). */
+const fire = (handler: unknown, ev: object) => (handler as ((ev: object) => void) | null)?.(ev)
+
+/** Un WebSocket falso: apunta lo que se envía y deja abrir, recibir y cerrar a mano. */
+function fakeSocket() {
+  const sent: string[] = []
+  const socket = {
+    readyState: 0,
+    send: (data: string) => void sent.push(data),
+    close: (code = 1000) => fire(socket.onclose, { code }),
+    onopen: null,
+    onmessage: null,
+    onclose: null,
+    onerror: null,
+  } as { -readonly [K in keyof SocketLike]: SocketLike[K] }
+  const open = () => {
+    socket.readyState = 1
+    fire(socket.onopen, {})
+  }
+  const receive = (data: string) => fire(socket.onmessage, { data })
+  return { socket, sent, open, receive }
+}
+
+describe('WebSocketTransport', () => {
+  it('abre, envía, recibe y avisa del cierre una vez', async () => {
+    const { socket, sent, open, receive } = fakeSocket()
+    const transport = new WebSocketTransport(socket)
+    const got: string[] = []
+    const closes: number[] = []
+    transport.onmessage = (data) => got.push(data)
+    transport.onclose = (code) => closes.push(code)
+    open()
+    await transport.opened
+    transport.send('hola')
+    receive('eco')
+    expect(sent).toEqual(['hola'])
+    expect(got).toEqual(['eco'])
+    transport.close(4001)
+    fire(socket.onclose, { code: 4001 })
+    expect(closes).toEqual([4001])
+  })
+
+  it('opened falla si se cierra antes de abrirse', async () => {
+    const { socket } = fakeSocket()
+    const transport = new WebSocketTransport(socket)
+    socket.close(1006)
+    await expect(transport.opened).rejects.toThrow('1006')
+  })
+
+  it('con latencia retrasa los dos sentidos sin desordenar, y sin ella vuelve a ser inmediato', async () => {
+    vi.useFakeTimers()
+    try {
+      const { socket, sent, open, receive } = fakeSocket()
+      let now = 0
+      const transport = new WebSocketTransport(socket, () => now)
+      const got: string[] = []
+      transport.onmessage = (data) => got.push(data)
+      open()
+      transport.latency = 100
+      transport.jitter = 40
+      for (let i = 0; i < 5; i++) {
+        transport.send(`s${i}`)
+        receive(`r${i}`)
+      }
+      expect(sent).toEqual([])
+      now += 59
+      vi.advanceTimersByTime(59)
+      expect(sent).toEqual([])
+      now += 100
+      vi.advanceTimersByTime(100)
+      expect(sent).toEqual(['s0', 's1', 's2', 's3', 's4'])
+      expect(got).toEqual(['r0', 'r1', 'r2', 'r3', 'r4'])
+      transport.latency = transport.jitter = 0
+      transport.send('ya')
+      expect(sent.at(-1)).toBe('ya')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

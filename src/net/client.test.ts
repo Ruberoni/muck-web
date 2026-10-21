@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { Room, MemoryStorage, ABSENT_MS } from '../../server/room'
 import { Btn, type ActionData } from '../sim/commands'
+import { EYE_HEIGHT } from '../sim/constants'
+import { aimPose } from '../sim/interaction'
 import { mulberry32 } from '../sim/random'
+import { heightAt } from '../sim/world/terrain'
+import { botMove, driveClient } from './bot'
 import { NetClient, compactMoves } from './client'
 import type { Cmds } from './protocol'
 import type { MoveInput } from './session'
@@ -14,7 +18,7 @@ const FRAME_MS = 16
 function setup() {
   const time = new ManualTime(1_000_000)
   let tokens = 0
-  const room = new Room(CODE, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 } })
+  const room = new Room(CODE, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev: true })
   let seeds = 0
   const connect = (tab: string, intent: 'create' | 'join' = 'join', lag: Lag = { latency: 100, jitter: 30, rng: mulberry32(++seeds) }) => {
     const transport = new LaggyTransport(room, time, lag)
@@ -36,7 +40,7 @@ function setup() {
 type Script = (tick: number) => MoveInput & { actions?: ActionData[] }
 const idle: Script = () => ({ buttons: 0, yaw: 0, pitch: 0 })
 
-/** Corre `ms` en frames: avanza el reloj (sala y mensajes) y cada cliente predice los ticks que tocan y envía. */
+/** Corre `ms` en frames: avanza el reloj (sala y mensajes) y cada cliente predice los ticks que tocan, envía y pone el espejo al día. */
 function run(time: ManualTime, ms: number, players: [NetClient, Script][], afterFrame?: () => void) {
   for (let t = 0; t < ms; t += FRAME_MS) {
     time.advance(FRAME_MS)
@@ -47,6 +51,7 @@ function run(time: ManualTime, ms: number, players: [NetClient, Script][], after
         client.step(move, actions)
       }
       client.flush()
+      client.render()
     }
     afterFrame?.()
   }
@@ -241,6 +246,123 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
     expect(sent[0].at - moved).toBeLessThanOrEqual(FRAME_MS)
     expect(Math.abs(lead() - leadMoving)).toBeLessThan(1.5)
     expect(client.predictor!.stats.corrections).toBe(0)
+  })
+})
+
+describe('el espejo de NetClient', () => {
+  it('los objetos que caen se ven donde están, y desaparecen al recogerlos', () => {
+    const { room, time, connect } = setup()
+    const a = connect('a', 'create').client
+    const b = connect('b').client
+    run(time, 2000, [
+      [a, idle],
+      [b, idle],
+    ])
+    const sim = room.sim!
+    const { x, z } = sim.spawnCenter
+    // Lejos de los dos: caen y se quedan en el suelo.
+    sim.pickups.drop('stone', 3, x + 9, heightAt(x + 9, z) + 1, z)
+    run(time, 3000, [
+      [a, idle],
+      [b, idle],
+    ])
+    expect(sim.pickups.list).toHaveLength(3)
+    for (const client of [a, b]) {
+      const seen = client.sim!.pickups.list
+      expect(seen.map((p) => p.id)).toEqual(sim.pickups.list.map((p) => p.id))
+      for (const p of seen) {
+        const real = sim.pickups.list.find((q) => q.id === p.id)!
+        expect(p.grounded).toBe(true)
+        expect(p.item).toBe('stone')
+        expect(Math.hypot(p.pos.x - real.pos.x, p.pos.y - real.pos.y, p.pos.z - real.pos.z)).toBeLessThan(0.02)
+      }
+    }
+    // B se pone encima de cada una: las recoge y dejan de verse.
+    for (const { pos } of [...sim.pickups.list]) {
+      sim.teleport(b.id, pos.x, pos.z, 0, 0)
+      run(time, 700, [
+        [a, idle],
+        [b, idle],
+      ])
+    }
+    expect(sim.pickups.list).toHaveLength(0)
+    expect(a.sim!.pickups.list).toHaveLength(0)
+    expect(b.sim!.pickups.list).toHaveLength(0)
+    expect(b.predictor!.slot.inventory.count('stone')).toBe(3)
+  })
+
+  it('enemigos y reloj del día como en el servidor, un poco por detrás', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    sim.setPhase(0.75)
+    const { pos } = sim.slot(client.id).player
+    sim.enemies.spawnAt(pos.x + 8, pos.z)
+    run(time, 1500, [[client, roam]])
+    const mirror = client.sim!
+    expect(mirror.clock.day).toBe(sim.clock.day)
+    // Unos 200 ms por detrás: 100 de interpolación y la mitad del RTT.
+    expect(sim.clock.phase - mirror.clock.phase).toBeGreaterThan(0)
+    expect(sim.clock.phase - mirror.clock.phase).toBeLessThan(0.5 / 360)
+    expect(mirror.enemies.list.map((e) => e.id)).toEqual(sim.enemies.list.map((e) => e.id))
+    expect(mirror.enemies.list.length).toBeGreaterThan(0)
+    for (const e of mirror.enemies.list) {
+      const real = sim.enemies.list.find((r) => r.id === e.id)!
+      expect(Math.hypot(e.pos.x - real.pos.x, e.pos.z - real.pos.z)).toBeLessThan(1.5)
+    }
+  })
+
+  it('cada Move lleva aim; con él se tala el árbol que se ve, y el espejo lo sabe', () => {
+    const { room, time, connect } = setup()
+    const { client, sent } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const tree = sim.world.props.find((p) => p.kind === 'tree' && p.alive)!
+    const isFree = (x: number, z: number) => sim.world.props.every((o) => o === tree || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
+    const pose = aimPose(tree, isFree)
+    const pitch = Math.atan2(pose.aimY - heightAt(pose.x, pose.z) - EYE_HEIGHT, pose.horizontal)
+    sim.teleport(client.id, pose.x, pose.z, pose.yaw, pitch)
+    sent.length = 0
+    run(time, 4000, [[client, () => ({ buttons: Btn.Attack, yaw: pose.yaw, pitch })]])
+    const moves = sent.flatMap((s) => s.msg.moves)
+    expect(moves.every((m) => m.aim !== undefined)).toBe(true)
+    expect(moves.some((m) => m.aim?.kind === 'prop' && m.aim.id === tree.id)).toBe(true)
+    expect(sim.world.props[tree.id].alive).toBe(false)
+    expect(client.sim!.world.props[tree.id].alive).toBe(false)
+    // Y la madera que suelta.
+    run(time, 2000, [[client, idle]])
+    expect(client.sim!.pickups.list.map((p) => p.id)).toEqual(sim.pickups.list.map((p) => p.id))
+  })
+
+  it('un truco de desarrollo se aplica en el servidor y la predicción lo recoge', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1500, [[client, roam]])
+    client.dev({ op: 'give', item: 'stone', amount: 4 })
+    const sentAt = time.now()
+    run(time, 1000, [[client, roam]])
+    expect(client.lastEcho).toBeGreaterThan(sentAt)
+    expect(room.sim!.slot(client.id).inventory.count('stone')).toBe(4)
+    expect(client.predictor!.slot.inventory.count('stone')).toBe(4)
+    resetStats(client)
+    run(time, 2000, [[client, roam]])
+    expect(client.predictor!.stats.corrections).toBe(0)
+  })
+
+  it('un bot anda solo y los demás lo ven donde está', () => {
+    const { room, time, connect } = setup()
+    const a = connect('a', 'create').client
+    const bot = connect('bot').client
+    run(time, 1000, [[a, idle]], () => driveClient(bot, (tick) => botMove(tick, bot.id)))
+    resetStats(bot)
+    const start = { ...room.sim!.slot(bot.id).player.pos }
+    run(time, 4000, [[a, idle]], () => driveClient(bot, (tick) => botMove(tick, bot.id)))
+    const real = room.sim!.slot(bot.id).player.pos
+    expect(Math.hypot(real.x - start.x, real.z - start.z)).toBeGreaterThan(5)
+    const seen = a.shownPlayers.find((p) => p.id === bot.id)!
+    expect(Math.hypot(seen.pose.x - real.x, seen.pose.z - real.z)).toBeLessThan(2)
+    expect(bot.predictor!.stats.corrections).toBe(0)
   })
 })
 

@@ -157,6 +157,8 @@ export class RoomObject extends DurableObject<Env> {
       clock: { now: () => Date.now() },
       scheduler: this.scheduler,
       random: { token: randomToken, seed: () => crypto.getRandomValues(new Uint32Array(1))[0] },
+      // Los trucos de `__debug` solo con `npm run dev:server`.
+      dev: this.env.ALLOW_LOCAL === '1',
     })
     return this.room
   }

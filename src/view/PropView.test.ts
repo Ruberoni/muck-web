@@ -62,4 +62,17 @@ describe('PropView', () => {
     view.reset()
     for (const p of [tree, bush]) expect(view.instancesOf(p.id).every(atBase)).toBe(true)
   })
+
+  it('sync dibuja los props como dice un estado completo, sin animarlos', () => {
+    const view = new PropView(placements)
+    const rock = placements.find((p) => p.kind === 'rock')!
+    view.present([{ type: 'propDestroyed', id: rock.id, by: 0 }])
+    const props = placements.map((p) => ({ ...p, hp: p.id === bush.id ? 2 : 3, alive: p.id !== tree.id }))
+    view.sync(props)
+    expect(view.instancesOf(tree.id).every(isHidden)).toBe(true)
+    // Lo de antes del estado no cuenta.
+    expect(view.instancesOf(rock.id).every(atBase)).toBe(true)
+    expect(view.instancesOf(bush.id).filter((i) => i.berry !== undefined && !isHidden(i))).toHaveLength(2)
+    expect(view.instancesOf(bush.id).filter((i) => !isHidden(i)).every(atBase)).toBe(true)
+  })
 })

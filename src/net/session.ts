@@ -7,9 +7,12 @@ export type MoveInput = Omit<Move, 'tick'>
 
 /**
  * Por donde el cliente (Game) mueve la partida: le pasa sus comandos de cada tick y recibe los eventos.
- * El estado que dibuja lo lee de `sim`. Con un jugador es LocalSession; en red será NetSession (PR 12).
+ * El estado que dibuja lo lee de `sim`. Con un jugador es LocalSession; en red, NetSession (que además marca
+ * el ritmo de los ticks y tiene más cosas que dibujar: ver Game).
  */
 export interface Session {
+  /** En red: la partida es del servidor y `sim` es un espejo. */
+  readonly networked: boolean
   readonly sim: Simulation
   /** El jugador de este cliente dentro de `sim`. */
   readonly me: PlayerId
@@ -23,6 +26,7 @@ const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]
 
 /** Un jugador, sin servidor: la simulación corre en el mismo hilo y cada comando se aplica al momento. */
 export class LocalSession implements Session {
+  readonly networked = false
   readonly sim: Simulation
   readonly me = LOCAL_PLAYER
   readonly slot: PlayerSlot

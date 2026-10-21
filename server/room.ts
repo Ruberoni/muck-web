@@ -8,6 +8,7 @@ import {
   PONG,
   PROTOCOL_VERSION,
   type Cmds,
+  type Dev,
   type EnemySnap,
   type Hello,
   type PickupSnap,
@@ -19,6 +20,7 @@ import {
   type You,
 } from '../src/net/protocol'
 import { missingMove, MOVE_REPEAT, type Action, type Move, type PlayerCommands } from '../src/sim/commands'
+import { campfireSpot } from '../src/sim/campfires'
 import { STEP } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
 import { generatePropPlacements, type PropPlacement } from '../src/sim/props'
@@ -67,6 +69,8 @@ export interface RoomDeps {
   clock: Clock
   scheduler: Scheduler
   random: Random
+  /** Acepta los trucos de `__debug` (`dev`): solo en desarrollo (`npm run dev:server`) y en los tests. */
+  dev?: boolean
 }
 
 export class MemoryStorage implements Storage {
@@ -203,6 +207,9 @@ export class Room {
       this.kick(conn)
     } else if (msg.type === 'cmds') {
       this.cmds(seat, msg)
+    } else if (msg.type === 'dev') {
+      if (this.deps.dev) this.dev(seat, msg)
+      else this.kick(conn)
     } else {
       this.send(conn, { type: 'state', ...this.fullState(seat) })
     }
@@ -319,6 +326,33 @@ export class Room {
       if (action.seq <= seat.ackSeq) continue
       seat.ackSeq = action.seq
       seat.actions.push(action)
+    }
+  }
+
+  /** Un truco de `__debug`, al momento (fuera del bucle). */
+  private dev(seat: Seat, msg: Dev) {
+    const sim = this.sim!
+    const slot = this.slotOf(seat)
+    switch (msg.op) {
+      case 'give':
+        slot.inventory.add(msg.item, msg.amount)
+        break
+      case 'teleport':
+        sim.teleport(seat.id, msg.x, msg.z, msg.yaw, msg.pitch)
+        break
+      case 'setVitals':
+        if (msg.health !== undefined) slot.player.health = msg.health
+        if (msg.hunger !== undefined) slot.player.hunger = msg.hunger
+        break
+      case 'spawnEnemy':
+        sim.enemies.spawnAt(msg.x, msg.z)
+        break
+      case 'placeCampfire':
+        sim.campfires.place(campfireSpot({ x: msg.x, z: msg.z }, msg.yaw, [sim.world.grid, sim.campfires.grid]), seat.id)
+        break
+      case 'setPhase':
+        sim.setPhase(msg.phase)
+        break
     }
   }
 
