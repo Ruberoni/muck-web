@@ -7,12 +7,24 @@ const TEXELS_PER_UNIT = 1.5
 // Hueco entre el borde del círculo y las marcas fijadas en él (fogatas lejanas, N).
 const RIM_INSET = 9
 
+/** Un compañero en el minimapa. */
+export interface MinimapPlayer {
+  x: number
+  z: number
+  yaw: number
+  /** CSS. */
+  color: string
+  alive: boolean
+}
+
 export interface MinimapView {
   x: number
   z: number
   yaw: number
   campfires: readonly { x: number; z: number }[]
   enemies: readonly { pos: { x: number; z: number } }[]
+  /** Los demás jugadores (solo en red). */
+  players?: readonly MinimapPlayer[]
 }
 
 /**
@@ -35,6 +47,18 @@ export function clampToRim(p: { x: number; y: number }, radius: number): boolean
   p.x *= radius / d
   p.y *= radius / d
   return true
+}
+
+/**
+ * Dónde y hacia dónde va la flecha de un compañero (en unidades del mundo desde el centro, antes de escalar).
+ * Cerca, en su sitio y apuntando hacia donde mira; lejos, fijada al borde de radio `rim` y apuntando hacia él.
+ * `angle` es el giro de la flecha respecto a "arriba", en el sentido de las agujas del reloj (como `ctx.rotate`).
+ */
+export function teammateMark(dx: number, dz: number, yaw: number, viewYaw: number, rim: number) {
+  const p = toMinimap(dx, dz, viewYaw)
+  const far = clampToRim(p, rim)
+  const angle = far ? Math.atan2(p.x, -p.y) : viewYaw - yaw
+  return { x: p.x, y: p.y, angle, far }
 }
 
 type Rgb = [number, number, number]
@@ -154,6 +178,12 @@ export class Minimap {
       this.dot(c + p.x * scale, c + p.y * scale, far ? 3.5 : 4.5)
     }
 
+    // Compañeros: flechas de su color; los lejanos, en el borde apuntando hacia ellos.
+    for (const other of view.players ?? []) {
+      const mark = teammateMark(other.x - view.x, other.z - view.z, other.yaw, view.yaw, rim)
+      this.arrow(c + mark.x * scale, c + mark.y * scale, mark.angle, other.color, mark.far ? 0.75 : 1, other.alive)
+    }
+
     // Norte (-Z) en el borde.
     toMinimap(0, -1, view.yaw, p)
     ctx.font = '600 11px system-ui, sans-serif'
@@ -166,17 +196,33 @@ export class Minimap {
     ctx.fillText('N', c + p.x * (c - RIM_INSET), c + p.y * (c - RIM_INSET))
 
     // Jugador: flecha fija hacia arriba (el mapa es el que gira).
+    this.arrow(c, c, 0, '#fff', 1, true)
+  }
+
+  /** Flecha centrada en (x, y) que apunta hacia arriba girada `angle`. Un muerto, hueca. */
+  private arrow(x: number, y: number, angle: number, color: string, size: number, filled: boolean) {
+    const { ctx } = this
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(angle)
+    ctx.scale(size, size)
     ctx.beginPath()
-    ctx.moveTo(c, c - 7)
-    ctx.lineTo(c + 5, c + 5)
-    ctx.lineTo(c, c + 2.5)
-    ctx.lineTo(c - 5, c + 5)
+    ctx.moveTo(0, -7)
+    ctx.lineTo(5, 5)
+    ctx.lineTo(0, 2.5)
+    ctx.lineTo(-5, 5)
     ctx.closePath()
-    ctx.fillStyle = '#fff'
-    ctx.strokeStyle = 'rgb(0 0 0 / 0.7)'
     ctx.lineWidth = 1.5
-    ctx.stroke()
-    ctx.fill()
+    if (filled) {
+      ctx.fillStyle = color
+      ctx.strokeStyle = 'rgb(0 0 0 / 0.7)'
+      ctx.stroke()
+      ctx.fill()
+    } else {
+      ctx.strokeStyle = color
+      ctx.stroke()
+    }
+    ctx.restore()
   }
 
   private dot(x: number, y: number, r: number) {

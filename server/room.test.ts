@@ -156,6 +156,18 @@ describe('Room', () => {
     expect(b.snap.players.map((p) => p.id)).toEqual([a.id])
   })
 
+  it('reparte el RTT que dice cada jugador en su `cmds`', () => {
+    const { room, time } = setup()
+    const a = new Client(room, time)
+    const b = new Client(room, time, 'b')
+    join(a, b)
+    play(time, 200, [[a], [b]])
+    expect(b.snap.players[0].ping).toBe(0)
+    a.send({ type: 'cmds', t: time.now(), moves: [{ tick: room.sim!.tick + 1, buttons: 0, yaw: 0, pitch: 0, n: 6 }], actions: [], rtt: 87 })
+    play(time, 200, [[b]])
+    expect(b.snap.players[0].ping).toBe(87)
+  })
+
   it('el inventario de cada uno solo va en su `you`', () => {
     const { room, time } = setup()
     const a = new Client(room, time)

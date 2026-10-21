@@ -5,6 +5,7 @@ import type { PlayerId, SimEventData } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
 import type { RemotePlayer } from '../net/client'
 import type { Shown } from '../net/interp'
+import { PLAYER_LIGHTNESS, PLAYER_SATURATION, playerHue } from '../ui/playerColor'
 
 const BODY_WIDTH = 0.6
 /** Del suelo al cuello: la cabeza va encima, a la altura de los ojos. */
@@ -22,9 +23,9 @@ const visorGeometry = new THREE.BoxGeometry(HEAD_SIZE * 0.8, HEAD_SIZE * 0.22, 0
 const armGeometry = new THREE.BoxGeometry(0.14, 0.14, 0.5).translate(0, 0, -0.25)
 const visorMaterial = new THREE.MeshStandardMaterial({ color: '#1d2230', flatShading: true })
 
-/** Un color distinto por jugador (ángulo áureo en el círculo de tonos), el mismo en todos los clientes. */
+/** Un color distinto por jugador, el mismo en todos los clientes y el mismo que en el HUD (`playerCss`). */
 export function playerColor(id: PlayerId, out = new THREE.Color()): THREE.Color {
-  return out.setHSL((id * 0.618034) % 1, 0.55, 0.55)
+  return out.setHSL(playerHue(id), PLAYER_SATURATION, PLAYER_LIGHTNESS, THREE.SRGBColorSpace)
 }
 
 interface Model {

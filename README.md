@@ -94,7 +94,8 @@ npm run typecheck:server  # server/cf.ts con los tipos de Cloudflare
 
 Para probarlo en local (el multijugador aún está oculto: solo funciona en desarrollo o en un build con `VITE_MULTIPLAYER=1`), con `npm run dev` y `npm run dev:server` a la vez:
 
-- `http://localhost:5173/?room=CODIGO` entra en la sala `CODIGO` (con varias pestañas o navegadores se juega con varios).
+- El menú tiene el lobby: tu nombre, "Jugar solo", "Crear partida" (deja el código en la URL y en la pausa sale "Copiar enlace") y "Unirse" con un código. `http://localhost:5173/?room=CODIGO` ofrece "Unirse a CODIGO" (con varias pestañas o navegadores se juega con varios).
+- En una sala, arriba a la izquierda salen la conexión y la lista de jugadores (vida, ping, ausente); los nombres flotan sobre los demás, los compañeros salen en el minimapa con su color y lo que hacen suena donde pasa.
 - Desde la consola: `await __debug.net.create()` crea una sala y deja su código en la URL; `__debug.net.join('CODIGO')`, `__debug.net.players()`, `__debug.net.addBot()` (otro jugador en la misma pestaña que anda en círculos), `__debug.net.setLatency(100, 30)` (retraso artificial en ms) y `__debug.net.stats()` (RTT, margen y correcciones de la predicción).
 - En una sala, los trucos de `__debug` (`give`, `teleport`, `setVitals`, `spawnEnemy`, `placeCampfire`, `setPhase`, `aimAt`) los hace el servidor de desarrollo y devuelven una promesa; el de producción los rechaza.
 

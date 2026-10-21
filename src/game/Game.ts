@@ -11,7 +11,7 @@ import type { SimEvent } from '../sim/events'
 import { Hud } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
-import { WATER_LEVEL } from '../sim/world/terrain'
+import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { campfireSpot, type CampfireSpot } from '../sim/campfires'
 import { EAT_KEY, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
@@ -23,12 +23,19 @@ import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/pl
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import { LocalSession, type Session } from '../net/session'
 import type { NetSession } from '../net/netSession'
+import type { Notice } from '../net/client'
+import { pickNameTags, type PlayerRow } from '../ui/multiplayerHud'
+import { playerCss } from '../ui/playerColor'
 
 export type GameState = 'menu' | 'playing' | 'paused' | 'dead'
 
 const SHADOW_LOOK_AHEAD = 25
 // Distancia a la que deja de oírse una fogata.
 const CAMPFIRE_HEARING = 14
+/** Los nombres flotan algo por encima de la cabeza. */
+const NAME_HEIGHT = EYE_HEIGHT + 0.55
+/** Por encima del suelo a esta altura (m), otro jugador está en el aire o flotando: sus pasos no suenan. */
+const REMOTE_GROUNDED = 0.2
 
 /**
  * El cliente: convierte la entrada en comandos para la sesión y dibuja, suena y muestra lo que pasa.
@@ -62,6 +69,10 @@ export class Game {
   manualClock = false
   inputOverride: Partial<PlayerInput> | null = null
   attackOverride: boolean | null = null
+  /** Si un clic en el fondo del menú empieza a jugar. Con el lobby, no: se elige con sus botones. */
+  menuClickStarts = true
+  /** Al cambiar de estado o de partida (el lobby se rehace). */
+  onchange: (() => void) | null = null
 
   private sky: Sky
   private water: THREE.Mesh
@@ -82,6 +93,9 @@ export class Game {
   private queued: ActionData[] = []
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
   private worldVersion = -1
+  /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
+  private retrying = false
+  private projected = new THREE.Vector3()
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -166,6 +180,9 @@ export class Game {
     this.placeCamera(this.slot.player.pos)
     // En el menú o en pausa no predice ni envía: al empezar a jugar pide el estado.
     if (this.state !== 'playing') this.net?.suspend()
+    this.hud.net.setVisible(this.net !== null)
+    if (this.state !== 'playing') this.hud.showOverlay(this.state, this.net !== null)
+    this.onchange?.()
   }
 
   setState(state: GameState) {
@@ -173,6 +190,7 @@ export class Game {
       // Al empezar o reanudar no se interpola desde la posición de antes de la pausa.
       this.snapPlayer = true
       this.acc = 0
+      this.retrying = false
       this.net?.wake()
     }
     if (state !== 'playing') {
@@ -181,7 +199,18 @@ export class Game {
       this.net?.suspend()
     }
     this.state = state
-    this.hud.showOverlay(state === 'playing' ? null : state)
+    this.hud.showOverlay(state === 'playing' ? null : state, this.net !== null)
+    this.onchange?.()
+  }
+
+  /** Empieza o reanuda: captura el ratón (hace falta un gesto del usuario, como un clic). */
+  async play() {
+    // El clic es el gesto que permite al navegador empezar a sonar.
+    this.sound.unlock()
+    const ok = await this.input.requestLock()
+    if (ok) return
+    this.retrying = true
+    this.hud.showOverlay('retry')
   }
 
   /** Partida nueva: inventario vacío, isla restaurada y jugador en el punto de aparición. En red no hace nada (la isla es del servidor). */
@@ -246,15 +275,13 @@ export class Game {
 
   private async onOverlayClick() {
     if (this.state === 'playing') return
-    // El clic es el gesto que permite al navegador empezar a sonar.
-    this.sound.unlock()
+    if (this.state === 'menu' && !this.menuClickStarts && !this.retrying) return
     if (this.state === 'dead') {
       // En red el muerto espera (reaparecer y espectador llegan en el PR 14).
       if (this.net) return
       this.restart()
     }
-    const ok = await this.input.requestLock()
-    if (!ok) this.hud.showOverlay('retry')
+    await this.play()
   }
 
   private frame(time: number) {
@@ -275,6 +302,8 @@ export class Game {
       if (own.some((e) => e.type === 'worldReset')) this.resetViews()
       this.present(own)
       this.present(remote, false)
+      this.presentRemote(net, remote)
+      for (const notice of net.client.takeNotices()) this.hud.net.notice(noticeText(notice))
       this.render(net.alpha, dt, time)
       return
     }
@@ -373,6 +402,87 @@ export class Game {
     }
   }
 
+  /** Lo que hacen los demás, ya en el tick de render: suena donde pasa, y su muerte se avisa. */
+  private presentRemote(net: NetSession, events: readonly SimEvent[]) {
+    if (!events.length) return
+    const { sim } = this
+    const shown = net.client.shownPlayers
+    const playerAt = (id: number) => shown.find((p) => p.id === id)?.pose ?? null
+    const locate = (e: SimEvent): { x: number; z: number } | null => {
+      switch (e.type) {
+        case 'propDestroyed':
+          return sim.world.props[e.id]
+        case 'campfirePlaced':
+          return e
+        case 'enemyDied':
+          return sim.enemies.list.find((en) => en.id === e.id)?.pos ?? playerAt(e.by)
+        case 'playerSwing':
+        case 'playerHurt':
+        case 'playerDied':
+        case 'playerAte':
+        case 'playerCrafted':
+          return playerAt(e.id)
+        default:
+          return null
+      }
+    }
+    this.audio.remote(events, this.listener(), locate, (id) => sim.world.props[id].kind)
+    for (const e of events) if (e.type === 'playerDied' && e.id !== net.me) this.hud.net.notice(`${this.nameOf(net, e.id)} ha muerto`)
+  }
+
+  private listener() {
+    return { x: this.renderPos.x, z: this.renderPos.z, yaw: this.look.yaw }
+  }
+
+  private nameOf(net: NetSession, id: number): string {
+    return net.client.names.get(id) || `Jugador ${id + 1}`
+  }
+
+  /** En una sala: conexión, lista de jugadores, nombres sobre los demás y sus pasos. */
+  private renderNet(net: NetSession) {
+    const { hud, slot } = this
+    const shown = net.client.shownPlayers
+    const rtt = Math.round(net.client.clock.rtt)
+    if (net.closed) hud.net.setStatus('lost', net.closeReason ?? 'Sin conexión con el servidor.')
+    else hud.net.setStatus('online', `Sala ${net.room}${rtt > 0 ? ` · ${rtt} ms` : ''}`)
+
+    const rows: PlayerRow[] = [
+      {
+        id: net.me,
+        name: net.name || 'Jugador',
+        health: slot.player.health,
+        maxHealth: HEALTH_MAX,
+        ping: rtt,
+        absent: this.state !== 'playing' && slot.alive,
+        alive: slot.alive,
+        me: true,
+      },
+    ]
+    for (const { id, data } of [...shown].sort((a, b) => a.id - b.id)) {
+      rows.push({ id, name: this.nameOf(net, id), health: data.health, maxHealth: HEALTH_MAX, ping: data.ping, absent: data.connection === 'absent', alive: data.alive, me: false })
+    }
+    hud.net.setPlayers(rows)
+
+    const { camera, projected } = this
+    camera.updateMatrixWorld()
+    const tags = pickNameTags(
+      shown.map(({ id, pose }) => ({ id, name: this.nameOf(net, id), x: pose.x, y: pose.y + NAME_HEIGHT, z: pose.z })),
+      camera.position,
+      (x, y, z) => projected.set(x, y, z).project(camera),
+      window.innerWidth,
+      window.innerHeight,
+    )
+    hud.net.setNames(this.state === 'playing' ? tags : [])
+
+    this.audio.remoteSteps(
+      shown.map(({ id, pose, data }) => {
+        const ground = heightAt(pose.x, pose.z)
+        return { id, x: pose.x, z: pose.z, grounded: pose.y - ground < REMOTE_GROUNDED, inWater: ground < WATER_LEVEL, alive: data.alive }
+      }),
+      this.listener(),
+    )
+  }
+
   /** El HUD sigue el inventario del jugador de la sesión actual. */
   private bindInventory() {
     const { inventory } = this.slot
@@ -454,7 +564,15 @@ export class Game {
     else if (slot.hotbarFull && !slot.target) this.hud.setPrompt('Hotbar llena')
     else this.hud.setTarget(slot.target)
     this.hud.setDay(sim.clock.day)
-    this.hud.minimap.draw({ x: this.renderPos.x, z: this.renderPos.z, yaw: look.yaw, campfires: campfires.list, enemies: enemies.list })
+    this.hud.minimap.draw({
+      x: this.renderPos.x,
+      z: this.renderPos.z,
+      yaw: look.yaw,
+      campfires: campfires.list,
+      enemies: enemies.list,
+      players: net?.client.shownPlayers.map(({ id, pose, data }) => ({ x: pose.x, z: pose.z, yaw: pose.yaw, color: playerCss(id), alive: data.alive })),
+    })
+    if (net) this.renderNet(net)
     this.updateAmbient(dt)
 
     this.handheld.setItem(slot.inventory.selectedItem)
@@ -468,10 +586,23 @@ export class Game {
     const { sim } = this
     let nearest = Infinity
     for (const fire of sim.campfires.list) nearest = Math.min(nearest, Math.hypot(fire.x - this.renderPos.x, fire.z - this.renderPos.z))
+    // En una sala el mundo sigue en pausa, y su ambiente también.
+    const online = this.net !== null && !this.net.closed
     this.sound.update(dt, {
-      active: this.state === 'playing',
+      active: this.state === 'playing' || online,
       night: 1 - THREE.MathUtils.smoothstep(sunDirection(sim.clock.phase, this.sun).y, -0.1, 0.25),
       campfire: Math.max(0, 1 - nearest / CAMPFIRE_HEARING),
     })
+  }
+}
+
+function noticeText(notice: Notice): string {
+  switch (notice.type) {
+    case 'join':
+      return `${notice.name} se ha unido`
+    case 'leave':
+      return `${notice.name} se ha ido`
+    case 'islandReset':
+      return 'La isla se ha reiniciado por una actualización'
   }
 }

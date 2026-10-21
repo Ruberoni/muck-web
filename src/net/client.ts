@@ -16,6 +16,7 @@ import {
   MAX_ACTIONS,
   MAX_MOVE_REPEAT,
   MAX_MOVES,
+  MAX_RTT,
   PING,
   PONG,
   PROTOCOL_VERSION,
@@ -37,12 +38,17 @@ export type ClientHello = Pick<Hello, 'intent' | 'room' | 'name' | 'token' | 'ta
 
 export type ClientState = 'connecting' | 'online' | 'closed'
 
+/** Algo que avisar en el HUD: alguien entra o sale, o la isla guardada se ha descartado. */
+export type Notice = { type: 'join' | 'leave'; id: PlayerId; name: string } | { type: 'islandReset' }
+
 /** Lo que se dibuja de otro jugador además de su pose. */
 export interface RemotePlayer {
   item: ItemId | null
   health: number
   alive: boolean
   connection: Connection
+  /** Su RTT (ms), como lo dice la sala. */
+  ping: number
 }
 
 export interface RemoteEnemy {
@@ -133,6 +139,8 @@ export class NetClient {
   /** Eventos del servidor para presentarlos cuando el render llegue a su tick. */
   readonly presentation = new PresentationQueue<SimEvent>()
   readonly names = new Map<PlayerId, string>()
+  /** Avisos pendientes de mostrar (`takeNotices`). */
+  private notices: Notice[] = []
   /** Los demás jugadores tal como se dibujan en el tick de render (lo pone `render`). */
   shownPlayers: Shown<RemotePlayer>[] = []
   /** Sube con cada estado completo (`welcome`, `state`): la vista de la isla se rehace entera. */
@@ -219,7 +227,8 @@ export class NetClient {
     if (!(this.quiet && !quiet) && now - this.lastSentAt < (quiet ? QUIET_SEND_MS : SEND_MS)) return
     // Los nuevos y los no confirmados; los que el reloj se saltó no (el servidor los rellena igual).
     const moves = compactMoves(predictor.history.filter((h) => !h.filled && h.move.tick > this.ackTick).map((h) => h.move)).slice(-MAX_MOVES)
-    this.send({ type: 'cmds', t: now, moves, actions: actions.slice(0, MAX_ACTIONS) })
+    const rtt = Math.min(MAX_RTT, Math.round(this.clock.rtt))
+    this.send({ type: 'cmds', t: now, moves, actions: actions.slice(0, MAX_ACTIONS), ...(rtt > 0 ? { rtt } : {}) })
     // El margen solo dice algo del ritmo en los envíos normales: no en el primero tras estar quieto ni tras un tirón.
     const span = this.lastSent && !this.quiet ? newest.tick - this.lastSent.tick - 1 : null
     this.clock.sent(now, quiet || span === null || span > MAX_SPAN ? null : span)
@@ -274,6 +283,11 @@ export class NetClient {
     if (this.state === 'online') this.transport.send(PING)
   }
 
+  /** Los avisos desde la última vez, en orden de llegada. */
+  takeNotices(): Notice[] {
+    return this.notices.splice(0)
+  }
+
   renderTick(): number {
     return this.clock.renderTick(this.time.now())
   }
@@ -307,6 +321,7 @@ export class NetClient {
         this.ackTick = msg.serverTick
         this.ackSeq = msg.you.appliedSeq
         for (const p of msg.state.players) this.names.set(p.id, p.name)
+        if (msg.islandReset) this.notices.push({ type: 'islandReset' })
         this.pushRemote(msg.state.tick, msg.state.players, msg.state.enemies.list)
         this.state = 'online'
         this.onchange?.()
@@ -347,8 +362,10 @@ export class NetClient {
         break
       case 'join':
         this.names.set(msg.id, msg.name)
+        this.notices.push({ type: 'join', id: msg.id, name: msg.name })
         break
       case 'leave':
+        this.notices.push({ type: 'leave', id: msg.id, name: msg.name })
         break
     }
   }
@@ -367,7 +384,11 @@ export class NetClient {
   private pushRemote(tick: number, players: readonly PlayerSnap[], enemies: readonly EnemySnap[]) {
     this.players.push(
       tick,
-      players.map(({ id, pos, yaw, pitch, item, health, alive, connection }) => ({ id, pose: { ...pos, yaw, pitch }, data: { item, health, alive, connection } })),
+      players.map(({ id, pos, yaw, pitch, item, health, alive, connection, ping }) => ({
+        id,
+        pose: { ...pos, yaw, pitch },
+        data: { item, health, alive, connection, ping },
+      })),
     )
     this.enemies.push(
       tick,

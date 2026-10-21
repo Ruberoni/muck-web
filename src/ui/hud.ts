@@ -3,6 +3,7 @@ import { canCraft, RECIPES } from '../sim/crafting'
 import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Target } from '../sim/interaction'
 import { Minimap } from './minimap'
+import { MultiplayerHud } from './multiplayerHud'
 
 const HANDLE = `<polygon points="7,28 10,29.5 22,8 19,6.5" fill="#8a5a32"/>`
 const axe = (head: string, edge: string) =>
@@ -31,6 +32,13 @@ const OVERLAY_TEXT: Record<Exclude<OverlayKind, null>, string> = {
   dead: 'Has muerto — haz clic para empezar de nuevo',
 }
 
+/** En una sala la partida no se para: la pausa es solo tuya y morir no reinicia la isla. */
+const ONLINE_TEXT: Partial<Record<Exclude<OverlayKind, null>, string>> = {
+  menu: 'Haz clic para entrar en la partida',
+  paused: 'Pausa (la partida sigue) — haz clic para continuar',
+  dead: 'Has muerto',
+}
+
 const CONTROLS = `
   <ul class="controls">
     <li><kbd>WASD</kbd> moverse</li>
@@ -55,6 +63,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, pa
 /** HUD en DOM. Solo toca el DOM cuando cambia un valor visible. */
 export class Hud {
   readonly minimap: Minimap
+  /** Lo que solo se ve en una sala: conexión, jugadores, avisos y nombres. */
+  readonly net: MultiplayerHud
+  /** El texto del menú cuando hay lobby (los botones del panel deciden cómo jugar). */
+  menuText: string | null = null
   private healthFill: HTMLElement
   private hungerBar: HTMLElement
   private hungerFill: HTMLElement
@@ -80,6 +92,7 @@ export class Hud {
     this.prompt = el('div', 'prompt', root)
     this.day = el('div', 'day', root)
     this.minimap = new Minimap(root)
+    this.net = new MultiplayerHud(root)
 
     const bars = el('div', 'bars', root)
     this.healthFill = el('div', 'fill', el('div', 'bar health', bars))
@@ -122,10 +135,14 @@ export class Hud {
     this.showOverlay('menu')
   }
 
-  showOverlay(kind: OverlayKind) {
+  /** `online`: en una sala (overlay translúcido y textos de red). */
+  showOverlay(kind: OverlayKind, online = false) {
     this.overlay.hidden = kind === null
     this.overlay.classList.toggle('dead', kind === 'dead')
-    if (kind) this.overlayTitle.textContent = OVERLAY_TEXT[kind]
+    this.overlay.classList.toggle('online', online)
+    if (!kind) return
+    const text = (online && ONLINE_TEXT[kind]) || (kind === 'menu' && this.menuText) || OVERLAY_TEXT[kind]
+    this.overlayTitle.textContent = text
   }
 
   setHealth(value: number, max: number) {

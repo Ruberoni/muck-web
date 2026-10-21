@@ -263,3 +263,139 @@ kbd {
 
 .setting input { width: 100%; margin: 0; accent-color: #ffd866; cursor: pointer; }
 .setting .value { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- Multijugador --- */
+
+/* En una sala la partida sigue detrás: el overlay deja verla. */
+.overlay.online { background: rgb(20 40 60 / 0.2); }
+.overlay.online.dead { background: rgb(70 10 10 / 0.35); }
+
+.net {
+  position: absolute;
+  left: 16px;
+  top: 48px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  max-width: min(260px, calc(100vw - var(--minimap) - 48px));
+}
+
+.net[hidden], .names[hidden] { display: none; }
+
+.net-status { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.net-status .light { width: 8px; height: 8px; border-radius: 50%; background: #9aa0a6; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4); flex: none; }
+.net-status.online .light { background: #5bd66b; }
+.net-status.connecting .light { background: #f2c94c; }
+.net-status.lost .light { background: #e05a4f; }
+.net-status.lost .text { color: #ffb3ab; }
+
+.players {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.3);
+  display: grid;
+  gap: 3px;
+}
+
+.player {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 44px 3.8em 4.6em;
+  align-items: center;
+  gap: 6px;
+}
+
+.player .swatch { width: 10px; height: 10px; border-radius: 3px; }
+.player .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player.me .name { font-weight: 700; }
+.player.away .name { opacity: 0.6; }
+.player .life { height: 5px; border-radius: 3px; background: rgb(0 0 0 / 0.4); overflow: hidden; }
+.player .life .fill { display: block; height: 100%; background: #e05a4f; transform-origin: left center; }
+.player .ping { font-variant-numeric: tabular-nums; opacity: 0.75; font-size: 12px; text-align: right; min-width: 3.5em; }
+.player .tag { justify-self: start; font-size: 11px; padding: 0 4px; border-radius: 3px; background: rgb(255 255 255 / 0.15); }
+.player .tag.empty { background: none; }
+
+.notices {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.notice {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.4);
+  animation: notice 5s ease-out forwards;
+  white-space: nowrap;
+}
+
+@keyframes notice {
+  0% { opacity: 0; transform: translateY(-4px); }
+  6%, 85% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+.names { position: absolute; inset: 0; overflow: hidden; }
+
+.name-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.9), 0 0 1px rgb(0 0 0);
+}
+
+/* El lobby, en el panel del menú y la pausa. */
+.lobby {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  cursor: default;
+  font-size: 14px;
+}
+
+.lobby-offline, .lobby-room { display: grid; gap: 10px; }
+.lobby[hidden], .lobby [hidden] { display: none; }
+.lobby .field { display: grid; gap: 4px; text-align: left; font-weight: 600; }
+.lobby .buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.lobby .join { display: flex; gap: 8px; justify-content: center; }
+.lobby .join input { width: 7em; text-transform: uppercase; letter-spacing: 0.15em; text-align: center; }
+.lobby .room { font-size: 16px; }
+.lobby .room code { font-size: 20px; letter-spacing: 0.15em; font-weight: 700; color: #ffd866; }
+
+.lobby input {
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  background: rgb(0 0 0 / 0.35);
+  color: #fff;
+}
+
+.lobby button {
+  font: inherit;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.lobby button:hover:not(:disabled) { background: rgb(255 255 255 / 0.22); }
+.lobby button:disabled { opacity: 0.5; cursor: default; }
+.lobby button.primary { background: #ffd866; border-color: #ffd866; color: #1d2230; }
+.lobby button.primary:hover:not(:disabled) { background: #ffe38f; }
+.lobby .status { margin: 0; font-size: 13px; opacity: 0.9; }
+.lobby .status.error { color: #ffb3ab; opacity: 1; }

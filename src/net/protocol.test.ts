@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MAX_PITCH } from '../sim/constants'
 import { RECIPES } from '../sim/crafting'
 import { SLOT_COUNT } from '../sim/inventory'
-import { cleanName, isRoomCode, MAX_ACTIONS, MAX_MESSAGE, MAX_MOVES, parseClientMessage, PROTOCOL_VERSION } from './protocol'
+import { cleanName, isRoomCode, MAX_ACTIONS, MAX_MESSAGE, MAX_MOVES, MAX_RTT, parseClientMessage, PROTOCOL_VERSION } from './protocol'
 
 const hello = { type: 'hello', v: PROTOCOL_VERSION, t: 12.5, intent: 'join', room: 'K7QX2', name: ' Ana ', tab: 'a1' }
 const move = { tick: 10, buttons: 65, yaw: 1, pitch: -0.2 }
@@ -66,6 +66,8 @@ describe('protocolo', () => {
     if (!result.ok) return
     expect(result.msg).toEqual({ type: 'cmds', t: 1, moves, actions: actions.map(({ ...a }) => (delete (a as { junk?: boolean }).junk, a)) })
     expect(valid({ type: 'resync' })).toBe(true)
+    const withRtt = parse(cmds({ rtt: 85 }))
+    expect(withRtt.ok && withRtt.msg).toMatchObject({ type: 'cmds', rtt: 85 })
   })
 
   it('cmds inválido: tipos, rangos y tamaños', () => {
@@ -92,6 +94,7 @@ describe('protocolo', () => {
     expect(valid(cmds({ moves: Array(MAX_MOVES + 1).fill(move) }))).toBe(false)
     expect(valid(cmds({ actions: Array.from({ length: MAX_ACTIONS + 1 }, (_, i) => ({ seq: i + 1, tick: 1, kind: 'eat' })) }))).toBe(false)
     expect(valid(cmds({ moves: 'x' }))).toBe(false)
+    for (const rtt of [-1, 1.5, 'x', MAX_RTT + 1]) expect(valid(cmds({ rtt })), String(rtt)).toBe(false)
     expect(valid({ type: 'dev', op: 'give' })).toBe(false)
     expect(parseClientMessage('{"type":"resync"' + ' '.repeat(MAX_MESSAGE) + '}').ok).toBe(false)
     expect(parseClientMessage('[1]').ok).toBe(false)

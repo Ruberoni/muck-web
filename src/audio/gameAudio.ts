@@ -1,6 +1,6 @@
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { PropKind } from '../sim/props'
-import type { SoundOut } from './sound'
+import type { SoundName, SoundOut } from './sound'
 import { spatialize } from './sound'
 
 /** Metros recorridos entre dos pasos: al correr suenan más seguidos sin tocar nada. */
@@ -13,6 +13,31 @@ export const GROWL_DISTANCE = 28
 const GROWL_MIN_INTERVAL = 2.5
 const GROWL_RANDOM_INTERVAL = 4
 const IMPACT = { tree: 'hitWood', rock: 'hitStone', bush: 'hitBush' } as const
+
+/** Hasta dónde se oye lo que hacen los demás (§8 del plan): golpes y roturas, fogatas, daño, pasos y lo demás. */
+export const REMOTE_HEARING = { hit: 30, campfire: 25, hurt: 20, step: 15, other: 15 } as const
+/** La muerte de otro se oye siempre, aunque esté lejos (con esta ganancia como mínimo). */
+export const REMOTE_DEATH_GAIN = 0.35
+
+/** Quién escucha: la cámara del jugador local. */
+export interface Listener {
+  x: number
+  z: number
+  yaw: number
+}
+
+/** Otro jugador como se dibuja ahora, para sus pasos. */
+export interface RemoteWalker {
+  id: PlayerId
+  x: number
+  z: number
+  /** Pisando suelo (no en el aire ni flotando). */
+  grounded: boolean
+  inWater: boolean
+  alive: boolean
+}
+
+type Point = { x: number; z: number }
 
 interface PlayerLike {
   pos: { x: number; z: number }
@@ -30,6 +55,8 @@ export class GameAudio {
   private airTime = 0
   private stride = 0
   private growlTimer = GROWL_MIN_INTERVAL
+  /** Pasos de los demás: dónde estaban en el frame anterior y cuánto llevan andado desde el último paso. */
+  private walkers = new Map<PlayerId, { x: number; z: number; stride: number }>()
 
   constructor(
     private sound: SoundOut,
@@ -115,15 +142,87 @@ export class GameAudio {
     }
   }
 
+  /**
+   * Sonidos de lo que hacen los demás (eventos ya en el tick de render), en su sitio: `locate` dice dónde pasa
+   * cada evento (null: no se sabe, no suena). Lo que solo le importa a quien lo hace (recoger, bayas) no suena.
+   */
+  remote(list: readonly SimEvent[], listener: Listener, locate: (e: SimEvent) => Point | null, propKind: (id: number) => PropKind) {
+    const at = (e: SimEvent, distance: number, name: SoundName | null, minGain = 0) => {
+      const where = name && locate(e)
+      if (!where) return
+      const { gain, pan } = spatialize(where.x - listener.x, where.z - listener.z, listener.yaw, distance)
+      const g = Math.max(gain, minGain)
+      if (g > 0) this.sound.play(name, { gain: g, pan })
+    }
+    for (const e of list) {
+      switch (e.type) {
+        case 'playerSwing':
+          at(e, REMOTE_HEARING.hit, this.impact(e.target, list, propKind))
+          break
+        case 'propDestroyed':
+          at(e, REMOTE_HEARING.hit, propKind(e.id) === 'rock' ? 'breakStone' : 'breakWood')
+          break
+        case 'enemyDied':
+          at(e, REMOTE_HEARING.hit, 'enemyDeath')
+          break
+        case 'campfirePlaced':
+          at(e, REMOTE_HEARING.campfire, 'place')
+          break
+        case 'playerHurt':
+          at(e, REMOTE_HEARING.hurt, 'hurt')
+          break
+        case 'playerAte':
+          at(e, REMOTE_HEARING.other, 'eat')
+          break
+        case 'playerCrafted':
+          at(e, REMOTE_HEARING.other, 'craft')
+          break
+        case 'playerDied':
+          at(e, REMOTE_HEARING.hit, 'death', REMOTE_DEATH_GAIN)
+          break
+      }
+    }
+  }
+
+  /** Por frame: los pasos de los demás, un paso cada STRIDE metros como los propios, oídos hasta 15 m. */
+  remoteSteps(walkers: readonly RemoteWalker[], listener: Listener) {
+    const seen = new Set<PlayerId>()
+    for (const w of walkers) {
+      seen.add(w.id)
+      const last = this.walkers.get(w.id)
+      if (!last) {
+        this.walkers.set(w.id, { x: w.x, z: w.z, stride: 0 })
+        continue
+      }
+      const moved = Math.hypot(w.x - last.x, w.z - last.z)
+      last.x = w.x
+      last.z = w.z
+      // Un salto grande es una corrección o un teletransporte, no pasos.
+      if (!w.alive || !w.grounded || moved >= MAX_STEP_DISTANCE * 4) continue
+      last.stride += moved
+      if (last.stride < STRIDE) continue
+      last.stride -= STRIDE
+      const { gain, pan } = spatialize(w.x - listener.x, w.z - listener.z, listener.yaw, REMOTE_HEARING.step)
+      if (gain > 0) this.sound.play(w.inWater ? 'stepWater' : 'step', { gain: gain * (0.8 + this.rng() * 0.2), pan })
+    }
+    for (const id of this.walkers.keys()) if (!seen.has(id)) this.walkers.delete(id)
+  }
+
   /** Impacto de un golpe propio, o al aire si `target` es null. */
   private swing(target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind) {
-    if (!target) return this.sound.play('swing')
+    const name = this.impact(target, list, propKind)
+    if (name) this.sound.play(name)
+  }
+
+  /** Lo que suena al golpear `target`: nada si en la misma lista lo rompe o lo mata (suena eso). */
+  private impact(target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind): SoundName | null {
+    if (!target) return 'swing'
     const killed = list.some(
       (e) => ((e.type === 'propDestroyed' && target.kind === 'prop') || (e.type === 'enemyDied' && target.kind === 'enemy')) && e.id === target.id,
     )
-    if (killed) return
-    if (target.kind === 'enemy') return this.sound.play('enemyHit')
-    this.sound.play(IMPACT[propKind(target.id)])
+    if (killed) return null
+    if (target.kind === 'enemy') return 'enemyHit'
+    return IMPACT[propKind(target.id)]
   }
 
   private pickup() {
@@ -137,5 +236,6 @@ export class GameAudio {
     this.airTime = 0
     this.stride = 0
     this.growlTimer = GROWL_MIN_INTERVAL
+    this.walkers.clear()
   }
 }
