@@ -1,4 +1,4 @@
-name: Build & Deploy to GitHub Pages
+name: Build & Deploy
 
 on:
   push:
@@ -40,7 +40,16 @@ jobs:
       # src/sim se comparte con el servidor: debe compilar sin DOM.
       - run: npm run typecheck:sim
 
+      # El Worker y la Durable Object, con los tipos de workerd.
+      - run: npm run typecheck:server
+
+      # Humo de la Durable Object en workerd y medida de CPU de la sala.
+      - run: npm run test:server
+
       - run: npm run build
+        env:
+          # wss://… del Worker (variable del repo); el cliente le añade /room/:code.
+          VITE_SERVER_URL: ${{ vars.SERVER_URL }}
 
       - name: Configure Pages
         if: github.ref == 'refs/heads/main'
@@ -66,3 +75,60 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  # El servidor de multijugador (Cloudflare Worker + Durable Object), detrás de Pages: un cliente nuevo con el
+  # servidor viejo reintenta hasta que llega este despliegue. Solo si el push cambia lo que el servidor ejecuta,
+  # porque desplegar corta las partidas abiertas unos segundos.
+  server:
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Changes for the server?
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != push ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "Sin commit anterior con el que comparar: se despliega."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$BEFORE" HEAD -- server src/sim src/net package-lock.json ':(exclude)*.test.ts'; then
+            echo "Sin cambios en server/, src/sim/, src/net/ ni package-lock.json: no se despliega."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only "$BEFORE" HEAD -- server src/sim src/net package-lock.json ':(exclude)*.test.ts'
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.changes.outputs.deploy == 'true'
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+        if: steps.changes.outputs.deploy == 'true'
+
+      - name: Deploy Worker
+        if: steps.changes.outputs.deploy == 'true'
+        run: npm run deploy:server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Check /status
+        if: steps.changes.outputs.deploy == 'true'
+        env:
+          SERVER_URL: ${{ vars.SERVER_URL }}
+        run: |
+          url="https://${SERVER_URL#wss://}/status"
+          for i in 1 2 3 4 5 6; do
+            if body=$(curl -fsS "$url"); then echo "$body"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::$url no responde tras desplegar."
+          exit 1

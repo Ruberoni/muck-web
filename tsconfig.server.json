@@ -1,0 +1,10 @@
+{
+  // El Worker y la Durable Object: tipos del runtime de Cloudflare (workerd), sin DOM ni Node.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["server/cf.ts"],
+  "exclude": []
+}

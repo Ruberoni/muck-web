@@ -72,11 +72,24 @@ La lógica que no depende de three.js ni del DOM (jugador, supervivencia, colisi
 
 El workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
 
-- en cada **push a `main`** corre los tests, comprueba `src/sim/` sin DOM, hace el build y despliega `dist/` a GitHub Pages;
-- en cada **pull request** hacia `main` solo corre los tests, esa comprobación y el build (sin desplegar);
-- también se puede lanzar a mano desde la pestaña Actions (solo despliega si se lanza sobre `main`).
+- en cada **push a `main`** corre los tests (también los del servidor), comprueba `src/sim/` sin DOM y el Worker con los tipos de Cloudflare, hace el build, despliega `dist/` a GitHub Pages y, después, despliega el servidor de multijugador a Cloudflare si el push cambia `server/`, `src/sim/`, `src/net/` o `package-lock.json`;
+- en cada **pull request** hacia `main` corre lo mismo sin desplegar, y además comprueba que se ha subido `PROTOCOL_VERSION` si hacía falta;
+- también se puede lanzar a mano desde la pestaña Actions (solo despliega si se lanza sobre `main`; lanzado a mano, despliega siempre el servidor).
 
 Configuración única en GitHub:
 
 1. **Settings → General → Default branch**: debe ser `main` (el environment `github-pages` solo permite desplegar desde la rama por defecto).
 2. **Settings → Pages → Build and deployment → Source**: **GitHub Actions**.
+3. **Settings → Secrets and variables → Actions**: los secretos `CLOUDFLARE_API_TOKEN` (permisos *Account · Workers Scripts · Edit* y *Account · Account Settings · Read*) y `CLOUDFLARE_ACCOUNT_ID`, y la variable `SERVER_URL` con la URL `wss://` del Worker (sin ruta). El build la expone al cliente como `VITE_SERVER_URL`.
+
+## Servidor de multijugador
+
+El multijugador (en construcción) usa un servidor autoritativo en [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/): un Worker (`server/cf.ts`, configurado en `server/wrangler.jsonc`) recibe `GET /room/:code` y pasa el WebSocket a la Durable Object de esa sala, que ejecuta la misma simulación que el navegador (`server/room.ts` sobre `src/sim/`). La isla se guarda en el SQLite de la Durable Object cada 10 s, al pararse la sala y al irse el último jugador, y se borra a las 24 h sin nadie. `GET /status` responde `{"ok": true, "v": <PROTOCOL_VERSION>}`.
+
+```bash
+npm run dev:server        # el Worker en local con wrangler dev (ws://localhost:8787/room/CODIGO), acepta localhost
+npm run test:server       # humo del Worker y la Durable Object en workerd, y la medida de CPU de la sala
+npm run typecheck:server  # server/cf.ts con los tipos de Cloudflare
+```
+
+**Desplegar el servidor corta las partidas abiertas unos segundos**: Cloudflare cierra los WebSockets al cambiar el código. Los clientes se reconectan con su token y siguen con la isla guardada (se pierden como mucho los últimos 10 s). Por eso el workflow solo lo despliega cuando cambia lo que el servidor ejecuta.

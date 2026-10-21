@@ -1,0 +1,16 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // La variable del repo SERVER_URL (wss://muck-web.ruben-pardes25.workers.dev) depende de este nombre.
+  "name": "muck-web",
+  "main": "cf.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
+  },
+  // El plan gratuito solo admite Durable Objects con SQLite.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomObject"] }],
+  // Workers Logs: cpuTime de cada invocación, para medir el coste real de una sala.
+  "observability": { "enabled": true }
+}

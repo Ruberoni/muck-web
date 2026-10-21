@@ -17,5 +17,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "server", "vite.config.ts"]
+  "include": ["src", "server", "vite.config.ts", "vitest.server.config.ts"],
+  // El Worker usa los tipos de workerd: se comprueba con tsconfig.server.json.
+  "exclude": ["server/cf.ts"]
 }
