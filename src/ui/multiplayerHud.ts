@@ -1,3 +1,4 @@
+import { MAX_CHAT } from '../net/protocol'
 import type { PlayerId } from '../sim/events'
 import { playerCss } from './playerColor'
 
@@ -7,6 +8,8 @@ export const NAME_DISTANCE = 40
 const NOTICE_MS = 5000
 /** Avisos a la vez: si llegan más, se van los más viejos. */
 const MAX_NOTICES = 4
+/** Líneas de chat que se guardan (con el chat abierto se ven todas; cerrado, se desvanecen solas). */
+const MAX_CHAT_LINES = 8
 
 export type ConnectionLight = 'connecting' | 'online' | 'lost'
 
@@ -83,6 +86,10 @@ export class MultiplayerHud {
   private banner: HTMLElement
   private bannerTitle: HTMLElement
   private bannerDetail: HTMLElement
+  private chatLog: HTMLElement
+  private chatInput: HTMLInputElement
+  /** Al pulsar Enter con texto en el chat. */
+  onsay: ((text: string) => void) | null = null
   private rows = new Map<PlayerId, { root: HTMLElement; key: string }>()
   private tags = new Map<PlayerId, HTMLElement>()
   private lastStatus = ''
@@ -100,7 +107,56 @@ export class MultiplayerHud {
     this.banner = el('div', 'banner', parent)
     this.bannerTitle = el('div', 'title', this.banner)
     this.bannerDetail = el('div', 'detail', this.banner)
+    const chat = el('div', 'chat', parent)
+    this.chatLog = el('div', 'chat-log', chat)
+    this.chatInput = el('input', 'chat-input', chat)
+    this.chatInput.maxLength = MAX_CHAT
+    this.chatInput.placeholder = 'Escribe y pulsa Enter'
+    this.chatInput.hidden = true
+    // Lo que se teclea no mueve al jugador. keyup sí pasa: así no se queda pegada una tecla soltada escribiendo.
+    this.chatInput.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Enter') {
+        const text = this.chatInput.value.trim()
+        if (text) this.onsay?.(text)
+        this.closeChat()
+      } else if (e.key === 'Escape') {
+        this.closeChat()
+      }
+    })
+    this.chatInput.addEventListener('blur', () => this.closeChat())
+    for (const type of ['click', 'mousedown', 'pointerdown'] as const) this.chatInput.addEventListener(type, (e) => e.stopPropagation())
     this.setVisible(false)
+  }
+
+  get chatOpen(): boolean {
+    return !this.chatInput.hidden
+  }
+
+  /** Abre la caja de chat (Enter en una sala) con el foco en ella. */
+  openChat() {
+    if (this.root.hidden || this.chatOpen) return
+    this.chatInput.hidden = false
+    this.chatInput.parentElement!.classList.add('open')
+    this.chatInput.focus()
+  }
+
+  closeChat() {
+    if (!this.chatOpen) return
+    this.chatInput.value = ''
+    this.chatInput.hidden = true
+    this.chatInput.parentElement!.classList.remove('open')
+    this.chatInput.blur()
+  }
+
+  /** Una línea de chat: el nombre con el color del jugador y el texto (ajeno: con `textContent`). */
+  chat(id: PlayerId, name: string, text: string) {
+    while (this.chatLog.childElementCount >= MAX_CHAT_LINES) this.chatLog.firstElementChild!.remove()
+    const line = el('div', 'chat-line', this.chatLog)
+    const who = el('span', 'who', line)
+    who.textContent = `${name}: `
+    who.style.color = playerCss(id)
+    line.append(text)
   }
 
   /** Fuera de una sala no se ve nada (y se olvida lo que había). */
@@ -111,6 +167,8 @@ export class MultiplayerHud {
     this.setPlayers([])
     this.setNames([])
     this.notices.replaceChildren()
+    this.closeChat()
+    this.chatLog.replaceChildren()
     this.setBanner(null)
     this.lastStatus = ''
   }

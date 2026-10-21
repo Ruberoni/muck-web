@@ -140,6 +140,7 @@ export class Game {
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
+    this.hud.net.onsay = (text) => this.net?.client.say(text)
     this.bindInventory()
     this.sound.setVolume(this.settings.volume)
     createSettingsPanel(
@@ -196,6 +197,7 @@ export class Game {
     this.worldVersion = -1
     // El espectador es de la sala que se deja: en la nueva se vuelve a decidir con su `you`.
     if (this.state === 'spectating') this.state = 'playing'
+    this.hud.setCrosshair(true)
     this.netGeneration = this.net?.generation ?? 0
     this.gameOverDay = null
     this.lookFromPlayer()
@@ -221,6 +223,8 @@ export class Game {
       this.setCrafting(false)
     }
     if (state !== 'playing') this.input.clear()
+    if (!isActive(state)) this.hud.net.closeChat()
+    this.hud.setCrosshair(state !== 'spectating')
     // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue. El espectador sigue conectado.
     if (isActive(state)) this.net?.wake()
     else this.net?.suspend()
@@ -333,7 +337,10 @@ export class Game {
       this.present(own)
       this.present(remote, false)
       this.presentRemote(net, remote)
-      for (const notice of net.client.takeNotices()) this.hud.net.notice(noticeText(notice))
+      for (const notice of net.client.takeNotices()) {
+        if (notice.type === 'chat') this.hud.net.chat(notice.id, notice.name, notice.text)
+        else this.hud.net.notice(noticeText(notice))
+      }
       // Muerto, mira a los demás hasta que el servidor dice (en `you`) que ha reaparecido.
       if (this.state === 'playing' && !this.slot.alive) this.setState('spectating')
       else if (this.state === 'spectating' && this.slot.alive) this.setState('playing')
@@ -392,7 +399,9 @@ export class Game {
   private step() {
     if (this.state === 'spectating') return this.spectatorStep()
     const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
-    const actions = this.actions(this.input.takePresses(), this.input.takeWheel())
+    const presses = this.input.takePresses()
+    this.chatKey(presses)
+    const actions = this.actions(presses, this.input.takeWheel())
     const attack = this.attackOverride ?? this.input.attackHeld
     const { yaw, pitch } = this.look
     const events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, actions)
@@ -408,9 +417,17 @@ export class Game {
     const presses = this.input.takePresses()
     this.input.takeWheel()
     this.queued.length = 0
+    this.chatKey(presses)
     if (presses.has('Tab')) this.spectateNext()
     const { yaw, pitch } = this.look
     this.session.step({ buttons: 0, yaw, pitch }, [])
+  }
+
+  /** En una sala, Enter abre el chat: lo que se teclee no llega al juego hasta cerrarlo (Enter o Esc). */
+  private chatKey(presses: ReadonlySet<string>) {
+    if (!this.net || !(presses.has('Enter') || presses.has('NumpadEnter'))) return
+    this.input.clear()
+    this.hud.net.openChat()
   }
 
   /** Los compañeros vivos a los que se puede mirar, por id. */
@@ -480,6 +497,9 @@ export class Game {
           break
         case 'gameOver':
           this.gameOverDay = e.day
+          break
+        case 'gameOverCancelled':
+          this.gameOverDay = null
           break
       }
     }
@@ -716,7 +736,7 @@ export class Game {
   }
 }
 
-function noticeText(notice: Notice): string {
+function noticeText(notice: Exclude<Notice, { type: 'chat' }>): string {
   switch (notice.type) {
     case 'join':
       return `${notice.name} se ha unido`

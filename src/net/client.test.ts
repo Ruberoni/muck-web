@@ -6,7 +6,7 @@ import { aimPose } from '../sim/interaction'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
 import { botMove, driveClient } from './bot'
-import { NetClient, compactMoves } from './client'
+import { LEAVE_GRACE_MS, NetClient, compactMoves } from './client'
 import type { Cmds } from './protocol'
 import type { MoveInput } from './session'
 import { LaggyTransport, ManualTime, type Lag } from './transport'
@@ -20,9 +20,9 @@ function setup() {
   let tokens = 0
   const room = new Room(CODE, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev: true })
   let seeds = 0
-  const connect = (tab: string, intent: 'create' | 'join' = 'join', lag: Lag = { latency: 100, jitter: 30, rng: mulberry32(++seeds) }) => {
+  const connect = (tab: string, intent: 'create' | 'join' = 'join', lag: Lag = { latency: 100, jitter: 30, rng: mulberry32(++seeds) }, token?: string) => {
     const transport = new LaggyTransport(room, time, lag)
-    const client = new NetClient(transport, time, { intent, room: CODE, name: tab, tab })
+    const client = new NetClient(transport, time, { intent, room: CODE, name: tab, tab, ...(token ? { token } : {}) })
     const sent: { at: number; msg: Cmds }[] = []
     const send = transport.send.bind(transport)
     transport.send = (data) => {
@@ -381,8 +381,41 @@ describe('el espejo de NetClient', () => {
     expect(ping).toBeLessThan(400)
     b.client.close()
     run(time, 500, [[a.client, idle]])
-    expect(a.client.takeNotices()).toEqual([{ type: 'leave', id: b.client.id, name: 'b' }])
+    // Sale del mundo enseguida, pero "se ha ido" espera por si vuelve (una reconexión).
     expect(a.client.shownPlayers).toEqual([])
+    expect(a.client.takeNotices()).toEqual([])
+    run(time, LEAVE_GRACE_MS, [[a.client, idle]])
+    expect(a.client.takeNotices()).toEqual([{ type: 'leave', id: b.client.id, name: 'b' }])
+  })
+
+  it('quien se corta y vuelve enseguida no se avisa como si se fuera y entrara', () => {
+    const { time, connect } = setup()
+    const a = connect('a', 'create')
+    const b = connect('b')
+    run(time, 2000, [[a.client, idle], [b.client, idle]])
+    a.client.takeNotices()
+    const { token, id } = b.client
+    b.client.close()
+    run(time, 2000, [[a.client, idle]])
+    const again = connect('b', 'join', undefined, token)
+    run(time, LEAVE_GRACE_MS + 1000, [[a.client, idle], [again.client, idle]])
+    expect(again.client.id).toBe(id)
+    expect(a.client.takeNotices()).toEqual([])
+    expect(a.client.shownPlayers.map((p) => p.id)).toEqual([id])
+  })
+
+  it('el chat llega a todos, también a quien escribe, con su nombre', () => {
+    const { time, connect } = setup()
+    const a = connect('a', 'create')
+    const b = connect('b')
+    run(time, 2000, [[a.client, idle], [b.client, idle]])
+    a.client.takeNotices()
+    b.client.takeNotices()
+    b.client.say('¡hola!')
+    run(time, 500, [[a.client, idle], [b.client, idle]])
+    const chat = { type: 'chat', id: b.client.id, name: 'b', text: '¡hola!' }
+    expect(a.client.takeNotices()).toEqual([chat])
+    expect(b.client.takeNotices()).toEqual([chat])
   })
 })
 

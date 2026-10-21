@@ -2,7 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { MAX_PITCH } from '../sim/constants'
 import { RECIPES } from '../sim/crafting'
 import { SLOT_COUNT } from '../sim/inventory'
-import { cleanName, isRoomCode, MAX_ACTIONS, MAX_MESSAGE, MAX_MOVES, MAX_RTT, parseClientMessage, PROTOCOL_VERSION } from './protocol'
+import {
+  cleanChat,
+  cleanName,
+  enemyTuple,
+  isRoomCode,
+  MAX_ACTIONS,
+  MAX_CHAT,
+  MAX_MESSAGE,
+  MAX_MOVES,
+  MAX_RTT,
+  parseClientMessage,
+  pickupTuple,
+  playerTuple,
+  PROTOCOL_VERSION,
+  ServerDecoder,
+  type EnemySnap,
+  type PickupSnap,
+  type PlayerSnap,
+  type SnapWire,
+} from './protocol'
 
 const hello = { type: 'hello', v: PROTOCOL_VERSION, t: 12.5, intent: 'join', room: 'K7QX2', name: ' Ana ', tab: 'a1' }
 const move = { tick: 10, buttons: 65, yaw: 1, pitch: -0.2 }
@@ -122,5 +141,63 @@ describe('protocolo', () => {
       { op: 'fly' },
     ]
     for (const extra of bad) expect(dev(extra).ok, JSON.stringify(extra)).toBe(false)
+  })
+
+  it('chat: de 1 a MAX_CHAT caracteres, sin caracteres de control', () => {
+    expect(cleanChat('  hola  ')).toBe('hola')
+    expect(cleanChat('x'.repeat(MAX_CHAT))).toHaveLength(MAX_CHAT)
+    for (const text of ['', '   ', 'x'.repeat(MAX_CHAT + 1), 'a\nb', 7, null]) expect(cleanChat(text), String(text)).toBeNull()
+    expect(parse({ type: 'say', text: ' ¡hola! ', extra: 1 })).toEqual({ ok: true, msg: { type: 'say', text: '¡hola!' } })
+    expect(valid({ type: 'say' })).toBe(false)
+  })
+})
+
+describe('snap en el cable', () => {
+  const player: PlayerSnap = { id: 2, pos: { x: 1.25, y: 5.5, z: -3 }, yaw: 1.5, pitch: -0.2, item: 'wood', health: 80, alive: true, connection: 'absent', ping: 87 }
+  const enemy: EnemySnap = { id: 9, pos: { x: -10.5, z: 4.25 }, yaw: 3.1, hp: 4 }
+  const pickup: PickupSnap = { id: 4, pos: { x: 1, y: 2, z: 3 }, grounded: true }
+  const inventory = { slots: ['wood', null, null, null, null, null, null, null, null], counts: { wood: 3 }, selected: 0 } as const
+  const you = (withInventory: boolean): SnapWire['you'] => ({
+    player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, health: 100, hunger: 90 },
+    ...(withInventory ? { inventory: { ...inventory, slots: [...inventory.slots], counts: { ...inventory.counts } } } : {}),
+    combat: { cooldown: 0, pendingSwing: false },
+    hotbarFull: false,
+    alive: true,
+    respawnAt: null,
+    appliedSeq: 3,
+  })
+  const wire = (withInventory: boolean): SnapWire => ({
+    type: 'snap',
+    tick: 30,
+    t: 1,
+    held: 2,
+    ackTick: 31,
+    ackSeq: 3,
+    slack: 4,
+    you: you(withInventory),
+    players: [playerTuple(player)],
+    enemies: [enemyTuple(enemy)],
+    movingPickups: [pickupTuple(pickup)],
+  })
+
+  it('las tuplas se leen como los objetos de los que salen', () => {
+    const decoder = new ServerDecoder()
+    const snap = decoder.decode(JSON.stringify(wire(true)))
+    expect(snap).toMatchObject({ type: 'snap', tick: 30, players: [player], enemies: [enemy], movingPickups: [pickup] })
+    expect(decoder.decode(JSON.stringify({ ...wire(true), players: [playerTuple({ ...player, alive: false, connection: 'present' })] }))).toMatchObject({
+      players: [{ alive: false, connection: 'present' }],
+    })
+  })
+
+  it('un snap sin inventario lleva el último que llegó (en un welcome, un state o un snap)', () => {
+    const decoder = new ServerDecoder()
+    expect(() => decoder.decode(JSON.stringify(wire(false)))).toThrow()
+    decoder.decode(JSON.stringify(wire(true)))
+    const snap = decoder.decode(JSON.stringify(wire(false)))
+    expect(snap.type === 'snap' && snap.you.inventory).toEqual(inventory)
+    const empty = { slots: Array(9).fill(null), counts: {}, selected: 2 }
+    decoder.decode(JSON.stringify({ type: 'state', tick: 40, worldStartTick: 0, state: {}, you: { ...you(false), inventory: empty } }))
+    const after = decoder.decode(JSON.stringify(wire(false)))
+    expect(after.type === 'snap' && after.you.inventory).toEqual(empty)
   })
 })

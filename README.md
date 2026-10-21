@@ -92,7 +92,9 @@ npm run test:server       # humo del Worker y la Durable Object en workerd, y la
 npm run typecheck:server  # server/cf.ts con los tipos de Cloudflare
 ```
 
-En GitHub Pages el menú ya ofrece "Crear partida" y "Unirse" (el build publicado lleva `VITE_MULTIPLAYER=1` y se conecta a `SERVER_URL`). Reglas en una sala: la pausa es solo tuya (sigues en el mundo como "ausente"); al morir tu inventario cae al suelo y miras a un compañero (Tab cambia) hasta reaparecer a los 30 s o, si es de noche, al amanecer; si mueren todos, "Game over" y la isla se reinicia. Si se corta la conexión, el juego vuelve a entrar solo durante un minuto.
+En GitHub Pages el menú ya ofrece "Crear partida" y "Unirse" (el build publicado lleva `VITE_MULTIPLAYER=1` y se conecta a `SERVER_URL`). Reglas en una sala: la pausa es solo tuya (sigues en el mundo como "ausente"); al morir tu inventario cae al suelo y miras a un compañero (Tab cambia) hasta reaparecer a los 30 s o, si es de noche, al amanecer; si mueren todos, "Game over" y la isla se reinicia a los 6 s (salvo que entre o vuelva alguien vivo antes). <kbd>Enter</kbd> abre el chat. Si se corta la conexión, el juego vuelve a entrar solo durante un minuto, y los demás no ven "se ha ido / se ha unido" si vuelves en menos de 10 s.
+
+Tráfico (medido en `npm run test:server` con 8 jugadores y 24 enemigos de noche): unos 30 KB/s de bajada por jugador en JSON, unos 15 KB/s con la compresión del WebSocket (permessage-deflate, que el Worker negocia). De subida, `cmds` a 20 Hz mientras te mueves, a 4 Hz quieto, a 1 Hz muerto y nada en pausa. En el plan gratuito de Cloudflare los mensajes entrantes cuentan 20 a 1 en las 100.000 peticiones diarias: unas 28 horas-jugador en movimiento al día (unas 7 h de partida a 4).
 
 Para probarlo en local, con `npm run dev` y `npm run dev:server` a la vez:
 

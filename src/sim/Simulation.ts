@@ -188,6 +188,11 @@ export class Simulation {
     // Lo que quedara por presentar de antes (trucos de debug) es de la partida que acaba.
     if (this.gameOverAt !== null && this.tick >= this.gameOverAt) this.reset()
     const present = this.inWorld()
+    // Alguien vivo ha entrado (o ha vuelto) durante la cuenta atrás: ya no están todos muertos.
+    if (this.gameOverAt !== null && present.some((s) => s.alive)) {
+      this.gameOverAt = null
+      this.events.emit({ type: 'gameOverCancelled' })
+    }
     if (this.gameOverAt === null) {
       for (const slot of present) if (!slot.alive && slot.respawnAt !== null && this.tick >= slot.respawnAt) this.respawn(slot)
     }

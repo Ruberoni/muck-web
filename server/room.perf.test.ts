@@ -16,9 +16,17 @@ function busyRoom() {
   let tokens = 0
   const room = new Room('BENCH', { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `t${++tokens}`, seed: () => 7 } })
   let bytes = 0
+  /** Lo último que recibe el primer jugador, para medir cuánto ocupa comprimido. */
+  const sample: string[] = []
   const conns: Conn[] = []
   for (let i = 0; i < MAX_PLAYERS; i++) {
-    const conn: Conn = { send: (data) => void (bytes += data.length), close: () => {} }
+    const conn: Conn = {
+      send: (data) => {
+        bytes += data.length
+        if (i === 0 && sample.push(data) > 200) sample.shift()
+      },
+      close: () => {},
+    }
     conns.push(conn)
     const hello: Hello = { type: 'hello', v: PROTOCOL_VERSION, t: 0, intent: i === 0 ? 'create' : 'join', room: 'BENCH', name: `J${i}`, tab: `${i}` }
     room.message(conn, JSON.stringify(hello))
@@ -45,10 +53,16 @@ function busyRoom() {
     }
     time.advance(LOOP_MS)
   }
-  return { run, sim, bytes: () => bytes }
+  return { run, sim, bytes: () => bytes, sample }
 }
 
-it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en sus 50 ms', () => {
+/** Lo que ocupa un mensaje con permessage-deflate sin contexto compartido (lo peor: el navegador y workerd suelen compartirlo). */
+async function deflated(data: string): Promise<number> {
+  const stream = new Blob([data]).stream().pipeThrough(new CompressionStream('deflate-raw'))
+  return (await new Response(stream).arrayBuffer()).byteLength
+}
+
+it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en sus 50 ms', async () => {
   const room = busyRoom()
   for (let i = 0; i < 200; i++) room.run() // calentamiento (JIT)
   const times: number[] = []
@@ -62,10 +76,15 @@ it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en 
   const mean = times.reduce((a, b) => a + b, 0) / times.length
   const p99 = times[Math.floor(times.length * 0.99)]
   const kbPerSecond = (room.bytes() - start) / 1000 / ((times.length * LOOP_MS) / 1000) / MAX_PLAYERS
+  const raw = room.sample.reduce((sum, m) => sum + m.length, 0)
+  const packed = (await Promise.all(room.sample.map(deflated))).reduce((a, b) => a + b, 0)
   console.log(
     `Vuelta del bucle: media ${mean.toFixed(2)} ms, p99 ${p99.toFixed(2)} ms (presupuesto ${LOOP_MS} ms); ` +
-      `${room.sim.enemies.list.length} enemigos; ${kbPerSecond.toFixed(1)} KB/s de salida por jugador`,
+      `${room.sim.enemies.list.length} enemigos; ${kbPerSecond.toFixed(1)} KB/s de salida por jugador ` +
+      `(~${((kbPerSecond * packed) / raw).toFixed(1)} KB/s con permessage-deflate)`,
   )
   expect(room.sim.enemies.list.length).toBe(ENEMY_HARD_MAX)
   expect(mean).toBeLessThan(LOOP_MS / 2)
+  // El §5.3 del plan estimaba ~30 KB/s en JSON con 8 jugadores y 24 enemigos; sin las tuplas del snap salían ~62.
+  expect(kbPerSecond).toBeLessThan(40)
 })

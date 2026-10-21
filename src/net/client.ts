@@ -20,6 +20,7 @@ import {
   PING,
   PONG,
   PROTOCOL_VERSION,
+  ServerDecoder,
   type DevOp,
   type EnemySnap,
   type Hello,
@@ -27,7 +28,6 @@ import {
   type PickupSnap,
   type PlayerSnap,
   type Reject,
-  type ServerMessage,
   type WorldState,
 } from './protocol'
 import type { MoveInput } from './session'
@@ -38,8 +38,17 @@ export type ClientHello = Pick<Hello, 'intent' | 'room' | 'name' | 'token' | 'ta
 
 export type ClientState = 'connecting' | 'online' | 'closed'
 
-/** Algo que avisar en el HUD: alguien entra o sale, o la isla guardada se ha descartado. */
-export type Notice = { type: 'join' | 'leave'; id: PlayerId; name: string } | { type: 'islandReset' }
+/** Algo que avisar en el HUD: alguien entra o sale, alguien escribe en el chat o la isla guardada se ha descartado. */
+export type Notice =
+  | { type: 'join' | 'leave'; id: PlayerId; name: string }
+  | { type: 'chat'; id: PlayerId; name: string; text: string }
+  | { type: 'islandReset' }
+
+/**
+ * Quien se va y vuelve antes de esto (una reconexión tras un corte) no se avisa: ni "se ha ido" ni "se ha unido".
+ * Así, una marcha de verdad se avisa con este retraso.
+ */
+export const LEAVE_GRACE_MS = 10_000
 
 /** Lo que se dibuja de otro jugador además de su pose. */
 export interface RemotePlayer {
@@ -87,6 +96,7 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
     case 'clockSet':
     case 'worldReset':
     case 'gameOver':
+    case 'gameOverCancelled':
       return true
     default:
       return false
@@ -146,6 +156,10 @@ export class NetClient {
   readonly names = new Map<PlayerId, string>()
   /** Avisos pendientes de mostrar (`takeNotices`). */
   private notices: Notice[] = []
+  /** Los que se han ido hace menos de LEAVE_GRACE_MS: si vuelven antes, no se avisa de nada. */
+  private leaving = new Map<PlayerId, { notice: Notice; at: number }>()
+  /** Recuerda el último inventario propio para los `snap` que no lo traen. */
+  private decoder = new ServerDecoder()
   /** Los demás jugadores tal como se dibujan en el tick de render (lo pone `render`). */
   shownPlayers: Shown<RemotePlayer>[] = []
   /** Sube con cada estado completo (`welcome`, `state`): la vista de la isla se rehace entera. */
@@ -289,8 +303,19 @@ export class NetClient {
     if (this.state === 'online') this.transport.send(PING)
   }
 
-  /** Los avisos desde la última vez, en orden de llegada. */
+  /** Un mensaje de chat (la sala lo devuelve a todos, también a este cliente). */
+  say(text: string) {
+    if (this.state === 'online') this.send({ type: 'say', text })
+  }
+
+  /** Los avisos desde la última vez, en orden de llegada (las marchas, pasado LEAVE_GRACE_MS). */
   takeNotices(): Notice[] {
+    const now = this.time.now()
+    for (const [id, { notice, at }] of this.leaving) {
+      if (now - at < LEAVE_GRACE_MS) continue
+      this.leaving.delete(id)
+      this.notices.push(notice)
+    }
     return this.notices.splice(0)
   }
 
@@ -308,7 +333,7 @@ export class NetClient {
 
   private receive(data: string) {
     if (data === PONG) return
-    const msg = JSON.parse(data) as ServerMessage
+    const msg = this.decoder.decode(data)
     const now = this.time.now()
     switch (msg.type) {
       case 'welcome': {
@@ -368,10 +393,14 @@ export class NetClient {
         break
       case 'join':
         this.names.set(msg.id, msg.name)
-        this.notices.push({ type: 'join', id: msg.id, name: msg.name })
+        // Ha vuelto enseguida: era un corte, no se avisa de nada.
+        if (!this.leaving.delete(msg.id)) this.notices.push({ type: 'join', id: msg.id, name: msg.name })
         break
       case 'leave':
-        this.notices.push({ type: 'leave', id: msg.id, name: msg.name })
+        this.leaving.set(msg.id, { notice: { type: 'leave', id: msg.id, name: msg.name }, at: now })
+        break
+      case 'chat':
+        this.notices.push({ type: 'chat', id: msg.id, name: msg.name, text: msg.text })
         break
     }
   }
