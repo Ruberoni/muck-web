@@ -155,41 +155,7 @@
   box-shadow: 0 0 0 2px rgb(255 255 255 / 0.6), 0 2px 8px rgb(0 0 0 / 0.35);
 }
 
-/* Centrado en el hueco entre el minimapa y la hotbar, para no taparlos en ventanas bajas. */
-.crafting {
-  position: absolute;
-  right: 16px;
-  top: calc(16px + var(--minimap) + 12px);
-  bottom: calc(16px + var(--slot) + 36px);
-  height: fit-content;
-  margin: auto 0;
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgb(0 0 0 / 0.45);
-  font-size: 14px;
-}
-
-.crafting[hidden], .crosshair[hidden] { display: none; }
-.crafting .title { margin: 0 0 2px; font-size: 16px; }
-.crafting .hint { margin: 2px 0 0; font-size: 12px; opacity: 0.7; }
-
-.recipe {
-  display: grid;
-  grid-template-columns: auto 28px 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 8px;
-  align-items: center;
-  opacity: 0.45;
-}
-
-.recipe.available { opacity: 1; }
-.recipe kbd { grid-row: span 2; min-width: 0; width: 22px; padding: 1px 0; margin: 0; }
-.recipe .icon { grid-row: span 2; width: 28px; height: 28px; }
-.recipe .icon svg { width: 100%; height: 100%; display: block; }
-.recipe .name { font-weight: 600; }
-.recipe .cost { font-size: 12px; opacity: 0.8; }
+.crosshair[hidden] { display: none; }
 
 /* Pantalla de inventario (Tab o E): con el ratón suelto, recibe los clics y tapa el juego. */
 .inventory {
@@ -204,9 +170,12 @@
 
 .inventory[hidden] { display: none; }
 
+/* Dos columnas: casillas y recetas. En ventanas estrechas se apilan y el panel entero se desplaza. */
 .inventory-panel {
   display: grid;
-  gap: 8px;
+  grid-template-columns: auto minmax(240px, 300px);
+  align-items: start;
+  gap: 8px 24px;
   padding: 16px 20px;
   border-radius: 12px;
   background: rgb(0 0 0 / 0.5);
@@ -215,9 +184,52 @@
   overflow: auto;
 }
 
+.inventory-slots, .inventory-recipes { display: grid; gap: 8px; align-content: start; }
 .inventory-panel .title { margin: 0; font-size: 18px; }
 .inventory-panel .label { margin: 4px 0 0; font-size: 14px; min-height: 1.2em; }
 .inventory-panel .hint { margin: 0; font-size: 12px; opacity: 0.7; }
+.inventory-panel .inventory-keys { grid-column: 1 / -1; }
+
+/* La lista se desplaza sola, a la altura de las casillas más o menos. */
+.recipe-list {
+  display: grid;
+  gap: 4px;
+  max-height: min(60vh, 360px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.recipe-group { margin: 6px 0 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; }
+.recipe-group:first-child { margin-top: 0; }
+
+.recipe {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  column-gap: 8px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  /* Mayúsculas + clic no selecciona texto. */
+  user-select: none;
+  opacity: 0.55;
+}
+
+.recipe:hover { background: rgb(255 255 255 / 0.1); }
+.recipe.available { opacity: 1; }
+.recipe .icon { grid-row: span 3; width: 32px; height: 32px; }
+.recipe .icon svg { width: 100%; height: 100%; display: block; }
+.recipe .name { font-weight: 600; font-size: 14px; }
+.recipe .cost { font-size: 12px; opacity: 0.85; }
+.recipe .cost .missing { color: #ff7a7a; font-weight: 600; }
+.recipe .reason { font-size: 12px; color: #ffb3a8; }
+.recipe .reason[hidden] { display: none; }
+
+@media (max-width: 760px) {
+  .inventory-panel { grid-template-columns: auto; }
+  .inventory-recipes { margin-top: 8px; }
+  .recipe-list { max-height: none; overflow: visible; }
+}
 
 .inventory-grid {
   display: grid;

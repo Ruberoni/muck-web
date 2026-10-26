@@ -153,6 +153,13 @@ describe('sonido', () => {
     )
     expect(names()).toEqual(['hurt', 'eat', 'craft', 'place', 'death'])
   })
+
+  it('fabricar varias en un paso (Mayúsculas + clic) suena una vez; en el siguiente, otra', () => {
+    const { audio, names } = setup()
+    const crafted = (tick: number, id = 0): SimEvent => ({ tick, type: 'playerCrafted', id, recipe: 'wood_axe' })
+    audio.events([crafted(1), crafted(1), crafted(1), crafted(1, 1), crafted(2)], 0, () => 'tree')
+    expect(names()).toEqual(['craft', 'craft'])
+  })
 })
 
 describe('sonido de los demás', () => {
@@ -180,6 +187,13 @@ describe('sonido de los demás', () => {
     expect(played[0].options!.gain).toBeCloseTo(spatialize(10, 0, 0, REMOTE_HEARING.hit).gain)
     expect(played[0].options!.pan).toBeGreaterThan(0.5)
     expect(played[1].options!.gain).toBeLessThan(played[0].options!.gain!)
+  })
+
+  it('lo que fabrica cada uno en un mismo paso suena una vez', () => {
+    const { audio, played } = setup()
+    const crafted = (tick: number, id: number): SimEvent => ({ tick, type: 'playerCrafted', id, recipe: 'wood_axe' })
+    audio.remote([crafted(1, 1), crafted(1, 1), crafted(1, 2), crafted(2, 1), crafted(2, 1)], listener, () => ({ x: 1, z: 0 }), () => 'tree')
+    expect(played.map((p) => p.name)).toEqual(['craft', 'craft', 'craft'])
   })
 
   it('la muerte de otro se oye siempre, aunque esté lejísimos', () => {

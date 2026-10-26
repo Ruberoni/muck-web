@@ -16,9 +16,11 @@ import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { campfireSpot, type CampfireSpot } from '../sim/campfires'
 import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
+import { NO_STATIONS } from '../sim/crafting'
+import { sendableActions } from '../ui/recipes'
 import { Handheld } from './handheld'
 import { Input } from './input'
-import { stepActions } from './actions'
+import { stepActions, type InventoryFocus } from './actions'
 import { acceptsKeys, afterLockChange, inGame, showsCrosshair, type GameState } from './states'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/player'
@@ -56,7 +58,7 @@ const SPECTATOR_TURN = 5
  * mira a los demás (`spectating`, Tab cambia) hasta que el servidor lo hace reaparecer.
  *
  * Con la pantalla de inventario abierta (`inventory`) el ratón está suelto, pero se sigue en partida: el jugador
- * se queda quieto y solo manda lo que genera la pantalla (`move`), y la red y la simulación siguen.
+ * se queda quieto y solo manda lo que genera la pantalla (`move`, `craft`), y la red y la simulación siguen.
  */
 export class Game {
   readonly renderer: THREE.WebGLRenderer
@@ -78,7 +80,6 @@ export class Game {
   readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
-  craftingOpen = false
   /** Con reloj manual, la simulación solo avanza con advance() (debug y pruebas). */
   manualClock = false
   inputOverride: Partial<PlayerInput> | null = null
@@ -103,7 +104,7 @@ export class Game {
   private shadowCenter = new THREE.Vector3()
   private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
   private sun = new THREE.Vector3()
-  /** Acciones de `__debug` (select, craft) para el siguiente paso, como si fueran teclas. */
+  /** Acciones de `__debug` y de la pantalla de inventario (select, move, craft) para el siguiente paso. */
   private queued: ActionData[] = []
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
   private worldVersion = -1
@@ -144,6 +145,9 @@ export class Game {
     this.hud = new Hud(container, () => this.onOverlayClick())
     this.hud.net.onsay = (text) => this.net?.client.say(text)
     this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
+    this.hud.inventory.oncraft = (recipe, times) => {
+      for (let i = 0; i < times; i++) this.queueAction({ kind: 'craft', recipe })
+    }
     this.hud.inventory.onclose = () => this.closeInventory()
     // Esc no es un gesto que permita recapturar el ratón: se queda en pausa.
     this.hud.inventory.onescape = () => this.setState('paused')
@@ -210,7 +214,6 @@ export class Game {
     this.net?.close()
     this.session = session
     this.bindInventory()
-    this.setCrafting(false)
     this.propView = this.buildPropView(this.propView)
     this.resetViews()
     this.worldVersion = -1
@@ -240,10 +243,7 @@ export class Game {
     }
     // El espectador registra teclas que solo consume con ticks: las que queden no se aplican al reaparecer.
     if (state === 'playing' && this.state === 'spectating') this.input.takePresses()
-    if (state === 'spectating') {
-      this.snapSpectator = true
-      this.setCrafting(false)
-    }
+    if (state === 'spectating') this.snapSpectator = true
     if (state !== 'playing') this.input.clear()
     if (!inGame(state)) this.hud.net.closeChat()
     this.hud.setCrosshair(showsCrosshair(state))
@@ -271,7 +271,6 @@ export class Game {
   restart() {
     if (this.net) return
     this.session.reset()
-    this.setCrafting(false)
     this.resetViews()
     this.lookFromPlayer()
     this.acc = 0
@@ -279,7 +278,10 @@ export class Game {
     if (this.state === 'dead') this.setState('menu')
   }
 
-  /** Una acción para el siguiente paso, como si se hubiera pulsado su tecla (`__debug.select`/`craft`). */
+  /**
+   * Una acción para el siguiente paso, como si se hubiera pulsado su tecla (`__debug.select`/`craft`/`move` y la
+   * pantalla de inventario). Los `craft` que la predicción da por fallidos no se llegan a mandar (`sendableActions`).
+   */
   queueAction(action: ActionData) {
     this.queued.push(action)
   }
@@ -299,12 +301,15 @@ export class Game {
     this.sound.setVolume(this.settings.volume)
   }
 
-  /** Abre la pantalla de inventario (cierra el crafteo) y suelta el ratón; jugando, y con un jugador o en una sala. */
-  openInventory() {
+  /**
+   * Abre la pantalla de inventario con las casillas o las recetas a la vista y suelta el ratón; jugando, y con un
+   * jugador o en una sala.
+   */
+  openInventory(focus: InventoryFocus = 'slots') {
     if (this.state !== 'playing') return
-    this.setCrafting(false)
     // Con el estado ya en `inventory`, soltar el ratón no pasa a pausa.
     this.setState('inventory')
+    this.hud.inventory.focus(focus)
     if (this.input.locked) document.exitPointerLock()
   }
 
@@ -324,11 +329,6 @@ export class Game {
       this.retrying = true
       this.hud.showOverlay('retry', this.net !== null)
     })
-  }
-
-  setCrafting(open: boolean) {
-    this.craftingOpen = open
-    this.hud.setCrafting(open)
   }
 
   /** Truco de debug: mueve al jugador y la cámara. En red lo hace el servidor: se cumple cuando la predicción lo recoge. */
@@ -421,28 +421,29 @@ export class Game {
   private step() {
     if (this.state === 'spectating') return this.spectatorStep()
     const { yaw, pitch } = this.look
+    const { inventory, player } = this.slot
+    // Solo se mandan los `craft` que la predicción da por buenos, con la posición con la que se aplicarán. Hasta que
+    // haya estaciones, ninguna está cerca (con ellas, el cliente las mirará con algo de margen).
+    const sendable = (actions: readonly ActionData[]) => sendableActions(actions, inventory, NO_STATIONS, player.pos)
     let events: readonly SimEvent[]
     if (this.state === 'inventory') {
       // Quieto (el `Move` sirve de keepalive) y solo con lo que manda la pantalla (o `__debug`).
-      events = this.session.step({ buttons: 0, yaw, pitch }, this.queued.splice(0))
+      events = this.session.step({ buttons: 0, yaw, pitch }, sendable(this.queued.splice(0)))
     } else {
       const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
       const presses = this.input.takePresses()
-      const { inventory } = this.slot
-      const { actions, crafting, inventory: openInventory } = stepActions(this.queued.splice(0), {
+      const { actions, inventory: openInventory } = stepActions(this.queued.splice(0), {
         presses,
         wheel: this.input.takeWheel(),
-        crafting: this.craftingOpen,
         selected: inventory.selected,
         slots: inventory.slots,
         clickSwings: this.attackOverride === null,
       })
-      if (crafting !== this.craftingOpen) this.setCrafting(crafting)
       // El chat no se abre a la vez que el inventario.
       if (!openInventory) this.chatKey(presses)
       const attack = this.attackOverride ?? this.input.attackHeld
-      events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, actions)
-      if (openInventory) this.openInventory()
+      events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, sendable(actions))
+      if (openInventory) this.openInventory(openInventory)
     }
     this.snapPlayer = false
     const { sim, slot } = this
@@ -742,6 +743,7 @@ export class Game {
     else if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else this.hud.setTarget(slot.target)
+    if (this.state === 'inventory') this.hud.inventory.updateRecipes(NO_STATIONS, p.pos)
     this.hud.setDay(sim.clock.day)
     this.hud.minimap.draw({
       x: this.renderPos.x,

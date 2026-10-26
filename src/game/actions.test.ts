@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { RECIPES } from '../sim/crafting'
 import { INVENTORY_SIZE, SLOT_COUNT, type ItemId } from '../sim/inventory'
 import { stepActions, type KeyStep } from './actions'
 import { CLICK, RIGHT_CLICK } from './input'
@@ -7,7 +6,7 @@ import { CLICK, RIGHT_CLICK } from './input'
 const slots = (items: Partial<Record<number, ItemId>> = {}) => Array.from({ length: SLOT_COUNT }, (_, i) => items[i] ?? null)
 
 const step = (presses: string[], k: Partial<KeyStep> = {}) =>
-  stepActions([], { presses: new Set(presses), wheel: 0, crafting: false, selected: 0, slots: slots(), clickSwings: true, ...k })
+  stepActions([], { presses: new Set(presses), wheel: 0, selected: 0, slots: slots(), clickSwings: true, ...k })
 
 describe('teclas a acciones', () => {
   it('los números eligen casilla', () => {
@@ -17,23 +16,13 @@ describe('teclas a acciones', () => {
     ])
   })
 
-  it('con el crafteo abierto los números fabrican, pero solo recetas que existen', () => {
-    const digits = Array.from({ length: SLOT_COUNT }, (_, i) => `Digit${i + 1}`)
-    const { actions, crafting } = step(digits, { crafting: true })
-    expect(crafting).toBe(true)
-    expect(actions).toEqual(RECIPES.map(({ id }) => ({ kind: 'craft', recipe: id })))
-    // Condición previa de la prueba: con tantas recetas como casillas no quedarían teclas de más que filtrar.
-    expect(RECIPES.length).toBeLessThan(SLOT_COUNT)
-  })
-
-  it('C abre o cierra el crafteo y vale ya para los números del mismo paso', () => {
-    expect(step(['KeyC', 'Digit1'])).toEqual({ actions: [{ kind: 'craft', recipe: RECIPES[0].id }], crafting: true, inventory: false })
-    expect(step(['KeyC', 'Digit1'], { crafting: true })).toEqual({ actions: [{ kind: 'select', slot: 0 }], crafting: false, inventory: false })
-  })
-
-  it('la rueda mueve la casilla, salvo con el crafteo abierto', () => {
+  it('la rueda mueve la casilla', () => {
     expect(step([], { wheel: 1, selected: 8 }).actions).toEqual([{ kind: 'select', slot: 0 }])
-    expect(step([], { wheel: -1, crafting: true }).actions).toEqual([])
+    expect(step([], { wheel: -2, selected: 1 }).actions).toEqual([{ kind: 'select', slot: 8 }])
+  })
+
+  it('los números ya no fabrican: C pide la pantalla de inventario en las recetas', () => {
+    expect(step(['KeyC', 'Digit1'])).toEqual({ actions: [{ kind: 'select', slot: 0 }], inventory: 'recipes' })
   })
 
   it('el clic coloca la fogata si queda en la mano tras elegir casilla; si no, golpea', () => {
@@ -48,7 +37,6 @@ describe('teclas a acciones', () => {
     const { actions } = stepActions([{ kind: 'select', slot: 4 }], {
       presses: new Set([CLICK]),
       wheel: 0,
-      crafting: false,
       selected: 0,
       slots: slots({ 4: 'campfire' }),
       clickSwings: true,
@@ -57,7 +45,7 @@ describe('teclas a acciones', () => {
   })
 
   it('una casilla movida desde debug cuenta para el clic del mismo paso', () => {
-    const k = { presses: new Set([CLICK]), wheel: 0, crafting: false, selected: 0, clickSwings: true }
+    const k = { presses: new Set([CLICK]), wheel: 0, selected: 0, clickSwings: true }
     const toHand = { kind: 'move', from: 20, to: 0 } as const
     const out = { kind: 'move', from: 0, to: 20 } as const
     const inBackpack = Array.from({ length: INVENTORY_SIZE }, (_, i) => (i === 20 ? 'campfire' : null))
@@ -71,9 +59,9 @@ describe('teclas a acciones', () => {
     expect(step([RIGHT_CLICK]).actions).toEqual([{ kind: 'eat' }])
   })
 
-  it('Tab o E piden abrir el inventario, que cierra el crafteo', () => {
-    expect(step(['Tab'])).toEqual({ actions: [], crafting: false, inventory: true })
-    expect(step(['KeyE'], { crafting: true })).toEqual({ actions: [], crafting: false, inventory: true })
-    expect(step(['KeyQ'], { crafting: true }).inventory).toBe(false)
+  it('Tab o E piden la pantalla de inventario en las casillas', () => {
+    expect(step(['Tab'])).toEqual({ actions: [], inventory: 'slots' })
+    expect(step(['KeyE'])).toEqual({ actions: [], inventory: 'slots' })
+    expect(step(['KeyQ']).inventory).toBe(null)
   })
 })

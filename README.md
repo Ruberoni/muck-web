@@ -35,15 +35,19 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Shift** | correr (gasta stamina) |
 | **Clic izquierdo** | golpear; mantenerlo repite el golpe |
 | **Clic derecho** o **F** | comer una baya |
-| **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo y no actúa con el crafteo abierto) |
+| **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo) |
 | **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra para intercambiarlas. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
-| **C** | abrir o cerrar el crafteo (con él abierto, **1–5** fabrica) |
+| **C** | abrir el inventario con las recetas a la vista: clic en una receta la fabrica y **Mayúsculas + clic**, hasta 5 |
 | **Clic izquierdo** con la fogata en la mano | colocarla |
 | **Esc** | pausa |
 
 Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas no vuelven. La madera y la piedra caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo.
 
 El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata también se animan.
+
+## Crafteo
+
+Las recetas están en la pantalla de inventario (**C** la abre directamente en ellas): hacha y pico de madera (5 de madera cada uno), hacha y pico de piedra (3 de madera y 5 de piedra) y la fogata. Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo. Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas.
 
 ## Fogata
 

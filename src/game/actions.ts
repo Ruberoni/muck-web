@@ -1,11 +1,15 @@
 import type { ActionData } from '../sim/commands'
 import { EAT_KEY } from '../sim/constants'
-import { RECIPES } from '../sim/crafting'
 import { cycleSlot, SLOT_COUNT, type ItemId } from '../sim/inventory'
 import { CLICK, RIGHT_CLICK } from './input'
 
 /** Teclas que abren la pantalla de inventario jugando (y la cierran, desde la pantalla). */
 export const INVENTORY_KEYS: ReadonlySet<string> = new Set(['Tab', 'KeyE'])
+/** Abre la misma pantalla con las recetas a la vista (y también la cierra). */
+export const RECIPES_KEY = 'KeyC'
+
+/** Qué se quiere ver al abrir la pantalla de inventario. */
+export type InventoryFocus = 'slots' | 'recipes'
 
 /** Lo que hace falta saber de un paso para traducir sus pulsaciones en acciones (sin DOM ni Game). */
 export interface KeyStep {
@@ -13,8 +17,6 @@ export interface KeyStep {
   presses: ReadonlySet<string>
   /** Pasos de rueda (positivo hacia abajo). */
   wheel: number
-  /** Si el panel de crafteo estaba abierto al empezar el paso. */
-  crafting: boolean
   /** La casilla elegida y lo que hay en cada una. */
   selected: number
   slots: readonly (ItemId | null)[]
@@ -23,14 +25,12 @@ export interface KeyStep {
 }
 
 /**
- * Acciones de las pulsaciones de un paso, detrás de las ya encoladas (`queued`, de `__debug`). C abre o cierra
- * el crafteo; los números eligen casilla o, con el crafteo abierto, fabrican, pero solo recetas que existen: una
- * receta fuera de rango hace que la sala rechace el mensaje entero y expulse al jugador. La rueda mueve la casilla
- * elegida salvo con el crafteo abierto, donde se ignora. El clic coloca la fogata si es lo que queda en la mano y,
- * si no, golpea. Devuelve también si el crafteo queda abierto y si se pide abrir el inventario (Tab o E), que
- * cierra el crafteo.
+ * Acciones de las pulsaciones de un paso, detrás de las ya encoladas (`queued`, de `__debug` o de la pantalla de
+ * inventario). Los números y la rueda eligen casilla. El clic coloca la fogata si es lo que queda en la mano y, si
+ * no, golpea. Devuelve también si se pide abrir la pantalla de inventario: Tab o E, en las casillas, o C, en las
+ * recetas (null, si no). Fabricar se hace desde la pantalla.
  */
-export function stepActions(queued: readonly ActionData[], k: KeyStep): { actions: ActionData[]; crafting: boolean; inventory: boolean } {
+export function stepActions(queued: readonly ActionData[], k: KeyStep): { actions: ActionData[]; inventory: InventoryFocus | null } {
   const actions = [...queued]
   // La casilla que quedará elegida y lo que habrá en cada una tras las acciones encoladas (fabricar no se tiene en
   // cuenta: lo fabricado solo llega a la mano si cae justo en la casilla elegida, que estaba vacía).
@@ -40,17 +40,12 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
     if (action.kind === 'select') selected = action.slot
     else if (action.kind === 'move') [slots[action.from], slots[action.to]] = [slots[action.to], slots[action.from]]
   }
-  const crafting = k.presses.has('KeyC') ? !k.crafting : k.crafting
   for (let i = 0; i < SLOT_COUNT; i++) {
     if (!k.presses.has(`Digit${i + 1}`)) continue
-    if (crafting) {
-      if (i < RECIPES.length) actions.push({ kind: 'craft', recipe: RECIPES[i].id })
-    } else {
-      actions.push({ kind: 'select', slot: i })
-      selected = i
-    }
+    actions.push({ kind: 'select', slot: i })
+    selected = i
   }
-  if (k.wheel && !crafting) {
+  if (k.wheel) {
     selected = cycleSlot(selected, k.wheel)
     actions.push({ kind: 'select', slot: selected })
   }
@@ -59,6 +54,6 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
     else if (k.clickSwings) actions.push({ kind: 'swing' })
   }
   if (k.presses.has(EAT_KEY) || k.presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })
-  const inventory = [...INVENTORY_KEYS].some((code) => k.presses.has(code))
-  return { actions, crafting: crafting && !inventory, inventory }
+  const inventory = k.presses.has(RECIPES_KEY) ? 'recipes' : [...INVENTORY_KEYS].some((code) => k.presses.has(code)) ? 'slots' : null
+  return { actions, inventory }
 }
