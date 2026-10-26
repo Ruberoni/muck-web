@@ -1,4 +1,4 @@
-import { CloseCode, MAX_PLAYERS, type Reject } from './protocol'
+import { CloseCode, MAX_PLAYERS, PROTOCOL_VERSION, type Reject } from './protocol'
 
 /** El servidor no responde: puede ser la red o la cuota gratuita de Cloudflare (que no deja ni ver `/status`). */
 export const SERVER_DOWN = 'El servidor no responde. Puede que se haya agotado su cuota gratuita de hoy: prueba más tarde o juega solo.'
@@ -13,7 +13,10 @@ const NO_CONNECTION = 'Sin conexión con el servidor.'
 export function closeMessage(reject: Reject | null, code: number | null, room = ''): string | null {
   switch (reject?.reason) {
     case 'version':
-      return 'Tu versión del juego no es la del servidor: recarga la página.'
+      // Con el servidor más viejo, recargar no sirve: el cliente ya es el nuevo.
+      return reject.v !== undefined && reject.v < PROTOCOL_VERSION
+        ? 'El servidor aún no se ha actualizado a esta versión del juego. Prueba dentro de un rato.'
+        : 'Tu versión del juego no es la del servidor: recarga la página.'
     case 'full':
       return `La sala está llena (${MAX_PLAYERS} jugadores).`
     case 'not-found':
@@ -68,10 +71,57 @@ export async function explainClose(reject: Reject | null, code: number | null, r
   return (await probeServer(serverUrl, fetchFn)) ? NO_CONNECTION : SERVER_DOWN
 }
 
+/** La recarga que ya se hizo por una versión nueva del servidor (`v`) y cuándo (`at`, ms de `Date.now()`). */
+export interface ReloadMark {
+  v: number
+  at: number
+}
+
+/** Si el cliente recargado sigue siendo viejo (Pages aún no sirve el nuevo), se vuelve a recargar cada tanto (ms)… */
+export const RELOAD_EVERY_MS = 30_000
+/** …durante como mucho esto (ms) desde la primera recarga por esa versión. */
+export const RELOAD_FOR_MS = 5 * 60_000
+/** Con el servidor más viejo que el cliente (Pages se despliega antes que el Worker), se reintenta cada tanto (ms)… */
+export const OLD_SERVER_RETRY_MS = 5000
+/** …durante como mucho esto (ms). */
+export const OLD_SERVER_FOR_MS = 2 * 60_000
+
+export const NEW_VERSION = 'Hay una versión nueva, recargando…'
+export const SERVER_UPDATING = 'El servidor se está actualizando…'
+
+/**
+ * Qué hacer cuando la sala rechaza al cliente por versión (`serverV` es la del `reject`):
+ * - `reload`: el servidor es más nuevo; recargar ya para bajar el cliente nuevo.
+ * - `reload-later`: ya se recargó por esa versión hace menos de RELOAD_FOR_MS y Pages sigue sirviendo el cliente
+ *   viejo (volver a conectar con el mismo JS daría el mismo rechazo): recargar otra vez dentro de RELOAD_EVERY_MS.
+ * - `retry`: el servidor es más viejo (aún no se ha desplegado el Worker); volver a intentarlo dentro de
+ *   OLD_SERVER_RETRY_MS, si no hace más de OLD_SERVER_FOR_MS que se espera (`waitingSince`, o null si es el primero).
+ * - `lost`: no hay nada que esperar; "recarga la página".
+ */
+export type VersionAction = 'reload' | 'reload-later' | 'retry' | 'lost'
+
+export function versionAction(clientV: number, serverV: number | undefined, reloadedFor: ReloadMark | null, waitingSince: number | null, now: number): VersionAction {
+  if (serverV === undefined || serverV === clientV) return 'lost'
+  if (serverV < clientV) return waitingSince === null || now - waitingSince < OLD_SERVER_FOR_MS ? 'retry' : 'lost'
+  // Una marca del futuro (se cambió el reloj) no vale.
+  if (reloadedFor?.v !== serverV || now < reloadedFor.at) return 'reload'
+  return now - reloadedFor.at < RELOAD_FOR_MS ? 'reload-later' : 'lost'
+}
+
+/**
+ * La marca que hay que guardar al recargar por la versión `serverV`: la que ya había si es de esa versión (el plazo
+ * de RELOAD_FOR_MS cuenta desde la primera recarga; si se renovara, se recargaría cada 30 s para siempre) y, si no,
+ * una nueva. Una marca del futuro (se cambió el reloj) no vale.
+ */
+export function nextMark(mark: ReloadMark | null, serverV: number, now: number): ReloadMark {
+  return mark?.v === serverV && mark.at <= now ? mark : { v: serverV, at: now }
+}
+
 /**
  * Si tras este cierre (o este fallo al volver a entrar) se reintenta: sí tras un corte (1006, 1001, 1011, un
- * redespliegue del servidor o la pestaña olvidada, 1000); no si la sala lo ha rechazado, si es otra versión, si se ha
- * abierto en otra pestaña, si la sala está llena o borrada, si se ha agotado la cuota o por un mensaje no válido.
+ * redespliegue del servidor o la pestaña olvidada, 1000); no si la sala lo ha rechazado, si es otra versión (eso
+ * lo decide `versionAction`), si se ha abierto en otra pestaña, si la sala está llena o borrada, si se ha agotado
+ * la cuota o por un mensaje no válido.
  */
 export function shouldReconnect(reject: Reject | null, code: number | null): boolean {
   if (reject) return false

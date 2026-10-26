@@ -36,7 +36,10 @@ export class WheelStepper {
 
 interface InputCallbacks {
   onLockChange(locked: boolean): void
+  /** Si cuentan el clic y la rueda: solo vivo y jugando (un espectador que mantiene el clic no golpea al reaparecer). */
   isPlaying(): boolean
+  /** Si cuentan las pulsaciones de teclado: también muerto en una sala (Tab cambia a quién se mira, Enter abre el chat). */
+  acceptsKeys(): boolean
 }
 
 /** Teclado (por e.code), ratón y pointer lock. */
@@ -132,9 +135,10 @@ export class Input {
     return delta
   }
 
-  /** Registra una pulsación única. Como el clic, fuera de partida no cuenta. */
+  /** Registra una pulsación única. El clic, fuera de partida o de espectador, no cuenta; una tecla, fuera de partida. */
   press(code: string) {
-    if (this.callbacks.isPlaying()) this.presses.add(code)
+    const mouse = code === CLICK || code === RIGHT_CLICK
+    if (mouse ? this.callbacks.isPlaying() : this.callbacks.acceptsKeys()) this.presses.add(code)
   }
 
   /** Registra pasos de rueda (positivo hacia abajo). Como el clic, fuera de partida no cuenta. */

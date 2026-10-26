@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CloseCode } from './protocol'
-import { closeMessage, explainClose, QUOTA, reconnectDelay, SERVER_DOWN, shouldReconnect, statusUrl } from './status'
+import { CloseCode, PROTOCOL_VERSION } from './protocol'
+import { closeMessage, explainClose, nextMark, OLD_SERVER_FOR_MS, QUOTA, reconnectDelay, RELOAD_FOR_MS, SERVER_DOWN, shouldReconnect, statusUrl, versionAction } from './status'
 
 const answer = (ok: boolean) => (async () => ({ ok }) as Response) as typeof fetch
 const unreachable = (async () => {
@@ -38,5 +38,44 @@ describe('estado de la conexión', () => {
     }
     expect(shouldReconnect({ type: 'reject', reason: 'not-found' }, 1000)).toBe(false)
     expect([0, 1, 2, 3, 4, 10].map(reconnectDelay)).toEqual([500, 1000, 2000, 4000, 5000, 5000])
+  })
+
+  describe('otra versión', () => {
+    const now = 1_000_000_000
+
+    it('servidor más nuevo: recarga; si ya se recargó por esa versión hace poco, otra vez más tarde; luego se rinde', () => {
+      expect(versionAction(7, 8, null, null, now)).toBe('reload')
+      // Una recarga por otra versión no cuenta.
+      expect(versionAction(7, 9, { v: 8, at: now - 1000 }, null, now)).toBe('reload')
+      expect(versionAction(7, 8, { v: 8, at: now - 1000 }, null, now)).toBe('reload-later')
+      expect(versionAction(7, 8, { v: 8, at: now - RELOAD_FOR_MS + 1 }, null, now)).toBe('reload-later')
+      expect(versionAction(7, 8, { v: 8, at: now - RELOAD_FOR_MS }, null, now)).toBe('lost')
+      // Una marca del futuro (se cambió el reloj) no vale.
+      expect(versionAction(7, 8, { v: 8, at: now + 1000 }, null, now)).toBe('reload')
+    })
+
+    it('servidor más viejo: reintenta durante un rato, sin recargar', () => {
+      expect(versionAction(8, 7, null, null, now)).toBe('retry')
+      expect(versionAction(8, 7, { v: 7, at: now }, now - OLD_SERVER_FOR_MS + 1, now)).toBe('retry')
+      expect(versionAction(8, 7, null, now - OLD_SERVER_FOR_MS, now)).toBe('lost')
+    })
+
+    it('al recargar otra vez por la misma versión, la marca no se renueva (si no, el plazo no acabaría nunca)', () => {
+      const first = { v: 8, at: now - 60_000 }
+      expect(nextMark(first, 8, now)).toBe(first)
+      expect(nextMark(null, 8, now)).toEqual({ v: 8, at: now })
+      expect(nextMark(first, 9, now)).toEqual({ v: 9, at: now })
+      expect(nextMark({ v: 8, at: now + 1000 }, 8, now)).toEqual({ v: 8, at: now })
+    })
+
+    it('rendirse con el servidor viejo no pide recargar: el cliente ya es el nuevo', () => {
+      expect(closeMessage({ type: 'reject', reason: 'version', v: PROTOCOL_VERSION - 1 }, 4000)).toContain('aún no se ha actualizado')
+      expect(closeMessage({ type: 'reject', reason: 'version', v: PROTOCOL_VERSION + 1 }, 4000)).toContain('recarga')
+    })
+
+    it('sin versión en el rechazo (o la misma) no hay nada que esperar', () => {
+      expect(versionAction(7, undefined, null, null, now)).toBe('lost')
+      expect(versionAction(7, 7, null, null, now)).toBe('lost')
+    })
   })
 })

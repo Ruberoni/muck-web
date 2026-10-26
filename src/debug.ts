@@ -8,6 +8,7 @@ import { heightAt, WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './sim/constants'
 import { ENEMY_AIM_HEIGHT } from './sim/enemies'
 import { campfireSpot } from './sim/campfires'
+import { RECIPES } from './sim/crafting'
 import type { DevOp } from './net/protocol'
 import { LocalSession } from './net/session'
 import { NetSession, startBot, type Bot } from './net/netSession'
@@ -180,7 +181,11 @@ export function installDebug(game: Game) {
     hotbar: () => ({ slots: [...inventory().slots], selected: inventory().selected }),
     give: (item: ItemId, amount = 1) => dev({ op: 'give', item, amount }, () => inventory().add(item, amount)),
     select: (index: number) => game.queueAction({ kind: 'select', slot: index }),
-    craft: (index: number) => game.queueAction({ kind: 'craft', recipe: index }),
+    craft: (index: number) => {
+      // En red, una receta que no existe hace que la sala expulse al jugador.
+      if (!Number.isInteger(index) || index < 0 || index >= RECIPES.length) throw new Error(`no existe la receta ${index}`)
+      game.queueAction({ kind: 'craft', recipe: index })
+    },
     setCrafting: (open: boolean) => game.setCrafting(open),
     campfires: () => sim().campfires.list.map(({ id, x, y, z }) => ({ id, x, y, z })),
     /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo (con un jugador). */

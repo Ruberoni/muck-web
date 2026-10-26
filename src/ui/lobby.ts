@@ -1,7 +1,9 @@
 import type { Game } from '../game/Game'
-import { failureMessage, NetSession } from '../net/netSession'
+import { failureMessage, NetError, NetSession } from '../net/netSession'
 import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
+import { onVersionReject, reloadFor } from '../net/reload'
 import { LocalSession } from '../net/session'
+import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
 const NAME_KEY = 'muck-web:name'
 const DEFAULT_NAME = 'Jugador'
@@ -116,6 +118,11 @@ export function installLobby(game: Game) {
 
   let busy = false
   let error = ''
+  /** Esperando por versión (recarga o reintento pendiente): el aviso y cómo cancelarlo si se elige otra cosa. */
+  let waiting = ''
+  let cancelWait: (() => void) | null = null
+  /** Desde cuándo (Date.now()) el servidor es más viejo que el cliente en los intentos de entrar. */
+  let oldServerSince: number | null = null
   let copiedTimer: ReturnType<typeof setTimeout> | null = null
   const urlRoom = () => roomFromUrl()
   const name = () => cleanName(nameInput.value) || DEFAULT_NAME
@@ -139,17 +146,31 @@ export function installLobby(game: Game) {
       : net?.closed
         ? (net.closeReason ?? 'Sin conexión con el servidor.')
         : net?.status === 'reconnecting'
-          ? 'Se ha cortado la conexión. Reconectando…'
-          : error
+          ? (net.waitReason ?? 'Se ha cortado la conexión. Reconectando…')
+          : waiting || error
     status.hidden = !status.textContent
   }
 
+  /** Otra elección del jugador: se olvida la espera por versión que hubiera. */
+  function stopWaiting() {
+    cancelWait?.()
+    cancelWait = null
+    waiting = ''
+    oldServerSince = null
+  }
+
   async function enter(open: () => Promise<NetSession>, room: string) {
+    stopWaiting()
+    await attempt(open, room)
+  }
+
+  async function attempt(open: () => Promise<NetSession>, room: string) {
     busy = true
     error = ''
     update()
     try {
       const session = await open()
+      oldServerSince = null
       game.setSession(session)
       setRoomInUrl(session.room)
       busy = false
@@ -157,9 +178,47 @@ export function installLobby(game: Game) {
       await game.play()
     } catch (e) {
       busy = false
-      error = await failureMessage(e, room)
+      if (!waitForVersion(e, open, room)) error = await failureMessage(e, room)
       update()
     }
+  }
+
+  /**
+   * La sala es de otra versión: recarga la página (servidor más nuevo; al volver, "Unirse a…" espera el clic) o lo
+   * reintenta cada poco (más viejo: Pages se despliega antes que el Worker). Mientras se espera al servidor viejo,
+   * un corte pasajero (el Worker redesplegándose) también se reintenta. false si no hay nada que esperar.
+   */
+  function waitForVersion(error: unknown, open: () => Promise<NetSession>, room: string): boolean {
+    const reject = error instanceof NetError ? error.reject : null
+    if (reject?.reason !== 'version') {
+      const code = error instanceof NetError ? error.code : null
+      if (oldServerSince === null || !shouldReconnect(reject, code) || Date.now() - oldServerSince >= OLD_SERVER_FOR_MS) return false
+      retryLater(open, room)
+      return true
+    }
+    const action = onVersionReject(reject.v, oldServerSince)
+    if (action === 'lost') {
+      oldServerSince = null
+      return false
+    }
+    if (action === 'retry') {
+      oldServerSince ??= Date.now()
+      retryLater(open, room)
+      return true
+    }
+    waiting = NEW_VERSION
+    cancelWait = reloadFor(reject.v!, action === 'reload-later')
+    return true
+  }
+
+  function retryLater(open: () => Promise<NetSession>, room: string) {
+    waiting = SERVER_UPDATING
+    const timer = setTimeout(() => {
+      cancelWait = null
+      waiting = ''
+      void attempt(open, room)
+    }, OLD_SERVER_RETRY_MS)
+    cancelWait = () => clearTimeout(timer)
   }
 
   nameInput.addEventListener('input', () => {
@@ -174,6 +233,7 @@ export function installLobby(game: Game) {
     if (e.key === 'Enter' && !join.disabled) join.click()
   })
   solo.addEventListener('click', () => {
+    stopWaiting()
     error = ''
     setRoomInUrl(null)
     update()
@@ -202,6 +262,7 @@ export function installLobby(game: Game) {
     copiedTimer = setTimeout(() => (copy.textContent = 'Copiar enlace'), copied ? COPIED_MS : COPIED_MS * 4)
   })
   leave.addEventListener('click', () => {
+    stopWaiting()
     game.setSession(new LocalSession())
     setRoomInUrl(null)
     error = ''

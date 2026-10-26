@@ -193,6 +193,11 @@ export class PropView {
     }
   }
 
+  /** Libera las instancias (las geometrías y los materiales son compartidos y se quedan). */
+  dispose() {
+    for (const mesh of this.allMeshes) mesh.dispose()
+  }
+
   private wobble(id: number) {
     if (!this.destroyed[id]) this.wobbles.set(id, 0)
   }

@@ -4,9 +4,10 @@ import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import type { Vec3 } from '../sim/player'
 import { botMove, driveClient } from './bot'
 import { NetClient, type ClientHello } from './client'
-import { cleanName, ROOM_ALPHABET, ROOM_CODE_LENGTH, type DevOp, type Reject } from './protocol'
+import { cleanName, CloseCode, ROOM_ALPHABET, ROOM_CODE_LENGTH, type DevOp, type Reject } from './protocol'
+import { onVersionReject, reloadFor, versionAccepted } from './reload'
 import type { MoveInput, Session } from './session'
-import { explainClose, RECONNECT_FOR_MS, reconnectDelay, shouldReconnect } from './status'
+import { explainClose, NEW_VERSION, OLD_SERVER_RETRY_MS, RECONNECT_FOR_MS, reconnectDelay, SERVER_UPDATING, shouldReconnect } from './status'
 import { WebSocketTransport } from './transport'
 
 /** El Worker (`wss://…`, sin ruta). En desarrollo, el de `npm run dev:server`. */
@@ -95,7 +96,9 @@ async function connectClient(hello: ClientHello, url: string): Promise<{ client:
  *
  * Si se corta (`reconnecting`), vuelve a entrar con el mismo token y la misma pestaña, con esperas crecientes durante
  * un minuto: el NetClient nuevo sustituye al viejo y `generation` sube (Game rehace la vista). En pausa espera a
- * `wake` para reintentar. Si la sala lo rechaza o el corte no tiene arreglo (otra pestaña, otra versión…), `lost`.
+ * `wake` para reintentar. Si al volver la sala es de otra versión, recarga la página (servidor más nuevo) o espera a
+ * que se actualice (más viejo), ver `versionAction`. Si la sala lo rechaza o el corte no tiene arreglo (otra
+ * pestaña…), `lost`.
  */
 export class NetSession implements Session {
   readonly networked = true
@@ -104,6 +107,8 @@ export class NetSession implements Session {
   closeReason: string | null = null
   /** Sube cada vez que un NetClient nuevo sustituye al anterior (al reconectar). */
   generation = 0
+  /** Reconectando, si se espera algo más que la red (una versión nueva, que se actualice el servidor): para el HUD. */
+  waitReason: string | null = null
   private pinger: ReturnType<typeof setInterval> | null = null
   private devWaits: { sentAt: number; until: number; resolve: () => void }[] = []
   private suspended = false
@@ -111,6 +116,11 @@ export class NetSession implements Session {
   private attempt = 0
   private reconnectSince = 0
   private retry: ReturnType<typeof setTimeout> | null = null
+  /** Desde cuándo (Date.now()) el servidor es más viejo que el cliente al reconectar. */
+  private oldServerSince: number | null = null
+  private cancelReload: (() => void) | null = null
+  /** Un intento de volver a entrar en marcha: `wake` no lanza otro en paralelo. */
+  private connecting = false
 
   private constructor(
     public client: NetClient,
@@ -129,6 +139,7 @@ export class NetSession implements Session {
     const clean = cleanName(name) ?? ''
     const { client, transport } = await connectClient({ intent, room, name: clean, tab: TAB, ...(token ? { token } : {}) }, url)
     saveToken(room, client.token!)
+    versionAccepted()
     return new NetSession(client, transport, room, clean, url)
   }
 
@@ -207,7 +218,8 @@ export class NetSession implements Session {
     if (this.pinger !== null) clearInterval(this.pinger)
     this.pinger = null
     this.client.wake()
-    if (this.status === 'reconnecting' && this.retry === null) this.startReconnecting()
+    // Con una recarga por versión pendiente no se reintenta: el mismo cliente volvería a ser rechazado.
+    if (this.status === 'reconnecting' && this.retry === null && !this.connecting && this.cancelReload === null) this.startReconnecting()
   }
 
   /**
@@ -225,6 +237,8 @@ export class NetSession implements Session {
     if (this.pinger !== null) clearInterval(this.pinger)
     if (this.retry !== null) clearTimeout(this.retry)
     this.pinger = this.retry = null
+    this.cancelReload?.()
+    this.cancelReload = null
     for (const wait of this.devWaits) wait.resolve()
     this.devWaits = []
     this.client.close()
@@ -257,6 +271,7 @@ export class NetSession implements Session {
     if (this.leaving || this.status !== 'reconnecting') return
     const { room, name, url } = this
     const token = this.client.token
+    this.connecting = true
     try {
       const { client, transport } = await connectClient({ intent: 'join', room, name, tab: TAB, ...(token ? { token } : {}) }, url)
       if (this.leaving) return client.close()
@@ -265,14 +280,46 @@ export class NetSession implements Session {
       if (this.leaving) return
       const reject = error instanceof NetError ? error.reject : null
       const code = error instanceof NetError ? error.code : null
+      if (reject?.reason === 'version') return this.onVersion(reject)
       if (shouldReconnect(reject, code) && performance.now() - this.reconnectSince < RECONNECT_FOR_MS) this.scheduleRetry()
       else this.lose(reject, code)
+    } finally {
+      this.connecting = false
+    }
+  }
+
+  /** Al volver a entrar, la sala es de otra versión: recargar, esperar a que se actualice o darlo por perdido. */
+  private onVersion(reject: Reject) {
+    const action = onVersionReject(reject.v, this.oldServerSince)
+    switch (action) {
+      case 'reload':
+      case 'reload-later':
+        this.waitReason = NEW_VERSION
+        this.cancelReload?.()
+        this.cancelReload = reloadFor(reject.v!, action === 'reload-later')
+        return
+      case 'retry':
+        this.oldServerSince ??= Date.now()
+        this.waitReason = SERVER_UPDATING
+        // El servidor contesta: el minuto de reintentos por cortes cuenta desde ahora.
+        this.reconnectSince = performance.now()
+        if (this.retry !== null) clearTimeout(this.retry)
+        this.retry = setTimeout(() => {
+          this.retry = null
+          void this.reconnect()
+        }, OLD_SERVER_RETRY_MS)
+        return
+      case 'lost':
+        return this.lose(reject, CloseCode.Version)
     }
   }
 
   /** Un NetClient nuevo, ya dentro de la sala, sustituye al cortado. */
   private adopt(client: NetClient, transport: WebSocketTransport) {
     saveToken(this.room, client.token!)
+    versionAccepted()
+    this.oldServerSince = null
+    this.waitReason = null
     transport.latency = this.transport.latency
     transport.jitter = this.transport.jitter
     for (const wait of this.devWaits) wait.resolve()
@@ -287,6 +334,7 @@ export class NetSession implements Session {
 
   private lose(reject: Reject | null, code: number | null) {
     this.status = 'lost'
+    this.waitReason = null
     this.closeReason = 'Sin conexión con el servidor.'
     explainClose(reject, code, this.room, this.url).then((reason) => (this.closeReason = reason))
   }
