@@ -8,6 +8,7 @@ describe('herramienta que falta', () => {
     expect(toolName({ family: 'pickaxe', tier: 3 })).toBe('pico de hierro')
     expect(toolName({ family: 'axe', tier: 3 })).toBe('hacha de hierro')
     expect(toolName({ family: 'axe', tier: 1 })).toBe('hacha de madera')
+    expect(toolName({ family: 'pickaxe', tier: 4 })).toBe('pico de mithril')
     // Un nivel sin herramienta todavía.
     expect(toolName({ family: 'axe', tier: 9 })).toBe('hacha de nivel 9')
   })
@@ -35,6 +36,14 @@ describe('herramienta que falta', () => {
     expect(missingTool('stone_axe', 'birch')).toBeNull()
     expect(missingTool('wood_pickaxe', 'iron_ore')).toBe('pico de piedra')
     expect(missingTool('stone_pickaxe', 'iron_ore')).toBeNull()
+  })
+
+  it('el pino oscuro pide el hacha de hierro y la mena de mithril el pico de hierro', () => {
+    expect(missingTool('stone_axe', 'darkpine')).toBe('hacha de hierro')
+    expect(missingTool('iron_axe', 'darkpine')).toBeNull()
+    expect(missingTool('mithril_axe', 'darkpine')).toBeNull()
+    expect(missingTool('stone_pickaxe', 'mithril_ore')).toBe('pico de hierro')
+    expect(missingTool('mithril_pickaxe', 'mithril_ore')).toBeNull()
   })
 
   it('árboles y arbustos no piden nada', () => {

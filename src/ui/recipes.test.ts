@@ -27,8 +27,8 @@ describe('recetas en la pantalla de inventario', () => {
     expect(RECIPE_GROUPS.map((g) => g.recipes.map((r) => r.id))).toEqual([
       ['wood_axe', 'wood_pickaxe', 'campfire', 'workbench'],
       ['stone_axe', 'stone_pickaxe', 'furnace', 'anvil'],
-      ['iron_bar'],
-      ['iron_axe', 'iron_pickaxe'],
+      ['iron_bar', 'mithril_bar'],
+      ['iron_axe', 'iron_pickaxe', 'mithril_axe', 'mithril_pickaxe'],
     ])
   })
 
@@ -63,6 +63,10 @@ describe('recetas en la pantalla de inventario', () => {
     expect(recipeStatus(inventoryWith({ iron_bar: 3 }), recipe('iron_pickaxe'), NO_STATIONS, POS).reason).toBe(
       'Faltan 2 madera de abedul · Necesitas un yunque cerca',
     )
+    expect(recipeStatus(inventoryWith({ mithril_ore: 1, wood: 1 }), recipe('mithril_bar'), NO_STATIONS, POS).reason).toBe(
+      'Falta 1 madera · Necesitas un horno cerca',
+    )
+    expect(recipeStatus(inventoryWith({ mithril_bar: 3, dark_wood: 2 }), recipe('mithril_axe'), NEAR_ALL, POS).available).toBe(true)
   })
 
   it('con el inventario lleno y sin que se libere una casilla, "Inventario lleno"', () => {

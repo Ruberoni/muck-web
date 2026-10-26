@@ -15,12 +15,20 @@ describe('mundo determinista', () => {
   })
 
   // Los tipos del PR 8 van en sus propios meshes y detrás en la lista: no cambian el hash anterior. Este es el suyo
-  // (referencia en Node; en Chromium, `__debug.levelPropsHash` da 'e93e8633'); los del PR 10 se añadirán detrás sin cambiarlo.
+  // (referencia en Node; en Chromium, `__debug.levelPropsHash` da 'e93e8633'); los del PR 10 van detrás sin cambiarlo.
   it('abedules y menas de hierro tienen su propio hash', () => {
     const { birch, iron_ore } = view.byKind
     expect(birch[0].count).toBeGreaterThan(0)
     expect(iron_ore[0].count).toBeGreaterThan(0)
     expect(computeWorldHash([...birch, ...iron_ore])).toBe('95333a1f')
+  })
+
+  // Lo mismo con los del PR 10 (`__debug.mithrilPropsHash` da lo mismo en Chromium).
+  it('pinos oscuros y menas de mithril tienen su propio hash', () => {
+    const { darkpine, mithril_ore } = view.byKind
+    expect(darkpine[0].count).toBeGreaterThan(0)
+    expect(mithril_ore[0].count).toBeGreaterThan(0)
+    expect(computeWorldHash([...darkpine, ...mithril_ore])).toBe('519075ff')
   })
 
   it('los arbustos son deterministas', () => {

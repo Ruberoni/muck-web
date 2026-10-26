@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type PlayerCommands } from './commands'
-import type { RecipeId } from './crafting'
-import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, STATION_RANGE, STEP } from './constants'
+import { RECIPE_IDS, type RecipeId } from './crafting'
+import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, PROP_DEFS, STATION_RANGE, STEP } from './constants'
 import { Enemies, enemyCap, enemyCapFor, spawnIntervalFor, type EnemyPrey } from './enemies'
 import type { PlayerId, SimEvent, SimEventData, TargetRef } from './events'
 import { aimPose } from './interaction'
@@ -310,6 +310,80 @@ describe('Simulation con varios jugadores', () => {
     }
     expect(broke).toBe(1 + Math.round(HIT_COOLDOWN / STEP))
     expect(sim.pickups.list.filter((p) => p.item === 'iron_ore')).toHaveLength(3)
+  })
+
+  it('progresión completa: de la mano al pico de mithril, sin nada regalado', () => {
+    const sim = withPlayers(1)
+    const { inventory } = sim.slot(0)
+    const used = new Set<RecipeId>()
+    const craft = (recipe: RecipeId, times = 1) => {
+      used.add(recipe)
+      const actions = Array.from({ length: times }, () => ({ kind: 'craft' as const, recipe }))
+      return ofType(stepAll(sim, { 0: { actions } }), 'playerCrafted').length
+    }
+    const hold = (item: ItemId | null) => {
+      if (item) stepAll(sim, { 0: { actions: [{ kind: 'select', slot: inventory.slots.indexOf(item) }] } })
+    }
+    /** Rompe props de `kind` (el más cercano al claro cada vez) hasta tener `amount` de lo que sueltan, y lo recoge. */
+    const gather = (kind: PropData['kind'], amount: number, tool: ItemId | null) => {
+      hold(tool)
+      const { item } = PROP_DEFS[kind].drop
+      while (inventory.count(item) < amount) {
+        const near = (p: PropData) => Math.hypot(p.x - spot.x, p.z - spot.z)
+        const prop = sim.world.props.filter((p) => p.kind === kind && p.alive).sort((a, b) => near(a) - near(b))[0]
+        expect(prop, `quedan ${kind}`).toBeDefined()
+        const look = aimAt(sim, 0, prop)
+        for (let t = 0; t < 600 && prop.alive; t++) stepAll(sim, { 0: { ...look, buttons: Btn.Attack } })
+        expect(prop.alive, `${kind} con ${tool}`).toBe(false)
+        // Se pasa por encima de cada pieza hasta cogerlas todas.
+        for (let t = 0; t < 600 && sim.pickups.list.some((p) => p.item === item); t++) {
+          const piece = sim.pickups.list.find((p) => p.item === item)!
+          sim.teleport(0, piece.pos.x, piece.pos.z, 0, 0)
+          stepAll(sim)
+        }
+        expect(sim.pickups.list).toHaveLength(0)
+      }
+    }
+    /** Coloca `item` desde el centro del claro, mirando a `yaw`. */
+    const place = (item: ItemId, yaw: number) => {
+      sim.teleport(0, spot.x, spot.z, yaw, 0)
+      return ofType(stepAll(sim, { 0: { actions: [{ kind: 'select', slot: inventory.slots.indexOf(item) }, { kind: 'place' }] } }), 'structurePlaced')
+    }
+    const atSpot = () => sim.teleport(0, spot.x, spot.z, 0, 0)
+
+    // A mano solo caen árboles: la roca no.
+    gather('tree', 5, null)
+    expect(craft('wood_pickaxe')).toBe(1)
+    gather('rock', 5 + 5 + 12 + 6, 'wood_pickaxe')
+    gather('tree', 10 + 3 + 3 + 4 + 10, null)
+    atSpot()
+    expect(craft('workbench')).toBe(1)
+    expect(place('workbench', 0)).toHaveLength(1)
+    expect(craft('stone_axe') + craft('stone_pickaxe') + craft('furnace')).toBe(3)
+    expect(place('furnace', Math.PI / 2)).toHaveLength(1)
+
+    // Hierro: la mena con el pico de piedra y el abedul con el hacha de piedra.
+    gather('iron_ore', 10, 'stone_pickaxe')
+    gather('birch', 4, 'stone_axe')
+    atSpot()
+    expect(craft('iron_bar', 5) + craft('iron_bar', 5)).toBe(10)
+    expect(craft('anvil')).toBe(1)
+    expect(place('anvil', Math.PI)).toHaveLength(1)
+    atSpot()
+    expect(craft('iron_axe') + craft('iron_pickaxe')).toBe(2)
+
+    // Mithril: la mena con el pico de hierro y el pino oscuro con el hacha de hierro.
+    gather('mithril_ore', 6, 'iron_pickaxe')
+    gather('darkpine', 4, 'iron_axe')
+    gather('tree', 12, 'iron_axe')
+    atSpot()
+    expect(craft('mithril_bar', 5) + craft('mithril_bar')).toBe(6)
+    expect(craft('mithril_axe') + craft('mithril_pickaxe')).toBe(2)
+    expect(inventory.count('mithril_axe')).toBe(1)
+    expect(inventory.count('mithril_pickaxe')).toBe(1)
+    // Se ha pasado por todas las recetas salvo la fogata y el hacha de madera, que no hacen falta.
+    expect(RECIPE_IDS.filter((id) => !used.has(id))).toEqual(['wood_axe', 'campfire'])
+    expect(sim.slot(0).player.health).toBeGreaterThan(0)
   })
 
   it('cada jugador recibe su daño; el que muere deja de moverse, de comer y de ser objetivo', () => {

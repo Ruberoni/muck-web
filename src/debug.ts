@@ -36,6 +36,8 @@ export function installDebug(game: Game) {
   const worldHash = computeWorldHash(islandMeshes(game.propView))
   // Lo mismo para los props de los niveles, que van en sus propios meshes (abedules y menas de hierro).
   const levelPropsHash = computeWorldHash([...game.propView.byKind.birch, ...game.propView.byKind.iron_ore])
+  // Y los del mithril (pinos oscuros y menas de mithril), que van detrás sin cambiar el anterior.
+  const mithrilPropsHash = computeWorldHash([...game.propView.byKind.darkpine, ...game.propView.byKind.mithril_ore])
   // Solo ids de props: los enemigos tienen su propia numeración (ver enemies()).
   const targetPropId = () => {
     const t = slot().target
@@ -123,6 +125,7 @@ export function installDebug(game: Game) {
   const api = {
     worldHash,
     levelPropsHash,
+    mithrilPropsHash,
     net,
     start({ manual = false }: { manual?: boolean } = {}) {
       if (manual) localOnly('el reloj manual')

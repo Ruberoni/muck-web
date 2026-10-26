@@ -6,10 +6,14 @@ import {
   BIRCH_COUNT,
   buildPropPlacements,
   createPropWorld,
+  DARKPINE_BAND,
+  DARKPINE_COUNT,
   findSpawn,
   generatePropPlacements,
   IRON_ORE_BAND,
   IRON_ORE_COUNT,
+  MITHRIL_ORE_BAND,
+  MITHRIL_ORE_COUNT,
   resetProp,
   SPAWN_EXCLUSION,
   type PropKind,
@@ -20,6 +24,13 @@ import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt } from './world/te
 
 /** Los props de antes del PR 8 (árboles, rocas y arbustos): sus ids, posiciones y el hash del mundo no cambian. */
 const ORIGINAL_COUNT = 180 + 60 + 45
+/** Los tipos de cada franja, con su cantidad exacta, su franja y la pendiente máxima. */
+const BANDED = [
+  { kind: 'birch', count: BIRCH_COUNT, band: BIRCH_BAND, slope: MAX_SLOPE },
+  { kind: 'iron_ore', count: IRON_ORE_COUNT, band: IRON_ORE_BAND, slope: MAX_SLOPE * 1.5 },
+  { kind: 'darkpine', count: DARKPINE_COUNT, band: DARKPINE_BAND, slope: MAX_SLOPE },
+  { kind: 'mithril_ore', count: MITHRIL_ORE_COUNT, band: MITHRIL_ORE_BAND, slope: MAX_SLOPE * 1.5 },
+] as const
 
 const gridOf = (placements: readonly PropPlacement[]) => {
   const grid = new SpatialGrid<Collider>()
@@ -41,30 +52,36 @@ describe('colocación de props', () => {
     expect(Object.isFrozen(placements[0])).toBe(true)
   })
 
-  it('el id es el índice: árboles, rocas, arbustos y después abedules y menas de hierro', () => {
+  it('el id es el índice: árboles, rocas, arbustos y después abedules, menas de hierro, pinos oscuros y menas de mithril', () => {
     expect(placements.every((p, i) => p.id === i)).toBe(true)
     const kinds = placements.map((p) => p.kind)
-    const order = ['tree', 'rock', 'bush', 'birch', 'iron_ore']
+    const order = ['tree', 'rock', 'bush', 'birch', 'iron_ore', 'darkpine', 'mithril_ore']
     for (let i = 1; i < kinds.length; i++) expect(order.indexOf(kinds[i])).toBeGreaterThanOrEqual(order.indexOf(kinds[i - 1]))
     for (const kind of order) expect(kinds).toContain(kind)
     expect(kinds.slice(0, ORIGINAL_COUNT).every((k) => k === 'tree' || k === 'rock' || k === 'bush')).toBe(true)
+    // Los del PR 10 van detrás de los del PR 8: no mueven sus ids (ni sus posiciones, que vigila world.test.ts).
+    expect(kinds.slice(ORIGINAL_COUNT, ORIGINAL_COUNT + BIRCH_COUNT + IRON_ORE_COUNT).every((k) => k === 'birch' || k === 'iron_ore')).toBe(true)
   })
 
-  it('salen todos los abedules y menas de hierro, en su franja de altura y pendiente', () => {
-    expect(ofKind('birch')).toHaveLength(BIRCH_COUNT)
-    expect(ofKind('iron_ore')).toHaveLength(IRON_ORE_COUNT)
-    for (const p of ofKind('birch')) {
+  it.each(BANDED)('salen todos los de tipo $kind, en su franja de altura y pendiente', ({ kind, count, band, slope }) => {
+    expect(ofKind(kind)).toHaveLength(count)
+    for (const p of ofKind(kind)) {
       const h = heightAt(p.x, p.z)
-      expect(h).toBeGreaterThanOrEqual(BIRCH_BAND.min)
-      expect(h).toBeLessThanOrEqual(BIRCH_BAND.max)
-      expect(slopeAt(p.x, p.z)).toBeLessThanOrEqual(MAX_SLOPE)
+      expect(h).toBeGreaterThanOrEqual(band.min)
+      expect(h).toBeLessThanOrEqual(band.max)
+      expect(slopeAt(p.x, p.z)).toBeLessThanOrEqual(slope)
     }
-    for (const p of ofKind('iron_ore')) {
-      const h = heightAt(p.x, p.z)
-      expect(h).toBeGreaterThanOrEqual(IRON_ORE_BAND.min)
-      expect(h).toBeLessThanOrEqual(IRON_ORE_BAND.max)
-      expect(slopeAt(p.x, p.z)).toBeLessThanOrEqual(MAX_SLOPE * 1.5)
-    }
+  })
+
+  it('las franjas de las menas no se solapan: el hierro no se come las cimas', () => {
+    expect(IRON_ORE_BAND.max).toBeLessThanOrEqual(MITHRIL_ORE_BAND.min)
+  })
+
+  it('las menas de mithril son más pequeñas que las de hierro y los pinos oscuros más grandes que los abedules', () => {
+    const maxScale = (kind: PropKind) => Math.max(...ofKind(kind).map((p) => Math.max(p.scaleX, p.scaleZ)))
+    const minScale = (kind: PropKind) => Math.min(...ofKind(kind).map((p) => p.scaleX))
+    expect(maxScale('mithril_ore')).toBeLessThanOrEqual(1)
+    expect(minScale('darkpine')).toBeGreaterThanOrEqual(1.2)
   })
 
   it('los tipos nuevos no mueven el punto de aparición, quedan lejos de él y no se solapan con nada', () => {
@@ -82,7 +99,7 @@ describe('colocación de props', () => {
     }
   })
 
-  it('árboles, abedules y arbustos solo giran en Y y escalan igual en los tres ejes', () => {
+  it('árboles, abedules, pinos oscuros y arbustos solo giran en Y y escalan igual en los tres ejes', () => {
     for (const p of placements.filter((p) => PROP_DEFS[p.kind].family !== 'rock')) {
       expect(p.rotX).toBe(0)
       expect(p.scaleY).toBe(p.scaleX)

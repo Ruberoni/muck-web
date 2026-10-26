@@ -27,3 +27,5 @@ export const createBushRng = () => mulberry32(WORLD_SEED ^ 0x85ebca6b)
 // Los tipos nuevos de prop, uno por tipo y en este orden detrás de los arbustos (props.ts).
 export const createBirchRng = () => mulberry32(WORLD_SEED ^ 0xc2b2ae35)
 export const createIronOreRng = () => mulberry32(WORLD_SEED ^ 0x27d4eb2f)
+export const createDarkpineRng = () => mulberry32(WORLD_SEED ^ 0x165667b1)
+export const createMithrilOreRng = () => mulberry32(WORLD_SEED ^ 0xd3a2646c)

@@ -8,32 +8,49 @@ const KINDS = Object.keys(PROP_DEFS) as PropKind[]
 const ITEMS = [null, ...(Object.keys(ITEM_NAMES) as ItemId[])]
 
 describe('niveles: daño contra props', () => {
-  // Tabla completa (§2.3 del plan) con lo que hay hoy (herramientas de madera, piedra y hierro): árbol y arbusto de nivel 0, roca de nivel 1, abedul y mena de hierro de nivel 2.
-  it.each<[ItemId | null, number, number, number, number, number]>([
-    // objeto, árbol, abedul, roca, mena de hierro, arbusto
-    [null, 1, 0, 0, 0, 1],
-    ['wood', 1, 0, 0, 0, 1],
-    ['stone', 1, 0, 0, 0, 1],
-    ['berry', 1, 0, 0, 0, 1],
-    ['campfire', 1, 0, 0, 0, 1],
-    ['birch_wood', 1, 0, 0, 0, 1],
-    ['iron_ore', 1, 0, 0, 0, 1],
-    ['iron_bar', 1, 0, 0, 0, 1],
-    ['workbench', 1, 0, 0, 0, 1],
-    ['furnace', 1, 0, 0, 0, 1],
-    ['anvil', 1, 0, 0, 0, 1],
-    ['wood_axe', 2, 0, 0, 0, 1],
-    ['stone_axe', 4, 4, 0, 0, 1],
-    ['wood_pickaxe', 1, 0, 2, 0, 1],
-    ['stone_pickaxe', 1, 0, 4, 4, 1],
-    ['iron_axe', 6, 6, 0, 0, 1],
-    ['iron_pickaxe', 1, 0, 6, 6, 1],
-  ])('%s: árbol %i, abedul %i, roca %i, mena de hierro %i, arbusto %i', (item, tree, birch, rock, ironOre, bush) => {
-    expect(propDamage(item, 'tree')).toBe(tree)
-    expect(propDamage(item, 'birch')).toBe(birch)
-    expect(propDamage(item, 'rock')).toBe(rock)
-    expect(propDamage(item, 'iron_ore')).toBe(ironOre)
-    expect(propDamage(item, 'bush')).toBe(bush)
+  // Tabla completa (§2.3 del plan): árbol y arbusto de nivel 0, roca de nivel 1, abedul y mena de hierro de nivel 2,
+  // pino oscuro y mena de mithril de nivel 3.
+  const TABLE: [ItemId | null, number, number, number, number, number, number, number][] = [
+    // objeto, árbol, abedul, pino oscuro, roca, mena de hierro, mena de mithril, arbusto
+    [null, 1, 0, 0, 0, 0, 0, 1],
+    ['wood', 1, 0, 0, 0, 0, 0, 1],
+    ['stone', 1, 0, 0, 0, 0, 0, 1],
+    ['berry', 1, 0, 0, 0, 0, 0, 1],
+    ['raw_meat', 1, 0, 0, 0, 0, 0, 1],
+    ['campfire', 1, 0, 0, 0, 0, 0, 1],
+    ['birch_wood', 1, 0, 0, 0, 0, 0, 1],
+    ['dark_wood', 1, 0, 0, 0, 0, 0, 1],
+    ['iron_ore', 1, 0, 0, 0, 0, 0, 1],
+    ['iron_bar', 1, 0, 0, 0, 0, 0, 1],
+    ['mithril_ore', 1, 0, 0, 0, 0, 0, 1],
+    ['mithril_bar', 1, 0, 0, 0, 0, 0, 1],
+    ['workbench', 1, 0, 0, 0, 0, 0, 1],
+    ['furnace', 1, 0, 0, 0, 0, 0, 1],
+    ['anvil', 1, 0, 0, 0, 0, 0, 1],
+    ['wood_axe', 2, 0, 0, 0, 0, 0, 1],
+    ['stone_axe', 4, 4, 0, 0, 0, 0, 1],
+    ['iron_axe', 6, 6, 6, 0, 0, 0, 1],
+    ['mithril_axe', 9, 9, 9, 0, 0, 0, 1],
+    ['wood_pickaxe', 1, 0, 0, 2, 0, 0, 1],
+    ['stone_pickaxe', 1, 0, 0, 4, 4, 0, 1],
+    ['iron_pickaxe', 1, 0, 0, 6, 6, 6, 1],
+    ['mithril_pickaxe', 1, 0, 0, 9, 9, 9, 1],
+  ]
+  it.each(TABLE)(
+    '%s: árbol %i, abedul %i, pino oscuro %i, roca %i, mena de hierro %i, mena de mithril %i, arbusto %i',
+    (item, tree, birch, darkpine, rock, ironOre, mithrilOre, bush) => {
+      expect(propDamage(item, 'tree')).toBe(tree)
+      expect(propDamage(item, 'birch')).toBe(birch)
+      expect(propDamage(item, 'darkpine')).toBe(darkpine)
+      expect(propDamage(item, 'rock')).toBe(rock)
+      expect(propDamage(item, 'iron_ore')).toBe(ironOre)
+      expect(propDamage(item, 'mithril_ore')).toBe(mithrilOre)
+      expect(propDamage(item, 'bush')).toBe(bush)
+    },
+  )
+
+  it('la tabla recorre todos los objetos', () => {
+    expect(new Set(TABLE.map(([item]) => item))).toEqual(new Set(ITEMS))
   })
 
   it('el pico de piedra pica la mena de hierro en 3 golpes y el de madera no; con el abedul, igual con las hachas', () => {
@@ -54,6 +71,23 @@ describe('niveles: daño contra props', () => {
     // Cada una solo sirve para lo suyo.
     expect(canDamage('iron_axe', 'iron_ore')).toBe(false)
     expect(canDamage('iron_pickaxe', 'birch')).toBe(false)
+  })
+
+  it('mena de mithril y pino oscuro: 3 golpes con hierro y 2 con mithril; el mithril no mejora a nadie más de nivel', () => {
+    const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
+    expect(hits('iron_pickaxe', 'mithril_ore')).toBe(3)
+    expect(hits('mithril_pickaxe', 'mithril_ore')).toBe(2)
+    expect(hits('iron_axe', 'darkpine')).toBe(3)
+    expect(hits('mithril_axe', 'darkpine')).toBe(2)
+    expect(hits('mithril_pickaxe', 'iron_ore')).toBe(2)
+    expect(hits('mithril_axe', 'birch')).toBe(2)
+    expect(canDamage('stone_pickaxe', 'mithril_ore')).toBe(false)
+    expect(canDamage('stone_axe', 'darkpine')).toBe(false)
+    expect(canDamage('mithril_axe', 'mithril_ore')).toBe(false)
+    expect(requiredTool('mithril_ore')).toEqual({ family: 'pickaxe', tier: 3 })
+    expect(requiredTool('darkpine')).toEqual({ family: 'axe', tier: 3 })
+    // Ningún prop pide nivel 4.
+    expect(Math.max(...KINDS.map((k) => PROP_DEFS[k].tier))).toBe(3)
   })
 
   it('para cualquier objeto y tipo: lo de nivel 0 siempre se daña, y lo que no es herramienta solo daña eso', () => {
@@ -95,5 +129,7 @@ describe('niveles: daño contra props', () => {
     expect(attackDamage('stone_pickaxe')).toBe(3)
     expect(attackDamage('iron_axe')).toBe(4)
     expect(attackDamage('iron_pickaxe')).toBe(4)
+    expect(attackDamage('mithril_axe')).toBe(6)
+    expect(attackDamage('mithril_pickaxe')).toBe(6)
   })
 })

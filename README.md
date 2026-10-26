@@ -41,7 +41,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Clic izquierdo** con la fogata o una estación (mesa de trabajo, horno o yunque) en la mano | colocarla |
 | **Esc** | pausa |
 
-Los árboles se talan con 3 golpes a mano (+4 madera). Las rocas no se pueden picar a mano: hace falta un pico de madera (2 golpes), de piedra o de hierro (1 golpe), y dan +3 piedra. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Las hachas talan más rápido (2 golpes con la de madera, 1 con la de piedra o la de hierro). En las laderas (entre 3 y 6 m de altura) crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes) o de hierro (2 golpes) y dan +4 madera de abedul, y más arriba (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes) o de hierro (2 golpes) y dan +3 mineral de hierro. El mineral se funde en el horno y la madera de abedul sirve para las herramientas de hierro (ver [Crafteo](#crafteo)). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas (también abedules y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo.
+Los árboles se talan con 3 golpes a mano (+4 madera). Las rocas no se pueden picar a mano: hace falta un pico de madera (2 golpes) o cualquiera mejor (1 golpe), y dan +3 piedra. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Las hachas talan más rápido (2 golpes con la de madera, 1 con cualquiera mejor). En las laderas (entre 3 y 6 m de altura) crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes) o mejor (2 golpes) y dan +4 madera de abedul, y más arriba (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes) o mejor (2 golpes) y dan +3 mineral de hierro. Entre 6 y 9 m crecen también 20 pinos oscuros, más grandes y de copa casi negra, que piden un hacha de hierro (3 golpes; 2 con la de mithril) y dan +4 madera oscura, y en las cimas (desde 8,5 m) hay 16 menas de mithril, pequeñas y con cristales azules, que piden un pico de hierro (3 golpes; 2 con el de mithril) y dan +4 mineral de mithril. Los minerales se funden en el horno; la madera de abedul sirve para las herramientas de hierro y la oscura para las de mithril (ver [Crafteo](#crafteo)). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas (también abedules, pinos oscuros y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo.
 
 El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata o una estación también se animan.
 
@@ -58,11 +58,13 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | mesa de trabajo | horno | 12 piedra + 4 madera |
 | mesa de trabajo | yunque | 4 lingotes de hierro + 6 piedra |
 | horno | lingote de hierro | 1 mineral de hierro + 1 madera |
+| horno | lingote de mithril | 1 mineral de mithril + 2 madera |
 | yunque | hacha o pico de hierro | 3 lingotes de hierro + 2 madera de abedul |
+| yunque | hacha o pico de mithril | 3 lingotes de mithril + 2 madera oscura |
 
 Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un horno cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas. Fundir es instantáneo: cada clic junto al horno convierte un mineral en un lingote.
 
-Las herramientas de hierro hacen 6 de daño a lo de su familia y 4 a los trasgos. De momento nada pide hierro: talan y pican lo mismo que las de piedra, pero más rápido.
+Las herramientas de hierro hacen 6 de daño a lo de su familia y 4 a los trasgos, y son las que abren el pino oscuro y la mena de mithril. Las de mithril, las mejores, hacen 9 y 6: nada pide mithril, pero rompen abedules, pinos oscuros y menas en 2 golpes y tumban a un trasgo de un golpe.
 
 ## Estaciones
 
@@ -78,7 +80,7 @@ El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya dev
 
 ## Enemigos
 
-Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera y 2 con uno de piedra o de hierro; cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo, y al amanecer los que quedan desaparecen.
+Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera, 2 con uno de piedra o de hierro y 1 con uno de mithril; cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo, y al amanecer los que quedan desaparecen.
 
 ## Sonido y ajustes
 
@@ -88,7 +90,7 @@ En el menú y en la pausa hay deslizadores para la sensibilidad del ratón, el c
 
 ## Mundo
 
-El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/sim/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, los abedules y las menas de hierro, uno propio cada uno, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.
+El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/sim/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, los abedules, las menas de hierro, los pinos oscuros y las menas de mithril, uno propio cada uno y en ese orden, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`…); no se incluye en el build de producción.
 
 La lógica que no depende de three.js ni del DOM (jugador, supervivencia, colisiones, inventario, fabricación, constantes, generador aleatorio, altura del terreno y reloj del día) vive en `src/sim/`, para que la pueda ejecutar también un servidor. `npm run typecheck:sim` la compila sin la librería del DOM y un test comprueba que no importa three ni nada de fuera de `src/sim/`.
 

@@ -20,7 +20,7 @@ import {
   type PropPlacement,
 } from '../sim/props'
 
-// Las geometrías son por familia (el abedul tiene la forma del árbol y la mena la de la roca) y los materiales por
+// Las geometrías son por familia (abedul y pino oscuro tienen la forma del árbol y las menas la de la roca) y los materiales por
 // tipo. sim/aim.ts construye las hitboxes de cada familia con las mismas caras (salvo las bayas y los cristales de
 // las menas, que son adorno): una geometría nueva tiene que llevarse también allí.
 const trunkGeometry = new THREE.CylinderGeometry(TRUNK_TOP_RADIUS, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, TRUNK_SIDES).translate(0, TRUNK_HEIGHT / 2, 0)
@@ -92,6 +92,8 @@ function crystalGeometry() {
   )
 }
 
+const crystals = crystalGeometry()
+
 const material = (color: string, extra: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, ...extra })
 
 const berryMaterial = material('#c2304a')
@@ -111,10 +113,18 @@ const PARTS: Record<PropKind, Part[]> = {
     { geometry: birchTrunkGeometry(), material: material('#ffffff', { vertexColors: true }) },
     { geometry: foliageGeometry, material: material('#7fae45') },
   ],
+  darkpine: [
+    { geometry: trunkGeometry, material: material('#4a3626') },
+    { geometry: foliageGeometry, material: material('#1b3a24') },
+  ],
   rock: [{ geometry: rockGeometry, material: material('#9a978a') }],
   iron_ore: [
     { geometry: rockGeometry, material: material('#7b7268') },
-    { geometry: crystalGeometry(), material: material('#c8743a', { metalness: 0.4, roughness: 0.5 }) },
+    { geometry: crystals, material: material('#c8743a', { metalness: 0.4, roughness: 0.5 }) },
+  ],
+  mithril_ore: [
+    { geometry: rockGeometry, material: material('#6c7080') },
+    { geometry: crystals, material: material('#4fb3f0', { metalness: 0.4, roughness: 0.4, emissive: '#123c5c' }) },
   ],
   bush: [{ geometry: bushGeometry, material: material('#3d7d35') }, ...berryGeometries.map((geometry) => ({ geometry, material: berryMaterial }))],
 }
