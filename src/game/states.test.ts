@@ -21,8 +21,8 @@ describe('estados de Game', () => {
     expect(which(showsCrosshair)).toEqual(['menu', 'playing', 'paused', 'dead'])
   })
 
-  it('capturar el ratón pasa siempre a jugar (empezar, reanudar o cerrar el inventario)', () => {
-    for (const state of ALL) expect(afterLockChange(state, true)).toBe('playing')
+  it('capturar el ratón pasa a jugar (empezar, reanudar o cerrar el inventario), salvo muerto con un jugador', () => {
+    for (const state of ALL) expect(afterLockChange(state, true)).toBe(state === 'dead' ? null : 'playing')
   })
 
   it('perderlo pausa si se jugaba con él; al abrir el inventario o al morir con un jugador no cambia nada', () => {

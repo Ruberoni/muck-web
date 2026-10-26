@@ -109,8 +109,6 @@ export class Game {
   private worldVersion = -1
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
   private retrying = false
-  /** Cerrando el inventario: a la espera de recapturar el ratón. */
-  private closingInventory = false
   private projected = new THREE.Vector3()
   /** El `generation` de la sesión en red que ya refleja la vista (sube al reconectar). */
   private netGeneration = 0
@@ -167,6 +165,8 @@ export class Game {
       onLockChange: (locked) => {
         const next = afterLockChange(this.state, locked)
         if (next) this.setState(next)
+        // Muerto con un jugador el overlay necesita el ratón suelto para su clic.
+        else if (locked) document.exitPointerLock()
       },
     })
     // Con el inventario abierto el ratón ya está suelto: ocultar la pestaña o cambiar de ventana no cambiaría el
@@ -252,7 +252,6 @@ export class Game {
     if (inGame(state)) this.net?.wake()
     else this.net?.suspend()
     this.state = state
-    this.closingInventory = false
     this.hud.inventory.setOpen(state === 'inventory')
     this.hud.showOverlay(overlayFor(state), this.net !== null)
     this.onchange?.()
@@ -313,10 +312,11 @@ export class Game {
    * Cierra la pantalla de inventario recapturando el ratón: se llama desde el propio evento de teclado, que cuenta
    * como gesto del usuario. Se vuelve a jugar al capturarlo (`afterLockChange`), no antes: la misma tecla llegaría
    * a `Input` y volvería a abrir la pantalla. Si no se puede (el navegador lo rechaza si se soltó hace poco), pausa.
+   * Sin guardia contra pulsaciones repetidas: pedirlo otra vez es inocuo, y donde `requestPointerLock` no devuelve
+   * promesa un fallo no avisa y la pantalla debe seguir respondiendo.
    */
   closeInventory() {
-    if (this.state !== 'inventory' || this.closingInventory) return
-    this.closingInventory = true
+    if (this.state !== 'inventory') return
     this.sound.unlock()
     void this.input.requestLock().then((ok) => {
       if (ok || this.state !== 'inventory') return

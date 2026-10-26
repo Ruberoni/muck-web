@@ -1,8 +1,9 @@
+import { INVENTORY_KEYS } from '../game/actions'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import { ICONS } from './icons'
 
 /** Teclas que cierran la pantalla y vuelven a jugar: las que la abren (Tab y E) y la del crafteo (C). */
-const CLOSE_KEYS: ReadonlySet<string> = new Set(['Tab', 'KeyE', 'KeyC'])
+const CLOSE_KEYS: ReadonlySet<string> = new Set([...INVENTORY_KEYS, 'KeyC'])
 /** Con la pantalla abierta no hacen nada: no deben pulsar lo que tenga el foco ni llegar al juego. */
 const BLOCKED_KEYS: ReadonlySet<string> = new Set(['Space', 'Enter', 'NumpadEnter'])
 
@@ -54,7 +55,7 @@ export class InventoryScreen {
       this.slots.push({ root, icon: el('div', 'icon', root), count: el('span', 'count', root), item: undefined })
     }
     this.label = el('p', 'label', panel)
-    el('p', 'hint', panel).textContent = 'Tab o E: volver al juego · Esc: pausa'
+    el('p', 'hint', panel).textContent = 'Tab, E o C: volver al juego · Esc: pausa'
     // Con el ratón suelto el clic derecho abriría el menú del navegador.
     this.root.addEventListener('contextmenu', (e) => e.preventDefault())
   }
