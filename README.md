@@ -36,6 +36,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Clic izquierdo** | golpear; mantenerlo repite el golpe |
 | **Clic derecho** o **F** | comer una baya |
 | **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo y no actúa con el crafteo abierto) |
+| **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra para intercambiarlas. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
 | **C** | abrir o cerrar el crafteo (con él abierto, **1–5** fabrica) |
 | **Clic izquierdo** con la fogata en la mano | colocarla |
 | **Esc** | pausa |

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RECIPES } from '../sim/crafting'
 import { INVENTORY_SIZE, SLOT_COUNT, type ItemId } from '../sim/inventory'
-import { acceptsKeys, stepActions, type KeyStep } from './actions'
+import { stepActions, type KeyStep } from './actions'
 import { CLICK, RIGHT_CLICK } from './input'
 
 const slots = (items: Partial<Record<number, ItemId>> = {}) => Array.from({ length: SLOT_COUNT }, (_, i) => items[i] ?? null)
@@ -27,8 +27,8 @@ describe('teclas a acciones', () => {
   })
 
   it('C abre o cierra el crafteo y vale ya para los números del mismo paso', () => {
-    expect(step(['KeyC', 'Digit1'])).toEqual({ actions: [{ kind: 'craft', recipe: RECIPES[0].id }], crafting: true })
-    expect(step(['KeyC', 'Digit1'], { crafting: true })).toEqual({ actions: [{ kind: 'select', slot: 0 }], crafting: false })
+    expect(step(['KeyC', 'Digit1'])).toEqual({ actions: [{ kind: 'craft', recipe: RECIPES[0].id }], crafting: true, inventory: false })
+    expect(step(['KeyC', 'Digit1'], { crafting: true })).toEqual({ actions: [{ kind: 'select', slot: 0 }], crafting: false, inventory: false })
   })
 
   it('la rueda mueve la casilla, salvo con el crafteo abierto', () => {
@@ -71,9 +71,9 @@ describe('teclas a acciones', () => {
     expect(step([RIGHT_CLICK]).actions).toEqual([{ kind: 'eat' }])
   })
 
-  it('el teclado cuenta jugando y de espectador (Tab y chat), no en menús ni pausa', () => {
-    expect(acceptsKeys('playing')).toBe(true)
-    expect(acceptsKeys('spectating')).toBe(true)
-    for (const state of ['menu', 'paused', 'dead'] as const) expect(acceptsKeys(state)).toBe(false)
+  it('Tab o E piden abrir el inventario, que cierra el crafteo', () => {
+    expect(step(['Tab'])).toEqual({ actions: [], crafting: false, inventory: true })
+    expect(step(['KeyE'], { crafting: true })).toEqual({ actions: [], crafting: false, inventory: true })
+    expect(step(['KeyQ'], { crafting: true }).inventory).toBe(false)
   })
 })

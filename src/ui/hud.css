@@ -191,6 +191,46 @@
 .recipe .name { font-weight: 600; }
 .recipe .cost { font-size: 12px; opacity: 0.8; }
 
+/* Pantalla de inventario (Tab o E): con el ratón suelto, recibe los clics y tapa el juego. */
+.inventory {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(10 20 30 / 0.45);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.inventory[hidden] { display: none; }
+
+.inventory-panel {
+  display: grid;
+  gap: 8px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.5);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.inventory-panel .title { margin: 0; font-size: 18px; }
+.inventory-panel .label { margin: 4px 0 0; font-size: 14px; min-height: 1.2em; }
+.inventory-panel .hint { margin: 0; font-size: 12px; opacity: 0.7; }
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(9, var(--slot));
+  gap: 6px;
+}
+
+/* La hotbar, separada de la mochila como en el juego. */
+.inventory-grid.hotbar-row { margin-top: 6px; padding-top: 10px; border-top: 1px solid rgb(255 255 255 / 0.2); }
+.inventory .slot { cursor: pointer; }
+.inventory .slot:hover { background: rgb(255 255 255 / 0.12); }
+.inventory .slot.picked { border-color: #7fd3ff; box-shadow: 0 0 0 2px #7fd3ff; }
+
 .overlay {
   position: fixed;
   inset: 0;

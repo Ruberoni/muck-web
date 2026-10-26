@@ -1,27 +1,11 @@
 import { ENEMY_DEF, PROP_DEFS } from '../sim/constants'
 import { canCraft, RECIPES } from '../sim/crafting'
-import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
+import { ITEM_NAMES, SLOT_COUNT, type Inventory } from '../sim/inventory'
 import type { Target } from '../sim/interaction'
+import { ICONS } from './icons'
+import { InventoryScreen } from './inventoryScreen'
 import { Minimap } from './minimap'
 import { MultiplayerHud } from './multiplayerHud'
-
-const HANDLE = `<polygon points="7,28 10,29.5 22,8 19,6.5" fill="#8a5a32"/>`
-const axe = (head: string, edge: string) =>
-  `<svg viewBox="0 0 32 32">${HANDLE}<polygon points="16,7 22,3 29,9 27,15 21,11" fill="${head}"/><polygon points="22,3 29,9 27,15" fill="${edge}"/></svg>`
-const pickaxe = (head: string, edge: string) =>
-  `<svg viewBox="0 0 32 32">${HANDLE}<polygon points="5,12 11,6 20,3 29,5 30,9 21,7 12,9" fill="${head}"/><polygon points="5,12 11,6 12,9" fill="${edge}"/><polygon points="29,5 30,9 25,7.5" fill="${edge}"/></svg>`
-
-const ICONS: Record<ItemId, string> = {
-  wood: `<svg viewBox="0 0 32 32"><rect x="4" y="9" width="24" height="14" rx="3" fill="#8a5a32"/><ellipse cx="26" cy="16" rx="4" ry="7" fill="#d9a86a"/><ellipse cx="26" cy="16" rx="2" ry="3.5" fill="#b07b45"/></svg>`,
-  stone: `<svg viewBox="0 0 32 32"><polygon points="6,22 10,10 20,6 27,14 25,24 14,27" fill="#9a978a"/><polygon points="10,10 20,6 18,15" fill="#b8b5a8"/><polygon points="18,15 27,14 25,24" fill="#7c796e"/></svg>`,
-  berry: `<svg viewBox="0 0 32 32"><path d="M16 9 Q18 4 23 4 Q21 8 16 9" fill="#3d7d35"/><circle cx="11" cy="19" r="6" fill="#c2304a"/><circle cx="21" cy="20" r="6" fill="#a8243d"/><circle cx="16" cy="12" r="5.5" fill="#d63d58"/><circle cx="14.5" cy="10.5" r="1.5" fill="#f2a0ad"/></svg>`,
-  wood_axe: axe('#d9a86a', '#b07b45'),
-  wood_pickaxe: pickaxe('#d9a86a', '#b07b45'),
-  stone_axe: axe('#b8b5a8', '#7c796e'),
-  stone_pickaxe: pickaxe('#b8b5a8', '#7c796e'),
-  raw_meat: `<svg viewBox="0 0 32 32"><rect x="20" y="17" width="9" height="4" rx="2" transform="rotate(35 24 19)" fill="#efe6d2"/><path d="M5 15 Q6 6 15 6 Q24 7 23 15 Q22 24 13 25 Q4 24 5 15" fill="#d9566a"/><path d="M9 14 Q11 9 16 10" stroke="#f2a0ad" stroke-width="2" fill="none"/><circle cx="14" cy="17" r="2.5" fill="#f4e2c8"/></svg>`,
-  campfire: `<svg viewBox="0 0 32 32"><path d="M16 4 Q23 12 21 19 Q19 23 16 23 Q13 23 11 19 Q9 12 16 4" fill="#ff7a1f"/><path d="M16 11 Q20 16 18.5 20 Q17.5 22 16 22 Q14.5 22 13.5 20 Q12 16 16 11" fill="#ffd23f"/><polygon points="4,25 6,22 26,26 25,29" fill="#6b4426"/><polygon points="28,25 26,22 6,26 7,29" fill="#8a5a32"/></svg>`,
-}
 
 export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | null
 
@@ -48,6 +32,7 @@ const CONTROLS = `
     <li><kbd>Clic</kbd> golpear (mantener para repetir)</li>
     <li><kbd>Clic derecho</kbd> o <kbd>F</kbd> comer bayas</li>
     <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
+    <li><kbd>Tab</kbd> o <kbd>E</kbd> inventario (clic en dos casillas: cambiarlas)</li>
     <li><kbd>C</kbd> crafteo (con él abierto, 1–5 fabrica)</li>
     <li><kbd>Clic</kbd> con la fogata en la mano: colocarla</li>
     <li><kbd>Enter</kbd> chat (en una sala)</li>
@@ -66,6 +51,8 @@ export class Hud {
   readonly minimap: Minimap
   /** Lo que solo se ve en una sala: conexión, jugadores, avisos y nombres. */
   readonly net: MultiplayerHud
+  /** La pantalla de inventario (Tab o E), encima del resto del HUD. */
+  readonly inventory: InventoryScreen
   /** El texto del menú cuando hay lobby (los botones del panel deciden cómo jugar). */
   menuText: string | null = null
   private healthFill: HTMLElement
@@ -124,6 +111,7 @@ export class Hud {
     })
     el('p', 'hint', this.crafting).textContent = 'C para cerrar'
     this.crafting.hidden = true
+    this.inventory = new InventoryScreen(root)
 
     this.overlay = el('div', 'overlay', container)
     const panel = (this.panel = el('div', 'panel', this.overlay))
@@ -225,6 +213,7 @@ export class Hud {
     const held = inventory.selectedItem
     this.held.textContent = held ? ITEM_NAMES[held] : ''
     RECIPES.forEach((recipe, i) => this.recipes[i].classList.toggle('available', canCraft(inventory, recipe)))
+    this.inventory.setInventory(inventory)
   }
   setDay(day: number) {
     if (day === this.last.day) return

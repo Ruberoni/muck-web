@@ -2,14 +2,10 @@ import type { ActionData } from '../sim/commands'
 import { EAT_KEY } from '../sim/constants'
 import { RECIPES } from '../sim/crafting'
 import { cycleSlot, SLOT_COUNT, type ItemId } from '../sim/inventory'
-import type { GameState } from './Game'
 import { CLICK, RIGHT_CLICK } from './input'
 
-/**
- * Estados en los que cuentan las pulsaciones de teclado: también muerto en una sala, donde Tab cambia a quién se
- * mira y Enter abre el chat. El clic y la rueda solo cuentan en `playing`.
- */
-export const acceptsKeys = (state: GameState) => state === 'playing' || state === 'spectating'
+/** Teclas que abren la pantalla de inventario jugando (y la cierran, desde la pantalla). */
+export const INVENTORY_KEYS: ReadonlySet<string> = new Set(['Tab', 'KeyE'])
 
 /** Lo que hace falta saber de un paso para traducir sus pulsaciones en acciones (sin DOM ni Game). */
 export interface KeyStep {
@@ -31,9 +27,10 @@ export interface KeyStep {
  * el crafteo; los números eligen casilla o, con el crafteo abierto, fabrican, pero solo recetas que existen: una
  * receta fuera de rango hace que la sala rechace el mensaje entero y expulse al jugador. La rueda mueve la casilla
  * elegida salvo con el crafteo abierto, donde se ignora. El clic coloca la fogata si es lo que queda en la mano y,
- * si no, golpea. Devuelve también si el crafteo queda abierto.
+ * si no, golpea. Devuelve también si el crafteo queda abierto y si se pide abrir el inventario (Tab o E), que
+ * cierra el crafteo.
  */
-export function stepActions(queued: readonly ActionData[], k: KeyStep): { actions: ActionData[]; crafting: boolean } {
+export function stepActions(queued: readonly ActionData[], k: KeyStep): { actions: ActionData[]; crafting: boolean; inventory: boolean } {
   const actions = [...queued]
   // La casilla que quedará elegida y lo que habrá en cada una tras las acciones encoladas (fabricar no se tiene en
   // cuenta: lo fabricado solo llega a la mano si cae justo en la casilla elegida, que estaba vacía).
@@ -62,5 +59,6 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
     else if (k.clickSwings) actions.push({ kind: 'swing' })
   }
   if (k.presses.has(EAT_KEY) || k.presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })
-  return { actions, crafting }
+  const inventory = [...INVENTORY_KEYS].some((code) => k.presses.has(code))
+  return { actions, crafting: crafting && !inventory, inventory }
 }
