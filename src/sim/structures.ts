@@ -27,7 +27,7 @@ export const PLACEABLE_DEFS: Partial<Record<ItemId, { kind: StructureKind; radiu
 )
 
 /** La estructura que coloca `item`, o null si no es colocable. */
-export const placeableOf = (item: ItemId | null) => (item && PLACEABLE_DEFS[item]) || null
+export const placeableOf = (item: ItemId | null) => (item !== null && Object.hasOwn(PLACEABLE_DEFS, item) && PLACEABLE_DEFS[item]) || null
 
 export interface Structure extends Collider {
   id: number

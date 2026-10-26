@@ -73,7 +73,7 @@ const own: MaterialFor = (material) => material
  */
 export class StructureView {
   readonly group = new THREE.Group()
-  private models = new Map<number, StructureModel>()
+  private models = new Map<number, StructureModel & { kind: StructureKind }>()
   private seen = new Set<number>()
   /** Una vista previa por tipo, creada la primera vez que hace falta; solo se ve una a la vez. */
   private ghosts = new Map<StructureKind, THREE.Group>()
@@ -156,8 +156,11 @@ export class StructureView {
     this.seen.clear()
     for (const s of structures) {
       this.seen.add(s.id)
-      if (this.models.has(s.id)) continue
-      const model = MODELS[s.kind](own, true)
+      const old = this.models.get(s.id)
+      // Un id que vuelve con otro tipo o en otro sitio (otra partida) es otra estructura.
+      if (old && old.kind === s.kind && old.root.position.x === s.x && old.root.position.z === s.z) continue
+      if (old) this.group.remove(old.root)
+      const model = { ...MODELS[s.kind](own, true), kind: s.kind }
       model.root.position.set(s.x, s.y - 0.05, s.z)
       model.root.rotation.y = s.rotY
       this.group.add(model.root)

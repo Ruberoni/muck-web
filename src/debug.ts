@@ -219,6 +219,8 @@ export function installDebug(game: Game) {
       // En red, un tipo que no existe hace que la sala expulse al jugador.
       if (!STRUCTURE_KINDS.includes(kind)) throw new Error(`no existe la estructura ${kind} (son ${STRUCTURE_KINDS.join(', ')})`)
       if ((x === undefined) !== (z === undefined)) throw new Error('x y z van juntas')
+      // En red, un número no finito llega como null y la sala expulsa al jugador.
+      if ([x, z, yaw].some((n) => n !== undefined && !Number.isFinite(n))) throw new Error('x, z y yaw deben ser números finitos')
       const op: DevOp = { op: 'placeStructure', kind }
       if (x !== undefined && z !== undefined) Object.assign(op, { x, z })
       if (yaw !== undefined) Object.assign(op, { yaw })

@@ -662,7 +662,8 @@ describe('Room', () => {
     const free: { x: number; z: number }[] = []
     for (let i = 0; i < 400 && free.length < 2; i++) {
       const at = { x: x + Math.cos(i) * (3 + i * 0.1), z: z + Math.sin(i) * (3 + i * 0.1) }
-      const fits = structureSpot(at, 0, radius, [sim.world.grid]).valid
+      // El primero, mirando a -z; el segundo, a -x (yaw π/2).
+      const fits = structureSpot(at, free.length === 0 ? 0 : Math.PI / 2, radius, [sim.world.grid]).valid
       if (fits && free.every((f) => Math.hypot(f.x - at.x, f.z - at.z) > 4)) free.push(at)
     }
     expect(free).toHaveLength(2)
@@ -689,12 +690,12 @@ describe('Room', () => {
     expect(types).toContain('enemySpawn')
     expect(types).toContain('structurePlaced')
     // Sin (x, z) ni yaw: delante del jugador, hacia donde mira.
-    a.send({ type: 'dev', op: 'teleport', x: free[1].x, z: free[1].z, yaw: 0, pitch: 0 })
+    a.send({ type: 'dev', op: 'teleport', x: free[1].x, z: free[1].z, yaw: Math.PI / 2, pitch: 0 })
     a.send({ type: 'dev', op: 'placeStructure', kind: 'campfire' })
     time.advance(0)
     expect(sim.structures.list).toHaveLength(2)
-    expect(sim.structures.list[1].x).toBeCloseTo(free[1].x)
-    expect(sim.structures.list[1].z).toBeCloseTo(free[1].z - PLACE_DISTANCE)
+    expect(sim.structures.list[1].x).toBeCloseTo(free[1].x - PLACE_DISTANCE)
+    expect(sim.structures.list[1].z).toBeCloseTo(free[1].z)
     expect(a.closed).toBeNull()
   })
 

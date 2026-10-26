@@ -5,6 +5,7 @@ import { PLACEABLE_DEFS, placeableOf, STRUCTURE_DEFS, STRUCTURE_KINDS, Structure
 import { resolveCircle } from './collision'
 import { PLACE_DISTANCE, PLAYER_RADIUS } from './constants'
 import type { SimEventData } from './events'
+import type { ItemId } from './inventory'
 
 const world = createPropWorld()
 const RADIUS = STRUCTURE_DEFS.campfire.radius
@@ -107,6 +108,7 @@ describe('estructuras en general', () => {
     expect(placeableOf('campfire')).toEqual({ kind: 'campfire', radius: 0.6 })
     expect(placeableOf('wood')).toBeNull()
     expect(placeableOf(null)).toBeNull()
+    expect(placeableOf('constructor' as ItemId)).toBeNull()
   })
 
   it('el sitio libre depende del radio: una más ancha choca donde una estrecha cabe', () => {

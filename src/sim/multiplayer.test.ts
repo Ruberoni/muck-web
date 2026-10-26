@@ -176,7 +176,7 @@ describe('Simulation con varios jugadores', () => {
       // Uno mira hacia -z y el otro hacia +z: caen a 4,4 m una de otra.
       sim.teleport(id, spot.x, spot.z, id * Math.PI, 0)
     }
-    const events = stepAll(sim, { 1: { yaw: Math.PI, actions: [{ kind: 'place' }] }, 0: { actions: [{ kind: 'place' }] } })
+    const events = stepAll(sim, { 0: { actions: [{ kind: 'place' }] }, 1: { actions: [{ kind: 'place' }] } })
     expect(ofType(events, 'structurePlaced').map((e) => [e.id, e.by])).toEqual([[0, 0], [1, 1]])
     expect(sim.structures.list.map((s) => s.kind)).toEqual(['campfire', 'campfire'])
     expect(sim.structures.list[1].z - sim.structures.list[0].z).toBeCloseTo(2 * PLACE_DISTANCE)
