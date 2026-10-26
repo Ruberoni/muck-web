@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { GameAudio } from '../audio/gameAudio'
 import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
-import type { PropView } from '../view/PropView'
+import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
 import { CampfireView } from '../view/CampfireView'
@@ -14,11 +14,11 @@ import { sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
 import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { campfireSpot, type CampfireSpot } from '../sim/campfires'
-import { EAT_KEY, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
+import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { Handheld } from './handheld'
-import { CLICK, Input, RIGHT_CLICK } from './input'
-import { cycleSlot, SLOT_COUNT } from '../sim/inventory'
+import { Input } from './input'
+import { acceptsKeys, stepActions } from './actions'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/player'
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
@@ -63,7 +63,8 @@ export class Game {
   readonly scene: THREE.Scene
   /** Se cambia con setSession (al entrar en una sala o volver a jugar solo). */
   session: Session = new LocalSession()
-  readonly propView: PropView
+  /** Se rehace con las colocaciones de cada sesión (ver buildPropView). */
+  propView: PropView
   readonly hud: Hud
   readonly input: Input
   readonly enemyView = new EnemyView()
@@ -130,11 +131,11 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(this.settings.fov, window.innerWidth / window.innerHeight, 0.1, 600)
     this.camera.rotation.order = 'YXZ'
 
-    const { scene, sky, water, propView } = createScene(this.sim.world.placements)
+    const { scene, sky, water } = createScene()
     this.scene = scene
     this.sky = sky
     this.water = water
-    this.propView = propView
+    this.propView = this.buildPropView()
     this.campfireView = new CampfireView(scene)
     scene.add(this.enemyView.group, this.pickupView.group, this.remotePlayers.group)
     this.lookFromPlayer()
@@ -155,6 +156,7 @@ export class Game {
 
     this.input = new Input(this.renderer.domElement, {
       isPlaying: () => this.state === 'playing',
+      acceptsKeys: () => acceptsKeys(this.state),
       onLockChange: (locked) => {
         if (locked) this.setState('playing')
         else if (isActive(this.state)) this.setState('paused')
@@ -193,6 +195,7 @@ export class Game {
     this.session = session
     this.bindInventory()
     this.setCrafting(false)
+    this.propView = this.buildPropView()
     this.resetViews()
     this.worldVersion = -1
     // El espectador es de la sala que se deja: en la nueva se vuelve a decidir con su `you`.
@@ -362,46 +365,22 @@ export class Game {
     this.render(this.state === 'playing' && !this.manualClock ? this.acc / STEP : 1, dt, time)
   }
 
-  /**
-   * Acciones de las pulsaciones de un paso. C abre o cierra el crafteo; los números eligen casilla o,
-   * con el crafteo abierto, fabrican. La rueda mueve la casilla elegida salvo con el crafteo abierto,
-   * donde se ignora. El clic coloca la fogata si es lo que queda en la mano y, si no, golpea.
-   */
-  private actions(presses: ReadonlySet<string>, wheel: number): ActionData[] {
-    const actions = this.queued.splice(0)
-    const { inventory } = this.slot
-    // La casilla que quedará elegida tras las acciones de este paso.
-    let selected = inventory.selected
-    for (const action of actions) if (action.kind === 'select') selected = action.slot
-    if (presses.has('KeyC')) this.setCrafting(!this.craftingOpen)
-    for (let i = 0; i < SLOT_COUNT; i++) {
-      if (!presses.has(`Digit${i + 1}`)) continue
-      if (this.craftingOpen) {
-        actions.push({ kind: 'craft', recipe: i })
-      } else {
-        actions.push({ kind: 'select', slot: i })
-        selected = i
-      }
-    }
-    if (wheel && !this.craftingOpen) {
-      selected = cycleSlot(selected, wheel)
-      actions.push({ kind: 'select', slot: selected })
-    }
-    if (presses.has(CLICK)) {
-      if (inventory.slots[selected] === 'campfire') actions.push({ kind: 'place' })
-      else if (this.attackOverride === null) actions.push({ kind: 'swing' })
-    }
-    if (presses.has(EAT_KEY) || presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })
-    return actions
-  }
-
   /** Un paso fijo: manda el movimiento y las acciones a la sesión y presenta lo que ha pasado. */
   private step() {
     if (this.state === 'spectating') return this.spectatorStep()
     const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
     const presses = this.input.takePresses()
     this.chatKey(presses)
-    const actions = this.actions(presses, this.input.takeWheel())
+    const { inventory } = this.slot
+    const { actions, crafting } = stepActions(this.queued.splice(0), {
+      presses,
+      wheel: this.input.takeWheel(),
+      crafting: this.craftingOpen,
+      selected: inventory.selected,
+      slots: inventory.slots,
+      clickSwings: this.attackOverride === null,
+    })
+    if (crafting !== this.craftingOpen) this.setCrafting(crafting)
     const attack = this.attackOverride ?? this.input.attackHeld
     const { yaw, pitch } = this.look
     const events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, actions)
@@ -458,6 +437,7 @@ export class Game {
   private reconnected(net: NetSession) {
     this.netGeneration = net.generation
     this.bindInventory()
+    this.propView = this.buildPropView()
     this.resetViews()
     this.worldVersion = -1
     this.snapPlayer = true
@@ -547,7 +527,7 @@ export class Game {
     const shown = net.client.shownPlayers
     const rtt = Math.round(net.client.clock.rtt)
     if (net.closed) hud.net.setStatus('lost', net.closeReason ?? 'Sin conexión con el servidor.')
-    else if (net.status === 'reconnecting') hud.net.setStatus('connecting', `Sala ${net.room} · reconectando…`)
+    else if (net.status === 'reconnecting') hud.net.setStatus('connecting', `Sala ${net.room} · ${net.waitReason ?? 'reconectando…'}`)
     else hud.net.setStatus('online', `Sala ${net.room}${rtt > 0 ? ` · ${rtt} ms` : ''}`)
     hud.net.setBanner(this.banner(net))
 
@@ -608,6 +588,23 @@ export class Game {
     inventory.onChange(() => {
       if (inventory === this.slot.inventory) this.hud.setInventory(inventory)
     })
+  }
+
+  /**
+   * Una vista de los props nueva, con las colocaciones de la sesión actual, en lugar de la anterior. En red son las
+   * del servidor: las locales no valen, porque `heightAt` difiere en los últimos bits entre motores (la `y` siempre, y
+   * con props cerca de un umbral, hasta qué prop lleva cada id). Por eso no se compara: se rehace siempre.
+   */
+  private buildPropView(): PropView {
+    const view = new PropView(this.sim.world.placements)
+    // En el constructor aún no hay vista anterior.
+    const old = this.propView as PropView | undefined
+    if (old) {
+      this.scene.remove(old.group)
+      old.dispose()
+    }
+    this.scene.add(view.group)
+    return view
   }
 
   /** Vistas como la isla recién generada, sin enemigos, objetos, fogatas ni otros jugadores. */
@@ -682,7 +679,7 @@ export class Game {
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
-    else if (net?.status === 'reconnecting') this.hud.setPrompt('Reconectando…')
+    else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating') this.hud.setPrompt('')
     else if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
     else if (slot.hotbarFull && !slot.target) this.hud.setPrompt('Hotbar llena')
