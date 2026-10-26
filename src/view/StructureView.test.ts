@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { Structures, type StructureSpot } from '../sim/structures'
+import { STRUCTURE_DEFS, Structures, type StructureSpot } from '../sim/structures'
 import { CAMPFIRE_LIGHTS } from '../sim/constants'
 import { StructureView } from './StructureView'
 
@@ -103,6 +103,31 @@ describe('StructureView', () => {
     expect(bench.rotation.y).toBe(1)
     view.setGhost(null)
     expect(ghosts().some((g) => g.visible)).toBe(false)
+  })
+
+  it('el horno y el yunque: cada uno con su modelo y su giro; el fuego del horno parpadea pero no da luz', () => {
+    const { scene, fires, view, update } = setup()
+    fires.place({ x: 0, y: 5, z: 0, valid: true }, 'furnace', 0, 0.7)
+    fires.place({ x: 4, y: 5, z: 0, valid: true }, 'anvil', 0, -0.3)
+    update(0.825, { x: 0, z: 0 })
+    expect(view.group.children).toHaveLength(2)
+    const furnace = view.modelOf(0)!
+    expect(furnace.root.rotation.y).toBe(0.7)
+    expect(furnace.flame).not.toBeNull()
+    expect(furnace.flame!.scale.y).not.toBe(1)
+    const anvil = view.modelOf(1)!
+    expect(anvil.root.rotation.y).toBe(-0.3)
+    expect(anvil.flame).toBeNull()
+    expect(lightsOf(scene).every((l) => l.intensity === 0)).toBe(true)
+    // Cada modelo cabe en el radio de su estructura (en horizontal), con un poco de holgura por el fuego.
+    for (const [id, kind] of [[0, 'furnace'], [1, 'anvil']] as const) {
+      const root = view.modelOf(id)!.root
+      root.rotation.y = 0
+      root.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(root)
+      const half = Math.max(box.max.x - root.position.x, root.position.x - box.min.x, box.max.z - root.position.z, root.position.z - box.min.z)
+      expect(half, kind).toBeLessThan(STRUCTURE_DEFS[kind].radius + 0.15)
+    }
   })
 
   it('un id que vuelve en otro sitio (otra partida sin reset de la vista) se dibuja de nuevo', () => {

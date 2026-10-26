@@ -1,4 +1,21 @@
-export type ItemId = 'wood' | 'stone' | 'berry' | 'wood_axe' | 'wood_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'raw_meat' | 'campfire' | 'workbench' | 'birch_wood' | 'iron_ore'
+export type ItemId =
+  | 'wood'
+  | 'stone'
+  | 'berry'
+  | 'wood_axe'
+  | 'wood_pickaxe'
+  | 'stone_axe'
+  | 'stone_pickaxe'
+  | 'raw_meat'
+  | 'campfire'
+  | 'workbench'
+  | 'birch_wood'
+  | 'iron_ore'
+  | 'iron_bar'
+  | 'iron_axe'
+  | 'iron_pickaxe'
+  | 'furnace'
+  | 'anvil'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -13,6 +30,11 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   workbench: 'Mesa de trabajo',
   birch_wood: 'Madera de abedul',
   iron_ore: 'Mineral de hierro',
+  iron_bar: 'Lingote de hierro',
+  iron_axe: 'Hacha de hierro',
+  iron_pickaxe: 'Pico de hierro',
+  furnace: 'Horno',
+  anvil: 'Yunque',
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

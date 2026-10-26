@@ -44,6 +44,8 @@ const CAMPFIRE_HEARING = 14
 const PLACE_PROMPT: Record<StructureKind, string> = {
   campfire: 'Clic para colocar la fogata',
   workbench: 'Clic para colocar la mesa de trabajo',
+  furnace: 'Clic para colocar el horno',
+  anvil: 'Clic para colocar el yunque',
 }
 /** Segundos que se ve "Necesitas pico de madera" tras golpear algo que no se puede con lo que se lleva. */
 const TOOL_WARNING_TIME = 1.5

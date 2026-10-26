@@ -103,7 +103,7 @@ export const PICKUP_MAGNET_SPEED = 6
 
 export interface ToolDef {
   family: ToolFamily
-  /** 1 madera, 2 piedra (la mano es el nivel 0). */
+  /** 1 madera, 2 piedra, 3 hierro (la mano es el nivel 0). */
   tier: number
   /** Daño contra los props de su familia; contra el resto se golpea como a mano (la regla está en tiers.ts). */
   damage: number
@@ -114,11 +114,13 @@ export interface ToolDef {
 export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   wood_axe: { family: 'axe', tier: 1, damage: 2, attack: 2 },
   stone_axe: { family: 'axe', tier: 2, damage: 4, attack: 3 },
+  iron_axe: { family: 'axe', tier: 3, damage: 6, attack: 4 },
   wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 2 },
   stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 3 },
+  iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 4 },
 }
 
-// Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra.
+// Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra o de hierro.
 export const ENEMY_DEF = { name: 'Trasgo', verb: 'atacar', hp: 6, drop: { item: 'raw_meat' as ItemId, amount: 1 } }
 export const ENEMY_RADIUS = 0.55
 // Algo más lento que andar: se le puede dejar atrás, pero no mientras se tala o se pica.

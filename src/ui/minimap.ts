@@ -12,6 +12,8 @@ const RIM_INSET = 9
 export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; near: string; far: string }> = {
   campfire: { shape: 'dot', near: '#ff8636', far: '#ffb347' },
   workbench: { shape: 'square', near: '#d9a86a', far: '#ecc896' },
+  furnace: { shape: 'square', near: '#cfc8bd', far: '#e6e1d8' },
+  anvil: { shape: 'square', near: '#7f9cc4', far: '#b3c6e2' },
 }
 
 /** Un compañero en el minimapa. */

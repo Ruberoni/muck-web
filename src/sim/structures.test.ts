@@ -80,11 +80,14 @@ describe('colocar fogatas', () => {
     expect(fires.list[0].id).toBe(0)
   })
 
-  it('la mesa queda de frente a quien la coloca; la fogata, con su giro por id', () => {
+  it('las estaciones quedan de frente a quien las coloca; la fogata, con su giro por id', () => {
     const s = new Structures()
     expect(s.place({ x: 0, y: 5, z: 0, valid: true }, 'campfire', 0, 2)!.rotY).toBe(0)
     expect(s.place({ x: 5, y: 5, z: 0, valid: true }, 'workbench', 0, 2)!.rotY).toBe(2)
     expect(s.place({ x: 10, y: 5, z: 0, valid: true }, 'campfire', 0, 2)!.rotY).toBeCloseTo(2 * 1.3)
+    // El horno y el yunque, como la mesa.
+    expect(s.place({ x: 15, y: 5, z: 0, valid: true }, 'furnace', 0, 1.5)!.rotY).toBe(1.5)
+    expect(s.place({ x: 20, y: 5, z: 0, valid: true }, 'anvil', 0, -1)!.rotY).toBe(-1)
   })
 
   it('colocarla emite structurePlaced con el tipo y quién la puso', () => {
@@ -114,6 +117,9 @@ describe('estructuras en general', () => {
     }
     expect(placeableOf('campfire')).toEqual({ kind: 'campfire', radius: 0.6 })
     expect(placeableOf('workbench')).toEqual({ kind: 'workbench', radius: 0.7 })
+    expect(placeableOf('furnace')).toEqual({ kind: 'furnace', radius: 0.8 })
+    expect(placeableOf('anvil')).toEqual({ kind: 'anvil', radius: 0.5 })
+    expect(placeableOf('iron_bar')).toBeNull()
     expect(placeableOf('wood')).toBeNull()
     expect(placeableOf(null)).toBeNull()
     expect(placeableOf('constructor' as ItemId)).toBeNull()

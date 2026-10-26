@@ -1,7 +1,7 @@
 import type { Inventory, ItemId } from './inventory'
 import type { Vec3 } from './player'
 
-/** Estaciones junto a las que se fabrican algunas recetas (el horno y el yunque llegan con su PR). */
+/** Estaciones junto a las que se fabrican algunas recetas. */
 export type StationKind = 'workbench' | 'furnace' | 'anvil'
 
 /** Lo que fabricar necesita del mundo: si hay una estación de ese tipo al alcance desde `pos`. */
@@ -13,7 +13,18 @@ export interface CraftWorld {
 export const NO_STATIONS: CraftWorld = { nearStation: () => false }
 
 /** Identificador estable de una receta: es lo que viaja en `craft` y en `playerCrafted`. */
-export type RecipeId = 'wood_axe' | 'wood_pickaxe' | 'campfire' | 'workbench' | 'stone_axe' | 'stone_pickaxe'
+export type RecipeId =
+  | 'wood_axe'
+  | 'wood_pickaxe'
+  | 'campfire'
+  | 'workbench'
+  | 'stone_axe'
+  | 'stone_pickaxe'
+  | 'furnace'
+  | 'anvil'
+  | 'iron_bar'
+  | 'iron_axe'
+  | 'iron_pickaxe'
 
 export interface Recipe {
   id: RecipeId
@@ -31,6 +42,12 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'workbench', result: 'workbench', cost: [{ item: 'wood', amount: 10 }], station: null },
   { id: 'stone_axe', result: 'stone_axe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
   { id: 'stone_pickaxe', result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
+  { id: 'furnace', result: 'furnace', cost: [{ item: 'stone', amount: 12 }, { item: 'wood', amount: 4 }], station: 'workbench' },
+  { id: 'anvil', result: 'anvil', cost: [{ item: 'iron_bar', amount: 4 }, { item: 'stone', amount: 6 }], station: 'workbench' },
+  // Fundir es instantáneo: una receta más, junto al horno.
+  { id: 'iron_bar', result: 'iron_bar', cost: [{ item: 'iron_ore', amount: 1 }, { item: 'wood', amount: 1 }], station: 'furnace' },
+  { id: 'iron_axe', result: 'iron_axe', cost: [{ item: 'iron_bar', amount: 3 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
+  { id: 'iron_pickaxe', result: 'iron_pickaxe', cost: [{ item: 'iron_bar', amount: 3 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
 ]
 
 const BY_ID = new Map<string, Recipe>(RECIPES.map((r) => [r.id, r]))

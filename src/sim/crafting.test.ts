@@ -55,6 +55,6 @@ describe('crafteo', () => {
   it('cada receta tiene un id distinto y solo esos ids son válidos', () => {
     expect(new Set(RECIPE_IDS).size).toBe(RECIPES.length)
     for (const id of RECIPE_IDS) expect(isRecipeId(id)).toBe(true)
-    for (const bad of [0, 4, '', 'iron_pickaxe', 'toString', '__proto__', null, undefined]) expect(isRecipeId(bad)).toBe(false)
+    for (const bad of [0, 4, '', 'mithril_pickaxe', 'toString', '__proto__', null, undefined]) expect(isRecipeId(bad)).toBe(false)
   })
 })
