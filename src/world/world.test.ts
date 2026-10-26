@@ -28,7 +28,7 @@ describe('mundo determinista', () => {
     const { darkpine, mithril_ore } = view.byKind
     expect(darkpine[0].count).toBeGreaterThan(0)
     expect(mithril_ore[0].count).toBeGreaterThan(0)
-    expect(computeWorldHash([...darkpine, ...mithril_ore])).toBe('519075ff')
+    expect(computeWorldHash([...darkpine, ...mithril_ore])).toBe('45edcf5f')
   })
 
   it('los arbustos son deterministas', () => {

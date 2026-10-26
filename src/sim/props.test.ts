@@ -77,11 +77,13 @@ describe('colocación de props', () => {
     expect(IRON_ORE_BAND.max).toBeLessThanOrEqual(MITHRIL_ORE_BAND.min)
   })
 
-  it('las menas de mithril son más pequeñas que las de hierro y los pinos oscuros más grandes que los abedules', () => {
-    const maxScale = (kind: PropKind) => Math.max(...ofKind(kind).map((p) => Math.max(p.scaleX, p.scaleZ)))
-    const minScale = (kind: PropKind) => Math.min(...ofKind(kind).map((p) => p.scaleX))
-    expect(maxScale('mithril_ore')).toBeLessThanOrEqual(1)
-    expect(minScale('darkpine')).toBeGreaterThanOrEqual(1.2)
+  it('las menas de mithril tienen escala 0,6–1 (las de hierro llegan a 1,6) y los pinos oscuros, 1,2–1,6', () => {
+    const scales = (kind: PropKind) => ofKind(kind).flatMap((p) => [p.scaleX, p.scaleY, p.scaleZ])
+    expect(Math.min(...scales('mithril_ore'))).toBeGreaterThanOrEqual(0.6)
+    expect(Math.max(...scales('mithril_ore'))).toBeLessThanOrEqual(1)
+    expect(Math.max(...scales('iron_ore'))).toBeGreaterThan(1.2)
+    expect(Math.min(...scales('darkpine'))).toBeGreaterThanOrEqual(1.2)
+    expect(Math.max(...scales('darkpine'))).toBeLessThanOrEqual(1.6)
   })
 
   it('los tipos nuevos no mueven el punto de aparición, quedan lejos de él y no se solapan con nada', () => {

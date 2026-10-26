@@ -207,7 +207,7 @@ export function buildPropPlacements(): PropPlacement[] {
   scatter(mithrilRng, MITHRIL_ORE_COUNT, (x, z, y) => {
     // Más pequeñas que las de hierro: caben más en las cimas.
     const sx = 0.6 + mithrilRng() * 0.4
-    const sy = 0.5 + mithrilRng() * 0.3
+    const sy = 0.6 + mithrilRng() * 0.4
     const sz = 0.6 + mithrilRng() * 0.4
     const rx = mithrilRng() * Math.PI
     const ry = mithrilRng() * Math.PI * 2

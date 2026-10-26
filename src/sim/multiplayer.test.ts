@@ -321,8 +321,11 @@ describe('Simulation con varios jugadores', () => {
       const actions = Array.from({ length: times }, () => ({ kind: 'craft' as const, recipe }))
       return ofType(stepAll(sim, { 0: { actions } }), 'playerCrafted').length
     }
+    /** Selecciona `item`, o una casilla vacía de la hotbar si es null (a mano). */
     const hold = (item: ItemId | null) => {
-      if (item) stepAll(sim, { 0: { actions: [{ kind: 'select', slot: inventory.slots.indexOf(item) }] } })
+      const slot = inventory.slots.indexOf(item)
+      expect(slot, `casilla de ${item}`).toBeGreaterThanOrEqual(0)
+      stepAll(sim, { 0: { actions: [{ kind: 'select', slot }] } })
     }
     /** Rompe props de `kind` (el más cercano al claro cada vez) hasta tener `amount` de lo que sueltan, y lo recoge. */
     const gather = (kind: PropData['kind'], amount: number, tool: ItemId | null) => {
@@ -353,6 +356,10 @@ describe('Simulation con varios jugadores', () => {
 
     // A mano solo caen árboles: la roca no.
     gather('tree', 5, null)
+    const rock = sim.world.props.find((p) => p.kind === 'rock')!
+    const look = aimAt(sim, 0, rock)
+    for (let t = 0; t < 60; t++) stepAll(sim, { 0: { ...look, buttons: Btn.Attack } })
+    expect(rock.hp).toBe(rock.maxHp)
     expect(craft('wood_pickaxe')).toBe(1)
     gather('rock', 5 + 5 + 12 + 6, 'wood_pickaxe')
     gather('tree', 10 + 3 + 3 + 4 + 10, null)

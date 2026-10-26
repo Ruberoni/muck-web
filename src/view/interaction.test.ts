@@ -403,17 +403,24 @@ describe('herramientas', () => {
     expect(other.alive).toBe(false)
   })
 
-  it('el pino oscuro solo cae con hacha de hierro o mejor, y da madera oscura', () => {
+  it('el pino oscuro solo cae con hacha de hierro (3 golpes) o de mithril (2), y da madera oscura', () => {
     const pine = firstOf('darkpine')
     equip('stone_axe')
     ctx.aimAt(pine)
     ctx.hold(STEP)
     expect(pine.hp).toBe(pine.maxHp)
+    expect(ctx.events.some((e) => e.type === 'propHit')).toBe(false)
     ctx.reset()
     equip('iron_axe')
     ctx.aimAt(pine)
     ctx.hold(STEP + HIT_COOLDOWN * 2)
     expect(pine.alive).toBe(false)
     expect(ctx.onGround('dark_wood')).toBe(4)
+    ctx.reset()
+    const other = ctx.world.props.find((p) => p.kind === 'darkpine' && p.alive)!
+    equip('mithril_axe')
+    ctx.aimAt(other)
+    ctx.hold(STEP + HIT_COOLDOWN)
+    expect(other.alive).toBe(false)
   })
 })

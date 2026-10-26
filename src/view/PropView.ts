@@ -20,9 +20,9 @@ import {
   type PropPlacement,
 } from '../sim/props'
 
-// Las geometrías son por familia (abedul y pino oscuro tienen la forma del árbol y las menas la de la roca) y los materiales por
-// tipo. sim/aim.ts construye las hitboxes de cada familia con las mismas caras (salvo las bayas y los cristales de
-// las menas, que son adorno): una geometría nueva tiene que llevarse también allí.
+// Las geometrías son por familia (abedul y pino oscuro tienen la forma del árbol y las menas la de la roca) y los
+// materiales por tipo. sim/aim.ts construye las hitboxes de cada familia con las mismas caras (salvo las bayas y los
+// cristales de las menas, que son adorno): una geometría nueva tiene que llevarse también allí.
 const trunkGeometry = new THREE.CylinderGeometry(TRUNK_TOP_RADIUS, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, TRUNK_SIDES).translate(0, TRUNK_HEIGHT / 2, 0)
 const foliageGeometry = new THREE.ConeGeometry(FOLIAGE_RADIUS, FOLIAGE_HEIGHT, FOLIAGE_SIDES).translate(0, FOLIAGE_BASE + FOLIAGE_HEIGHT / 2, 0)
 const rockGeometry = new THREE.IcosahedronGeometry(ROCK_RADIUS, 0)
