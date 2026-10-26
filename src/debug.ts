@@ -182,7 +182,11 @@ export function installDebug(game: Game) {
     /** Las casillas de la mochila (9–26). */
     backpack: () => inventory().slots.slice(SLOT_COUNT),
     give: (item: ItemId, amount = 1) => dev({ op: 'give', item, amount }, () => inventory().add(item, amount)),
-    select: (index: number) => game.queueAction({ kind: 'select', slot: index }),
+    select: (index: number) => {
+      // En red, una casilla fuera de la hotbar hace que la sala expulse al jugador.
+      if (!Number.isInteger(index) || index < 0 || index >= SLOT_COUNT) throw new Error(`no existe la casilla ${index} de la hotbar`)
+      game.queueAction({ kind: 'select', slot: index })
+    },
     craft: (id: RecipeId) => {
       // En red, una receta que no existe hace que la sala expulse al jugador.
       if (!isRecipeId(id)) throw new Error(`no existe la receta ${id} (son ${RECIPE_IDS.join(', ')})`)

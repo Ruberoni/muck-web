@@ -129,7 +129,7 @@ describe('Inventory', () => {
     expect(inv.slots[1]).toBe(null)
     expect(inv.slots[INVENTORY_SIZE - 1]).toBe('wood')
     expect(changes).toBe(2)
-    for (const [from, to] of [[0, 0], [0, INVENTORY_SIZE], [-1, 0], [0.5, 1]]) expect(inv.move(from, to)).toBe(false)
+    for (const [from, to] of [[0, 0], [5, 6], [0, INVENTORY_SIZE], [-1, 0], [0.5, 1]]) expect(inv.move(from, to)).toBe(false)
     expect(changes).toBe(2)
     // Las cantidades no cambian, y lo que se agota libera su casilla en la mochila.
     expect(inv.toJSON()).toEqual({ wood: 3, stone: 2 })
@@ -170,6 +170,14 @@ describe('Inventory', () => {
     inv.select(-1)
     expect(inv.selected).toBe(1)
     inv.select(2)
+    expect(inv.selectedItem).toBe(null)
+  })
+
+  it('con menos casillas que la hotbar no se elige una que no existe', () => {
+    const inv = new Inventory(2)
+    inv.select(5)
+    expect(inv.selected).toBe(0)
+    inv.select(1)
     expect(inv.selectedItem).toBe(null)
   })
 

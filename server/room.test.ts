@@ -231,6 +231,9 @@ describe('Room', () => {
       const c = new Client(room, time, 'x')
       c.hello('join')
       time.advance(0)
+      // Ha entrado: lo que lo cierra es la acción, no un cmds sin asiento.
+      expect(c.welcome).toBeDefined()
+      expect(c.closed).toBe(null)
       c.cmds([], [c.action(data as ActionData, room.sim!.tick + 1)])
       time.advance(0)
       expect(c.closed, JSON.stringify(data)).toBe(CloseCode.Invalid)

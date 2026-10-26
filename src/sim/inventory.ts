@@ -85,10 +85,10 @@ export class Inventory {
     return this.counts.get(item) ?? 0
   }
 
-  /** Intercambia dos casillas (vacías o no). Devuelve false si alguna no existe o son la misma. */
+  /** Intercambia dos casillas. Devuelve false (sin avisar) si alguna no existe o no cambia nada (la misma, o dos vacías). */
   move(from: number, to: number): boolean {
     const valid = (i: number) => Number.isInteger(i) && i >= 0 && i < this.slots.length
-    if (!valid(from) || !valid(to) || from === to) return false
+    if (!valid(from) || !valid(to) || this.slots[from] === this.slots[to]) return false
     const item = this.slots[from]
     this.slots[from] = this.slots[to]
     this.slots[to] = item
@@ -97,7 +97,7 @@ export class Inventory {
   }
 
   select(index: number) {
-    if (index < 0 || index >= SLOT_COUNT || index === this.selected) return
+    if (index < 0 || index >= Math.min(SLOT_COUNT, this.slots.length) || index === this.selected) return
     this.selected = index
     this.emit()
   }

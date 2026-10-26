@@ -129,15 +129,19 @@ export function compactMoves(moves: readonly Move[]): MoveMsg[] {
 
 /**
  * `cmds` como texto que cabe en MAX_MESSAGE (uno más largo hace que la sala expulse): como mucho MAX_ACTIONS
- * acciones y, si aun así no cabe, sin las últimas. Las que se quedan fuera siguen sin confirmar y salen en un
- * envío siguiente.
+ * acciones y, si aun así no cabe, sin las últimas (la sala no se salta ningún `seq`). Las que se quedan fuera
+ * siguen sin confirmar: cada envío repite desde la última confirmada, así que salen cuando el servidor confirme
+ * las anteriores (~1 RTT), ya tarde para su tick (una corrección). Con las cotas reales no pasa (client.test.ts).
+ * Por si acaso, sin acciones se quitan también los `Move` más viejos (el servidor rellena los que faltan).
  */
 export function encodeCmds(cmds: Cmds): string {
   const actions = cmds.actions.slice(0, MAX_ACTIONS)
-  let data = JSON.stringify({ ...cmds, actions })
-  while (data.length > MAX_MESSAGE && actions.length) {
-    actions.pop()
-    data = JSON.stringify({ ...cmds, actions })
+  const moves = [...cmds.moves]
+  let data = JSON.stringify({ ...cmds, moves, actions })
+  while (data.length > MAX_MESSAGE && (actions.length || moves.length > 1)) {
+    if (actions.length) actions.pop()
+    else moves.shift()
+    data = JSON.stringify({ ...cmds, moves, actions })
   }
   return data
 }

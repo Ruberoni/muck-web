@@ -127,7 +127,7 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
     expect(slot.inventory.count('wood_axe')).toBe(1)
     expect(slot.inventory.count('campfire')).toBe(0)
     expect(slot.inventory.slots[26]).toBe('wood')
-    expect(slot.inventory.count('wood_pickaxe')).toBe(1)
+    expect(slot.inventory.slots[1]).toBe('wood_pickaxe')
     expect(client.predictor!.stats.corrections).toBe(0)
   })
 
@@ -507,6 +507,15 @@ describe('encodeCmds', () => {
     expect(sent.actions).toEqual(cmds.actions.slice(0, sent.actions.length))
     expect(sent.moves).toEqual(cmds.moves)
     expect(parseClientMessage(data).ok).toBe(true)
+  })
+
+  it('sin acciones que quitar, quita los Move más viejos', () => {
+    const cmds = big(TICK, SEQ)
+    const many: Cmds = { ...cmds, actions: [], moves: Array.from({ length: 4 }, () => cmds.moves).flat() }
+    expect(JSON.stringify(many).length).toBeGreaterThan(MAX_MESSAGE)
+    const sent = JSON.parse(encodeCmds(many))
+    expect(JSON.stringify(sent).length).toBeLessThanOrEqual(MAX_MESSAGE)
+    expect(sent.moves).toEqual(many.moves.slice(-sent.moves.length))
   })
 
   it('nunca manda más de MAX_ACTIONS', () => {

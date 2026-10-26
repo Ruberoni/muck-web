@@ -35,9 +35,14 @@ export interface KeyStep {
  */
 export function stepActions(queued: readonly ActionData[], k: KeyStep): { actions: ActionData[]; crafting: boolean } {
   const actions = [...queued]
-  // La casilla que quedará elegida tras las acciones de este paso.
+  // La casilla que quedará elegida y lo que habrá en cada una tras las acciones encoladas (fabricar no se tiene en
+  // cuenta: lo fabricado solo llega a la mano si cae justo en la casilla elegida, que estaba vacía).
   let selected = k.selected
-  for (const action of actions) if (action.kind === 'select') selected = action.slot
+  const slots = [...k.slots]
+  for (const action of actions) {
+    if (action.kind === 'select') selected = action.slot
+    else if (action.kind === 'move') [slots[action.from], slots[action.to]] = [slots[action.to], slots[action.from]]
+  }
   const crafting = k.presses.has('KeyC') ? !k.crafting : k.crafting
   for (let i = 0; i < SLOT_COUNT; i++) {
     if (!k.presses.has(`Digit${i + 1}`)) continue
@@ -53,7 +58,7 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
     actions.push({ kind: 'select', slot: selected })
   }
   if (k.presses.has(CLICK)) {
-    if (k.slots[selected] === 'campfire') actions.push({ kind: 'place' })
+    if (slots[selected] === 'campfire') actions.push({ kind: 'place' })
     else if (k.clickSwings) actions.push({ kind: 'swing' })
   }
   if (k.presses.has(EAT_KEY) || k.presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })
