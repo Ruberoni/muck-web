@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { BERRIES_PER_BUSH, PROP_DEFS, WOBBLE_DURATION } from '../sim/constants'
 import type { SimEventData } from '../sim/events'
 import {
@@ -19,8 +20,9 @@ import {
   type PropPlacement,
 } from '../sim/props'
 
-// Una geometría y un material por tipo, compartidos por todas las instancias. sim/aim.ts construye
-// las hitboxes con las mismas caras (salvo las bayas): una geometría nueva tiene que llevarse también allí.
+// Las geometrías son por familia (el abedul tiene la forma del árbol y la mena la de la roca) y los materiales por
+// tipo. sim/aim.ts construye las hitboxes de cada familia con las mismas caras (salvo las bayas y los cristales de
+// las menas, que son adorno): una geometría nueva tiene que llevarse también allí.
 const trunkGeometry = new THREE.CylinderGeometry(TRUNK_TOP_RADIUS, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, TRUNK_SIDES).translate(0, TRUNK_HEIGHT / 2, 0)
 const foliageGeometry = new THREE.ConeGeometry(FOLIAGE_RADIUS, FOLIAGE_HEIGHT, FOLIAGE_SIDES).translate(0, FOLIAGE_BASE + FOLIAGE_HEIGHT / 2, 0)
 const rockGeometry = new THREE.IcosahedronGeometry(ROCK_RADIUS, 0)
@@ -37,11 +39,85 @@ const berryGeometries = [
 ].map(([x, y, z]) => new THREE.IcosahedronGeometry(0.09, 0).translate(x, y, z))
 if (berryGeometries.length !== BERRIES_PER_BUSH) throw new Error('Una posición por baya')
 
-const trunkMaterial = new THREE.MeshStandardMaterial({ color: '#7a5230', flatShading: true })
-const foliageMaterial = new THREE.MeshStandardMaterial({ color: '#2f6f2e', flatShading: true })
-const rockMaterial = new THREE.MeshStandardMaterial({ color: '#9a978a', flatShading: true })
-const bushMaterial = new THREE.MeshStandardMaterial({ color: '#3d7d35', flatShading: true })
-const berryMaterial = new THREE.MeshStandardMaterial({ color: '#c2304a', flatShading: true })
+const BIRCH_ROWS = 12
+/**
+ * El tronco del árbol partido en franjas de altura (la misma superficie: cada cara es un trapecio plano) y con las
+ * marcas oscuras del abedul en los colores de los vértices.
+ */
+function birchTrunkGeometry() {
+  const geometry = new THREE.CylinderGeometry(TRUNK_TOP_RADIUS, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, TRUNK_SIDES, BIRCH_ROWS)
+    .translate(0, TRUNK_HEIGHT / 2, 0)
+    .toNonIndexed()
+  const position = geometry.getAttribute('position')
+  const colors = new Float32Array(position.count * 3)
+  const bark = new THREE.Color('#ece8dc')
+  const mark = new THREE.Color('#2f2c28')
+  for (let v = 0; v < position.count; v += 3) {
+    let cx = 0
+    let cy = 0
+    let cz = 0
+    for (let k = 0; k < 3; k++) {
+      cx += position.getX(v + k) / 3
+      cy += position.getY(v + k) / 3
+      cz += position.getZ(v + k) / 3
+    }
+    const row = Math.floor((cy / TRUNK_HEIGHT) * BIRCH_ROWS)
+    // CylinderGeometry pone el ángulo θ en x = sin θ, z = cos θ: así las dos mitades de cada cara caen en el mismo lado.
+    const theta = (Math.atan2(cx, cz) + Math.PI * 2) % (Math.PI * 2)
+    const side = Math.floor((theta / (Math.PI * 2)) * TRUNK_SIDES)
+    // Las tapas (sus tres vértices a la misma altura) quedan claras; en el resto, unas pocas caras oscuras sin patrón a la vista.
+    const y0 = position.getY(v)
+    const isCap = Math.abs(position.getY(v + 1) - y0) < 1e-6 && Math.abs(position.getY(v + 2) - y0) < 1e-6
+    const color = !isCap && (row * 5 + side * 2) % 7 === 0 ? mark : bark
+    for (let k = 0; k < 3; k++) color.toArray(colors, (v + k) * 3)
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  return geometry
+}
+
+/** Cristales que asoman de la mena (sobre el icosaedro de radio 1, en la mitad de arriba). Adorno: sin hitbox. */
+function crystalGeometry() {
+  const spots = [
+    [0.55, 0.62, 0.2],
+    [-0.5, 0.55, 0.45],
+    [0.05, 0.85, -0.45],
+    [-0.35, 0.4, -0.75],
+    [0.7, 0.3, -0.45],
+  ]
+  return mergeGeometries(
+    spots.map(([x, y, z]) => {
+      const d = new THREE.Vector3(x, y, z).normalize()
+      return new THREE.OctahedronGeometry(0.16, 0).scale(0.8, 1.4, 0.8).translate(d.x * 0.92, d.y * 0.92, d.z * 0.92)
+    }),
+  )
+}
+
+const material = (color: string, extra: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, ...extra })
+
+const berryMaterial = material('#c2304a')
+
+interface Part {
+  geometry: THREE.BufferGeometry
+  material: THREE.Material
+}
+
+/** Piezas de cada tipo: un InstancedMesh por pieza y tipo. En el arbusto, de la segunda en adelante son las bayas. */
+const PARTS: Record<PropKind, Part[]> = {
+  tree: [
+    { geometry: trunkGeometry, material: material('#7a5230') },
+    { geometry: foliageGeometry, material: material('#2f6f2e') },
+  ],
+  birch: [
+    { geometry: birchTrunkGeometry(), material: material('#ffffff', { vertexColors: true }) },
+    { geometry: foliageGeometry, material: material('#7fae45') },
+  ],
+  rock: [{ geometry: rockGeometry, material: material('#9a978a') }],
+  iron_ore: [
+    { geometry: rockGeometry, material: material('#7b7268') },
+    { geometry: crystalGeometry(), material: material('#c8743a', { metalness: 0.4, roughness: 0.5 }) },
+  ],
+  bush: [{ geometry: bushGeometry, material: material('#3d7d35') }, ...berryGeometries.map((geometry) => ({ geometry, material: berryMaterial }))],
+}
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
 const WOBBLE_AMOUNT = 0.12
@@ -62,13 +138,16 @@ function createInstanced(geometry: THREE.BufferGeometry, material: THREE.Materia
 }
 
 /**
- * Los props dibujados: un InstancedMesh por pieza (tronco, copa, roca, arbusto y cada baya), construido
- * desde las colocaciones. Sigue a la simulación por sus eventos: wobble al golpear, ocultar al romper
- * y bayas que se quitan y vuelven.
+ * Los props dibujados: un InstancedMesh por tipo y pieza (tronco y copa, roca, mena y sus cristales, arbusto y cada
+ * baya), construido desde las colocaciones. Sigue a la simulación por sus eventos: wobble al golpear, ocultar al
+ * romper y bayas que se quitan y vuelven.
  */
 export class PropView {
   readonly group = new THREE.Group()
+  /** Los meshes de los tipos de la isla original, con nombre (islandMeshes, tests). */
   readonly meshes
+  /** Los meshes de cada tipo, en el orden de sus piezas (PARTS). */
+  readonly byKind: Readonly<Record<PropKind, readonly THREE.InstancedMesh[]>>
   /** Todos los meshes. */
   readonly allMeshes: THREE.InstancedMesh[]
   /** Instancias de cada prop, por id. */
@@ -83,20 +162,21 @@ export class PropView {
 
   constructor(placements: readonly PropPlacement[]) {
     const count = (kind: PropKind) => placements.filter((p) => p.kind === kind).length
-    const trees = count('tree')
-    const bushCount = count('bush')
-    const trunks = createInstanced(trunkGeometry, trunkMaterial, trees)
-    const foliage = createInstanced(foliageGeometry, foliageMaterial, trees)
-    const rocks = createInstanced(rockGeometry, rockMaterial, count('rock'))
-    const bushes = createInstanced(bushGeometry, bushMaterial, bushCount)
-    const berries = berryGeometries.map((geometry) => createInstanced(geometry, berryMaterial, bushCount))
-    this.meshes = { trunks, foliage, rocks, bushes, berries }
-    this.allMeshes = [trunks, foliage, rocks, bushes, ...berries]
-    const meshesOf: Record<PropKind, THREE.InstancedMesh[]> = { tree: [trunks, foliage], rock: [rocks], bush: [bushes, ...berries] }
+    const kinds = Object.keys(PARTS) as PropKind[]
+    const meshesOf = Object.fromEntries(
+      kinds.map((kind) => {
+        const n = count(kind)
+        return [kind, PARTS[kind].map(({ geometry, material }) => createInstanced(geometry, material, n))]
+      }),
+    ) as Record<PropKind, THREE.InstancedMesh[]>
+    const [bushes, ...berries] = meshesOf.bush
+    this.byKind = meshesOf
+    this.meshes = { trunks: meshesOf.tree[0], foliage: meshesOf.tree[1], rocks: meshesOf.rock[0], bushes, berries }
+    this.allMeshes = kinds.flatMap((kind) => meshesOf[kind])
     const berryMeshes: THREE.InstancedMesh[] = berries
 
     const dummy = new THREE.Object3D()
-    const next: Record<PropKind, number> = { tree: 0, rock: 0, bush: 0 }
+    const next = Object.fromEntries(kinds.map((kind) => [kind, 0])) as Record<PropKind, number>
     for (const p of placements) {
       dummy.position.set(p.x, p.y, p.z)
       dummy.rotation.set(p.rotX, p.rotY, 0)
@@ -122,7 +202,7 @@ export class PropView {
     this.group.add(...this.allMeshes)
   }
 
-  /** Instancias del prop `id` (tronco y copa; roca; arbusto y sus bayas). */
+  /** Instancias del prop `id` (tronco y copa; roca; mena y cristales; arbusto y sus bayas). */
   instancesOf(id: number): readonly PropInstance[] {
     return this.instances[id] ?? []
   }

@@ -99,15 +99,19 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
     }
   })
 
-  // Árboles y rocas tienen las mismas caras que el modelo.
-  it.each(['tree', 'rock'] as const)('%s: el mismo objetivo en todos los rayos', (kind) => {
+  // Árboles, abedules y rocas tienen las mismas caras que el modelo (el tronco del abedul está partido en franjas,
+  // pero es la misma superficie).
+  it.each(['tree', 'birch', 'rock'] as const)('%s: el mismo objetivo en todos los rayos', (kind) => {
     const result = compare(propSamples(kind))
     expect(result.touched).toBeGreaterThan(800)
     expect(result.same).toBe(result.touched)
   })
 
-  it('arbusto: solo difiere en las bayas que sobresalen', () => {
-    const result = compare(propSamples('bush'))
+  it.each([
+    ['bush', 'las bayas'],
+    ['iron_ore', 'los cristales'],
+  ] as const)('%s: solo difiere en %s que sobresalen', (kind, _part) => {
+    const result = compare(propSamples(kind))
     expect(result.touched).toBeGreaterThan(800)
     expect(result.boxOnly).toBe(0)
     expect(result.same).toBe(result.touched - result.meshOnly)

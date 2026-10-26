@@ -78,6 +78,10 @@ const handle = mat('#8a5a32')
 const woodHead = mat('#c8955a')
 const stoneHead = mat('#9a978a')
 const bark = mat('#7a5230')
+const birchBark = mat('#ece8dc')
+const birchMark = mat('#2f2c28')
+const ore = mat('#7b7268')
+const oreVein = new THREE.MeshStandardMaterial({ color: '#c8743a', flatShading: true, metalness: 0.4, roughness: 0.5 })
 const berryRed = mat('#c2304a')
 const leaf = mat('#3d7d35')
 const meat = mat('#c75a5a')
@@ -147,6 +151,31 @@ function workbench() {
   return g
 }
 
+function birchLog() {
+  const g = new THREE.Group()
+  const tilt = (geometry: THREE.BufferGeometry) => geometry.rotateX(Math.PI / 2 - 0.3).translate(0, 0.08, -0.04)
+  g.add(part(tilt(new THREE.CylinderGeometry(0.06, 0.07, 0.36, 6)), birchBark))
+  // Dos marcas oscuras que asoman apenas del tronco (radio 0,07 abajo y 0,06 arriba).
+  const mark = (y: number) => {
+    const r = 0.065 - (y / 0.36) * 0.01 + 0.004
+    return tilt(new THREE.CylinderGeometry(r, r, 0.03, 6).translate(0, y, 0))
+  }
+  g.add(part(mergeGeometries([mark(0.07), mark(-0.08)]), birchMark))
+  return g
+}
+
+function oreChunk() {
+  const g = new THREE.Group()
+  g.add(part(new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.09, 0), ore))
+  const spots = [
+    [0.06, 0.14, 0.03],
+    [-0.05, 0.12, -0.05],
+    [0.02, 0.07, 0.08],
+  ]
+  g.add(part(mergeGeometries(spots.map(([x, y, z]) => new THREE.OctahedronGeometry(0.03, 0).translate(x, y, z))), oreVein))
+  return g
+}
+
 /** Modelo de un objeto a escala de la mano (también se usa, escalado, para los objetos en el suelo). */
 export function itemModel(item: ItemId): THREE.Group {
   switch (item) {
@@ -176,6 +205,10 @@ export function itemModel(item: ItemId): THREE.Group {
       return campfireBundle()
     case 'workbench':
       return workbench()
+    case 'birch_wood':
+      return birchLog()
+    case 'iron_ore':
+      return oreChunk()
   }
 }
 

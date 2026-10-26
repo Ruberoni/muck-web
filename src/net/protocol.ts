@@ -14,7 +14,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 11
+export const PROTOCOL_VERSION = 12
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -180,7 +180,7 @@ export interface Welcome {
   serverTick: number
   worldStartTick: number
   /** Las colocaciones de la isla: así los ids coinciden aunque el motor del cliente difiera en los últimos bits. */
-  placements: PropPlacement[]
+  placements: readonly PropPlacement[]
   state: WorldState
   you: You
   /** La isla guardada era de otra versión y se ha empezado una nueva con el mismo código. */

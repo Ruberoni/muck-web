@@ -14,12 +14,23 @@ describe('mundo determinista', () => {
     expect(computeWorldHash(islandMeshes(view))).toBe('50ef32fe')
   })
 
+  // Los tipos del PR 8 van en sus propios meshes y detrás en la lista: no cambian el hash anterior. Este es el suyo
+  // (referencia en Node; en Chromium, `__debug.levelPropsHash` da 'e93e8633'); los del PR 10 se añadirán detrás sin cambiarlo.
+  it('abedules y menas de hierro tienen su propio hash', () => {
+    const { birch, iron_ore } = view.byKind
+    expect(birch[0].count).toBeGreaterThan(0)
+    expect(iron_ore[0].count).toBeGreaterThan(0)
+    expect(computeWorldHash([...birch, ...iron_ore])).toBe('95333a1f')
+  })
+
   it('los arbustos son deterministas', () => {
     const again = new PropView(createPropWorld().placements)
     const { bushes, berries } = view.meshes
     expect(bushes.count).toBeGreaterThan(30)
     for (const mesh of berries) expect(mesh.count).toBe(bushes.count)
     expect(computeWorldHash([again.meshes.bushes, ...again.meshes.berries])).toBe(computeWorldHash([bushes, ...berries]))
+    // Referencia en Node: los tipos nuevos van detrás y con su propio stream, así que tampoco mueven los arbustos.
+    expect(computeWorldHash([bushes, ...berries])).toBe('0d7d3a36')
   })
 
   it('las posiciones de las colocaciones coinciden con las matrices de instancia', () => {

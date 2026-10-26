@@ -3,6 +3,7 @@ import { MAX_PLAYERS, PROTOCOL_VERSION, type Cmds, type Hello } from '../src/net
 import { ManualTime } from '../src/net/transport'
 import { Btn } from '../src/sim/commands'
 import { ENEMY_HARD_MAX } from '../src/sim/constants'
+import { generatePropPlacements } from '../src/sim/props'
 import { DAY_FRACTION } from '../src/sim/world/daycycle'
 import { LOOP_MS, MemoryStorage, Room, type Conn } from './room'
 
@@ -87,4 +88,26 @@ it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en 
   expect(mean).toBeLessThan(LOOP_MS / 2)
   // El §5.3 del plan estimaba ~30 KB/s en JSON con 8 jugadores y 24 enemigos; sin las tuplas del snap salían ~62.
   expect(kbPerSecond).toBeLessThan(40)
+})
+
+it('abrir una sala es barato: todas comparten las colocaciones y welcome sigue por debajo de 128 KB', () => {
+  /** Crea la sala y entra el primer jugador (es cuando se crea la simulación); devuelve lo que recibe. */
+  const open = (code: string) => {
+    const time = new ManualTime(1_000_000)
+    const room = new Room(code, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => 't', seed: () => 7 } })
+    const received: string[] = []
+    const hello: Hello = { type: 'hello', v: PROTOCOL_VERSION, t: 0, intent: 'create', room: code, name: 'J', tab: '0' }
+    room.message({ send: (data) => void received.push(data), close: () => {} }, JSON.stringify(hello))
+    return received
+  }
+  open('BENCH') // la primera genera (y memoiza) las colocaciones
+  const t0 = performance.now()
+  for (let i = 0; i < 20; i++) open('BENCH')
+  const perRoom = (performance.now() - t0) / 20
+  const welcome = open('BENCH').find((m) => m.includes('"welcome"')) ?? ''
+  console.log(`Abrir una sala: ${perRoom.toFixed(2)} ms; welcome de ${(welcome.length / 1024).toFixed(1)} KB`)
+  expect(welcome).not.toBe('')
+  expect(new Room('BENCH', { storage: new MemoryStorage(), clock: new ManualTime(0), scheduler: new ManualTime(0), random: { token: () => 't', seed: () => 7 } }).placements).toBe(generatePropPlacements())
+  expect(perRoom).toBeLessThan(25)
+  expect(welcome.length).toBeLessThan(128 * 1024)
 })
