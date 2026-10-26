@@ -373,6 +373,7 @@ describe('herramientas', () => {
     ctx.aimAt(birch)
     ctx.hold(STEP)
     expect(birch.hp).toBe(birch.maxHp)
+    expect(ctx.events.some((e) => e.type === 'propHit')).toBe(false)
     ctx.reset()
     equip('stone_axe')
     ctx.aimAt(birch)

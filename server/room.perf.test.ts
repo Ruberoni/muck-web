@@ -3,6 +3,7 @@ import { MAX_PLAYERS, PROTOCOL_VERSION, type Cmds, type Hello } from '../src/net
 import { ManualTime } from '../src/net/transport'
 import { Btn } from '../src/sim/commands'
 import { ENEMY_HARD_MAX } from '../src/sim/constants'
+import { generatePropPlacements } from '../src/sim/props'
 import { DAY_FRACTION } from '../src/sim/world/daycycle'
 import { LOOP_MS, MemoryStorage, Room, type Conn } from './room'
 
@@ -89,7 +90,7 @@ it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en 
   expect(kbPerSecond).toBeLessThan(40)
 })
 
-it('abrir una sala es barato: la isla se genera una vez y welcome sigue por debajo de 128 KB', () => {
+it('abrir una sala es barato: todas comparten las colocaciones y welcome sigue por debajo de 128 KB', () => {
   /** Crea la sala y entra el primer jugador (es cuando se crea la simulación); devuelve lo que recibe. */
   const open = (code: string) => {
     const time = new ManualTime(1_000_000)
@@ -106,6 +107,7 @@ it('abrir una sala es barato: la isla se genera una vez y welcome sigue por deba
   const welcome = open('BENCH').find((m) => m.includes('"welcome"')) ?? ''
   console.log(`Abrir una sala: ${perRoom.toFixed(2)} ms; welcome de ${(welcome.length / 1024).toFixed(1)} KB`)
   expect(welcome).not.toBe('')
+  expect(new Room('BENCH', { storage: new MemoryStorage(), clock: new ManualTime(0), scheduler: new ManualTime(0), random: { token: () => 't', seed: () => 7 } }).placements).toBe(generatePropPlacements())
   expect(perRoom).toBeLessThan(25)
   expect(welcome.length).toBeLessThan(128 * 1024)
 })

@@ -27,6 +27,14 @@ describe('herramienta que falta', () => {
     expect(swingFeedback(null, 'bush', true, true)).toEqual({ wobble: false, warn: false })
   })
 
+  it('el abedul pide el hacha de piedra y la mena de hierro el pico de piedra', () => {
+    expect(missingTool(null, 'birch')).toBe('hacha de piedra')
+    expect(missingTool('wood_axe', 'birch')).toBe('hacha de piedra')
+    expect(missingTool('stone_axe', 'birch')).toBeNull()
+    expect(missingTool('wood_pickaxe', 'iron_ore')).toBe('pico de piedra')
+    expect(missingTool('stone_pickaxe', 'iron_ore')).toBeNull()
+  })
+
   it('árboles y arbustos no piden nada', () => {
     expect(missingTool(null, 'tree')).toBeNull()
     expect(missingTool('wood_pickaxe', 'tree')).toBeNull()

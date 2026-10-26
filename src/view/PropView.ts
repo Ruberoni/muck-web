@@ -65,8 +65,9 @@ function birchTrunkGeometry() {
     // CylinderGeometry pone el ángulo θ en x = sin θ, z = cos θ: así las dos mitades de cada cara caen en el mismo lado.
     const theta = (Math.atan2(cx, cz) + Math.PI * 2) % (Math.PI * 2)
     const side = Math.floor((theta / (Math.PI * 2)) * TRUNK_SIDES)
-    // Las tapas (centro en el eje) quedan claras; en el resto, unas pocas caras oscuras sin patrón a la vista.
-    const isCap = Math.hypot(cx, cz) < TRUNK_TOP_RADIUS * 0.5
+    // Las tapas (sus tres vértices a la misma altura) quedan claras; en el resto, unas pocas caras oscuras sin patrón a la vista.
+    const y0 = position.getY(v)
+    const isCap = Math.abs(position.getY(v + 1) - y0) < 1e-6 && Math.abs(position.getY(v + 2) - y0) < 1e-6
     const color = !isCap && (row * 5 + side * 2) % 7 === 0 ? mark : bark
     for (let k = 0; k < 3; k++) color.toArray(colors, (v + k) * 3)
   }
@@ -138,9 +139,8 @@ function createInstanced(geometry: THREE.BufferGeometry, material: THREE.Materia
 
 /**
  * Los props dibujados: un InstancedMesh por tipo y pieza (tronco y copa, roca, mena y sus cristales, arbusto y cada
- * baya), construido
- * desde las colocaciones. Sigue a la simulación por sus eventos: wobble al golpear, ocultar al romper
- * y bayas que se quitan y vuelven.
+ * baya), construido desde las colocaciones. Sigue a la simulación por sus eventos: wobble al golpear, ocultar al
+ * romper y bayas que se quitan y vuelven.
  */
 export class PropView {
   readonly group = new THREE.Group()

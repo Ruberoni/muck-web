@@ -71,6 +71,8 @@ describe('colocación de props', () => {
     const before = findSpawn(gridOf(placements.slice(0, ORIGINAL_COUNT)))
     expect(findSpawn(gridOf(placements))).toEqual(before)
     expect(new Simulation(1).spawnCenter).toEqual(before)
+    // Referencia en Node, como el hash del mundo: la de antes del PR 8.
+    expect(before).toEqual({ x: 1.5590735034407721, z: -1.5521887162548624 })
     for (const p of placements.slice(ORIGINAL_COUNT)) {
       expect(Math.hypot(p.x - before.x, p.z - before.z) - p.radius).toBeGreaterThanOrEqual(SPAWN_EXCLUSION)
       for (const other of placements) {

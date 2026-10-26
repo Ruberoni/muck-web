@@ -19,7 +19,7 @@ const ATTEMPTS_PER_PROP = 400
 /** Hueco libre que deja el punto de aparición hasta el borde de cualquier prop. */
 const SPAWN_CLEARANCE = 3
 
-// Forma de cada tipo en espacio local (antes de rotar y escalar): la usan la vista y las hitboxes (aim.ts).
+// Forma de cada familia en espacio local (antes de rotar y escalar): la usan la vista y las hitboxes (aim.ts).
 export const TRUNK_TOP_RADIUS = 0.25
 export const TRUNK_BOTTOM_RADIUS = 0.35
 export const TRUNK_HEIGHT = 2.6

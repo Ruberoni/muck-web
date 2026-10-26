@@ -15,7 +15,7 @@ describe('mundo determinista', () => {
   })
 
   // Los tipos del PR 8 van en sus propios meshes y detrás en la lista: no cambian el hash anterior. Este es el suyo
-  // (también en Node); los del PR 10 se añadirán detrás sin cambiarlo.
+  // (referencia en Node; en Chromium, `__debug.levelPropsHash` da 'e93e8633'); los del PR 10 se añadirán detrás sin cambiarlo.
   it('abedules y menas de hierro tienen su propio hash', () => {
     const { birch, iron_ore } = view.byKind
     expect(birch[0].count).toBeGreaterThan(0)

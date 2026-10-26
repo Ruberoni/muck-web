@@ -155,8 +155,12 @@ function birchLog() {
   const g = new THREE.Group()
   const tilt = (geometry: THREE.BufferGeometry) => geometry.rotateX(Math.PI / 2 - 0.3).translate(0, 0.08, -0.04)
   g.add(part(tilt(new THREE.CylinderGeometry(0.06, 0.07, 0.36, 6)), birchBark))
-  // Dos marcas oscuras que asoman apenas del tronco.
-  g.add(part(mergeGeometries([0.07, -0.08].map((y) => tilt(new THREE.CylinderGeometry(0.067, 0.067, 0.03, 6).translate(0, y, 0)))), birchMark))
+  // Dos marcas oscuras que asoman apenas del tronco (radio 0,07 abajo y 0,06 arriba).
+  const mark = (y: number) => {
+    const r = 0.065 - (y / 0.36) * 0.01 + 0.004
+    return tilt(new THREE.CylinderGeometry(r, r, 0.03, 6).translate(0, y, 0))
+  }
+  g.add(part(mergeGeometries([mark(0.07), mark(-0.08)]), birchMark))
   return g
 }
 
