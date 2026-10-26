@@ -38,16 +38,20 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo) |
 | **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra para intercambiarlas. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
 | **C** | abrir el inventario con las recetas a la vista: clic en una receta la fabrica y **Mayúsculas + clic**, hasta 5 |
-| **Clic izquierdo** con la fogata en la mano | colocarla |
+| **Clic izquierdo** con la fogata o la mesa de trabajo en la mano | colocarla |
 | **Esc** | pausa |
 
 Los árboles se talan con 3 golpes (+4 madera) y las rocas se pican con 4 (+3 piedra). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas no vuelven. La madera y la piedra caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo.
 
-El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata también se animan.
+El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata o la mesa también se animan.
 
 ## Crafteo
 
-Las recetas están en la pantalla de inventario (**C** la abre directamente en ellas): hacha y pico de madera (5 de madera cada uno), hacha y pico de piedra (3 de madera y 5 de piedra) y la fogata. Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo. Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas.
+Las recetas están en la pantalla de inventario (**C** la abre directamente en ellas), agrupadas por estación. Sin estación: hacha y pico de madera (5 de madera cada uno), la fogata y la mesa de trabajo (10 de madera). En la mesa de trabajo: hacha y pico de piedra (3 de madera y 5 de piedra). Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas una mesa de trabajo cerca" si falta la mesa). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas.
+
+## Mesa de trabajo
+
+Se fabrica con 10 de madera y se coloca como la fogata, con vista previa. Se coloca de frente al jugador. Las recetas de mesa se fabrican a unos 3 m o menos de su borde (3,3 m), de cualquier mesa: es permanente y en una sala la comparten todos. No se puede atravesar, sale en el minimapa con un cuadrado y desaparece al reiniciarse la isla.
 
 ## Fogata
 
@@ -63,7 +67,7 @@ Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 
 
 ## Sonido y ajustes
 
-Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
+Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata o la mesa, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
 
 En el menú y en la pausa hay deslizadores para la sensibilidad del ratón, el campo de visión y el volumen. Se guardan en `localStorage` y se aplican al momento.
 

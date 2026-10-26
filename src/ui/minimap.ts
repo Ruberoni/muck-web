@@ -11,6 +11,7 @@ const RIM_INSET = 9
 /** Cómo se marca cada tipo de estructura: forma y color de cerca y de lejos (en el borde). */
 export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; near: string; far: string }> = {
   campfire: { shape: 'dot', near: '#ff8636', far: '#ffb347' },
+  workbench: { shape: 'square', near: '#d9a86a', far: '#ecc896' },
 }
 
 /** Un compañero en el minimapa. */

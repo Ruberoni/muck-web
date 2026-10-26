@@ -228,7 +228,7 @@ export function installDebug(game: Game) {
         const s = sim()
         const from = x !== undefined && z !== undefined ? { x, z } : player().pos
         const spot = structureSpot(from, yaw ?? player().yaw, STRUCTURE_DEFS[kind].radius, [s.world.grid, s.structures.grid])
-        return s.structures.place(spot, kind, slot().id) !== null
+        return s.structures.place(spot, kind, slot().id, yaw ?? player().yaw) !== null
       })
     },
     props: () => sim().world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),

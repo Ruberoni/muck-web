@@ -372,7 +372,7 @@ export class Room {
         const { pos, yaw } = slot.player
         const from = msg.x !== undefined && msg.z !== undefined ? { x: msg.x, z: msg.z } : pos
         const spot = structureSpot(from, msg.yaw ?? yaw, STRUCTURE_DEFS[msg.kind].radius, [sim.world.grid, sim.structures.grid])
-        sim.structures.place(spot, msg.kind, seat.id)
+        sim.structures.place(spot, msg.kind, seat.id, msg.yaw ?? yaw)
         break
       }
       case 'setPhase':

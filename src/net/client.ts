@@ -1,7 +1,6 @@
 import type { Clock } from '../../server/room'
 import type { ActionData, Move } from '../sim/commands'
-import { NO_STATIONS } from '../sim/crafting'
-import { ENEMY_DEF, STEP } from '../sim/constants'
+import { ENEMY_DEF, STATION_RANGE, STEP } from '../sim/constants'
 import type { EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
@@ -9,7 +8,7 @@ import type { Pickup } from '../sim/pickups'
 import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
-import { structureSpot } from '../sim/structures'
+import { stationNear, structureSpot } from '../sim/structures'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
 import { InterpBuffer, Interpolator, PresentationQueue, type Shown } from './interp'
 import { Predictor } from './predict'
@@ -368,7 +367,8 @@ export class NetClient {
         this.predictor = new Predictor(slot, {
           env: sim.env,
           canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, [sim.world.grid, sim.structures.grid]).valid,
-          ...NO_STATIONS,
+          // Como en la simulación: las estaciones del espejo, con el mismo alcance.
+          nearStation: (kind, pos) => stationNear(sim.structures.list, kind, pos, STATION_RANGE),
         })
         this.predictor.start(msg.serverTick, msg.you)
         this.clock.sync(now, msg.serverTick, msg)

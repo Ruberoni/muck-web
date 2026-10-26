@@ -138,6 +138,15 @@ function campfireBundle() {
   return g
 }
 
+function workbench() {
+  const g = new THREE.Group()
+  g.add(part(new THREE.BoxGeometry(0.2, 0.03, 0.13).translate(0, 0.13, 0), woodHead))
+  const legs = [-1, 1].flatMap((x) => [-1, 1].map((z) => new THREE.BoxGeometry(0.025, 0.12, 0.025).translate(x * 0.08, 0.06, z * 0.045)))
+  g.add(part(mergeGeometries(legs), bark))
+  g.add(part(new THREE.BoxGeometry(0.06, 0.025, 0.025).translate(0.03, 0.157, 0), stoneHead))
+  return g
+}
+
 /** Modelo de un objeto a escala de la mano (también se usa, escalado, para los objetos en el suelo). */
 export function itemModel(item: ItemId): THREE.Group {
   switch (item) {
@@ -165,6 +174,8 @@ export function itemModel(item: ItemId): THREE.Group {
       return rawMeat()
     case 'campfire':
       return campfireBundle()
+    case 'workbench':
+      return workbench()
   }
 }
 

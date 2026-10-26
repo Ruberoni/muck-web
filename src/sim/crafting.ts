@@ -1,7 +1,7 @@
 import type { Inventory, ItemId } from './inventory'
 import type { Vec3 } from './player'
 
-/** Estaciones junto a las que se fabrican algunas recetas (llegan con sus PRs; hasta entonces ninguna receta las pide). */
+/** Estaciones junto a las que se fabrican algunas recetas (el horno y el yunque llegan con su PR). */
 export type StationKind = 'workbench' | 'furnace' | 'anvil'
 
 /** Lo que fabricar necesita del mundo: si hay una estación de ese tipo al alcance desde `pos`. */
@@ -13,7 +13,7 @@ export interface CraftWorld {
 export const NO_STATIONS: CraftWorld = { nearStation: () => false }
 
 /** Identificador estable de una receta: es lo que viaja en `craft` y en `playerCrafted`. */
-export type RecipeId = 'wood_axe' | 'wood_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'campfire'
+export type RecipeId = 'wood_axe' | 'wood_pickaxe' | 'campfire' | 'workbench' | 'stone_axe' | 'stone_pickaxe'
 
 export interface Recipe {
   id: RecipeId
@@ -27,9 +27,10 @@ export interface Recipe {
 export const RECIPES: readonly Recipe[] = [
   { id: 'wood_axe', result: 'wood_axe', cost: [{ item: 'wood', amount: 5 }], station: null },
   { id: 'wood_pickaxe', result: 'wood_pickaxe', cost: [{ item: 'wood', amount: 5 }], station: null },
-  { id: 'stone_axe', result: 'stone_axe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: null },
-  { id: 'stone_pickaxe', result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: null },
   { id: 'campfire', result: 'campfire', cost: [{ item: 'wood', amount: 6 }, { item: 'stone', amount: 3 }], station: null },
+  { id: 'workbench', result: 'workbench', cost: [{ item: 'wood', amount: 10 }], station: null },
+  { id: 'stone_axe', result: 'stone_axe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
+  { id: 'stone_pickaxe', result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
 ]
 
 const BY_ID = new Map<string, Recipe>(RECIPES.map((r) => [r.id, r]))

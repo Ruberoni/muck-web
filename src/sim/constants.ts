@@ -125,6 +125,8 @@ export const ENEMY_RETARGET_MARGIN = 3
 
 // Distancia por delante del jugador a la que se colocan la fogata y las demás estructuras (radios en structures.ts).
 export const PLACE_DISTANCE = 2.2
+// Alcance de una estación al fabricar: en horizontal, del centro del jugador al borde de la estación.
+export const STATION_RANGE = 3.5
 // Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.
 export const CAMPFIRE_LIGHTS = 4
 export const CAMPFIRE_LIGHT_INTENSITY = 30
