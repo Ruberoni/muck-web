@@ -22,6 +22,7 @@ describe('teclas a acciones', () => {
     const { actions, crafting } = step(digits, { crafting: true })
     expect(crafting).toBe(true)
     expect(actions).toEqual(RECIPES.map((_, i) => ({ kind: 'craft', recipe: i })))
+    // Condición previa de la prueba: con tantas recetas como casillas no quedarían teclas de más que filtrar.
     expect(RECIPES.length).toBeLessThan(SLOT_COUNT)
   })
 

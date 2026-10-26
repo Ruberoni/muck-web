@@ -3,7 +3,7 @@ import { failureMessage, NetError, NetSession } from '../net/netSession'
 import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
 import { onVersionReject, reloadFor } from '../net/reload'
 import { LocalSession } from '../net/session'
-import { NEW_VERSION, OLD_SERVER_RETRY_MS, SERVER_UPDATING } from '../net/status'
+import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
 const NAME_KEY = 'muck-web:name'
 const DEFAULT_NAME = 'Jugador'
@@ -178,35 +178,47 @@ export function installLobby(game: Game) {
       await game.play()
     } catch (e) {
       busy = false
-      if (!(e instanceof NetError && e.reject?.reason === 'version' && waitForVersion(e.reject.v, open, room))) error = await failureMessage(e, room)
+      if (!waitForVersion(e, open, room)) error = await failureMessage(e, room)
       update()
     }
   }
 
   /**
    * La sala es de otra versión: recarga la página (servidor más nuevo; al volver, "Unirse a…" espera el clic) o lo
-   * reintenta cada poco (más viejo: Pages se despliega antes que el Worker). false si no hay nada que esperar.
+   * reintenta cada poco (más viejo: Pages se despliega antes que el Worker). Mientras se espera al servidor viejo,
+   * un corte pasajero (el Worker redesplegándose) también se reintenta. false si no hay nada que esperar.
    */
-  function waitForVersion(serverV: number | undefined, open: () => Promise<NetSession>, room: string): boolean {
-    const action = onVersionReject(serverV, oldServerSince)
+  function waitForVersion(error: unknown, open: () => Promise<NetSession>, room: string): boolean {
+    const reject = error instanceof NetError ? error.reject : null
+    if (reject?.reason !== 'version') {
+      const code = error instanceof NetError ? error.code : null
+      if (oldServerSince === null || !shouldReconnect(reject, code) || Date.now() - oldServerSince >= OLD_SERVER_FOR_MS) return false
+      retryLater(open, room)
+      return true
+    }
+    const action = onVersionReject(reject.v, oldServerSince)
     if (action === 'lost') {
       oldServerSince = null
       return false
     }
     if (action === 'retry') {
       oldServerSince ??= Date.now()
-      waiting = SERVER_UPDATING
-      const timer = setTimeout(() => {
-        cancelWait = null
-        waiting = ''
-        void attempt(open, room)
-      }, OLD_SERVER_RETRY_MS)
-      cancelWait = () => clearTimeout(timer)
+      retryLater(open, room)
       return true
     }
     waiting = NEW_VERSION
-    cancelWait = reloadFor(serverV!, action === 'reload-later')
+    cancelWait = reloadFor(reject.v!, action === 'reload-later')
     return true
+  }
+
+  function retryLater(open: () => Promise<NetSession>, room: string) {
+    waiting = SERVER_UPDATING
+    const timer = setTimeout(() => {
+      cancelWait = null
+      waiting = ''
+      void attempt(open, room)
+    }, OLD_SERVER_RETRY_MS)
+    cancelWait = () => clearTimeout(timer)
   }
 
   nameInput.addEventListener('input', () => {

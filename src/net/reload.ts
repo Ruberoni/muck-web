@@ -1,9 +1,12 @@
 import { PROTOCOL_VERSION } from './protocol'
-import { RELOAD_EVERY_MS, versionAction, type ReloadMark, type VersionAction } from './status'
+import { nextMark, RELOAD_EVERY_MS, versionAction, type ReloadMark, type VersionAction } from './status'
 
 /** En `sessionStorage` (por pestaña): a qué versión del servidor se recargó y cuándo, para no recargar en bucle. */
 const MARK_KEY = 'muck-web:reloadedFor'
-/** En la URL tras una recarga por versión: así la petición no sale de la caché del navegador. */
+/**
+ * En la URL tras una recarga por versión, distinto en cada intento (`<versión>.<hora>`): Pages sirve el HTML con
+ * caché de 10 min, y volver a la misma URL podría devolver el cliente viejo de la caché del navegador.
+ */
 const VERSION_PARAM = 'v'
 
 function loadMark(): ReloadMark | null {
@@ -27,14 +30,14 @@ export function onVersionReject(serverV: number | undefined, waitingSince: numbe
  */
 export function reloadFor(serverV: number, later = false): () => void {
   const reload = () => {
+    const now = Date.now()
     try {
-      const mark = loadMark()
-      if (mark?.v !== serverV || mark.at > Date.now()) sessionStorage.setItem(MARK_KEY, JSON.stringify({ v: serverV, at: Date.now() } satisfies ReloadMark))
+      sessionStorage.setItem(MARK_KEY, JSON.stringify(nextMark(loadMark(), serverV, now)))
     } catch {
       // Sin almacenamiento no hay protección contra el bucle, pero tras recargar hace falta un clic para volver a entrar.
     }
     const url = new URL(location.href)
-    url.searchParams.set(VERSION_PARAM, String(serverV))
+    url.searchParams.set(VERSION_PARAM, `${serverV}.${now}`)
     location.replace(url)
   }
   if (!later) {
@@ -55,5 +58,5 @@ export function versionAccepted() {
   const url = new URL(location.href)
   if (!url.searchParams.has(VERSION_PARAM)) return
   url.searchParams.delete(VERSION_PARAM)
-  history.replaceState(history.state, '', url)
+  history.replaceState(null, '', url)
 }

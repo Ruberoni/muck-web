@@ -119,6 +119,8 @@ export class NetSession implements Session {
   /** Desde cuándo (Date.now()) el servidor es más viejo que el cliente al reconectar. */
   private oldServerSince: number | null = null
   private cancelReload: (() => void) | null = null
+  /** Un intento de volver a entrar en marcha: `wake` no lanza otro en paralelo. */
+  private connecting = false
 
   private constructor(
     public client: NetClient,
@@ -217,7 +219,7 @@ export class NetSession implements Session {
     this.pinger = null
     this.client.wake()
     // Con una recarga por versión pendiente no se reintenta: el mismo cliente volvería a ser rechazado.
-    if (this.status === 'reconnecting' && this.retry === null && this.cancelReload === null) this.startReconnecting()
+    if (this.status === 'reconnecting' && this.retry === null && !this.connecting && this.cancelReload === null) this.startReconnecting()
   }
 
   /**
@@ -269,6 +271,7 @@ export class NetSession implements Session {
     if (this.leaving || this.status !== 'reconnecting') return
     const { room, name, url } = this
     const token = this.client.token
+    this.connecting = true
     try {
       const { client, transport } = await connectClient({ intent: 'join', room, name, tab: TAB, ...(token ? { token } : {}) }, url)
       if (this.leaving) return client.close()
@@ -280,6 +283,8 @@ export class NetSession implements Session {
       if (reject?.reason === 'version') return this.onVersion(reject)
       if (shouldReconnect(reject, code) && performance.now() - this.reconnectSince < RECONNECT_FOR_MS) this.scheduleRetry()
       else this.lose(reject, code)
+    } finally {
+      this.connecting = false
     }
   }
 
@@ -298,6 +303,7 @@ export class NetSession implements Session {
         this.waitReason = SERVER_UPDATING
         // El servidor contesta: el minuto de reintentos por cortes cuenta desde ahora.
         this.reconnectSince = performance.now()
+        if (this.retry !== null) clearTimeout(this.retry)
         this.retry = setTimeout(() => {
           this.retry = null
           void this.reconnect()

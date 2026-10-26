@@ -135,7 +135,7 @@ export class Game {
     this.scene = scene
     this.sky = sky
     this.water = water
-    this.propView = this.buildPropView()
+    this.propView = this.buildPropView(null)
     this.campfireView = new CampfireView(scene)
     scene.add(this.enemyView.group, this.pickupView.group, this.remotePlayers.group)
     this.lookFromPlayer()
@@ -195,7 +195,7 @@ export class Game {
     this.session = session
     this.bindInventory()
     this.setCrafting(false)
-    this.propView = this.buildPropView()
+    this.propView = this.buildPropView(this.propView)
     this.resetViews()
     this.worldVersion = -1
     // El espectador es de la sala que se deja: en la nueva se vuelve a decidir con su `you`.
@@ -221,6 +221,8 @@ export class Game {
       this.acc = 0
       this.retrying = false
     }
+    // El espectador registra teclas que solo consume con ticks: las que queden no se aplican al reaparecer.
+    if (state === 'playing' && this.state === 'spectating') this.input.takePresses()
     if (state === 'spectating') {
       this.snapSpectator = true
       this.setCrafting(false)
@@ -437,7 +439,7 @@ export class Game {
   private reconnected(net: NetSession) {
     this.netGeneration = net.generation
     this.bindInventory()
-    this.propView = this.buildPropView()
+    this.propView = this.buildPropView(this.propView)
     this.resetViews()
     this.worldVersion = -1
     this.snapPlayer = true
@@ -595,10 +597,8 @@ export class Game {
    * del servidor: las locales no valen, porque `heightAt` difiere en los últimos bits entre motores (la `y` siempre, y
    * con props cerca de un umbral, hasta qué prop lleva cada id). Por eso no se compara: se rehace siempre.
    */
-  private buildPropView(): PropView {
+  private buildPropView(old: PropView | null): PropView {
     const view = new PropView(this.sim.world.placements)
-    // En el constructor aún no hay vista anterior.
-    const old = this.propView as PropView | undefined
     if (old) {
       this.scene.remove(old.group)
       old.dispose()

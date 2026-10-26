@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CloseCode } from './protocol'
-import { closeMessage, explainClose, OLD_SERVER_FOR_MS, QUOTA, reconnectDelay, RELOAD_FOR_MS, SERVER_DOWN, shouldReconnect, statusUrl, versionAction } from './status'
+import { CloseCode, PROTOCOL_VERSION } from './protocol'
+import { closeMessage, explainClose, nextMark, OLD_SERVER_FOR_MS, QUOTA, reconnectDelay, RELOAD_FOR_MS, SERVER_DOWN, shouldReconnect, statusUrl, versionAction } from './status'
 
 const answer = (ok: boolean) => (async () => ({ ok }) as Response) as typeof fetch
 const unreachable = (async () => {
@@ -58,6 +58,19 @@ describe('estado de la conexión', () => {
       expect(versionAction(8, 7, null, null, now)).toBe('retry')
       expect(versionAction(8, 7, { v: 7, at: now }, now - OLD_SERVER_FOR_MS + 1, now)).toBe('retry')
       expect(versionAction(8, 7, null, now - OLD_SERVER_FOR_MS, now)).toBe('lost')
+    })
+
+    it('al recargar otra vez por la misma versión, la marca no se renueva (si no, el plazo no acabaría nunca)', () => {
+      const first = { v: 8, at: now - 60_000 }
+      expect(nextMark(first, 8, now)).toBe(first)
+      expect(nextMark(null, 8, now)).toEqual({ v: 8, at: now })
+      expect(nextMark(first, 9, now)).toEqual({ v: 9, at: now })
+      expect(nextMark({ v: 8, at: now + 1000 }, 8, now)).toEqual({ v: 8, at: now })
+    })
+
+    it('rendirse con el servidor viejo no pide recargar: el cliente ya es el nuevo', () => {
+      expect(closeMessage({ type: 'reject', reason: 'version', v: PROTOCOL_VERSION - 1 }, 4000)).toContain('aún no se ha actualizado')
+      expect(closeMessage({ type: 'reject', reason: 'version', v: PROTOCOL_VERSION + 1 }, 4000)).toContain('recarga')
     })
 
     it('sin versión en el rechazo (o la misma) no hay nada que esperar', () => {
