@@ -102,8 +102,9 @@ export class GameAudio {
    */
   events(list: readonly SimEvent[], me: PlayerId, propKind: (id: number) => PropKind) {
     const s = this.sound
-    // Recoger varias piezas en el mismo paso suena una sola vez.
+    // Recoger varias piezas en el mismo paso suena una sola vez, y fabricar varias (Mayúsculas + clic), también.
     let collected = false
+    const crafted = new Set<number>()
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
@@ -133,7 +134,8 @@ export class GameAudio {
           if (e.id === me) s.play('eat')
           break
         case 'playerCrafted':
-          if (e.id === me) s.play('craft')
+          if (e.id === me && !crafted.has(e.tick)) s.play('craft')
+          if (e.id === me) crafted.add(e.tick)
           break
         case 'playerDied':
           if (e.id === me) s.play('death')
@@ -154,6 +156,8 @@ export class GameAudio {
       const g = Math.max(gain, minGain)
       if (g > 0) this.sound.play(name, { gain: g, pan })
     }
+    // Lo que fabrica cada uno en un mismo paso suena una vez.
+    const crafted = new Set<string>()
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
@@ -175,7 +179,8 @@ export class GameAudio {
           at(e, REMOTE_HEARING.other, 'eat')
           break
         case 'playerCrafted':
-          at(e, REMOTE_HEARING.other, 'craft')
+          if (!crafted.has(`${e.id}:${e.tick}`)) at(e, REMOTE_HEARING.other, 'craft')
+          crafted.add(`${e.id}:${e.tick}`)
           break
         case 'playerDied':
           at(e, REMOTE_HEARING.hit, 'death', REMOTE_DEATH_GAIN)

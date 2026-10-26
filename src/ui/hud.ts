@@ -1,11 +1,11 @@
 import { ENEMY_DEF, PROP_DEFS } from '../sim/constants'
-import { canCraft, RECIPES } from '../sim/crafting'
 import { ITEM_NAMES, SLOT_COUNT, type Inventory } from '../sim/inventory'
 import type { Target } from '../sim/interaction'
 import { ICONS } from './icons'
 import { InventoryScreen } from './inventoryScreen'
 import { Minimap } from './minimap'
 import { MultiplayerHud } from './multiplayerHud'
+import { CRAFT_MANY } from './recipes'
 
 export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | null
 
@@ -33,7 +33,7 @@ const CONTROLS = `
     <li><kbd>Clic derecho</kbd> o <kbd>F</kbd> comer bayas</li>
     <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
     <li><kbd>Tab</kbd> o <kbd>E</kbd> inventario (clic en dos casillas: cambiarlas)</li>
-    <li><kbd>C</kbd> crafteo (con él abierto, 1–5 fabrica)</li>
+    <li><kbd>C</kbd> inventario con las recetas (clic: fabricar; <kbd>Mayús</kbd> + clic: hasta ${CRAFT_MANY})</li>
     <li><kbd>Clic</kbd> con la fogata en la mano: colocarla</li>
     <li><kbd>Enter</kbd> chat (en una sala)</li>
     <li><kbd>Esc</kbd> pausa</li>
@@ -51,7 +51,7 @@ export class Hud {
   readonly minimap: Minimap
   /** Lo que solo se ve en una sala: conexión, jugadores, avisos y nombres. */
   readonly net: MultiplayerHud
-  /** La pantalla de inventario (Tab o E), encima del resto del HUD. */
+  /** La pantalla de inventario y crafteo (Tab, E o C), encima del resto del HUD. */
   readonly inventory: InventoryScreen
   /** El texto del menú cuando hay lobby (los botones del panel deciden cómo jugar). */
   menuText: string | null = null
@@ -64,8 +64,6 @@ export class Hud {
   private day: HTMLElement
   private slots: { root: HTMLElement; icon: HTMLElement; count: HTMLElement }[] = []
   private held: HTMLElement
-  private crafting: HTMLElement
-  private recipes: HTMLElement[] = []
   private hurt: HTMLElement
   private crosshair: HTMLElement
   private overlay: HTMLElement
@@ -99,18 +97,6 @@ export class Hud {
       this.slots.push({ root: slot, icon: el('div', 'icon', slot), count: el('span', 'count', slot) })
     }
 
-    this.crafting = el('div', 'crafting', root)
-    el('h2', 'title', this.crafting).textContent = 'Crafteo'
-    RECIPES.forEach((recipe, i) => {
-      const row = el('div', 'recipe', this.crafting)
-      el('kbd', '', row).textContent = String(i + 1)
-      el('div', 'icon', row).innerHTML = ICONS[recipe.result]
-      el('span', 'name', row).textContent = ITEM_NAMES[recipe.result]
-      el('span', 'cost', row).textContent = recipe.cost.map(({ item, amount }) => `${amount} ${ITEM_NAMES[item].toLowerCase()}`).join(' + ')
-      this.recipes.push(row)
-    })
-    el('p', 'hint', this.crafting).textContent = 'C para cerrar'
-    this.crafting.hidden = true
     this.inventory = new InventoryScreen(root)
 
     this.overlay = el('div', 'overlay', container)
@@ -197,10 +183,6 @@ export class Hud {
     this.hurt.classList.add('active')
   }
 
-  setCrafting(open: boolean) {
-    this.crafting.hidden = !open
-  }
-
   setInventory(inventory: Inventory) {
     this.slots.forEach((slot, i) => {
       const item = inventory.slots[i]
@@ -212,7 +194,6 @@ export class Hud {
     })
     const held = inventory.selectedItem
     this.held.textContent = held ? ITEM_NAMES[held] : ''
-    RECIPES.forEach((recipe, i) => this.recipes[i].classList.toggle('available', canCraft(inventory, recipe)))
     this.inventory.setInventory(inventory)
   }
   setDay(day: number) {

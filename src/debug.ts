@@ -10,6 +10,7 @@ import { ENEMY_AIM_HEIGHT } from './sim/enemies'
 import { campfireSpot } from './sim/campfires'
 import { isRecipeId, RECIPE_IDS, type RecipeId } from './sim/crafting'
 import type { DevOp } from './net/protocol'
+import { CRAFT_MANY } from './ui/recipes'
 import { LocalSession } from './net/session'
 import { NetSession, startBot, type Bot } from './net/netSession'
 
@@ -187,10 +188,12 @@ export function installDebug(game: Game) {
       if (!Number.isInteger(index) || index < 0 || index >= SLOT_COUNT) throw new Error(`no existe la casilla ${index} de la hotbar`)
       game.queueAction({ kind: 'select', slot: index })
     },
-    craft: (id: RecipeId) => {
+    /** Fabrica como un clic en la receta (`times`: Mayúsculas + clic); los que no se puedan no se mandan. */
+    craft: (id: RecipeId, times = 1) => {
       // En red, una receta que no existe hace que la sala expulse al jugador.
       if (!isRecipeId(id)) throw new Error(`no existe la receta ${id} (son ${RECIPE_IDS.join(', ')})`)
-      game.queueAction({ kind: 'craft', recipe: id })
+      if (!Number.isInteger(times) || times < 1 || times > CRAFT_MANY) throw new Error(`times debe ser un entero de 1 a ${CRAFT_MANY}`)
+      for (let i = 0; i < times; i++) game.queueAction({ kind: 'craft', recipe: id })
     },
     /** Intercambia dos casillas del inventario (0–8 hotbar, 9–26 mochila). */
     move: (from: number, to: number) => {
@@ -198,7 +201,6 @@ export function installDebug(game: Game) {
       if (!valid(from) || !valid(to)) throw new Error(`casillas fuera de rango: ${from}, ${to}`)
       game.queueAction({ kind: 'move', from, to })
     },
-    setCrafting: (open: boolean) => game.setCrafting(open),
     /**
      * Abre (jugando) o cierra la pantalla de inventario. Cerrarla desde aquí no recaptura el ratón (no hay gesto del
      * usuario): vuelve a jugar sin él, como `start`.
