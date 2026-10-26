@@ -1,5 +1,6 @@
 import type { RecipeId } from './crafting'
 import type { ItemId } from './inventory'
+import type { StructureKind } from './structures'
 
 /** Identificador de jugador. Con un jugador siempre es LOCAL_PLAYER. */
 export type PlayerId = number
@@ -20,7 +21,7 @@ export type SimEventData =
   | { type: 'berryGrew'; id: number; hp: number }
   | { type: 'pickupSpawn'; id: number; item: ItemId; amount: number }
   | { type: 'pickupCollected'; id: number; by: PlayerId }
-  | { type: 'campfirePlaced'; id: number; x: number; y: number; z: number; rotY: number; by: PlayerId }
+  | { type: 'structurePlaced'; id: number; kind: StructureKind; x: number; y: number; z: number; rotY: number; by: PlayerId }
   | { type: 'enemySpawn'; id: number; x: number; z: number }
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId }
   | { type: 'enemyAttack'; id: number; target: PlayerId }
@@ -29,7 +30,8 @@ export type SimEventData =
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
-  | { type: 'playerPlaced'; id: PlayerId }
+  /** Ha colocado `item` (la estructura llega en su `structurePlaced`). */
+  | { type: 'playerPlaced'; id: PlayerId; item: ItemId }
   | { type: 'playerHurt'; id: PlayerId; dmg: number }
   | { type: 'playerDied'; id: PlayerId }
   | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }

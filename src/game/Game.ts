@@ -5,7 +5,7 @@ import { createScene, updateSky, type Sky } from '../scene'
 import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
-import { CampfireView } from '../view/CampfireView'
+import { StructureView } from '../view/StructureView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { Hud, type OverlayKind } from '../ui/hud'
@@ -13,7 +13,7 @@ import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
 import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
-import { campfireSpot, type CampfireSpot } from '../sim/campfires'
+import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { NO_STATIONS } from '../sim/crafting'
@@ -39,6 +39,8 @@ const overlayFor = (state: GameState): OverlayKind => (inGame(state) ? null : st
 const SHADOW_LOOK_AHEAD = 25
 // Distancia a la que deja de oírse una fogata.
 const CAMPFIRE_HEARING = 14
+/** Lo que dice el aviso al tener una estructura en la mano. */
+const PLACE_PROMPT: Record<StructureKind, string> = { campfire: 'Clic para colocar la fogata' }
 /** Los nombres flotan algo por encima de la cabeza. */
 const NAME_HEIGHT = EYE_HEIGHT + 0.55
 /** Por encima del suelo a esta altura (m), otro jugador está en el aire o flotando: sus pasos no suenan. */
@@ -72,7 +74,7 @@ export class Game {
   readonly input: Input
   readonly enemyView = new EnemyView()
   readonly pickupView = new PickupView()
-  readonly campfireView: CampfireView
+  readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView()
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
@@ -102,7 +104,7 @@ export class Game {
   /** Tras empezar o reanudar, el jugador se dibuja donde está, sin interpolar desde antes de la pausa. */
   private snapPlayer = true
   private shadowCenter = new THREE.Vector3()
-  private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
+  private spot: StructureSpot = { x: 0, y: 0, z: 0, valid: false }
   private sun = new THREE.Vector3()
   /** Acciones de `__debug` y de la pantalla de inventario (select, move, craft) para el siguiente paso. */
   private queued: ActionData[] = []
@@ -138,7 +140,7 @@ export class Game {
     this.sky = sky
     this.water = water
     this.propView = this.buildPropView(null)
-    this.campfireView = new CampfireView(scene)
+    this.structureView = new StructureView(scene)
     scene.add(this.enemyView.group, this.pickupView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
@@ -528,7 +530,7 @@ export class Game {
           if (e.id === slot.id) this.handheld.play('swing')
           break
         case 'playerPlaced':
-          if (e.id === slot.id) this.handheld.play('place', 'campfire')
+          if (e.id === slot.id) this.handheld.play('place', e.item)
           break
         case 'playerAte':
           // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
@@ -558,7 +560,7 @@ export class Game {
       switch (e.type) {
         case 'propDestroyed':
           return sim.world.props[e.id]
-        case 'campfirePlaced':
+        case 'structurePlaced':
           return e
         case 'enemyDied':
           return sim.enemies.list.find((en) => en.id === e.id)?.pos ?? playerAt(e.by)
@@ -668,12 +670,12 @@ export class Game {
     return view
   }
 
-  /** Vistas como la isla recién generada, sin enemigos, objetos, fogatas ni otros jugadores. */
+  /** Vistas como la isla recién generada, sin enemigos, objetos, estructuras ni otros jugadores. */
   private resetViews() {
     this.propView.reset()
     this.enemyView.reset()
     this.pickupView.reset()
-    this.campfireView.reset()
+    this.structureView.reset()
     this.remotePlayers.reset()
     this.audio.reset()
   }
@@ -698,7 +700,7 @@ export class Game {
 
   private render(alpha: number, dt: number, time: number) {
     const { sim, slot, net } = this
-    const { campfires, enemies } = sim
+    const { structures, enemies } = sim
     const p = slot.player
     // Espectador: la cámara (y el minimapa, las sombras y el oído) siguen al compañero al que mira.
     const watched = net && this.state === 'spectating' ? this.watched(net) : null
@@ -731,10 +733,10 @@ export class Game {
       this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
     )
     updateSky(this.sky, sim.clock.phase, this.shadowCenter)
-    this.campfireView.update(time, sim.clock.phase, this.renderPos, campfires.list)
-    const placing = this.state === 'playing' && slot.inventory.selectedItem === 'campfire'
-    const spot = placing ? campfireSpot(this.renderPos, look.yaw, [sim.world.grid, campfires.grid], this.spot) : null
-    this.campfireView.setGhost(spot)
+    this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
+    const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
+    const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, [sim.world.grid, structures.grid], this.spot) : null
+    this.structureView.setGhost(placing && spot && { kind: placing.kind, spot })
 
     this.hud.setHealth(p.health, HEALTH_MAX)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
@@ -742,7 +744,7 @@ export class Game {
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating' || this.state === 'inventory') this.hud.setPrompt('')
-    else if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
+    else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else this.hud.setTarget(slot.target)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(NO_STATIONS, p.pos)
@@ -751,7 +753,7 @@ export class Game {
       x: this.renderPos.x,
       z: this.renderPos.z,
       yaw: look.yaw,
-      campfires: campfires.list,
+      structures: structures.list,
       enemies: enemies.list,
       players: net?.client.shownPlayers.map(({ id, pose, data }) => ({ x: pose.x, z: pose.z, yaw: pose.yaw, color: playerCss(id), alive: data.alive })),
     })
@@ -785,7 +787,9 @@ export class Game {
   private updateAmbient(dt: number) {
     const { sim } = this
     let nearest = Infinity
-    for (const fire of sim.campfires.list) nearest = Math.min(nearest, Math.hypot(fire.x - this.renderPos.x, fire.z - this.renderPos.z))
+    for (const s of sim.structures.list) {
+      if (s.kind === 'campfire') nearest = Math.min(nearest, Math.hypot(s.x - this.renderPos.x, s.z - this.renderPos.z))
+    }
     // En una sala el mundo sigue en pausa, y su ambiente también. Con el inventario abierto también sigue.
     const online = this.net !== null && !this.net.closed
     this.sound.update(dt, {

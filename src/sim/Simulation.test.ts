@@ -149,7 +149,7 @@ describe('Simulation', () => {
     const SPLIT = 500
     for (let t = 1; t <= SPLIT; t++) step(a, script(a, t))
     expect(tree.alive).toBe(false)
-    expect(a.campfires.list.length).toBe(1)
+    expect(a.structures.list.length).toBe(1)
     expect(a.enemies.list.length).toBeGreaterThan(0)
     expect(a.slot(0).inventory.slots[15]).not.toBe(null)
 

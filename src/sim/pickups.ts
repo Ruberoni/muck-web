@@ -63,7 +63,7 @@ export class Pickups {
   readonly list: Pickup[] = []
   private nextId = 0
 
-  /** `grids`: obstáculos de los que se apartan al caer (props, fogatas…). */
+  /** `grids`: obstáculos de los que se apartan al caer (props, estructuras…). */
   constructor(
     private grids: SpatialGrid<Collider>[] = [],
     private rng: () => number = Math.random,

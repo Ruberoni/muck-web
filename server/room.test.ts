@@ -14,9 +14,9 @@ import {
 } from '../src/net/protocol'
 import { LaggyTransport, ManualTime, type Lag } from '../src/net/transport'
 import { Btn, type Action, type ActionData, type PlayerCommands } from '../src/sim/commands'
-import { EYE_HEIGHT } from '../src/sim/constants'
+import { EYE_HEIGHT, PLACE_DISTANCE } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
-import { campfireSpot } from '../src/sim/campfires'
+import { STRUCTURE_DEFS, structureSpot } from '../src/sim/structures'
 import { aimPose } from '../src/sim/interaction'
 import { INVENTORY_SIZE } from '../src/sim/inventory'
 import type { PropData } from '../src/sim/props'
@@ -657,14 +657,24 @@ describe('Room', () => {
     join(a)
     const sim = room.sim!
     const { x, z } = sim.spawnCenter
-    const spot = campfireSpot({ x: x - 2, z }, 0, [sim.world.grid, sim.campfires.grid])
+    const radius = STRUCTURE_DEFS.campfire.radius
+    // Dos sitios donde cabe una fogata, cerca del punto de aparición y lejos uno de otro.
+    const free: { x: number; z: number }[] = []
+    for (let i = 0; i < 400 && free.length < 2; i++) {
+      const at = { x: x + Math.cos(i) * (3 + i * 0.1), z: z + Math.sin(i) * (3 + i * 0.1) }
+      // El primero, mirando a -z; el segundo, a -x (yaw π/2).
+      const fits = structureSpot(at, free.length === 0 ? 0 : Math.PI / 2, radius, [sim.world.grid]).valid
+      if (fits && free.every((f) => Math.hypot(f.x - at.x, f.z - at.z) > 4)) free.push(at)
+    }
+    expect(free).toHaveLength(2)
     a.send({ type: 'dev', op: 'give', item: 'wood', amount: 5 })
     a.send({ type: 'dev', op: 'teleport', x: x + 1, z: z + 1, yaw: 1, pitch: 0.2 })
     a.send({ type: 'dev', op: 'setVitals', health: 50, hunger: 20 })
     a.send({ type: 'dev', op: 'setPhase', phase: 0.8 })
     a.send({ type: 'dev', op: 'spawnEnemy', x: x + 8, z })
-    a.send({ type: 'dev', op: 'placeCampfire', x: x - 2, z, yaw: 0 })
+    a.send({ type: 'dev', op: 'placeStructure', kind: 'campfire', x: free[0].x, z: free[0].z, yaw: 0 })
     time.advance(0)
+    expect(sim.structures.list).toMatchObject([{ kind: 'campfire', x: free[0].x, z: free[0].z - PLACE_DISTANCE }])
     const slot = sim.slot(a.id)
     expect(slot.inventory.count('wood')).toBe(5)
     expect(slot.player.pos.x).toBeCloseTo(x + 1)
@@ -674,12 +684,18 @@ describe('Room', () => {
     expect(slot.player.hunger).toBe(20)
     expect(sim.clock.phase).toBeCloseTo(0.8, 3)
     expect(sim.enemies.list).toHaveLength(1)
-    expect(sim.campfires.list).toHaveLength(spot.valid ? 1 : 0)
     play(time, LOOP_MS * 2, [[a]])
     const types = a.events.map((e) => e.type)
     expect(types).toContain('clockSet')
     expect(types).toContain('enemySpawn')
-    if (spot.valid) expect(types).toContain('campfirePlaced')
+    expect(types).toContain('structurePlaced')
+    // Sin (x, z) ni yaw: delante del jugador, hacia donde mira.
+    a.send({ type: 'dev', op: 'teleport', x: free[1].x, z: free[1].z, yaw: Math.PI / 2, pitch: 0 })
+    a.send({ type: 'dev', op: 'placeStructure', kind: 'campfire' })
+    time.advance(0)
+    expect(sim.structures.list).toHaveLength(2)
+    expect(sim.structures.list[1].x).toBeCloseTo(free[1].x - PLACE_DISTANCE)
+    expect(sim.structures.list[1].z).toBeCloseTo(free[1].z)
     expect(a.closed).toBeNull()
   })
 

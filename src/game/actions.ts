@@ -1,6 +1,7 @@
 import type { ActionData } from '../sim/commands'
 import { EAT_KEY } from '../sim/constants'
 import { cycleSlot, SLOT_COUNT, type ItemId } from '../sim/inventory'
+import { placeableOf } from '../sim/structures'
 import { CLICK, RIGHT_CLICK } from './input'
 
 /** Teclas que abren la pantalla de inventario jugando (y la cierran, desde la pantalla). */
@@ -26,7 +27,7 @@ export interface KeyStep {
 
 /**
  * Acciones de las pulsaciones de un paso, detrás de las ya encoladas (`queued`, de `__debug` o de la pantalla de
- * inventario). Los números y la rueda eligen casilla. El clic coloca la fogata si es lo que queda en la mano y, si
+ * inventario). Los números y la rueda eligen casilla. El clic coloca lo que queda en la mano si es colocable (la fogata) y, si
  * no, golpea. Devuelve también si se pide abrir la pantalla de inventario: Tab o E, en las casillas, o C, en las
  * recetas (null, si no). Fabricar se hace desde la pantalla.
  */
@@ -50,7 +51,7 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
     actions.push({ kind: 'select', slot: selected })
   }
   if (k.presses.has(CLICK)) {
-    if (slots[selected] === 'campfire') actions.push({ kind: 'place' })
+    if (placeableOf(slots[selected])) actions.push({ kind: 'place' })
     else if (k.clickSwings) actions.push({ kind: 'swing' })
   }
   if (k.presses.has(EAT_KEY) || k.presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })

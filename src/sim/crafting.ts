@@ -23,7 +23,7 @@ export interface Recipe {
   station: StationKind | null
 }
 
-// El orden solo sirve para la UI: es el de las teclas 1–5 con el menú de crafteo abierto.
+// El orden solo sirve para la UI: es el de la columna de recetas de la pantalla de inventario.
 export const RECIPES: readonly Recipe[] = [
   { id: 'wood_axe', result: 'wood_axe', cost: [{ item: 'wood', amount: 5 }], station: null },
   { id: 'wood_pickaxe', result: 'wood_pickaxe', cost: [{ item: 'wood', amount: 5 }], station: null },

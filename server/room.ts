@@ -21,7 +21,7 @@ import {
   type You,
 } from '../src/net/protocol'
 import { missingMove, MOVE_REPEAT, type Action, type Move, type PlayerCommands } from '../src/sim/commands'
-import { campfireSpot } from '../src/sim/campfires'
+import { STRUCTURE_DEFS, structureSpot } from '../src/sim/structures'
 import { STEP } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
 import { generatePropPlacements, type PropPlacement } from '../src/sim/props'
@@ -368,9 +368,13 @@ export class Room {
       case 'spawnEnemy':
         sim.enemies.spawnAt(msg.x, msg.z)
         break
-      case 'placeCampfire':
-        sim.campfires.place(campfireSpot({ x: msg.x, z: msg.z }, msg.yaw, [sim.world.grid, sim.campfires.grid]), seat.id)
+      case 'placeStructure': {
+        const { pos, yaw } = slot.player
+        const from = msg.x !== undefined && msg.z !== undefined ? { x: msg.x, z: msg.z } : pos
+        const spot = structureSpot(from, msg.yaw ?? yaw, STRUCTURE_DEFS[msg.kind].radius, [sim.world.grid, sim.structures.grid])
+        sim.structures.place(spot, msg.kind, seat.id)
         break
+      }
       case 'setPhase':
         sim.setPhase(msg.phase)
         break
@@ -606,12 +610,12 @@ export class Room {
 
   private worldState(me: PlayerId): WorldState {
     const sim = this.sim!
-    const { tick, worldStartTick, props, enemies, pickups, campfires } = sim.toJSON()
+    const { tick, worldStartTick, props, enemies, pickups, structures } = sim.toJSON()
     const names = new Map([...this.seats.values()].map((s) => [s.id, s.name]))
     const players = this.playerSnaps()
       .filter((p) => p.id !== me)
       .map((p) => ({ ...p, name: names.get(p.id) ?? '' }))
-    return { tick, worldStartTick, props, enemies, pickups, campfires, players }
+    return { tick, worldStartTick, props, enemies, pickups, structures, players }
   }
 
   private fullState(seat: Seat) {

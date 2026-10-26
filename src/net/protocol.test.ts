@@ -134,7 +134,9 @@ describe('protocolo', () => {
     expect(dev({ op: 'teleport', x: 1, z: 2, yaw: 3, pitch: 0.1 }).ok).toBe(true)
     expect(dev({ op: 'setVitals', hunger: 10 })).toEqual({ ok: true, msg: { type: 'dev', op: 'setVitals', hunger: 10 } })
     expect(dev({ op: 'spawnEnemy', x: 1, z: 2 }).ok).toBe(true)
-    expect(dev({ op: 'placeCampfire', x: 1, z: 2, yaw: 0 }).ok).toBe(true)
+    expect(dev({ op: 'placeStructure', kind: 'campfire', x: 1, z: 2, yaw: 0 }).ok).toBe(true)
+    expect(dev({ op: 'placeStructure', kind: 'campfire', extra: 1 })).toEqual({ ok: true, msg: { type: 'dev', op: 'placeStructure', kind: 'campfire' } })
+    expect(dev({ op: 'placeStructure', kind: 'campfire', yaw: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'placeStructure', kind: 'campfire', yaw: 2 } })
     expect(dev({ op: 'setPhase', phase: 0.5 }).ok).toBe(true)
     const bad = [
       { op: 'give', item: 'diamante', amount: 1 },
@@ -145,6 +147,12 @@ describe('protocolo', () => {
       { op: 'setVitals', health: -1 },
       { op: 'setVitals', hunger: 'mucha' },
       { op: 'spawnEnemy', x: 1 },
+      { op: 'placeStructure', kind: 'castillo' },
+      { op: 'placeStructure', kind: 'toString' },
+      { op: 'placeStructure', kind: 'campfire', x: 1 },
+      { op: 'placeStructure', kind: 'campfire', x: 1, z: NaN },
+      { op: 'placeStructure', kind: 'campfire', yaw: '0' },
+      { op: 'placeCampfire', x: 1, z: 2, yaw: 0 },
       { op: 'setPhase' },
       { op: 'fly' },
     ]

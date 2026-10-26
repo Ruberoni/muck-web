@@ -123,9 +123,8 @@ export const ENEMY_HARD_MAX = 24
 export const ENEMY_RETARGET = 0.5
 export const ENEMY_RETARGET_MARGIN = 3
 
-export const CAMPFIRE_RADIUS = 0.6
-// Distancia por delante del jugador a la que se coloca la fogata.
-export const CAMPFIRE_PLACE_DISTANCE = 2.2
+// Distancia por delante del jugador a la que se colocan la fogata y las demás estructuras (radios en structures.ts).
+export const PLACE_DISTANCE = 2.2
 // Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.
 export const CAMPFIRE_LIGHTS = 4
 export const CAMPFIRE_LIGHT_INTENSITY = 30

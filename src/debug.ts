@@ -7,7 +7,7 @@ import { islandMeshes } from './view/PropView'
 import { heightAt, WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './sim/constants'
 import { ENEMY_AIM_HEIGHT } from './sim/enemies'
-import { campfireSpot } from './sim/campfires'
+import { STRUCTURE_DEFS, STRUCTURE_KINDS, structureSpot, type StructureKind } from './sim/structures'
 import { isRecipeId, RECIPE_IDS, type RecipeId } from './sim/crafting'
 import type { DevOp } from './net/protocol'
 import { CRAFT_MANY } from './ui/recipes'
@@ -210,13 +210,27 @@ export function installDebug(game: Game) {
       else if (game.state === 'inventory') game.setState('playing')
       return game.state
     },
-    campfires: () => sim().campfires.list.map(({ id, x, y, z }) => ({ id, x, y, z })),
-    /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo (con un jugador). */
-    placeCampfire: (x: number, z: number, yaw = 0) =>
-      dev({ op: 'placeCampfire', x, z, yaw }, () => {
+    structures: () => sim().structures.list.map(({ id, kind, x, y, z }) => ({ id, kind, x, y, z })),
+    /**
+     * Coloca una estructura `kind` delante de (x, z) mirando a `yaw`, sin gastar materiales; sin (x, z), delante del
+     * jugador, y sin `yaw`, hacia donde mira. Devuelve si se pudo (con un jugador).
+     */
+    placeStructure: (kind: StructureKind, x?: number, z?: number, yaw?: number) => {
+      // En red, un tipo que no existe hace que la sala expulse al jugador.
+      if (!STRUCTURE_KINDS.includes(kind)) throw new Error(`no existe la estructura ${kind} (son ${STRUCTURE_KINDS.join(', ')})`)
+      if ((x === undefined) !== (z === undefined)) throw new Error('x y z van juntas')
+      // En red, un número no finito llega como null y la sala expulsa al jugador.
+      if ([x, z, yaw].some((n) => n !== undefined && !Number.isFinite(n))) throw new Error('x, z y yaw deben ser números finitos')
+      const op: DevOp = { op: 'placeStructure', kind }
+      if (x !== undefined && z !== undefined) Object.assign(op, { x, z })
+      if (yaw !== undefined) Object.assign(op, { yaw })
+      return dev(op, () => {
         const s = sim()
-        return s.campfires.place(campfireSpot({ x, z }, yaw, [s.world.grid, s.campfires.grid]), slot().id) !== null
-      }),
+        const from = x !== undefined && z !== undefined ? { x, z } : player().pos
+        const spot = structureSpot(from, yaw ?? player().yaw, STRUCTURE_DEFS[kind].radius, [s.world.grid, s.structures.grid])
+        return s.structures.place(spot, kind, slot().id) !== null
+      })
+    },
     props: () => sim().world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
     target: targetPropId,
     /** Objetos en el suelo, por recoger. */

@@ -120,8 +120,8 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
       return { buttons: at > 80 && at < 140 ? Btn.Back : 0, yaw: 0, pitch: 0, actions }
     }
     run(time, 4000, [[client, script]])
-    expect(room.sim!.campfires.list).toHaveLength(1)
-    expect(client.sim!.campfires.list).toHaveLength(1)
+    expect(room.sim!.structures.list).toHaveLength(1)
+    expect(client.sim!.structures.list).toHaveLength(1)
     expect(slot.inventory.save()).toEqual(client.predictor!.slot.inventory.save())
     expect(slot.inventory.count('berry')).toBe(1)
     expect(slot.inventory.count('wood_axe')).toBe(1)

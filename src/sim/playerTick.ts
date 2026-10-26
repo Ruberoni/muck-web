@@ -4,6 +4,7 @@ import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
 import { startSwing, type Fighter } from './interaction'
 import { stepPlayer, type Player, type PlayerEnv } from './player'
+import { placeableOf } from './structures'
 import { eat, stepSurvival } from './survival'
 
 // La parte de un tick que toca solo al jugador y que el cliente predice: acciones sobre su inventario,
@@ -91,11 +92,11 @@ export function movePlayer(actor: Actor, command: PlayerCommands | undefined, en
 }
 
 /**
- * Lo que hacen las manos en este paso: si empieza un golpe y si toca colocar la fogata. Con la fogata en la mano
- * el clic la coloca en vez de golpear, y no queda ningún golpe pendiente.
+ * Lo que hacen las manos en este paso: si empieza un golpe y si toca colocar lo que se lleva. Con algo colocable
+ * en la mano (PLACEABLE_DEFS) el clic lo coloca en vez de golpear, y no queda ningún golpe pendiente.
  */
 export function useHands(actor: Actor, intent: Intent): { swing: boolean; place: boolean } {
-  const placing = actor.inventory.selectedItem === 'campfire'
+  const placing = placeableOf(actor.inventory.selectedItem) !== null
   if (placing) actor.combat.pendingSwing = false
   const swing = startSwing(actor.combat, STEP, !placing && intent.attack, !placing && intent.swing)
   return { swing, place: placing && intent.place }
@@ -117,15 +118,15 @@ function eatBerry(actor: Actor, emit: Emit) {
 /** Lo que la predicción necesita del mundo del cliente: `nearStation` mira las estaciones de su espejo. */
 export interface PredictWorld extends CraftWorld {
   env: PlayerEnv
-  /** Si una fogata colocada desde aquí caería en un sitio válido (campfireSpot contra las rejillas del cliente). */
-  canPlace(player: Player): boolean
+  /** Si una estructura de radio `radius` colocada desde aquí caería en un sitio válido (structureSpot contra las rejillas del cliente). */
+  canPlace(player: Player, radius: number): boolean
   emit: Emit
 }
 
 /**
  * Un tick del jugador del cliente sin tocar el mundo: lo mismo que hace `Simulation.step` con él, salvo lo que
  * depende de los demás (daño de enemigos, golpes que aciertan, recogidas y bayas) y sin consumir el azar.
- * `place` gasta la fogata si el sitio es válido, pero no la crea: la crea el servidor y llega en su evento.
+ * `place` gasta lo que se coloca si el sitio es válido, pero no crea la estructura: la crea el servidor y llega en su evento.
  * Emite lo que el jugador hace (golpe con el objetivo que dice tener delante, fabricar, comer, colocar).
  * Devuelve si empieza un golpe.
  */
@@ -135,9 +136,11 @@ export function predictPlayer(actor: Actor, command: PlayerCommands | undefined,
   movePlayer(actor, command, world.env)
   const hands = useHands(actor, intent)
   if (hands.swing) world.emit({ type: 'playerSwing', id: actor.id, item: actor.inventory.selectedItem, target: intent.aim ?? null })
-  if (hands.place && world.canPlace(actor.player)) {
-    world.emit({ type: 'playerPlaced', id: actor.id })
-    actor.inventory.remove('campfire', 1)
+  const placed = hands.place ? placeableOf(actor.inventory.selectedItem) : null
+  if (placed && world.canPlace(actor.player, placed.radius)) {
+    const item = actor.inventory.selectedItem!
+    world.emit({ type: 'playerPlaced', id: actor.id, item })
+    actor.inventory.remove(item, 1)
   }
   finishPlayerTick(actor, intent, world.emit)
   return hands.swing

@@ -14,8 +14,8 @@ const GROWL_MIN_INTERVAL = 2.5
 const GROWL_RANDOM_INTERVAL = 4
 const IMPACT = { tree: 'hitWood', rock: 'hitStone', bush: 'hitBush' } as const
 
-/** Hasta dónde se oye lo que hacen los demás (§8 del plan): golpes y roturas, fogatas, daño, pasos y lo demás. */
-export const REMOTE_HEARING = { hit: 30, campfire: 25, hurt: 20, step: 15, other: 15 } as const
+/** Hasta dónde se oye lo que hacen los demás (§8 del plan): golpes y roturas, colocar estructuras, daño, pasos y lo demás. */
+export const REMOTE_HEARING = { hit: 30, place: 25, hurt: 20, step: 15, other: 15 } as const
 /** La muerte de otro se oye siempre, aunque esté lejos (con esta ganancia como mínimo). */
 export const REMOTE_DEATH_GAIN = 0.35
 
@@ -124,7 +124,7 @@ export class GameAudio {
           if (e.by === me && !collected) this.pickup()
           collected ||= e.by === me
           break
-        case 'campfirePlaced':
+        case 'structurePlaced':
           s.play('place')
           break
         case 'playerHurt':
@@ -169,8 +169,8 @@ export class GameAudio {
         case 'enemyDied':
           at(e, REMOTE_HEARING.hit, 'enemyDeath')
           break
-        case 'campfirePlaced':
-          at(e, REMOTE_HEARING.campfire, 'place')
+        case 'structurePlaced':
+          at(e, REMOTE_HEARING.place, 'place')
           break
         case 'playerHurt':
           at(e, REMOTE_HEARING.hurt, 'hurt')
