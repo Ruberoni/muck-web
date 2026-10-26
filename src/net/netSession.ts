@@ -346,7 +346,10 @@ export interface Bot {
   stop(): void
 }
 
-/** Otro jugador en la misma pestaña, sin pantalla, que anda en círculos (`__debug.net.addBot`): para probar sin otro navegador. */
+/**
+ * Otro jugador en la misma pestaña, sin pantalla, que anda en círculos, tala y pica lo que puede y se fabrica herramientas
+ * de madera (`botStep`, `__debug.net.addBot`): para probar sin otro navegador.
+ */
 export async function startBot(room: string, name: string, url = SERVER_URL): Promise<Bot> {
   const { client } = await connectClient({ intent: 'join', room, name, tab: randomId() }, url)
   const timer = setInterval(() => driveClient(client, (tick) => botStep(tick, client.id, client.predictor!.slot)), BOT_FRAME_MS)

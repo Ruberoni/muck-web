@@ -6,6 +6,8 @@ import { attackDamage, canDamage, propDamage, requiredTool } from './tiers'
 
 const KINDS = Object.keys(PROP_DEFS) as PropKind[]
 const ITEMS = [null, ...(Object.keys(ITEM_NAMES) as ItemId[])]
+/** Golpes para romper un prop de `kind` con `item`. */
+const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
 
 describe('niveles: daño contra props', () => {
   // Tabla completa (§2.3 del plan): árbol y arbusto de nivel 0, roca de nivel 1, abedul y mena de hierro de nivel 2,
@@ -63,7 +65,6 @@ describe('niveles: daño contra props', () => {
   })
 
   it('las herramientas de hierro: 2 golpes a la mena de hierro y al abedul, 1 a la roca y al árbol', () => {
-    const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
     expect(hits('iron_pickaxe', 'iron_ore')).toBe(2)
     expect(hits('iron_axe', 'birch')).toBe(2)
     expect(hits('iron_pickaxe', 'rock')).toBe(1)
@@ -74,7 +75,6 @@ describe('niveles: daño contra props', () => {
   })
 
   it('mena de mithril y pino oscuro: 3 golpes con hierro y 2 con mithril; con mithril, abedul y mena de hierro caen de uno', () => {
-    const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
     expect(hits('iron_pickaxe', 'mithril_ore')).toBe(3)
     expect(hits('mithril_pickaxe', 'mithril_ore')).toBe(2)
     expect(hits('iron_axe', 'darkpine')).toBe(3)
@@ -116,7 +116,6 @@ describe('niveles: daño contra props', () => {
 
   it('cada nivel de herramienta rompe más deprisa todo lo de su familia que la anterior aún no rompía de un golpe', () => {
     // Equilibrio (PR 11): con 9 de daño, el mithril tardaba lo mismo que el hierro con el abedul y la mena de hierro.
-    const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
     const tools = Object.entries(TOOL_DEFS) as [ItemId, NonNullable<(typeof TOOL_DEFS)[ItemId]>][]
     for (const [item, tool] of tools) {
       const previous = tools.find(([, t]) => t.family === tool.family && t.tier === tool.tier - 1)

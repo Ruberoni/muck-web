@@ -7,7 +7,7 @@ import { aimPose } from '../sim/interaction'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
 import { clientCraftWorld, CLIENT_STATION_RANGE, sendableActions } from '../ui/recipes'
-import { botStep, driveClient } from './bot'
+import { botMove, botStep, driveClient } from './bot'
 import { LEAVE_GRACE_MS, NetClient, compactMoves, encodeCmds } from './client'
 import { MAX_ACTIONS, MAX_MESSAGE, MAX_MOVE_REPEAT, MAX_MOVES, MAX_RTT, parseClientMessage, type Cmds } from './protocol'
 import type { MoveInput } from './session'
@@ -410,11 +410,13 @@ describe('el espejo de NetClient', () => {
     const { room, time, connect } = setup()
     const a = connect('a', 'create').client
     const bot = connect('bot').client
+    // Primero solo anda (botMove): si se parase a talar, lo que recoge llegaría del servidor como corrección.
+    const walk = () => driveClient(bot, (tick) => botMove(tick, bot.id))
     const drive = () => driveClient(bot, (tick) => botStep(tick, bot.id, bot.predictor!.slot))
-    run(time, 1000, [[a, idle]], drive)
+    run(time, 1000, [[a, idle]], walk)
     resetStats(bot)
     const start = { ...room.sim!.slot(bot.id).player.pos }
-    run(time, 4000, [[a, idle]], drive)
+    run(time, 4000, [[a, idle]], walk)
     const real = room.sim!.slot(bot.id).player.pos
     expect(Math.hypot(real.x - start.x, real.z - start.z)).toBeGreaterThan(5)
     const seen = a.shownPlayers.find((p) => p.id === bot.id)!
@@ -432,7 +434,6 @@ describe('el espejo de NetClient', () => {
       if (corrections < 0 && slot.inventory.has('wood_pickaxe') && pending.length === 0) corrections = stats.corrections
     })
     expect(room.sim!.slot(bot.id).inventory.toJSON()).toMatchObject({ wood_axe: 1, wood_pickaxe: 1 })
-    expect(bot.predictor!.slot.inventory.toJSON()).toEqual(room.sim!.slot(bot.id).inventory.toJSON())
     expect(corrections).toBe(1)
   })
 

@@ -24,30 +24,32 @@ export function botMove(tick: number, id: number): MoveInput {
 export const BOT_RECIPES: readonly RecipeId[] = ['wood_axe', 'wood_pickaxe']
 
 /** Un tick de un bot: su `Move` y las acciones de ese tick. */
-export type BotStep = MoveInput & { actions: ActionData[] }
+export type BotStep = MoveInput & { actions: readonly ActionData[] }
 
 /**
- * Como `botMove`, pero mirando cómo le va (`slot`, el de su predicción): si tiene delante algo que puede romper, se
- * para a golpearlo con la mejor herramienta que lleve para eso; y fabrica lo de BOT_RECIPES que aún no tenga. Así
- * desde otro cliente se le ve talar, recoger y fabricar. Solo manda lo que su predicción da por bueno: nada que
- * la sala rechace ni que acabe en una corrección.
+ * Como `botMove`, pero mirando cómo le va (`slot`, el de su predicción): si tiene delante un árbol o una roca que
+ * puede romper, se para a golpearlo con la mejor herramienta que lleve para eso (los arbustos los deja); y fabrica lo
+ * de BOT_RECIPES que aún no tenga. Así desde otro cliente se le ve talar, recoger y fabricar. Solo manda lo que su
+ * predicción da por bueno, nada que la sala rechace; las correcciones solo vienen de lo que cambia el servidor (lo
+ * que recoge, un trasgo). El objetivo es el del tick anterior: `NetClient.step` lo recalcula después.
  */
 export function botStep(tick: number, id: number, slot: PlayerSlot): BotStep {
   const move = botMove(tick, id)
   const { inventory, target } = slot
   const actions: ActionData[] = []
-  const recipe = BOT_RECIPES.find((r) => !inventory.has(recipeById(r)!.result) && canCraft(inventory, recipeById(r)!))
-  if (recipe) actions.push({ kind: 'craft', recipe })
-  if (!slot.alive || !target || target.kind === 'enemy') return { ...move, actions }
-
-  // La mejor herramienta de la hotbar para lo que tiene delante; si no lleva ninguna, sigue con lo que tenga.
+  const recipe = BOT_RECIPES.map(recipeById).find((r) => r && !inventory.has(r.result) && canCraft(inventory, r))
+  if (recipe) actions.push({ kind: 'craft', recipe: recipe.id })
+  if (!slot.alive || !target || !target.alive || target.kind === 'enemy') return { ...move, actions }
   const family = PROP_DEFS[target.kind].tool
+  if (family === null) return { ...move, actions }
+
+  // La mejor herramienta de la hotbar que sirve para lo que tiene delante; si no lleva ninguna, sigue con lo que tenga.
   let best = -1
   let bestTier = 0
   for (let i = 0; i < SLOT_COUNT; i++) {
     const item = inventory.slots[i]
     const tool = item ? TOOL_DEFS[item] : undefined
-    if (tool && tool.family === family && tool.tier > bestTier) [best, bestTier] = [i, tool.tier]
+    if (tool && tool.family === family && tool.tier > bestTier && canDamage(item, target.kind)) [best, bestTier] = [i, tool.tier]
   }
   if (best >= 0 && best !== inventory.selected) actions.push({ kind: 'select', slot: best })
   const held = best >= 0 ? inventory.slots[best] : inventory.selectedItem

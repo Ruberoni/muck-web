@@ -11,6 +11,7 @@ import {
   MAX_CHAT,
   MAX_MESSAGE,
   MAX_MOVES,
+  MAX_PLAYERS,
   MAX_RTT,
   parseClientMessage,
   pickupTuple,
@@ -30,6 +31,10 @@ const parse = (msg: unknown) => parseClientMessage(JSON.stringify(msg))
 const valid = (msg: unknown) => parse(msg).ok
 
 describe('protocolo', () => {
+  it('salas de 8 jugadores, como da por hecho src/sim/balance.test.ts (que no puede importar MAX_PLAYERS)', () => {
+    expect(MAX_PLAYERS).toBe(8)
+  })
+
   it('códigos de sala', () => {
     expect(isRoomCode('K7QX2')).toBe(true)
     for (const code of ['K7QX', 'K7QX22', 'k7qx2', 'K0QX2', 'KIQX2', 'KLQX2', 5]) expect(isRoomCode(code), String(code)).toBe(false)

@@ -89,7 +89,7 @@ export function installDebug(game: Game) {
       transport.latency = ms
       transport.jitter = jitter
     },
-    /** Otro jugador en esta pestaña que anda en círculos, tala lo que puede y se fabrica un hacha y un pico de madera; devuelve su id. */
+    /** Otro jugador en esta pestaña que anda en círculos, tala y pica lo que puede y se fabrica un hacha y un pico de madera; devuelve su id. */
     async addBot() {
       const room = game.net?.room
       if (!room) throw new Error('no se está en una sala')

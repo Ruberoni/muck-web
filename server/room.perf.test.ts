@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { MAX_PLAYERS, PROTOCOL_VERSION, type Cmds, type Hello } from '../src/net/protocol'
 import { ManualTime } from '../src/net/transport'
 import { Btn } from '../src/sim/commands'
-import { ENEMY_HARD_MAX } from '../src/sim/constants'
+import { ENEMY_HARD_MAX, PLACE_DISTANCE } from '../src/sim/constants'
 import { generatePropPlacements } from '../src/sim/props'
 import { STRUCTURE_DEFS, structureSpot, type StructureKind } from '../src/sim/structures'
 import { DAY_FRACTION } from '../src/sim/world/daycycle'
@@ -44,11 +44,11 @@ function busyRoom({ base = false } = {}) {
   }
   if (base) {
     const kinds: StructureKind[] = ['workbench', 'furnace', 'anvil', ...Array<StructureKind>(8).fill('campfire')]
-    // Cada una en el primer sitio libre de un anillo alrededor del centro, de frente al centro.
+    // Cada una en el primer sitio libre de un anillo alrededor del centro, colocada mirando al centro.
     for (let i = 0, step = 0; i < kinds.length && step < 400; step++) {
       const a = step * 0.7
-      const r = 3 + (step % 5)
-      const yaw = Math.atan2(Math.cos(a), Math.sin(a))
+      const r = 3 + PLACE_DISTANCE + (step % 5)
+      const yaw = a
       const spot = structureSpot({ x: center.x + Math.sin(a) * r, z: center.z + Math.cos(a) * r }, yaw, STRUCTURE_DEFS[kinds[i]].radius, [
         sim.world.grid,
         sim.structures.grid,
@@ -86,20 +86,27 @@ async function deflated(data: string): Promise<number> {
   return (await new Response(stream).arrayBuffer()).byteLength
 }
 
-it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en sus 50 ms', async () => {
-  const room = busyRoom()
-  for (let i = 0; i < 200; i++) room.run() // calentamiento (JIT)
+/** Tras calentar (JIT), mide `turns` vueltas: media y p99 en ms y KB/s de salida por jugador. */
+function measure(room: ReturnType<typeof busyRoom>, turns = 1000) {
+  for (let i = 0; i < 200; i++) room.run()
   const times: number[] = []
   const start = room.bytes()
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < turns; i++) {
     const t0 = performance.now()
     room.run()
     times.push(performance.now() - t0)
   }
   times.sort((a, b) => a - b)
-  const mean = times.reduce((a, b) => a + b, 0) / times.length
-  const p99 = times[Math.floor(times.length * 0.99)]
-  const kbPerSecond = (room.bytes() - start) / 1000 / ((times.length * LOOP_MS) / 1000) / MAX_PLAYERS
+  return {
+    mean: times.reduce((a, b) => a + b, 0) / turns,
+    p99: times[Math.floor(turns * 0.99)],
+    kbPerSecond: (room.bytes() - start) / 1000 / ((turns * LOOP_MS) / 1000) / MAX_PLAYERS,
+  }
+}
+
+it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en sus 50 ms', async () => {
+  const room = busyRoom()
+  const { mean, p99, kbPerSecond } = measure(room)
   const raw = room.sample.reduce((sum, m) => sum + m.length, 0)
   const packed = (await Promise.all(room.sample.map(deflated))).reduce((a, b) => a + b, 0)
   console.log(
@@ -116,28 +123,18 @@ it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en 
 it('con una base de estaciones y fogatas, fundiendo en cada vuelta, también cabe holgada', () => {
   const room = busyRoom({ base: true })
   expect(room.sim.structures.list.map((s) => s.kind).sort()).toEqual(['anvil', 'furnace', 'workbench', ...Array(8).fill('campfire')].sort())
-  for (let i = 0; i < 200; i++) room.run()
   const bars = () => Array.from({ length: MAX_PLAYERS }, (_, i) => room.sim.slot(i).inventory.count('iron_bar')).reduce((a, b) => a + b, 0)
-  const before = bars()
-  const start = room.bytes()
-  const times: number[] = []
-  for (let i = 0; i < 1000; i++) {
-    const t0 = performance.now()
-    room.run()
-    times.push(performance.now() - t0)
-  }
-  times.sort((a, b) => a - b)
-  const mean = times.reduce((a, b) => a + b, 0) / times.length
-  const p99 = times[Math.floor(times.length * 0.99)]
-  const kbPerSecond = (room.bytes() - start) / 1000 / ((times.length * LOOP_MS) / 1000) / MAX_PLAYERS
-  const crafted = bars() - before
+  const turns = 1000
+  // Las 200 vueltas de calentamiento también funden: se cuentan todas.
+  const { mean, p99, kbPerSecond } = measure(room, turns)
+  const crafted = bars()
   console.log(
-    `Con base: media ${mean.toFixed(2)} ms, p99 ${p99.toFixed(2)} ms; ${crafted} lingotes en ${times.length} vueltas; ` +
+    `Con base: media ${mean.toFixed(2)} ms, p99 ${p99.toFixed(2)} ms; ${crafted} lingotes en ${turns + 200} vueltas; ` +
       `${kbPerSecond.toFixed(1)} KB/s de salida por jugador`,
   )
-  // Pasan por el horno de vez en cuando (unas 480 veces), no siempre: así se miden las dos ramas de `stationNear`.
+  // Pasan por el horno de vez en cuando, no siempre: así se miden las dos ramas de `stationNear`.
   expect(crafted).toBeGreaterThan(100)
-  expect(crafted).toBeLessThan(times.length * MAX_PLAYERS)
+  expect(crafted).toBeLessThan(((turns + 200) * MAX_PLAYERS) / 2)
   expect(mean).toBeLessThan(LOOP_MS / 2)
   expect(kbPerSecond).toBeLessThan(40)
 })
