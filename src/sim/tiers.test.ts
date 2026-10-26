@@ -6,6 +6,8 @@ import { attackDamage, canDamage, propDamage, requiredTool } from './tiers'
 
 const KINDS = Object.keys(PROP_DEFS) as PropKind[]
 const ITEMS = [null, ...(Object.keys(ITEM_NAMES) as ItemId[])]
+/** Golpes para romper un prop de `kind` con `item`. */
+const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
 
 describe('niveles: daño contra props', () => {
   // Tabla completa (§2.3 del plan): árbol y arbusto de nivel 0, roca de nivel 1, abedul y mena de hierro de nivel 2,
@@ -30,11 +32,11 @@ describe('niveles: daño contra props', () => {
     ['wood_axe', 2, 0, 0, 0, 0, 0, 1],
     ['stone_axe', 4, 4, 0, 0, 0, 0, 1],
     ['iron_axe', 6, 6, 6, 0, 0, 0, 1],
-    ['mithril_axe', 9, 9, 9, 0, 0, 0, 1],
+    ['mithril_axe', 12, 12, 12, 0, 0, 0, 1],
     ['wood_pickaxe', 1, 0, 0, 2, 0, 0, 1],
     ['stone_pickaxe', 1, 0, 0, 4, 4, 0, 1],
     ['iron_pickaxe', 1, 0, 0, 6, 6, 6, 1],
-    ['mithril_pickaxe', 1, 0, 0, 9, 9, 9, 1],
+    ['mithril_pickaxe', 1, 0, 0, 12, 12, 12, 1],
   ]
   it.each(TABLE)(
     '%s: árbol %i, abedul %i, pino oscuro %i, roca %i, mena de hierro %i, mena de mithril %i, arbusto %i',
@@ -63,7 +65,6 @@ describe('niveles: daño contra props', () => {
   })
 
   it('las herramientas de hierro: 2 golpes a la mena de hierro y al abedul, 1 a la roca y al árbol', () => {
-    const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
     expect(hits('iron_pickaxe', 'iron_ore')).toBe(2)
     expect(hits('iron_axe', 'birch')).toBe(2)
     expect(hits('iron_pickaxe', 'rock')).toBe(1)
@@ -73,14 +74,13 @@ describe('niveles: daño contra props', () => {
     expect(canDamage('iron_pickaxe', 'birch')).toBe(false)
   })
 
-  it('mena de mithril y pino oscuro: 3 golpes con hierro y 2 con mithril; el mithril no mejora a nadie más de nivel', () => {
-    const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
+  it('mena de mithril y pino oscuro: 3 golpes con hierro y 2 con mithril; con mithril, abedul y mena de hierro caen de uno', () => {
     expect(hits('iron_pickaxe', 'mithril_ore')).toBe(3)
     expect(hits('mithril_pickaxe', 'mithril_ore')).toBe(2)
     expect(hits('iron_axe', 'darkpine')).toBe(3)
     expect(hits('mithril_axe', 'darkpine')).toBe(2)
-    expect(hits('mithril_pickaxe', 'iron_ore')).toBe(2)
-    expect(hits('mithril_axe', 'birch')).toBe(2)
+    expect(hits('mithril_pickaxe', 'iron_ore')).toBe(1)
+    expect(hits('mithril_axe', 'birch')).toBe(1)
     expect(canDamage('stone_pickaxe', 'mithril_ore')).toBe(false)
     expect(canDamage('stone_axe', 'darkpine')).toBe(false)
     expect(canDamage('mithril_axe', 'mithril_ore')).toBe(false)
@@ -110,6 +110,19 @@ describe('niveles: daño contra props', () => {
           expect(a!.damage).toBeGreaterThan(b!.damage)
           expect(a!.attack).toBeGreaterThanOrEqual(b!.attack)
         }
+      }
+    }
+  })
+
+  it('cada nivel de herramienta rompe más deprisa todo lo de su familia que la anterior aún no rompía de un golpe', () => {
+    // Equilibrio (PR 11): con 9 de daño, el mithril tardaba lo mismo que el hierro con el abedul y la mena de hierro.
+    const tools = Object.entries(TOOL_DEFS) as [ItemId, NonNullable<(typeof TOOL_DEFS)[ItemId]>][]
+    for (const [item, tool] of tools) {
+      const previous = tools.find(([, t]) => t.family === tool.family && t.tier === tool.tier - 1)
+      if (!previous) continue
+      for (const kind of KINDS.filter((k) => PROP_DEFS[k].tool === tool.family && canDamage(previous[0], k))) {
+        const before = hits(previous[0], kind)
+        if (before > 1) expect(hits(item, kind), `${item} contra ${kind} (${previous[0]}: ${before})`).toBeLessThan(before)
       }
     }
   })

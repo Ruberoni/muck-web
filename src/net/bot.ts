@@ -1,4 +1,9 @@
-import { Btn } from '../sim/commands'
+import { Btn, type ActionData } from '../sim/commands'
+import { PROP_DEFS, TOOL_DEFS } from '../sim/constants'
+import { canCraft, recipeById, type RecipeId } from '../sim/crafting'
+import { SLOT_COUNT } from '../sim/inventory'
+import type { PlayerSlot } from '../sim/Simulation'
+import { canDamage } from '../sim/tiers'
 import type { NetClient } from './client'
 import type { MoveInput } from './session'
 
@@ -15,10 +20,50 @@ export function botMove(tick: number, id: number): MoveInput {
   }
 }
 
+/** Lo que el bot fabrica, en este orden, en cuanto tiene con qué (solo recetas sin estación: no coloca nada). */
+export const BOT_RECIPES: readonly RecipeId[] = ['wood_axe', 'wood_pickaxe']
+
+/** Un tick de un bot: su `Move` y las acciones de ese tick. */
+export type BotStep = MoveInput & { actions: readonly ActionData[] }
+
+/**
+ * Como `botMove`, pero mirando cómo le va (`slot`, el de su predicción): si tiene delante un árbol o una roca que
+ * puede romper, se para a golpearlo con la mejor herramienta que lleve para eso (los arbustos los deja); y fabrica lo
+ * de BOT_RECIPES que aún no tenga. Así desde otro cliente se le ve talar, recoger y fabricar. Solo manda lo que su
+ * predicción da por bueno, nada que la sala rechace; las correcciones solo vienen de lo que cambia el servidor (lo
+ * que recoge, un trasgo). El objetivo es el del tick anterior: `NetClient.step` lo recalcula después.
+ */
+export function botStep(tick: number, id: number, slot: PlayerSlot): BotStep {
+  const move = botMove(tick, id)
+  const { inventory, target } = slot
+  const actions: ActionData[] = []
+  const recipe = BOT_RECIPES.map(recipeById).find((r) => r && !inventory.has(r.result) && canCraft(inventory, r))
+  if (recipe) actions.push({ kind: 'craft', recipe: recipe.id })
+  if (!slot.alive || !target || !target.alive || target.kind === 'enemy') return { ...move, actions }
+  const family = PROP_DEFS[target.kind].tool
+  if (family === null) return { ...move, actions }
+
+  // La mejor herramienta de la hotbar que sirve para lo que tiene delante; si no lleva ninguna, sigue con lo que tenga.
+  let best = -1
+  let bestTier = 0
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const item = inventory.slots[i]
+    const tool = item ? TOOL_DEFS[item] : undefined
+    if (tool && tool.family === family && tool.tier > bestTier && canDamage(item, target.kind)) [best, bestTier] = [i, tool.tier]
+  }
+  if (best >= 0 && best !== inventory.selected) actions.push({ kind: 'select', slot: best })
+  const held = best >= 0 ? inventory.slots[best] : inventory.selectedItem
+  if (!canDamage(held, target.kind)) return { ...move, actions }
+  return { buttons: Btn.Attack, yaw: move.yaw, pitch: move.pitch, actions }
+}
+
 /** Un frame de un cliente sin pantalla: predice los ticks que tocan con `script`, envía y pone el espejo al día. */
-export function driveClient(client: NetClient, script: (tick: number) => MoveInput) {
+export function driveClient(client: NetClient, script: (tick: number) => MoveInput & { actions?: readonly ActionData[] }) {
   const ticks = client.advance()
-  for (let i = 0; i < ticks; i++) client.step(script(client.predictor!.tick + 1))
+  for (let i = 0; i < ticks; i++) {
+    const { actions = [], ...move } = script(client.predictor!.tick + 1)
+    client.step(move, actions)
+  }
   client.flush()
   client.render()
 }

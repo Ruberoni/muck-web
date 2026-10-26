@@ -2,8 +2,9 @@ import { expect, it } from 'vitest'
 import { MAX_PLAYERS, PROTOCOL_VERSION, type Cmds, type Hello } from '../src/net/protocol'
 import { ManualTime } from '../src/net/transport'
 import { Btn } from '../src/sim/commands'
-import { ENEMY_HARD_MAX } from '../src/sim/constants'
+import { ENEMY_HARD_MAX, PLACE_DISTANCE } from '../src/sim/constants'
 import { generatePropPlacements } from '../src/sim/props'
+import { STRUCTURE_DEFS, structureSpot, type StructureKind } from '../src/sim/structures'
 import { DAY_FRACTION } from '../src/sim/world/daycycle'
 import { LOOP_MS, MemoryStorage, Room, type Conn } from './room'
 
@@ -11,8 +12,10 @@ import { LOOP_MS, MemoryStorage, Room, type Conn } from './room'
  * Coste de CPU de una vuelta del bucle de la sala (§2): 8 jugadores moviéndose y golpeando de noche con 24 enemigos.
  * Una vuelta = 3 ticks de simulación + `ev` y un `snap` por jugador en JSON. Va con `npm run test:server` (vitest 5 ya no
  * tiene `bench`): imprime la media y el p99 en Node y falla si una vuelta media pasa de la mitad de su presupuesto.
+ * Con `base`, los jugadores dan vueltas alrededor de una base (mesa, horno, yunque y 8 fogatas) fundiendo hierro en
+ * cada vuelta: colisiones con estructuras, `stationNear` en cada `craft` y un `you` por jugador cuando le sale.
  */
-function busyRoom() {
+function busyRoom({ base = false } = {}) {
   const time = new ManualTime(1_000_000)
   let tokens = 0
   const room = new Room('BENCH', { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `t${++tokens}`, seed: () => 7 } })
@@ -39,6 +42,24 @@ function busyRoom() {
     const a = (i / ENEMY_HARD_MAX) * Math.PI * 2
     sim.enemies.spawnAt(center.x + Math.cos(a) * 15, center.z + Math.sin(a) * 15)
   }
+  if (base) {
+    const kinds: StructureKind[] = ['workbench', 'furnace', 'anvil', ...Array<StructureKind>(8).fill('campfire')]
+    // Cada una en el primer sitio libre de un anillo alrededor del centro, colocada mirando al centro.
+    for (let i = 0, step = 0; i < kinds.length && step < 400; step++) {
+      const a = step * 0.7
+      const r = 3 + PLACE_DISTANCE + (step % 5)
+      const yaw = a
+      const spot = structureSpot({ x: center.x + Math.sin(a) * r, z: center.z + Math.cos(a) * r }, yaw, STRUCTURE_DEFS[kinds[i]].radius, [
+        sim.world.grid,
+        sim.structures.grid,
+      ])
+      if (sim.structures.place(spot, kinds[i], 0, yaw)) i++
+    }
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      sim.slot(i).inventory.add('iron_ore', 1_000_000)
+      sim.slot(i).inventory.add('wood', 1_000_000)
+    }
+  }
 
   let turn = 0
   const run = () => {
@@ -49,7 +70,9 @@ function busyRoom() {
       slot.player.health = 100
       const yaw = (turn * 0.05 + i) % (Math.PI * 2)
       const buttons = Btn.Fwd | (turn % 4 === 0 ? Btn.Attack : 0) | (i % 2 ? Btn.Sprint : 0)
-      const cmds: Cmds = { type: 'cmds', t: time.now(), moves: [{ tick: sim.tick + 1, n: 3, buttons, yaw, pitch: 0 }], actions: [] }
+      const tick = sim.tick + 1
+      const actions: Cmds['actions'] = base ? [{ kind: 'craft', recipe: 'iron_bar', seq: turn, tick }] : []
+      const cmds: Cmds = { type: 'cmds', t: time.now(), moves: [{ tick, n: 3, buttons, yaw, pitch: 0 }], actions }
       room.message(conns[i], JSON.stringify(cmds))
     }
     time.advance(LOOP_MS)
@@ -63,20 +86,27 @@ async function deflated(data: string): Promise<number> {
   return (await new Response(stream).arrayBuffer()).byteLength
 }
 
-it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en sus 50 ms', async () => {
-  const room = busyRoom()
-  for (let i = 0; i < 200; i++) room.run() // calentamiento (JIT)
+/** Tras calentar (JIT), mide `turns` vueltas: media y p99 en ms y KB/s de salida por jugador. */
+function measure(room: ReturnType<typeof busyRoom>, turns = 1000) {
+  for (let i = 0; i < 200; i++) room.run()
   const times: number[] = []
   const start = room.bytes()
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < turns; i++) {
     const t0 = performance.now()
     room.run()
     times.push(performance.now() - t0)
   }
   times.sort((a, b) => a - b)
-  const mean = times.reduce((a, b) => a + b, 0) / times.length
-  const p99 = times[Math.floor(times.length * 0.99)]
-  const kbPerSecond = (room.bytes() - start) / 1000 / ((times.length * LOOP_MS) / 1000) / MAX_PLAYERS
+  return {
+    mean: times.reduce((a, b) => a + b, 0) / turns,
+    p99: times[Math.floor(turns * 0.99)],
+    kbPerSecond: (room.bytes() - start) / 1000 / ((turns * LOOP_MS) / 1000) / MAX_PLAYERS,
+  }
+}
+
+it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en sus 50 ms', async () => {
+  const room = busyRoom()
+  const { mean, p99, kbPerSecond } = measure(room)
   const raw = room.sample.reduce((sum, m) => sum + m.length, 0)
   const packed = (await Promise.all(room.sample.map(deflated))).reduce((a, b) => a + b, 0)
   console.log(
@@ -87,6 +117,25 @@ it('una vuelta del bucle con 8 jugadores y 24 enemigos de noche cabe holgada en 
   expect(room.sim.enemies.list.length).toBe(ENEMY_HARD_MAX)
   expect(mean).toBeLessThan(LOOP_MS / 2)
   // El §5.3 del plan estimaba ~30 KB/s en JSON con 8 jugadores y 24 enemigos; sin las tuplas del snap salían ~62.
+  expect(kbPerSecond).toBeLessThan(40)
+})
+
+it('con una base de estaciones y fogatas, fundiendo en cada vuelta, también cabe holgada', () => {
+  const room = busyRoom({ base: true })
+  expect(room.sim.structures.list.map((s) => s.kind).sort()).toEqual(['anvil', 'furnace', 'workbench', ...Array(8).fill('campfire')].sort())
+  const bars = () => Array.from({ length: MAX_PLAYERS }, (_, i) => room.sim.slot(i).inventory.count('iron_bar')).reduce((a, b) => a + b, 0)
+  const turns = 1000
+  // Las 200 vueltas de calentamiento también funden: se cuentan todas.
+  const { mean, p99, kbPerSecond } = measure(room, turns)
+  const crafted = bars()
+  console.log(
+    `Con base: media ${mean.toFixed(2)} ms, p99 ${p99.toFixed(2)} ms; ${crafted} lingotes en ${turns + 200} vueltas; ` +
+      `${kbPerSecond.toFixed(1)} KB/s de salida por jugador`,
+  )
+  // Pasan por el horno de vez en cuando, no siempre: así se miden las dos ramas de `stationNear`.
+  expect(crafted).toBeGreaterThan(100)
+  expect(crafted).toBeLessThan(((turns + 200) * MAX_PLAYERS) / 2)
+  expect(mean).toBeLessThan(LOOP_MS / 2)
   expect(kbPerSecond).toBeLessThan(40)
 })
 

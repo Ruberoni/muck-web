@@ -5,7 +5,8 @@ import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
 import { heightAt, WATER_LEVEL } from './sim/world/terrain'
-import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './sim/constants'
+import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH } from './sim/constants'
+import type { PropKind } from './sim/props'
 import { ENEMY_AIM_HEIGHT } from './sim/enemies'
 import { STRUCTURE_DEFS, STRUCTURE_KINDS, structureSpot, type StructureKind } from './sim/structures'
 import { isRecipeId, RECIPE_IDS, type RecipeId } from './sim/crafting'
@@ -88,7 +89,7 @@ export function installDebug(game: Game) {
       transport.latency = ms
       transport.jitter = jitter
     },
-    /** Otro jugador en esta pestaña que anda en círculos; devuelve su id. */
+    /** Otro jugador en esta pestaña que anda en círculos, tala y pica lo que puede y se fabrica un hacha y un pico de madera; devuelve su id. */
     async addBot() {
       const room = game.net?.room
       if (!room) throw new Error('no se está en una sala')
@@ -237,7 +238,13 @@ export function installDebug(game: Game) {
         return s.structures.place(spot, kind, slot().id, yaw ?? player().yaw) !== null
       })
     },
-    props: () => sim().world.props.map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive })),
+    /** Los props; con `kind`, solo los de ese tipo (p. ej. `props({ kind: 'mithril_ore' })`). */
+    props: ({ kind }: { kind?: PropKind } = {}) => {
+      if (kind !== undefined && !Object.hasOwn(PROP_DEFS, kind)) throw new Error(`no existe el tipo de prop ${kind} (son ${Object.keys(PROP_DEFS).join(', ')})`)
+      return sim()
+        .world.props.filter((p) => kind === undefined || p.kind === kind)
+        .map(({ id, kind, x, y, z, radius, hp, alive }) => ({ id, kind, x, y, z, radius, hp, alive }))
+    },
     target: targetPropId,
     /** Objetos en el suelo, por recoger. */
     pickups: () => sim().pickups.list.map(({ id, item, pos, grounded }) => ({ id, item, x: pos.x, y: pos.y, z: pos.z, grounded })),
