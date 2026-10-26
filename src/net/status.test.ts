@@ -11,7 +11,7 @@ describe('estado de la conexión', () => {
   it('explica cada rechazo y cada código de cierre', () => {
     expect(closeMessage({ type: 'reject', reason: 'not-found' }, 1000, 'K7QX2')).toBe('No existe la sala K7QX2.')
     expect(closeMessage({ type: 'reject', reason: 'full' }, 4003)).toContain('llena')
-    expect(closeMessage({ type: 'reject', reason: 'version', v: 9 }, 4000)).toContain('recarga')
+    expect(closeMessage({ type: 'reject', reason: 'version', v: PROTOCOL_VERSION + 1 }, 4000)).toContain('recarga')
     expect(closeMessage(null, CloseCode.OtherTab)).toContain('otra pestaña')
     expect(closeMessage(null, CloseCode.Quota)).toBe(QUOTA)
     expect(closeMessage(null, CloseCode.RoomDeleted)).toContain('borrado')

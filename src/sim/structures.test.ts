@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createPropWorld } from './props'
 import { heightAt, WATER_LEVEL } from './world/terrain'
-import { PLACEABLE_DEFS, placeableOf, STRUCTURE_DEFS, STRUCTURE_KINDS, Structures, structureSpot } from './structures'
+import { PLACEABLE_DEFS, placeableOf, stationNear, STRUCTURE_DEFS, STRUCTURE_KINDS, Structures, structureSpot } from './structures'
 import { resolveCircle } from './collision'
-import { PLACE_DISTANCE, PLAYER_RADIUS } from './constants'
+import { PLACE_DISTANCE, PLAYER_RADIUS, STATION_RANGE } from './constants'
 import type { SimEventData } from './events'
 import type { ItemId } from './inventory'
 
@@ -106,6 +106,7 @@ describe('estructuras en general', () => {
       expect(placeableOf(item)).toEqual({ kind, radius })
     }
     expect(placeableOf('campfire')).toEqual({ kind: 'campfire', radius: 0.6 })
+    expect(placeableOf('workbench')).toEqual({ kind: 'workbench', radius: 0.7 })
     expect(placeableOf('wood')).toBeNull()
     expect(placeableOf(null)).toBeNull()
     expect(placeableOf('constructor' as ItemId)).toBeNull()
@@ -139,5 +140,33 @@ describe('estructuras en general', () => {
     expect(mirror.list).toEqual([{ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3, radius: RADIUS, alive: true }])
     expect(mirror.save().nextId).toBe(5)
     expect(resolveCircle({ x: 1.1, z: 2 }, PLAYER_RADIUS, mirror.grid)).toBe(true)
+  })
+})
+
+describe('estación al alcance', () => {
+  const R = STRUCTURE_DEFS.workbench.radius
+  const at = (x: number, z: number) => ({ x, y: 7, z })
+
+  it('se mide en horizontal desde el centro del jugador hasta el borde de la estación', () => {
+    const s = new Structures()
+    s.place({ x: 10, y: 5, z: 20, valid: true }, 'workbench')
+    const edge = 10 + R + STATION_RANGE
+    expect(stationNear(s.list, 'workbench', at(edge, 20), STATION_RANGE)).toBe(true)
+    expect(stationNear(s.list, 'workbench', at(edge + 0.01, 20), STATION_RANGE)).toBe(false)
+    // La altura no cuenta (y = 7 frente a 5) y vale en cualquier dirección.
+    expect(stationNear(s.list, 'workbench', at(10, 20 - R - STATION_RANGE + 0.01), STATION_RANGE)).toBe(true)
+    // Con menos alcance (el del cliente), el mismo punto ya no está cerca.
+    expect(stationNear(s.list, 'workbench', at(edge, 20), STATION_RANGE - 0.2)).toBe(false)
+  })
+
+  it('solo cuenta una estación de ese tipo', () => {
+    const s = new Structures()
+    s.place({ x: 0, y: 5, z: 0, valid: true }, 'campfire')
+    expect(stationNear(s.list, 'workbench', at(0, 0), STATION_RANGE)).toBe(false)
+    expect(stationNear([], 'workbench', at(0, 0), STATION_RANGE)).toBe(false)
+    s.place({ x: 30, y: 5, z: 0, valid: true }, 'workbench')
+    expect(stationNear(s.list, 'workbench', at(0, 0), STATION_RANGE)).toBe(false)
+    expect(stationNear(s.list, 'workbench', at(28, 0), STATION_RANGE)).toBe(true)
+    expect(stationNear(s.list, 'furnace', at(28, 0), STATION_RANGE)).toBe(false)
   })
 })

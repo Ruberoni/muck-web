@@ -12,8 +12,17 @@ const stoneGeometry = new THREE.IcosahedronGeometry(0.14, 0)
 const outerFlameGeometry = new THREE.ConeGeometry(0.28, 0.75, 5).translate(0, 0.375, 0)
 const innerFlameGeometry = new THREE.ConeGeometry(0.15, 0.45, 5).translate(0, 0.225, 0)
 
+const topGeometry = new THREE.BoxGeometry(1.15, 0.12, 0.7)
+const legGeometry = new THREE.BoxGeometry(0.1, 0.72, 0.1)
+const rungGeometry = new THREE.BoxGeometry(0.9, 0.07, 0.07)
+const hammerHeadGeometry = new THREE.BoxGeometry(0.26, 0.1, 0.1)
+const hammerHandleGeometry = new THREE.BoxGeometry(0.05, 0.04, 0.34)
+const plankGeometry = new THREE.BoxGeometry(0.5, 0.05, 0.18)
+
 const logMaterial = new THREE.MeshStandardMaterial({ color: '#6b4426', flatShading: true })
 const stoneMaterial = new THREE.MeshStandardMaterial({ color: '#8a877b', flatShading: true })
+const plankMaterial = new THREE.MeshStandardMaterial({ color: '#c8955a', flatShading: true })
+const handleMaterial = new THREE.MeshStandardMaterial({ color: '#8a5a32', flatShading: true })
 // Las llamas no dependen de la luz: de noche se ven brillantes.
 const outerFlameMaterial = new THREE.MeshBasicMaterial({ color: '#ff7a1f' })
 const innerFlameMaterial = new THREE.MeshBasicMaterial({ color: '#ffd23f' })
@@ -54,6 +63,27 @@ function buildCampfire(m: MaterialFor, shadows: boolean): StructureModel {
   return { root, flame }
 }
 
+/** Mesa de trabajo: tablero sobre cuatro patas con travesaños, un martillo de piedra y una tabla encima. */
+function buildWorkbench(m: MaterialFor, shadows: boolean): StructureModel {
+  const root = new THREE.Group()
+  const mesh = (geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number, rotY = 0) => {
+    const node = new THREE.Mesh(geometry, m(material))
+    node.position.set(x, y, z)
+    node.rotation.y = rotY
+    node.castShadow = shadows
+    node.receiveShadow = shadows
+    root.add(node)
+    return node
+  }
+  for (const x of [-0.47, 0.47]) for (const z of [-0.25, 0.25]) mesh(legGeometry, logMaterial, x, 0.36, z)
+  for (const z of [-0.25, 0.25]) mesh(rungGeometry, logMaterial, 0, 0.2, z)
+  mesh(topGeometry, plankMaterial, 0, 0.78, 0)
+  mesh(plankGeometry, handleMaterial, -0.25, 0.865, 0.1, 0.2)
+  mesh(hammerHandleGeometry, handleMaterial, 0.28, 0.86, 0.02, -0.5)
+  mesh(hammerHeadGeometry, stoneMaterial, 0.2, 0.89, -0.13, -0.5)
+  return { root, flame: null }
+}
+
 export interface StructureModel {
   root: THREE.Group
   /** Las llamas que parpadean (solo la fogata). */
@@ -63,6 +93,7 @@ export interface StructureModel {
 /** El modelo de cada tipo de estructura. */
 const MODELS: Record<StructureKind, (m: MaterialFor, shadows: boolean) => StructureModel> = {
   campfire: buildCampfire,
+  workbench: buildWorkbench,
 }
 
 const own: MaterialFor = (material) => material

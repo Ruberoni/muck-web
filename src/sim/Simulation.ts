@@ -1,7 +1,7 @@
 import type { PlayerCommands } from './commands'
 import { resolveCircle } from './collision'
-import { NO_STATIONS, type CraftWorld, type RecipeId } from './crafting'
-import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, STEP } from './constants'
+import type { CraftWorld, RecipeId } from './crafting'
+import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
@@ -11,7 +11,7 @@ import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './pla
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
 import { createPropWorld, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
-import { placeableOf, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
+import { placeableOf, stationNear, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
 import { isDead } from './survival'
 import { DAY_LENGTH, DayClock, euclideanModulo, isNight, START_PHASE } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
@@ -84,7 +84,7 @@ const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ..
 export class Simulation {
   readonly world: PropWorld
   readonly clock = new DayClock()
-  /** Lo colocado: fogatas (y, más adelante, estaciones). Bloquea a jugadores, enemigos y objetos del suelo. */
+  /** Lo colocado: fogatas y estaciones. Bloquea a jugadores, enemigos y objetos del suelo. */
   readonly structures: Structures
   readonly enemies: Enemies
   readonly pickups: Pickups
@@ -106,8 +106,10 @@ export class Simulation {
   /** Todos muertos: tick en que se reinicia la isla. */
   private gameOverAt: number | null = null
   private spot: StructureSpot = { x: 0, y: 0, z: 0, valid: false }
-  /** Estaciones para fabricar: aún no hay ninguna. */
-  private readonly craftWorld: CraftWorld = NO_STATIONS
+  /** Las estaciones para fabricar son las estructuras colocadas. */
+  private readonly craftWorld: CraftWorld = {
+    nearStation: (kind, pos) => stationNear(this.structures.list, kind, pos, STATION_RANGE),
+  }
 
   constructor(seed: number, placements: readonly PropPlacement[] = generatePropPlacements()) {
     this.rng = mulberry32(seed)

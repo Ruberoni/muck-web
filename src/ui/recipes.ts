@@ -2,9 +2,21 @@ import type { ActionData } from '../sim/commands'
 import { canCraft, craft, RECIPES, recipeById, type CraftWorld, type Recipe, type StationKind } from '../sim/crafting'
 import { Inventory, ITEM_NAMES, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
+import { stationNear, type Structure } from '../sim/structures'
 
 /** Cuántas veces fabrica Mayúsculas + clic (cada una es una acción `craft`, en el mismo paso). */
 export const CRAFT_MANY = 5
+
+/**
+ * Alcance de las estaciones para el cliente: algo menos que STATION_RANGE (3,5 m en la simulación), para que una
+ * pequeña diferencia de posición en el borde no acabe en un `craft` que el servidor rechaza y una corrección.
+ */
+export const CLIENT_STATION_RANGE = 3.3
+
+/** El mundo de fabricar tal como lo ve el cliente: las estaciones de `structures()` con el alcance con margen. */
+export const clientCraftWorld = (structures: () => readonly Structure[]): CraftWorld => ({
+  nearStation: (kind, pos) => stationNear(structures(), kind, pos, CLIENT_STATION_RANGE),
+})
 
 const STATION_NAMES: Record<StationKind, string> = { workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque' }
 const STATION_NEEDED: Record<StationKind, string> = {

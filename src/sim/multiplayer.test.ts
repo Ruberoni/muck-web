@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type PlayerCommands } from './commands'
-import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, STEP } from './constants'
+import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, STATION_RANGE, STEP } from './constants'
 import { Enemies, enemyCap, enemyCapFor, spawnIntervalFor, type EnemyPrey } from './enemies'
 import type { PlayerId, SimEvent, SimEventData, TargetRef } from './events'
 import { aimPose } from './interaction'
@@ -181,6 +181,36 @@ describe('Simulation con varios jugadores', () => {
     expect(sim.structures.list.map((s) => s.kind)).toEqual(['campfire', 'campfire'])
     expect(sim.structures.list[1].z - sim.structures.list[0].z).toBeCloseTo(2 * PLACE_DISTANCE)
     expect([0, 1].map((id) => sim.slot(id).inventory.count('campfire'))).toEqual([0, 0])
+  })
+
+  it('la mesa de trabajo: fabrican en ella los que están cerca, también dos en el mismo tick, y el que está lejos no', () => {
+    const sim = withPlayers(3)
+    const { inventory } = sim.slot(0)
+    inventory.add('wood', 10)
+    sim.teleport(0, spot.x, spot.z, 0, 0)
+    stepAll(sim, { 0: { actions: [{ kind: 'craft', recipe: 'workbench' }] } })
+    expect(inventory.count('wood')).toBe(0)
+    const events = stepAll(sim, { 0: { actions: [{ kind: 'select', slot: inventory.slots.indexOf('workbench') }, { kind: 'place' }] } })
+    expect(ofType(events, 'playerPlaced')).toEqual([expect.objectContaining({ id: 0, item: 'workbench' })])
+    const [bench] = sim.structures.list
+    expect(bench).toMatchObject({ kind: 'workbench', radius: 0.7 })
+
+    // 1 al otro lado de la mesa; 2 a 1 m más del alcance, contando desde el borde.
+    sim.teleport(1, bench.x, bench.z - 1.5, Math.PI, 0)
+    sim.teleport(2, bench.x + bench.radius + STATION_RANGE + 1, bench.z, Math.PI / 2, 0)
+    const craftAxe: Command = { actions: [{ kind: 'craft', recipe: 'stone_axe' }] }
+    for (const id of [0, 1, 2]) {
+      sim.slot(id).inventory.add('wood', 3)
+      sim.slot(id).inventory.add('stone', 5)
+    }
+    const crafted = stepAll(sim, { 0: craftAxe, 1: craftAxe, 2: craftAxe })
+    expect(ofType(crafted, 'playerCrafted').map((e) => [e.id, e.recipe])).toEqual([[0, 'stone_axe'], [1, 'stone_axe']])
+    expect([0, 1, 2].map((id) => sim.slot(id).inventory.count('stone_axe'))).toEqual([1, 1, 0])
+    expect(sim.slot(2).inventory.toJSON()).toEqual({ wood: 3, stone: 5 })
+
+    // Al acercarse, el lejano también puede.
+    sim.teleport(2, bench.x + bench.radius + STATION_RANGE - 0.5, bench.z, Math.PI / 2, 0)
+    expect(ofType(stepAll(sim, { 2: craftAxe }), 'playerCrafted').map((e) => e.id)).toEqual([2])
   })
 
   it('cada jugador recibe su daño; el que muere deja de moverse, de comer y de ser objetivo', () => {

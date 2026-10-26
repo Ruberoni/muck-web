@@ -6,6 +6,7 @@ import { RECIPE_IDS } from '../sim/crafting'
 import { aimPose } from '../sim/interaction'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
+import { clientCraftWorld, CLIENT_STATION_RANGE, sendableActions } from '../ui/recipes'
 import { botMove, driveClient } from './bot'
 import { LEAVE_GRACE_MS, NetClient, compactMoves, encodeCmds } from './client'
 import { MAX_ACTIONS, MAX_MESSAGE, MAX_MOVE_REPEAT, MAX_MOVES, MAX_RTT, parseClientMessage, type Cmds } from './protocol'
@@ -128,6 +129,56 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
     expect(slot.inventory.count('campfire')).toBe(0)
     expect(slot.inventory.slots[26]).toBe('wood')
     expect(slot.inventory.slots[1]).toBe('wood_pickaxe')
+    expect(client.predictor!.stats.corrections).toBe(0)
+  })
+
+  it('fabrica en la mesa sin correcciones: pulsando desde que la coloca y alejándose hasta el borde del alcance', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 500, [[client, idle]])
+    const slot = room.sim!.slot(client.id)
+    slot.inventory.add('wood', 10 + 3 * 40)
+    slot.inventory.add('stone', 5 * 40)
+    run(time, 1500, [[client, idle]])
+    resetStats(client)
+
+    // Lo que hace Game: solo manda los `craft` que el cliente da por buenos, con el alcance con margen.
+    const world = clientCraftWorld(() => client.sim!.structures.list)
+    const fromEdge = () => {
+      const bench = client.sim!.structures.list[0]
+      const { pos } = client.predictor!.slot.player
+      return bench ? Math.hypot(bench.x - pos.x, bench.z - pos.z) - bench.radius : Infinity
+    }
+    let start = -1
+    const sent: { at: number; edge: number }[] = []
+    let filtered = 0
+    const script: Script = (tick) => {
+      if (start < 0) start = tick
+      const at = tick - start
+      const { inventory, player } = client.predictor!.slot
+      const wanted: ActionData[] = []
+      if (at === 10) wanted.push({ kind: 'craft', recipe: 'workbench' })
+      if (at === 20) wanted.push({ kind: 'select', slot: inventory.slots.indexOf('workbench') }, { kind: 'place' })
+      // Desde que la coloca, pide un hacha cada 2 ticks; a partir de 60 se aleja andando hacia atrás.
+      const tries = at > 20 && at % 2 === 0
+      if (tries) wanted.push({ kind: 'craft', recipe: 'stone_axe' })
+      const actions = sendableActions(wanted, inventory, world, player.pos)
+      if (tries && actions.some((a) => a.kind === 'craft')) sent.push({ at, edge: fromEdge() })
+      else if (tries) filtered++
+      return { buttons: at > 60 && fromEdge() < 5 ? Btn.Back : 0, yaw: 0, pitch: 0, actions }
+    }
+    run(time, 4000, [[client, script]])
+
+    expect(room.sim!.structures.list.map((s) => s.kind)).toEqual(['workbench'])
+    // Antes de que llegue `structurePlaced` (un RTT) no se manda nada: la mesa aún no está en el espejo.
+    expect(sent[0].at).toBeGreaterThan(22)
+    // Se fabrica hasta el borde de los 3,3 m del cliente, y ninguna se pierde en el servidor.
+    expect(Math.max(...sent.map((s) => s.edge))).toBeGreaterThan(CLIENT_STATION_RANGE - 0.25)
+    expect(Math.max(...sent.map((s) => s.edge))).toBeLessThanOrEqual(CLIENT_STATION_RANGE)
+    expect(filtered).toBeGreaterThan(10)
+    expect(slot.inventory.count('stone_axe')).toBe(sent.length)
+    expect(slot.inventory.save()).toEqual(client.predictor!.slot.inventory.save())
+    expect(fromEdge()).toBeGreaterThan(CLIENT_STATION_RANGE)
     expect(client.predictor!.stats.corrections).toBe(0)
   })
 

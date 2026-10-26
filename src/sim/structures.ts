@@ -3,11 +3,13 @@ import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { ItemId } from './inventory'
 import { PLACE_DISTANCE } from './constants'
+import type { StationKind } from './crafting'
+import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
 
-/** Lo que se puede colocar en el mundo. Las estaciones de crafteo entran con su PR. */
-export type StructureKind = 'campfire'
+/** Lo que se puede colocar en el mundo. El horno y el yunque entran con su PR. */
+export type StructureKind = 'campfire' | 'workbench'
 
 export interface StructureDef {
   /** El objeto que se gasta al colocarla. */
@@ -17,6 +19,7 @@ export interface StructureDef {
 
 export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   campfire: { item: 'campfire', radius: 0.6 },
+  workbench: { item: 'workbench', radius: 0.7 },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]
@@ -79,7 +82,16 @@ export function structureSpot(
   return out
 }
 
-/** Estructuras colocadas (fogatas y, más adelante, estaciones) y su rejilla de colisión. Las dibuja StructureView. */
+/**
+ * Si hay una estación `kind` al alcance desde `pos`: a `range` o menos en horizontal, del centro del jugador al
+ * borde de la estación. La usan la simulación (con STATION_RANGE) y el cliente (con algo menos, para no fabricar en
+ * el borde y acabar en una corrección).
+ */
+export function stationNear(structures: readonly Structure[], kind: StationKind, pos: Vec3, range: number): boolean {
+  return structures.some((s) => s.kind === kind && Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius <= range)
+}
+
+/** Estructuras colocadas (fogatas y estaciones) y su rejilla de colisión. Las dibuja StructureView. */
 export class Structures {
   readonly list: Structure[] = []
   readonly grid = new SpatialGrid<Structure>()

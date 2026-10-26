@@ -16,8 +16,7 @@ import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
-import { NO_STATIONS } from '../sim/crafting'
-import { sendableActions } from '../ui/recipes'
+import { clientCraftWorld, sendableActions } from '../ui/recipes'
 import { Handheld } from './handheld'
 import { Input } from './input'
 import { stepActions, type InventoryFocus } from './actions'
@@ -40,7 +39,10 @@ const SHADOW_LOOK_AHEAD = 25
 // Distancia a la que deja de oírse una fogata.
 const CAMPFIRE_HEARING = 14
 /** Lo que dice el aviso al tener una estructura en la mano. */
-const PLACE_PROMPT: Record<StructureKind, string> = { campfire: 'Clic para colocar la fogata' }
+const PLACE_PROMPT: Record<StructureKind, string> = {
+  campfire: 'Clic para colocar la fogata',
+  workbench: 'Clic para colocar la mesa de trabajo',
+}
 /** Los nombres flotan algo por encima de la cabeza. */
 const NAME_HEIGHT = EYE_HEIGHT + 0.55
 /** Por encima del suelo a esta altura (m), otro jugador está en el aire o flotando: sus pasos no suenan. */
@@ -108,6 +110,8 @@ export class Game {
   private sun = new THREE.Vector3()
   /** Acciones de `__debug` y de la pantalla de inventario (select, move, craft) para el siguiente paso. */
   private queued: ActionData[] = []
+  /** Las estaciones al fabricar, como las ve el cliente (con margen): para el filtro de envío y la pantalla. */
+  private craftWorld = clientCraftWorld(() => this.sim.structures.list)
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
   private worldVersion = -1
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
@@ -426,9 +430,9 @@ export class Game {
     if (this.state === 'spectating') return this.spectatorStep()
     const { yaw, pitch } = this.look
     const { inventory, player } = this.slot
-    // Solo se mandan los `craft` que la predicción da por buenos, con la posición con la que se aplicarán. Hasta que
-    // haya estaciones, ninguna está cerca (con ellas, el cliente las mirará con algo de margen).
-    const sendable = (actions: readonly ActionData[]) => sendableActions(actions, inventory, NO_STATIONS, player.pos)
+    // Solo se mandan los `craft` que la predicción da por buenos, con la posición con la que se aplicarán y las
+    // estaciones a algo menos de alcance que en la simulación.
+    const sendable = (actions: readonly ActionData[]) => sendableActions(actions, inventory, this.craftWorld, player.pos)
     let events: readonly SimEvent[]
     if (this.state === 'inventory') {
       // Quieto (el `Move` sirve de keepalive) y solo con lo que manda la pantalla (o `__debug`).
@@ -747,7 +751,7 @@ export class Game {
     else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else this.hud.setTarget(slot.target)
-    if (this.state === 'inventory') this.hud.inventory.updateRecipes(NO_STATIONS, p.pos)
+    if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
     this.hud.setDay(sim.clock.day)
     this.hud.minimap.draw({
       x: this.renderPos.x,
