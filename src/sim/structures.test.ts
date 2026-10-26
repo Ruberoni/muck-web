@@ -80,6 +80,13 @@ describe('colocar fogatas', () => {
     expect(fires.list[0].id).toBe(0)
   })
 
+  it('la mesa queda de frente a quien la coloca; la fogata, con su giro por id', () => {
+    const s = new Structures()
+    expect(s.place({ x: 0, y: 5, z: 0, valid: true }, 'campfire', 0, 2)!.rotY).toBe(0)
+    expect(s.place({ x: 5, y: 5, z: 0, valid: true }, 'workbench', 0, 2)!.rotY).toBe(2)
+    expect(s.place({ x: 10, y: 5, z: 0, valid: true }, 'campfire', 0, 2)!.rotY).toBeCloseTo(2 * 1.3)
+  })
+
   it('colocarla emite structurePlaced con el tipo y quién la puso', () => {
     const events: SimEventData[] = []
     const fires = new Structures((e) => void events.push(e))

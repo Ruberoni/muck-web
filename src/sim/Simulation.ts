@@ -407,7 +407,7 @@ export class Simulation {
     const def = placeableOf(item)
     if (!item || !def) return
     const spot = structureSpot(slot.player.pos, slot.player.yaw, def.radius, [this.world.grid, this.structures.grid], this.spot)
-    if (!this.structures.place(spot, def.kind, slot.id)) return
+    if (!this.structures.place(spot, def.kind, slot.id, slot.player.yaw)) return
     this.events.emit({ type: 'playerPlaced', id: slot.id, item })
     slot.inventory.remove(item, 1)
   }

@@ -193,7 +193,7 @@ describe('Simulation con varios jugadores', () => {
     const events = stepAll(sim, { 0: { actions: [{ kind: 'select', slot: inventory.slots.indexOf('workbench') }, { kind: 'place' }] } })
     expect(ofType(events, 'playerPlaced')).toEqual([expect.objectContaining({ id: 0, item: 'workbench' })])
     const [bench] = sim.structures.list
-    expect(bench).toMatchObject({ kind: 'workbench', radius: 0.7 })
+    expect(bench).toMatchObject({ kind: 'workbench', radius: 0.7, rotY: 0 })
 
     // 1 al otro lado de la mesa; 2 a 1 m más del alcance, contando desde el borde.
     sim.teleport(1, bench.x, bench.z - 1.5, Math.PI, 0)

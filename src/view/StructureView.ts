@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { sunDirection } from '../world/daycycle'
 import { CAMPFIRE_LIGHT_DISTANCE, CAMPFIRE_LIGHT_INTENSITY, CAMPFIRE_LIGHTS } from '../sim/constants'
-import type { Structure, StructureKind, StructureSpot } from '../sim/structures'
+import { STRUCTURE_DEFS, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
 
 const LIGHT_HEIGHT = 0.8
 // De día la fogata casi no se nota: a pleno sol la luz baja a esta fracción.
@@ -13,7 +13,8 @@ const outerFlameGeometry = new THREE.ConeGeometry(0.28, 0.75, 5).translate(0, 0.
 const innerFlameGeometry = new THREE.ConeGeometry(0.15, 0.45, 5).translate(0, 0.225, 0)
 
 const topGeometry = new THREE.BoxGeometry(1.15, 0.12, 0.7)
-const legGeometry = new THREE.BoxGeometry(0.1, 0.72, 0.1)
+// Las patas se hunden en el suelo: en pendiente, la de abajo no queda en el aire.
+const legGeometry = new THREE.BoxGeometry(0.1, 1, 0.1)
 const rungGeometry = new THREE.BoxGeometry(0.9, 0.07, 0.07)
 const hammerHeadGeometry = new THREE.BoxGeometry(0.26, 0.1, 0.1)
 const hammerHandleGeometry = new THREE.BoxGeometry(0.05, 0.04, 0.34)
@@ -75,12 +76,12 @@ function buildWorkbench(m: MaterialFor, shadows: boolean): StructureModel {
     root.add(node)
     return node
   }
-  for (const x of [-0.47, 0.47]) for (const z of [-0.25, 0.25]) mesh(legGeometry, logMaterial, x, 0.36, z)
+  for (const x of [-0.47, 0.47]) for (const z of [-0.25, 0.25]) mesh(legGeometry, logMaterial, x, 0.22, z)
   for (const z of [-0.25, 0.25]) mesh(rungGeometry, logMaterial, 0, 0.2, z)
   mesh(topGeometry, plankMaterial, 0, 0.78, 0)
   mesh(plankGeometry, handleMaterial, -0.25, 0.865, 0.1, 0.2)
-  mesh(hammerHandleGeometry, handleMaterial, 0.28, 0.86, 0.02, -0.5)
-  mesh(hammerHeadGeometry, stoneMaterial, 0.2, 0.89, -0.13, -0.5)
+  mesh(hammerHandleGeometry, handleMaterial, 0.28, 0.86, 0.02, 0.5)
+  mesh(hammerHeadGeometry, stoneMaterial, 0.2, 0.89, -0.13, 0.5)
   return { root, flame: null }
 }
 
@@ -128,8 +129,11 @@ export class StructureView {
     return this.models.get(id)
   }
 
-  /** Vista previa de dónde se colocaría una estructura `kind` (verde si se puede, roja si no); null la oculta. */
-  setGhost(ghost: { kind: StructureKind; spot: StructureSpot } | null) {
+  /**
+   * Vista previa de dónde se colocaría una estructura `kind` (verde si se puede, roja si no) mirando a `yaw`; null la
+   * oculta. Las estaciones salen giradas como quedarán; las redondas, sin giro.
+   */
+  setGhost(ghost: { kind: StructureKind; spot: StructureSpot; yaw: number } | null) {
     for (const [kind, model] of this.ghosts) model.visible = kind === ghost?.kind
     if (!ghost) return
     const { kind, spot } = ghost
@@ -142,6 +146,7 @@ export class StructureView {
     }
     model.visible = true
     model.position.set(spot.x, spot.y - 0.05, spot.z)
+    model.rotation.y = STRUCTURE_DEFS[kind].facesPlacer ? ghost.yaw : 0
     this.ghostMaterial.color.set(spot.valid ? '#7dff8a' : '#ff5a4f')
   }
 

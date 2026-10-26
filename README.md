@@ -51,7 +51,7 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 
 ## Mesa de trabajo
 
-Se fabrica con 10 de madera y se coloca como la fogata, con vista previa. Las recetas de mesa se pueden fabricar a 3,5 m o menos de su borde, de cualquier mesa: es permanente y en una sala la comparten todos. No se puede atravesar, sale en el minimapa con un cuadrado y desaparece al reiniciarse la isla.
+Se fabrica con 10 de madera y se coloca como la fogata, con vista previa. Se coloca de frente al jugador. Las recetas de mesa se fabrican a unos 3 m o menos de su borde (3,3 m), de cualquier mesa: es permanente y en una sala la comparten todos. No se puede atravesar, sale en el minimapa con un cuadrado y desaparece al reiniciarse la isla.
 
 ## Fogata
 
@@ -67,7 +67,7 @@ Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 
 
 ## Sonido y ajustes
 
-Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
+Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata o la mesa, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
 
 En el menú y en la pausa hay deslizadores para la sensibilidad del ratón, el campo de visión y el volumen. Se guardan en `localStorage` y se aplican al momento.
 

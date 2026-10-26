@@ -740,7 +740,7 @@ export class Game {
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, [sim.world.grid, structures.grid], this.spot) : null
-    this.structureView.setGhost(placing && spot && { kind: placing.kind, spot })
+    this.structureView.setGhost(placing && spot && { kind: placing.kind, spot, yaw: look.yaw })
 
     this.hud.setHealth(p.health, HEALTH_MAX)
     this.hud.setHunger(p.hunger, HUNGER_MAX)

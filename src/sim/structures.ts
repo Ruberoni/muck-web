@@ -15,11 +15,13 @@ export interface StructureDef {
   /** El objeto que se gasta al colocarla. */
   item: ItemId
   radius: number
+  /** Las que no son redondas se colocan de frente a quien las pone; las demás, cada una con su giro. */
+  facesPlacer: boolean
 }
 
 export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
-  campfire: { item: 'campfire', radius: 0.6 },
-  workbench: { item: 'workbench', radius: 0.7 },
+  campfire: { item: 'campfire', radius: 0.6, facesPlacer: false },
+  workbench: { item: 'workbench', radius: 0.7, facesPlacer: true },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]
@@ -99,11 +101,16 @@ export class Structures {
 
   constructor(private emit: Emit = NO_EMIT) {}
 
-  /** Coloca una estructura `kind` de `by` si el sitio es válido; devuelve la estructura o null. */
-  place(spot: StructureSpot, kind: StructureKind, by: PlayerId = LOCAL_PLAYER): Structure | null {
+  /**
+   * Coloca una estructura `kind` de `by` si el sitio es válido; devuelve la estructura o null. `yaw` es hacia donde
+   * mira quien la coloca: las estaciones quedan de frente a él (como su vista previa).
+   */
+  place(spot: StructureSpot, kind: StructureKind, by: PlayerId = LOCAL_PLAYER, yaw = 0): Structure | null {
     if (!spot.valid) return null
     const id = this.nextId++
-    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY: id * 1.3, radius: STRUCTURE_DEFS[kind].radius, alive: true }
+    const { radius, facesPlacer } = STRUCTURE_DEFS[kind]
+    const rotY = facesPlacer ? yaw : id * 1.3
+    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY, radius, alive: true }
     this.insert(structure)
     this.emit({ type: 'structurePlaced', id, kind, x: structure.x, y: structure.y, z: structure.z, rotY: structure.rotY, by })
     return structure

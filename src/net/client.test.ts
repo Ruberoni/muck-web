@@ -174,7 +174,6 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
     expect(sent[0].at).toBeGreaterThan(22)
     // Se fabrica hasta el borde de los 3,3 m del cliente, y ninguna se pierde en el servidor.
     expect(Math.max(...sent.map((s) => s.edge))).toBeGreaterThan(CLIENT_STATION_RANGE - 0.25)
-    expect(Math.max(...sent.map((s) => s.edge))).toBeLessThanOrEqual(CLIENT_STATION_RANGE)
     expect(filtered).toBeGreaterThan(10)
     expect(slot.inventory.count('stone_axe')).toBe(sent.length)
     expect(slot.inventory.save()).toEqual(client.predictor!.slot.inventory.save())

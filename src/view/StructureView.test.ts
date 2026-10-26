@@ -74,7 +74,7 @@ describe('StructureView', () => {
   it('reset apaga las luces y oculta la vista previa', () => {
     const { scene, place, view, update } = setup()
     place({ x: 0, y: 5, z: 0, valid: true })
-    view.setGhost({ kind: 'campfire', spot: { x: 0, y: 5, z: 3, valid: true } })
+    view.setGhost({ kind: 'campfire', spot: { x: 0, y: 5, z: 3, valid: true }, yaw: 0 })
     update()
     view.reset()
     expect(lightsOf(scene).every((l) => l.intensity === 0)).toBe(true)
@@ -84,19 +84,25 @@ describe('StructureView', () => {
   it('la vista previa sigue al sitio y cambia de color; null la oculta', () => {
     const { scene, view } = setup()
     const ghosts = () => scene.children.filter((c) => c !== view.group && c.type === 'Group')
-    view.setGhost({ kind: 'campfire', spot: { x: 1, y: 5, z: 3, valid: true } })
+    view.setGhost({ kind: 'campfire', spot: { x: 1, y: 5, z: 3, valid: true }, yaw: 1 })
     expect(ghosts()).toHaveLength(1)
     const [ghost] = ghosts()
     const color = () => ((ghost.children.find((c) => c instanceof THREE.Mesh) as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHexString()
     expect(ghost.visible).toBe(true)
     expect(ghost.position.x).toBe(1)
     expect(color()).toBe('7dff8a')
-    view.setGhost({ kind: 'campfire', spot: { x: 2, y: 5, z: 3, valid: false } })
+    view.setGhost({ kind: 'campfire', spot: { x: 2, y: 5, z: 3, valid: false }, yaw: 1 })
     expect(ghosts()).toHaveLength(1)
     expect(ghost.position.x).toBe(2)
     expect(color()).toBe('ff5a4f')
-    view.setGhost(null)
+    // La fogata, redonda, no gira; la mesa sale girada como quedará al colocarla.
+    expect(ghost.rotation.y).toBe(0)
+    view.setGhost({ kind: 'workbench', spot: { x: 2, y: 5, z: 3, valid: true }, yaw: 1 })
     expect(ghost.visible).toBe(false)
+    const bench = ghosts().find((g) => g.visible)!
+    expect(bench.rotation.y).toBe(1)
+    view.setGhost(null)
+    expect(ghosts().some((g) => g.visible)).toBe(false)
   })
 
   it('un id que vuelve en otro sitio (otra partida sin reset de la vista) se dibuja de nuevo', () => {
