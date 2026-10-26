@@ -1,4 +1,5 @@
 import type { Game } from '../game/Game'
+import { inGame } from '../game/states'
 import { failureMessage, NetError, NetSession } from '../net/netSession'
 import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
 import { onVersionReject, reloadFor } from '../net/reload'
@@ -272,9 +273,10 @@ export function installLobby(game: Game) {
   game.menuClickStarts = false
   game.hud.menuText = 'Elige cómo jugar'
   game.onchange = update
-  // El estado de la conexión cambia sin avisar a Game: se mira de vez en cuando mientras se ve el panel.
+  // El estado de la conexión cambia sin avisar a Game: se mira de vez en cuando mientras se ve el panel (fuera de
+  // partida: jugando, de espectador o con el inventario abierto no se ve).
   setInterval(() => {
-    if (game.state !== 'playing') update()
+    if (!inGame(game.state)) update()
   }, 500)
   if (game.state === 'menu') game.hud.showOverlay('menu')
   update()

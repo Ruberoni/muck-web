@@ -18,7 +18,8 @@ import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, 
 import { inputButtons, type ActionData } from '../sim/commands'
 import { Handheld } from './handheld'
 import { Input } from './input'
-import { acceptsKeys, stepActions } from './actions'
+import { stepActions } from './actions'
+import { acceptsKeys, afterLockChange, inGame, showsCrosshair, type GameState } from './states'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/player'
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
@@ -29,12 +30,9 @@ import type { Shown } from '../net/interp'
 import { pickNameTags, type PlayerRow } from '../ui/multiplayerHud'
 import { playerCss } from '../ui/playerColor'
 
-/** `spectating`: muerto en una sala, mirando a los demás hasta reaparecer (con un jugador, morir es `dead`). */
-export type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'spectating'
+export type { GameState } from './states'
 
-/** Se juega (con el ratón capturado): vivo o, en una sala, muerto mirando a los demás. */
-const isActive = (state: GameState) => state === 'playing' || state === 'spectating'
-const overlayFor = (state: GameState): OverlayKind => (state === 'playing' || state === 'spectating' ? null : state)
+const overlayFor = (state: GameState): OverlayKind => (inGame(state) ? null : state)
 
 const SHADOW_LOOK_AHEAD = 25
 // Distancia a la que deja de oírse una fogata.
@@ -56,6 +54,9 @@ const SPECTATOR_TURN = 5
  * reloj, `sim` es un espejo y hay más que presentar: los eventos del servidor que tratan del jugador local (al
  * llegar, con sonido) y los de los demás (en el tick de render, con sonido según dónde pasan). Muerto en una sala,
  * mira a los demás (`spectating`, Tab cambia) hasta que el servidor lo hace reaparecer.
+ *
+ * Con la pantalla de inventario abierta (`inventory`) el ratón está suelto, pero se sigue en partida: el jugador
+ * se queda quieto y solo manda lo que genera la pantalla (`move`), y la red y la simulación siguen.
  */
 export class Game {
   readonly renderer: THREE.WebGLRenderer
@@ -108,6 +109,8 @@ export class Game {
   private worldVersion = -1
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
   private retrying = false
+  /** Cerrando el inventario: a la espera de recapturar el ratón. */
+  private closingInventory = false
   private projected = new THREE.Vector3()
   /** El `generation` de la sesión en red que ya refleja la vista (sube al reconectar). */
   private netGeneration = 0
@@ -142,6 +145,10 @@ export class Game {
 
     this.hud = new Hud(container, () => this.onOverlayClick())
     this.hud.net.onsay = (text) => this.net?.client.say(text)
+    this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
+    this.hud.inventory.onclose = () => this.closeInventory()
+    // Esc no es un gesto que permita recapturar el ratón: se queda en pausa.
+    this.hud.inventory.onescape = () => this.setState('paused')
     this.bindInventory()
     this.sound.setVolume(this.settings.volume)
     createSettingsPanel(
@@ -158,9 +165,18 @@ export class Game {
       isPlaying: () => this.state === 'playing',
       acceptsKeys: () => acceptsKeys(this.state),
       onLockChange: (locked) => {
-        if (locked) this.setState('playing')
-        else if (isActive(this.state)) this.setState('paused')
+        const next = afterLockChange(this.state, locked)
+        if (next) this.setState(next)
       },
+    })
+    // Con el inventario abierto el ratón ya está suelto: ocultar la pestaña o cambiar de ventana no cambiaría el
+    // estado, y en red se seguiría en partida y al volver se re-simularían de golpe todos los ticks perdidos.
+    const leave = () => {
+      if (this.state === 'inventory') this.setState('paused')
+    }
+    window.addEventListener('blur', leave)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) leave()
     })
 
     window.addEventListener('resize', () => {
@@ -200,7 +216,7 @@ export class Game {
     this.worldVersion = -1
     // El espectador es de la sala que se deja: en la nueva se vuelve a decidir con su `you`.
     if (this.state === 'spectating') this.state = 'playing'
-    this.hud.setCrosshair(true)
+    this.hud.setCrosshair(showsCrosshair(this.state))
     this.netGeneration = this.net?.generation ?? 0
     this.gameOverDay = null
     this.lookFromPlayer()
@@ -208,15 +224,16 @@ export class Game {
     this.snapPlayer = true
     this.placeCamera(this.slot.player.pos)
     // En el menú o en pausa no predice ni envía: al empezar a jugar pide el estado.
-    if (!isActive(this.state)) this.net?.suspend()
+    if (!inGame(this.state)) this.net?.suspend()
     this.hud.net.setVisible(this.net !== null)
     if (this.state !== 'playing') this.hud.showOverlay(overlayFor(this.state), this.net !== null)
     this.onchange?.()
   }
 
   setState(state: GameState) {
-    if (state === 'playing' && this.state !== 'playing') {
-      // Al empezar, reanudar o reaparecer no se interpola desde la posición de antes.
+    if (state === 'playing' && this.state !== 'playing' && this.state !== 'inventory') {
+      // Al empezar, reanudar o reaparecer no se interpola desde la posición de antes (al cerrar el inventario sí:
+      // la simulación no se ha parado).
       this.snapPlayer = true
       this.acc = 0
       this.retrying = false
@@ -228,12 +245,15 @@ export class Game {
       this.setCrafting(false)
     }
     if (state !== 'playing') this.input.clear()
-    if (!isActive(state)) this.hud.net.closeChat()
-    this.hud.setCrosshair(state !== 'spectating')
-    // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue. El espectador sigue conectado.
-    if (isActive(state)) this.net?.wake()
+    if (!inGame(state)) this.hud.net.closeChat()
+    this.hud.setCrosshair(showsCrosshair(state))
+    // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue. El espectador y el inventario
+    // siguen conectados.
+    if (inGame(state)) this.net?.wake()
     else this.net?.suspend()
     this.state = state
+    this.closingInventory = false
+    this.hud.inventory.setOpen(state === 'inventory')
     this.hud.showOverlay(overlayFor(state), this.net !== null)
     this.onchange?.()
   }
@@ -278,6 +298,32 @@ export class Game {
     // Mover un deslizador es un gesto del usuario: basta para poder sonar.
     this.sound.unlock()
     this.sound.setVolume(this.settings.volume)
+  }
+
+  /** Abre la pantalla de inventario (cierra el crafteo) y suelta el ratón; jugando, y con un jugador o en una sala. */
+  openInventory() {
+    if (this.state !== 'playing') return
+    this.setCrafting(false)
+    // Con el estado ya en `inventory`, soltar el ratón no pasa a pausa.
+    this.setState('inventory')
+    if (this.input.locked) document.exitPointerLock()
+  }
+
+  /**
+   * Cierra la pantalla de inventario recapturando el ratón: se llama desde el propio evento de teclado, que cuenta
+   * como gesto del usuario. Se vuelve a jugar al capturarlo (`afterLockChange`), no antes: la misma tecla llegaría
+   * a `Input` y volvería a abrir la pantalla. Si no se puede (el navegador lo rechaza si se soltó hace poco), pausa.
+   */
+  closeInventory() {
+    if (this.state !== 'inventory' || this.closingInventory) return
+    this.closingInventory = true
+    this.sound.unlock()
+    void this.input.requestLock().then((ok) => {
+      if (ok || this.state !== 'inventory') return
+      this.setState('paused')
+      this.retrying = true
+      this.hud.showOverlay('retry', this.net !== null)
+    })
   }
 
   setCrafting(open: boolean) {
@@ -332,7 +378,7 @@ export class Game {
     if (net) {
       if (net.generation !== this.netGeneration) this.reconnected(net)
       // El reloj de red dice cuántos ticks predecir (0 en pausa: está suspendida).
-      for (let i = 0, n = net.advance(); i < n && isActive(this.state); i++) this.step()
+      for (let i = 0, n = net.advance(); i < n && inGame(this.state); i++) this.step()
       net.flush()
       const { own, remote } = net.render()
       if (own.some((e) => e.type === 'worldReset')) {
@@ -349,14 +395,18 @@ export class Game {
       // Muerto, mira a los demás hasta que el servidor dice (en `you`) que ha reaparecido.
       if (this.state === 'playing' && !this.slot.alive) this.setState('spectating')
       else if (this.state === 'spectating' && this.slot.alive) this.setState('playing')
+      // Muerto con el inventario abierto: a pausa, para no quedarse de espectador sin ratón ni overlay. El clic en el
+      // overlay lo recaptura, pasa a jugar y el frame siguiente a espectador.
+      else if (this.state === 'inventory' && !this.slot.alive) this.setState('paused')
       this.render(net.alpha, dt, time)
       return
     }
 
-    if (this.state === 'playing' && !this.manualClock) {
+    // Con el inventario abierto la isla sigue: solo se para en el menú, en pausa o muerto.
+    if (inGame(this.state) && !this.manualClock) {
       this.acc += dt
       let steps = 0
-      while (this.acc >= STEP && steps < MAX_STEPS_PER_FRAME && this.state === 'playing') {
+      while (this.acc >= STEP && steps < MAX_STEPS_PER_FRAME && inGame(this.state)) {
         this.step()
         this.acc -= STEP
         steps++
@@ -364,28 +414,36 @@ export class Game {
       if (steps === MAX_STEPS_PER_FRAME) this.acc = Math.min(this.acc, STEP)
     }
 
-    this.render(this.state === 'playing' && !this.manualClock ? this.acc / STEP : 1, dt, time)
+    this.render(inGame(this.state) && !this.manualClock ? this.acc / STEP : 1, dt, time)
   }
 
   /** Un paso fijo: manda el movimiento y las acciones a la sesión y presenta lo que ha pasado. */
   private step() {
     if (this.state === 'spectating') return this.spectatorStep()
-    const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
-    const presses = this.input.takePresses()
-    this.chatKey(presses)
-    const { inventory } = this.slot
-    const { actions, crafting } = stepActions(this.queued.splice(0), {
-      presses,
-      wheel: this.input.takeWheel(),
-      crafting: this.craftingOpen,
-      selected: inventory.selected,
-      slots: inventory.slots,
-      clickSwings: this.attackOverride === null,
-    })
-    if (crafting !== this.craftingOpen) this.setCrafting(crafting)
-    const attack = this.attackOverride ?? this.input.attackHeld
     const { yaw, pitch } = this.look
-    const events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, actions)
+    let events: readonly SimEvent[]
+    if (this.state === 'inventory') {
+      // Quieto (el `Move` sirve de keepalive) y solo con lo que manda la pantalla (o `__debug`).
+      events = this.session.step({ buttons: 0, yaw, pitch }, this.queued.splice(0))
+    } else {
+      const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
+      const presses = this.input.takePresses()
+      const { inventory } = this.slot
+      const { actions, crafting, inventory: openInventory } = stepActions(this.queued.splice(0), {
+        presses,
+        wheel: this.input.takeWheel(),
+        crafting: this.craftingOpen,
+        selected: inventory.selected,
+        slots: inventory.slots,
+        clickSwings: this.attackOverride === null,
+      })
+      if (crafting !== this.craftingOpen) this.setCrafting(crafting)
+      // El chat no se abre a la vez que el inventario.
+      if (!openInventory) this.chatKey(presses)
+      const attack = this.attackOverride ?? this.input.attackHeld
+      events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, actions)
+      if (openInventory) this.openInventory()
+    }
     this.snapPlayer = false
     const { sim, slot } = this
     // Una vez por tick real (en red, por tick predicho; nunca al re-simular).
@@ -540,7 +598,7 @@ export class Game {
         health: slot.player.health,
         maxHealth: HEALTH_MAX,
         ping: rtt,
-        absent: !isActive(this.state) && slot.alive,
+        absent: !inGame(this.state) && slot.alive,
         alive: slot.alive,
         me: true,
       },
@@ -559,7 +617,7 @@ export class Game {
       window.innerWidth,
       window.innerHeight,
     )
-    hud.net.setNames(isActive(this.state) ? tags : [])
+    hud.net.setNames(inGame(this.state) ? tags : [])
 
     this.audio.remoteSteps(
       shown.map(({ id, pose, data }) => {
@@ -680,7 +738,7 @@ export class Game {
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
-    else if (this.state === 'spectating') this.hud.setPrompt('')
+    else if (this.state === 'spectating' || this.state === 'inventory') this.hud.setPrompt('')
     else if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else this.hud.setTarget(slot.target)
@@ -700,7 +758,8 @@ export class Game {
     this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
     this.renderer.clear()
     this.renderer.render(this.scene, this.camera)
-    if (this.state !== 'dead' && this.state !== 'spectating') this.handheld.render(this.renderer)
+    // La mano no se dibuja muerto ni bajo la pantalla de inventario.
+    if (this.state !== 'dead' && this.state !== 'spectating' && this.state !== 'inventory') this.handheld.render(this.renderer)
   }
 
   /** Detrás y por encima del compañero, girando con él poco a poco; nunca bajo el suelo ni bajo el agua. */
@@ -723,10 +782,10 @@ export class Game {
     const { sim } = this
     let nearest = Infinity
     for (const fire of sim.campfires.list) nearest = Math.min(nearest, Math.hypot(fire.x - this.renderPos.x, fire.z - this.renderPos.z))
-    // En una sala el mundo sigue en pausa, y su ambiente también.
+    // En una sala el mundo sigue en pausa, y su ambiente también. Con el inventario abierto también sigue.
     const online = this.net !== null && !this.net.closed
     this.sound.update(dt, {
-      active: this.state === 'playing' || online,
+      active: inGame(this.state) || online,
       night: 1 - THREE.MathUtils.smoothstep(sunDirection(sim.clock.phase, this.sun).y, -0.1, 0.25),
       campfire: Math.max(0, 1 - nearest / CAMPFIRE_HEARING),
     })

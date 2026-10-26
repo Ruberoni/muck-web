@@ -199,6 +199,15 @@ export function installDebug(game: Game) {
       game.queueAction({ kind: 'move', from, to })
     },
     setCrafting: (open: boolean) => game.setCrafting(open),
+    /**
+     * Abre (jugando) o cierra la pantalla de inventario. Cerrarla desde aquí no recaptura el ratón (no hay gesto del
+     * usuario): vuelve a jugar sin él, como `start`.
+     */
+    inventoryScreen(open: boolean) {
+      if (open) game.openInventory()
+      else if (game.state === 'inventory') game.setState('playing')
+      return game.state
+    },
     campfires: () => sim().campfires.list.map(({ id, x, y, z }) => ({ id, x, y, z })),
     /** Coloca una fogata delante de (x, z) mirando a `yaw`, sin gastar materiales; devuelve si se pudo (con un jugador). */
     placeCampfire: (x: number, z: number, yaw = 0) =>
