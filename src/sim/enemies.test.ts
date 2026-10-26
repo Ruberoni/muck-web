@@ -18,7 +18,8 @@ import {
   WADE_DEPTH,
 } from './constants'
 import { ENEMY_AIM_HEIGHT, Enemies, enemyCap, type EnemyData } from './enemies'
-import { createCombat, hitDamage, Interaction, type Fighter } from './interaction'
+import { createCombat, Interaction, type Fighter } from './interaction'
+import { attackDamage } from './tiers'
 import { Inventory, type ItemId } from './inventory'
 import { Pickups } from './pickups'
 
@@ -180,12 +181,12 @@ describe('combate', () => {
   }
 
   it('las herramientas pegan más fuerte que la mano, sea hacha o pico', () => {
-    expect(hitDamage(null, 'enemy')).toBe(1)
-    expect(hitDamage('wood', 'enemy')).toBe(1)
-    expect(hitDamage('wood_axe', 'enemy')).toBe(2)
-    expect(hitDamage('wood_pickaxe', 'enemy')).toBe(2)
-    expect(hitDamage('stone_axe', 'enemy')).toBe(3)
-    expect(hitDamage('stone_pickaxe', 'enemy')).toBe(3)
+    expect(attackDamage(null)).toBe(1)
+    expect(attackDamage('wood')).toBe(1)
+    expect(attackDamage('wood_axe')).toBe(2)
+    expect(attackDamage('wood_pickaxe')).toBe(2)
+    expect(attackDamage('stone_axe')).toBe(3)
+    expect(attackDamage('stone_pickaxe')).toBe(3)
   })
 
   it('el raycast apunta al enemigo', () => {

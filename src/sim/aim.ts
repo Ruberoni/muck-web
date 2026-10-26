@@ -1,4 +1,4 @@
-import { EYE_HEIGHT, REACH } from './constants'
+import { EYE_HEIGHT, PROP_DEFS, REACH, type PropFamily } from './constants'
 import type { Collider, SpatialGrid } from './collision'
 import {
   BUSH_LIFT,
@@ -13,7 +13,6 @@ import {
   TRUNK_HEIGHT,
   TRUNK_SIDES,
   TRUNK_TOP_RADIUS,
-  type PropKind,
   type PropPlacement,
 } from './props'
 import { heightAt } from './world/terrain'
@@ -137,7 +136,8 @@ function frustum(sides: number, rBottom: number, rTop: number, y0: number, h: nu
   return convex(vertices, faces)
 }
 
-const SHAPES: Record<PropKind, readonly Convex[]> = {
+// Por familia: un tipo nuevo de una familia que ya existe tiene la misma hitbox (con su escala).
+const SHAPES: Record<PropFamily, readonly Convex[]> = {
   tree: [
     frustum(TRUNK_SIDES, TRUNK_BOTTOM_RADIUS, TRUNK_TOP_RADIUS, 0, TRUNK_HEIGHT),
     frustum(FOLIAGE_SIDES, FOLIAGE_RADIUS, 0, FOLIAGE_BASE, FOLIAGE_HEIGHT),
@@ -146,14 +146,15 @@ const SHAPES: Record<PropKind, readonly Convex[]> = {
   bush: [icosahedron(BUSH_RADIUS, { x: 1, y: BUSH_SQUASH, z: 1 }, BUSH_LIFT)],
 }
 // Radio horizontal de cada forma sin escalar (la inclinación de las rocas es pequeña: se cubre con la escala mayor).
-const SHAPE_REACH: Record<PropKind, number> = { tree: FOLIAGE_RADIUS, rock: ROCK_RADIUS, bush: BUSH_RADIUS }
+const SHAPE_REACH: Record<PropFamily, number> = { tree: FOLIAGE_RADIUS, rock: ROCK_RADIUS, bush: BUSH_RADIUS }
 const ENEMY_SHAPE = [icosahedron(ENEMY_BODY_RADIUS, ENEMY_BODY_SCALE, ENEMY_BODY_LIFT)]
 
 /** Hitboxes de los props a partir de sus colocaciones (no cambian durante la partida). */
 export function createPropHitboxes(placements: readonly PropPlacement[]): PropHitboxes {
   let reach = 0
   const boxes = placements.map((p): Hitbox => {
-    reach = Math.max(reach, SHAPE_REACH[p.kind] * Math.max(p.scaleX, p.scaleY, p.scaleZ))
+    const { family } = PROP_DEFS[p.kind]
+    reach = Math.max(reach, SHAPE_REACH[family] * Math.max(p.scaleX, p.scaleY, p.scaleZ))
     return {
       x: p.x,
       y: p.y,
@@ -165,7 +166,7 @@ export function createPropHitboxes(placements: readonly PropPlacement[]): PropHi
       sx: p.scaleX,
       sy: p.scaleY,
       sz: p.scaleZ,
-      parts: SHAPES[p.kind],
+      parts: SHAPES[family],
     }
   })
   return { boxes, reach }

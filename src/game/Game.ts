@@ -17,6 +17,8 @@ import { placeableOf, structureSpot, type StructureKind, type StructureSpot } fr
 import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { clientCraftWorld, sendableActions } from '../ui/recipes'
+import { missingTool, swingFeedback } from '../ui/tools'
+import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { Input } from './input'
 import { stepActions, type InventoryFocus } from './actions'
@@ -43,6 +45,8 @@ const PLACE_PROMPT: Record<StructureKind, string> = {
   campfire: 'Clic para colocar la fogata',
   workbench: 'Clic para colocar la mesa de trabajo',
 }
+/** Segundos que se ve "Necesitas pico de madera" tras golpear algo que no se puede con lo que se lleva. */
+const TOOL_WARNING_TIME = 1.5
 /** Los nombres flotan algo por encima de la cabeza. */
 const NAME_HEIGHT = EYE_HEIGHT + 0.55
 /** Por encima del suelo a esta altura (m), otro jugador está en el aire o flotando: sus pasos no suenan. */
@@ -81,6 +85,8 @@ export class Game {
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
+  /** El aviso de "Necesitas …" tras un golpe que no hace nada: a qué tipo de prop y los segundos que le quedan. */
+  private toolWarning: { kind: PropKind | null; left: number } = { kind: null, left: 0 }
   readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
@@ -532,6 +538,7 @@ export class Game {
           break
         case 'playerSwing':
           if (e.id === slot.id) this.handheld.play('swing')
+          this.swingAtProp(e)
           break
         case 'playerPlaced':
           if (e.id === slot.id) this.handheld.play('place', e.item)
@@ -552,6 +559,19 @@ export class Game {
           break
       }
     }
+  }
+
+  /**
+   * Un golpe a un prop que no le hace nada (sin la herramienta que pide) no tiene evento propio: el cliente lo
+   * decide con el objeto del golpe y el tipo del prop. Tiembla igual y, si es propio, se avisa de qué hace falta.
+   */
+  private swingAtProp(e: Extract<SimEvent, { type: 'playerSwing' }>) {
+    if (e.target?.kind !== 'prop') return
+    const prop = this.sim.world.props[e.target.id]
+    if (!prop) return
+    const { wobble, warn } = swingFeedback(e.item, prop.kind, prop.alive, e.id === this.slot.id)
+    if (wobble) this.propView.wobble(prop.id)
+    if (warn) this.toolWarning = { kind: prop.kind, left: TOOL_WARNING_TIME }
   }
 
   /** Lo que hacen los demás, ya en el tick de render: suena donde pasa, y su muerte se avisa. */
@@ -682,6 +702,7 @@ export class Game {
     this.structureView.reset()
     this.remotePlayers.reset()
     this.audio.reset()
+    this.toolWarning.left = 0
   }
 
   private die() {
@@ -745,12 +766,16 @@ export class Game {
     this.hud.setHealth(p.health, HEALTH_MAX)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
+    this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)
+    // Se va antes de tiempo si ya se lleva en la mano lo que hacía falta.
+    const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating' || this.state === 'inventory') this.hud.setPrompt('')
     else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
+    else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
-    else this.hud.setTarget(slot.target)
+    else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
     this.hud.setDay(sim.clock.day)
     this.hud.minimap.draw({

@@ -5,7 +5,7 @@ import { PropView, type PropInstance } from './PropView'
 import { heightAt } from '../sim/world/terrain'
 import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from '../sim/constants'
 import type { SimEventData } from '../sim/events'
-import { aimPose, createCombat, hitDamage, Interaction, type Fighter } from '../sim/interaction'
+import { aimPose, createCombat, Interaction, type Fighter } from '../sim/interaction'
 import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from '../sim/pickups'
 
@@ -14,8 +14,13 @@ function setup() {
   const view = new PropView(world.placements)
   const inventory = new Inventory()
   const pickups = new Pickups([world.grid], () => 0.5)
+  /** Todo lo emitido, en orden. */
+  const events: SimEventData[] = []
   // La vista recibe cada evento al momento, como si se presentara al final de cada paso.
-  const emit = (e: SimEventData) => view.present([e])
+  const emit = (e: SimEventData) => {
+    events.push(e)
+    view.present([e])
+  }
   const interaction = new Interaction(world, pickups, undefined, emit)
   // Desde dónde y hacia dónde mira el jugador.
   const viewer = { pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }
@@ -48,7 +53,12 @@ function setup() {
     fighter.target = null
     view.reset()
   }
-  return { world, view, inventory, pickups, interaction, viewer, fighter, aimAt, hold, step, onGround, reset }
+  /** Pone `item` en la mano. */
+  const equip = (item: ItemId) => {
+    inventory.add(item, 1)
+    inventory.select(inventory.slots.indexOf(item))
+  }
+  return { world, view, inventory, pickups, events, interaction, viewer, fighter, aimAt, hold, step, onGround, reset, equip }
 }
 
 describe('recolección', () => {
@@ -98,12 +108,13 @@ describe('recolección', () => {
     expect(tree.hp).toBe(tree.maxHp - 1)
   })
 
-  it('una roca necesita 4 golpes y da piedra', () => {
+  it('con pico de madera una roca necesita 2 golpes y da piedra', () => {
+    ctx.equip('wood_pickaxe')
     const rock = firstOf('rock')
     ctx.aimAt(rock)
     expect(ctx.fighter.target).toBe(rock)
-    ctx.hold(1.2)
-    expect(rock.hp).toBe(1)
+    ctx.hold(0.4)
+    expect(rock.hp).toBe(2)
     expect(rock.alive).toBe(true)
     ctx.hold(0.4)
     expect(rock.alive).toBe(false)
@@ -245,8 +256,9 @@ describe('bayas', () => {
     const rock = ctx.world.props.find((p) => p.kind === 'rock')!
     ctx.aimAt(tree)
     ctx.hold(1.2)
+    ctx.equip('wood_pickaxe')
     ctx.aimAt(rock)
-    ctx.hold(1.6)
+    ctx.hold(0.8)
     wait(BERRY_REGROW * BERRIES_PER_BUSH * 2)
     expect(tree.alive).toBe(false)
     expect(rock.alive).toBe(false)
@@ -258,11 +270,12 @@ describe('bayas', () => {
     const bush = firstBush()
     ctx.aimAt(tree)
     ctx.hold(1.2)
+    ctx.equip('wood_pickaxe')
     ctx.aimAt(rock)
     ctx.hold(STEP)
     ctx.aimAt(bush)
     ctx.hold(STEP)
-    expect(rock.hp).toBe(rock.maxHp - 1)
+    expect(rock.hp).toBe(rock.maxHp - 2)
 
     ctx.reset()
     for (const prop of [tree, rock, bush]) {
@@ -294,20 +307,20 @@ describe('herramientas', () => {
   })
 
   const firstOf = (kind: PropData['kind']) => ctx.world.props.find((p) => p.kind === kind)!
-  const equip = (item: ItemId) => {
-    ctx.inventory.add(item, 1)
-    ctx.inventory.select(ctx.inventory.slots.indexOf(item))
-  }
+  const equip = (item: ItemId) => ctx.equip(item)
 
-  it('cada herramienta multiplica el daño solo contra su tipo de prop', () => {
-    expect(hitDamage(null, 'tree')).toBe(1)
-    expect(hitDamage('wood', 'tree')).toBe(1)
-    expect(hitDamage('wood_axe', 'tree')).toBe(2)
-    expect(hitDamage('stone_axe', 'tree')).toBe(4)
-    expect(hitDamage('stone_axe', 'rock')).toBe(1)
-    expect(hitDamage('wood_pickaxe', 'rock')).toBe(2)
-    expect(hitDamage('stone_pickaxe', 'rock')).toBe(4)
-    expect(hitDamage('stone_pickaxe', 'tree')).toBe(1)
+  it.each([null, 'wood', 'wood_axe', 'stone_axe'] as const)('con %s la roca no pierde vida: el golpe se da, pero sin propHit', (item) => {
+    if (item) equip(item)
+    const rock = firstOf('rock')
+    ctx.aimAt(rock)
+    ctx.hold(1.6)
+    expect(rock.hp).toBe(rock.maxHp)
+    expect(rock.alive).toBe(true)
+    expect(ctx.onGround('stone')).toBe(0)
+    const swings = ctx.events.filter((e) => e.type === 'playerSwing')
+    expect(swings).toHaveLength(4)
+    expect(swings.every((e) => e.type === 'playerSwing' && e.item === item && e.target?.id === rock.id)).toBe(true)
+    expect(ctx.events.some((e) => e.type === 'propHit' || e.type === 'propDestroyed')).toBe(false)
   })
 
   it('con hacha de madera un árbol cae en 2 golpes', () => {

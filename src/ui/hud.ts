@@ -1,11 +1,12 @@
 import { ENEMY_DEF, PROP_DEFS } from '../sim/constants'
-import { ITEM_NAMES, SLOT_COUNT, type Inventory } from '../sim/inventory'
+import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Target } from '../sim/interaction'
 import { ICONS } from './icons'
 import { InventoryScreen } from './inventoryScreen'
 import { Minimap } from './minimap'
 import { MultiplayerHud } from './multiplayerHud'
 import { CRAFT_MANY } from './recipes'
+import { missingTool } from './tools'
 
 export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | null
 
@@ -149,17 +150,30 @@ export class Hud {
     }
   }
 
-  setTarget(target: Target | null) {
-    let text = ''
-    if (target?.kind === 'bush') {
-      const { name, verb } = PROP_DEFS.bush
-      text = target.hp > 0 ? `${name} (${target.hp}) — clic para ${verb}` : `${name} — sin bayas`
-    } else if (target) {
-      const def = target.kind === 'enemy' ? ENEMY_DEF : PROP_DEFS[target.kind]
-      const hp = target.maxHp > 1 ? ` ${'▮'.repeat(target.hp)}${'▯'.repeat(target.maxHp - target.hp)}` : ''
-      text = `${def.name}${hp} — clic para ${def.verb}`
+  /**
+   * Lo que se tiene delante, con `held` en la mano: nombre, barra de vida (proporcional, de ancho fijo) y qué hacer,
+   * o en gris la herramienta que pide si con `held` no se le puede hacer nada ("Roca · necesita pico de madera").
+   */
+  setTarget(target: Target | null, held: ItemId | null) {
+    if (!target) return this.setPrompt('')
+    if (target.kind !== 'enemy' && PROP_DEFS[target.kind].family === 'bush') {
+      const { name, verb } = PROP_DEFS[target.kind]
+      return this.setPrompt(target.hp > 0 ? `${name} (${target.hp}) — clic para ${verb}` : `${name} — sin bayas`)
     }
-    this.setPrompt(text)
+    const def = target.kind === 'enemy' ? ENEMY_DEF : PROP_DEFS[target.kind]
+    const need = target.kind === 'enemy' ? null : missingTool(held, target.kind)
+    // Empieza por \0 para no confundirse nunca con un texto de setPrompt.
+    const key = `\0${def.name}|${target.hp}|${target.maxHp}|${need}`
+    if (key === this.last.prompt) return
+    this.last.prompt = key
+    this.prompt.replaceChildren(def.name)
+    if (target.maxHp > 1) {
+      const fill = el('span', 'fill', el('span', 'hp', this.prompt))
+      fill.style.transform = `scaleX(${target.hp / target.maxHp})`
+    }
+    if (need) el('span', 'need', this.prompt).textContent = ` · necesita ${need}`
+    else this.prompt.append(` — clic para ${def.verb}`)
+    this.prompt.hidden = false
   }
 
   /** Texto bajo la mira; vacío lo oculta. */

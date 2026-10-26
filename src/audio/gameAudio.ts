@@ -1,5 +1,8 @@
+import { PROP_DEFS, type PropFamily } from '../sim/constants'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
+import type { ItemId } from '../sim/inventory'
 import type { PropKind } from '../sim/props'
+import { canDamage } from '../sim/tiers'
 import type { SoundName, SoundOut } from './sound'
 import { spatialize } from './sound'
 
@@ -12,7 +15,9 @@ const MIN_AIR_TIME = 0.3
 export const GROWL_DISTANCE = 28
 const GROWL_MIN_INTERVAL = 2.5
 const GROWL_RANDOM_INTERVAL = 4
-const IMPACT = { tree: 'hitWood', rock: 'hitStone', bush: 'hitBush' } as const
+const IMPACT: Record<PropFamily, SoundName> = { tree: 'hitWood', rock: 'hitStone', bush: 'hitBush' }
+const BREAK: Record<PropFamily, SoundName> = { tree: 'breakWood', rock: 'breakStone', bush: 'breakWood' }
+const breakOf = (kind: PropKind) => BREAK[PROP_DEFS[kind].family]
 
 /** Hasta dónde se oye lo que hacen los demás (§8 del plan): golpes y roturas, colocar estructuras, daño, pasos y lo demás. */
 export const REMOTE_HEARING = { hit: 30, place: 25, hurt: 20, step: 15, other: 15 } as const
@@ -108,10 +113,10 @@ export class GameAudio {
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
-          if (e.id === me) this.swing(e.target, list, propKind)
+          if (e.id === me) this.swing(e.item, e.target, list, propKind)
           break
         case 'propDestroyed':
-          s.play(propKind(e.id) === 'rock' ? 'breakStone' : 'breakWood')
+          s.play(breakOf(propKind(e.id)))
           break
         case 'enemyDied':
           s.play('enemyDeath')
@@ -161,10 +166,10 @@ export class GameAudio {
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
-          at(e, REMOTE_HEARING.hit, this.impact(e.target, list, propKind))
+          at(e, REMOTE_HEARING.hit, this.impact(e.item, e.target, list, propKind))
           break
         case 'propDestroyed':
-          at(e, REMOTE_HEARING.hit, propKind(e.id) === 'rock' ? 'breakStone' : 'breakWood')
+          at(e, REMOTE_HEARING.hit, breakOf(propKind(e.id)))
           break
         case 'enemyDied':
           at(e, REMOTE_HEARING.hit, 'enemyDeath')
@@ -213,21 +218,25 @@ export class GameAudio {
     for (const id of this.walkers.keys()) if (!seen.has(id)) this.walkers.delete(id)
   }
 
-  /** Impacto de un golpe propio, o al aire si `target` es null. */
-  private swing(target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind) {
-    const name = this.impact(target, list, propKind)
+  /** Impacto de un golpe propio con `item`, o al aire si `target` es null. */
+  private swing(item: ItemId | null, target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind) {
+    const name = this.impact(item, target, list, propKind)
     if (name) this.sound.play(name)
   }
 
-  /** Lo que suena al golpear `target`: nada si en la misma lista lo rompe o lo mata (suena eso). */
-  private impact(target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind): SoundName | null {
+  /**
+   * Lo que suena al golpear `target` con `item`: nada si en la misma lista lo rompe o lo mata (suena eso), y `clank`
+   * si no se le puede hacer nada con eso (una roca a mano): el cliente lo decide solo, sin evento nuevo.
+   */
+  private impact(item: ItemId | null, target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind): SoundName | null {
     if (!target) return 'swing'
     const killed = list.some(
       (e) => ((e.type === 'propDestroyed' && target.kind === 'prop') || (e.type === 'enemyDied' && target.kind === 'enemy')) && e.id === target.id,
     )
     if (killed) return null
     if (target.kind === 'enemy') return 'enemyHit'
-    return IMPACT[propKind(target.id)]
+    const kind = propKind(target.id)
+    return canDamage(item, kind) ? IMPACT[PROP_DEFS[kind].family] : 'clank'
   }
 
   private pickup() {

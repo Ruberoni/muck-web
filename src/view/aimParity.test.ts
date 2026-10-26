@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { aimRay, createPropHitboxes, pickTarget, type AimRay } from '../sim/aim'
 import { SpatialGrid } from '../sim/collision'
-import { EYE_HEIGHT, REACH } from '../sim/constants'
+import { EYE_HEIGHT, PROP_DEFS, REACH } from '../sim/constants'
 import { createPropWorld, type PropData, type PropKind } from '../sim/props'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
@@ -55,14 +55,15 @@ function compare(samples: { mesh: unknown; box: unknown }[]) {
   }
 }
 
-/** 40 props de un tipo, 60 rayos a cada uno desde fuera de su radio hacia su volumen y sus bordes. */
+/** 40 props de un tipo, 60 rayos a cada uno desde fuera de su radio hacia su volumen y sus bordes (según su familia). */
 function propSamples(kind: PropKind) {
+  const { family } = PROP_DEFS[kind]
   const rng = mulberry32(42)
   const samples: { mesh: number | 'enemy' | null; box: number | null }[] = []
   for (const prop of world.props.filter((p) => p.kind === kind).slice(0, 40)) {
-    const height = (kind === 'tree' ? 6 : 1.2) * prop.scaleY
-    const base = kind === 'rock' ? prop.y - 0.6 * prop.scaleY : prop.y
-    const spread = prop.radius * 1.6 + (kind === 'tree' ? 1.5 : 0.5)
+    const height = (family === 'tree' ? 6 : 1.2) * prop.scaleY
+    const base = family === 'rock' ? prop.y - 0.6 * prop.scaleY : prop.y
+    const spread = prop.radius * 1.6 + (family === 'tree' ? 1.5 : 0.5)
     for (let i = 0; i < 60; i++) {
       const angle = rng() * Math.PI * 2
       const dist = prop.radius + 0.4 + rng() * 3
