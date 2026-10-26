@@ -2,7 +2,7 @@ import type { ActionData } from '../sim/commands'
 import type { PlayerId, SimEvent } from '../sim/events'
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import type { Vec3 } from '../sim/player'
-import { botMove, driveClient } from './bot'
+import { botStep, driveClient } from './bot'
 import { NetClient, type ClientHello } from './client'
 import { cleanName, CloseCode, ROOM_ALPHABET, ROOM_CODE_LENGTH, type DevOp, type Reject } from './protocol'
 import { onVersionReject, reloadFor, versionAccepted } from './reload'
@@ -349,7 +349,7 @@ export interface Bot {
 /** Otro jugador en la misma pestaña, sin pantalla, que anda en círculos (`__debug.net.addBot`): para probar sin otro navegador. */
 export async function startBot(room: string, name: string, url = SERVER_URL): Promise<Bot> {
   const { client } = await connectClient({ intent: 'join', room, name, tab: randomId() }, url)
-  const timer = setInterval(() => driveClient(client, (tick) => botMove(tick, client.id)), BOT_FRAME_MS)
+  const timer = setInterval(() => driveClient(client, (tick) => botStep(tick, client.id, client.predictor!.slot)), BOT_FRAME_MS)
   return {
     id: client.id,
     client,

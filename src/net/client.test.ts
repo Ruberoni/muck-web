@@ -7,7 +7,7 @@ import { aimPose } from '../sim/interaction'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
 import { clientCraftWorld, CLIENT_STATION_RANGE, sendableActions } from '../ui/recipes'
-import { botMove, driveClient } from './bot'
+import { botStep, driveClient } from './bot'
 import { LEAVE_GRACE_MS, NetClient, compactMoves, encodeCmds } from './client'
 import { MAX_ACTIONS, MAX_MESSAGE, MAX_MOVE_REPEAT, MAX_MOVES, MAX_RTT, parseClientMessage, type Cmds } from './protocol'
 import type { MoveInput } from './session'
@@ -406,19 +406,34 @@ describe('el espejo de NetClient', () => {
     expect(client.predictor!.stats.corrections).toBe(0)
   })
 
-  it('un bot anda solo y los demás lo ven donde está', () => {
+  it('un bot anda solo y los demás lo ven donde está; con madera se fabrica sus herramientas, como predice', () => {
     const { room, time, connect } = setup()
     const a = connect('a', 'create').client
     const bot = connect('bot').client
-    run(time, 1000, [[a, idle]], () => driveClient(bot, (tick) => botMove(tick, bot.id)))
+    const drive = () => driveClient(bot, (tick) => botStep(tick, bot.id, bot.predictor!.slot))
+    run(time, 1000, [[a, idle]], drive)
     resetStats(bot)
     const start = { ...room.sim!.slot(bot.id).player.pos }
-    run(time, 4000, [[a, idle]], () => driveClient(bot, (tick) => botMove(tick, bot.id)))
+    run(time, 4000, [[a, idle]], drive)
     const real = room.sim!.slot(bot.id).player.pos
     expect(Math.hypot(real.x - start.x, real.z - start.z)).toBeGreaterThan(5)
     const seen = a.shownPlayers.find((p) => p.id === bot.id)!
     expect(Math.hypot(seen.pose.x - real.x, seen.pose.z - real.z)).toBeLessThan(2)
     expect(bot.predictor!.stats.corrections).toBe(0)
+
+    // La madera llega del servidor (una corrección, como cualquier truco o lo que se recoge); lo que fabrica con
+    // ella lo predice bien. Se cuenta hasta que el servidor confirma las dos herramientas: después puede ponerse a
+    // talar, y lo que recoja también llega del servidor.
+    bot.dev({ op: 'give', item: 'wood', amount: 10 })
+    let corrections = -1
+    run(time, 2000, [[a, idle]], () => {
+      drive()
+      const { slot, pending, stats } = bot.predictor!
+      if (corrections < 0 && slot.inventory.has('wood_pickaxe') && pending.length === 0) corrections = stats.corrections
+    })
+    expect(room.sim!.slot(bot.id).inventory.toJSON()).toMatchObject({ wood_axe: 1, wood_pickaxe: 1 })
+    expect(bot.predictor!.slot.inventory.toJSON()).toEqual(room.sim!.slot(bot.id).inventory.toJSON())
+    expect(corrections).toBe(1)
   })
 
   it('avisa de quién entra y sale, y cada uno ve el ping del otro', () => {

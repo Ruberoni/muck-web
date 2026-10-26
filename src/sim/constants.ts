@@ -117,12 +117,12 @@ export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   wood_axe: { family: 'axe', tier: 1, damage: 2, attack: 2 },
   stone_axe: { family: 'axe', tier: 2, damage: 4, attack: 3 },
   iron_axe: { family: 'axe', tier: 3, damage: 6, attack: 4 },
-  // El mithril no abre nada de nivel 4: da velocidad y ataque.
-  mithril_axe: { family: 'axe', tier: 4, damage: 9, attack: 6 },
+  // El mithril no abre nada de nivel 4: da velocidad (abedul y mena de hierro de un golpe) y ataque.
+  mithril_axe: { family: 'axe', tier: 4, damage: 12, attack: 6 },
   wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 2 },
   stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 3 },
   iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 4 },
-  mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 9, attack: 6 },
+  mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 12, attack: 6 },
 }
 
 // Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra o de hierro y 1 con una de mithril.
