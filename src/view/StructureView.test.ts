@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { Structures, type StructureSpot } from '../sim/structures'
+import { STRUCTURE_DEFS, Structures, type StructureSpot } from '../sim/structures'
 import { CAMPFIRE_LIGHTS } from '../sim/constants'
 import { StructureView } from './StructureView'
 
@@ -103,6 +103,38 @@ describe('StructureView', () => {
     expect(bench.rotation.y).toBe(1)
     view.setGhost(null)
     expect(ghosts().some((g) => g.visible)).toBe(false)
+  })
+
+  it('el horno y el yunque: cada uno con su modelo y su giro; el fuego del horno parpadea pero no da luz', () => {
+    const { scene, fires, view, update } = setup()
+    fires.place({ x: 0, y: 5, z: 0, valid: true }, 'furnace', 0, 0.7)
+    fires.place({ x: 4, y: 5, z: 0, valid: true }, 'anvil', 0, -0.3)
+    update(0.825, { x: 0, z: 0 })
+    expect(view.group.children).toHaveLength(2)
+    const furnace = view.modelOf(0)!
+    expect(furnace.root.rotation.y).toBe(0.7)
+    expect(furnace.flame).not.toBeNull()
+    expect(furnace.flame!.scale.y).not.toBe(1)
+    const anvil = view.modelOf(1)!
+    expect(anvil.root.rotation.y).toBe(-0.3)
+    expect(anvil.flame).toBeNull()
+    expect(lightsOf(scene).every((l) => l.intensity === 0)).toBe(true)
+    // Cada modelo, fuego incluido, cabe en el círculo de colisión de su estructura (en horizontal, todos los vértices).
+    for (const [id, kind] of [[0, 'furnace'], [1, 'anvil']] as const) {
+      const root = view.modelOf(id)!.root
+      root.updateMatrixWorld(true)
+      let farthest = 0
+      const v = new THREE.Vector3()
+      root.traverse((node) => {
+        if (!(node instanceof THREE.Mesh)) return
+        const position = node.geometry.getAttribute('position')
+        for (let i = 0; i < position.count; i++) {
+          v.fromBufferAttribute(position, i).applyMatrix4(node.matrixWorld)
+          farthest = Math.max(farthest, Math.hypot(v.x - root.position.x, v.z - root.position.z))
+        }
+      })
+      expect(farthest, kind).toBeLessThanOrEqual(STRUCTURE_DEFS[kind].radius)
+    }
   })
 
   it('un id que vuelve en otro sitio (otra partida sin reset de la vista) se dibuja de nuevo', () => {

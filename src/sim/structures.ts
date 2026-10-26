@@ -8,8 +8,8 @@ import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
 
-/** Lo que se puede colocar en el mundo. El horno y el yunque entran con su PR. */
-export type StructureKind = 'campfire' | 'workbench'
+/** Lo que se puede colocar en el mundo: la fogata y las estaciones de crafteo. */
+export type StructureKind = 'campfire' | StationKind
 
 export interface StructureDef {
   /** El objeto que se gasta al colocarla. */
@@ -22,6 +22,8 @@ export interface StructureDef {
 export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   campfire: { item: 'campfire', radius: 0.6, facesPlacer: false },
   workbench: { item: 'workbench', radius: 0.7, facesPlacer: true },
+  furnace: { item: 'furnace', radius: 0.8, facesPlacer: true },
+  anvil: { item: 'anvil', radius: 0.5, facesPlacer: true },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]

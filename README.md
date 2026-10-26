@@ -38,20 +38,35 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo) |
 | **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra para intercambiarlas. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
 | **C** | abrir el inventario con las recetas a la vista: clic en una receta la fabrica y **Mayúsculas + clic**, hasta 5 |
-| **Clic izquierdo** con la fogata o la mesa de trabajo en la mano | colocarla |
+| **Clic izquierdo** con la fogata o una estación (mesa de trabajo, horno o yunque) en la mano | colocarla |
 | **Esc** | pausa |
 
-Los árboles se talan con 3 golpes a mano (+4 madera). Las rocas no se pueden picar a mano: hace falta un pico de madera (2 golpes) o de piedra (1 golpe), y dan +3 piedra. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Las hachas talan más rápido (2 golpes con la de madera, 1 con la de piedra). En las laderas (entre 3 y 6 m de altura) crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes, +4 madera de abedul), y más arriba (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes, +3 mineral de hierro); de momento esos materiales aún no sirven para nada. Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas (también abedules y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo.
+Los árboles se talan con 3 golpes a mano (+4 madera). Las rocas no se pueden picar a mano: hace falta un pico de madera (2 golpes), de piedra o de hierro (1 golpe), y dan +3 piedra. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Las hachas talan más rápido (2 golpes con la de madera, 1 con la de piedra o la de hierro). En las laderas (entre 3 y 6 m de altura) crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes) o de hierro (2 golpes) y dan +4 madera de abedul, y más arriba (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes) o de hierro (2 golpes) y dan +3 mineral de hierro. El mineral se funde en el horno y la madera de abedul sirve para las herramientas de hierro (ver [Crafteo](#crafteo)). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Los árboles y las rocas (también abedules y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo.
 
-El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata o la mesa también se animan.
+El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata o una estación también se animan.
 
 ## Crafteo
 
-Las recetas están en la pantalla de inventario (**C** la abre directamente en ellas), agrupadas por estación. Sin estación: hacha y pico de madera (5 de madera cada uno), la fogata y la mesa de trabajo (10 de madera). En la mesa de trabajo: hacha y pico de piedra (3 de madera y 5 de piedra). Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas una mesa de trabajo cerca" si falta la mesa). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas.
+Las recetas están en la pantalla de inventario (**C** la abre directamente en ellas), agrupadas por estación:
 
-## Mesa de trabajo
+| Estación | Receta | Coste |
+| --- | --- | --- |
+| — | hacha o pico de madera | 5 madera |
+| — | fogata | 6 madera + 3 piedra |
+| — | mesa de trabajo | 10 madera |
+| mesa de trabajo | hacha o pico de piedra | 3 madera + 5 piedra |
+| mesa de trabajo | horno | 12 piedra + 4 madera |
+| mesa de trabajo | yunque | 4 lingotes de hierro + 6 piedra |
+| horno | lingote de hierro | 1 mineral de hierro + 1 madera |
+| yunque | hacha o pico de hierro | 3 lingotes de hierro + 2 madera de abedul |
 
-Se fabrica con 10 de madera y se coloca como la fogata, con vista previa. Se coloca de frente al jugador. Las recetas de mesa se fabrican a unos 3 m o menos de su borde (3,3 m), de cualquier mesa: es permanente y en una sala la comparten todos. No se puede atravesar, sale en el minimapa con un cuadrado y desaparece al reiniciarse la isla.
+Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un horno cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas. Fundir es instantáneo: cada clic junto al horno convierte un mineral en un lingote.
+
+Las herramientas de hierro hacen 6 de daño a lo de su familia y 4 a los trasgos. De momento nada pide hierro: talan y pican lo mismo que las de piedra, pero más rápido.
+
+## Estaciones
+
+La mesa de trabajo, el horno y el yunque se colocan como la fogata, con vista previa, y quedan de frente al jugador. Las recetas de cada estación se fabrican a unos 3 m o menos de su borde (3,3 m), de cualquiera de ese tipo: son permanentes y en una sala las comparten todos. No se pueden atravesar, salen en el minimapa con un cuadrado (marrón la mesa, gris el horno, azul el yunque) y desaparecen al reiniciarse la isla. El horno tiene fuego en la boca, pero no ilumina como la fogata.
 
 ## Fogata
 
@@ -63,11 +78,11 @@ El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya dev
 
 ## Enemigos
 
-Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera y 2 con uno de piedra; cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo, y al amanecer los que quedan desaparecen.
+Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera y 2 con uno de piedra o de hierro; cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo, y al amanecer los que quedan desaparecen.
 
 ## Sonido y ajustes
 
-Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata o la mesa, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
+Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata o una estación, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
 
 En el menú y en la pausa hay deslizadores para la sensibilidad del ratón, el campo de visión y el volumen. Se guardan en `localStorage` y se aplican al momento.
 

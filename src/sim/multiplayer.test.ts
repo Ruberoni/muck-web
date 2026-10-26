@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type PlayerCommands } from './commands'
+import type { RecipeId } from './crafting'
 import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, STATION_RANGE, STEP } from './constants'
 import { Enemies, enemyCap, enemyCapFor, spawnIntervalFor, type EnemyPrey } from './enemies'
 import type { PlayerId, SimEvent, SimEventData, TargetRef } from './events'
 import { aimPose } from './interaction'
-import { Inventory } from './inventory'
+import { Inventory, type ItemId } from './inventory'
 import { Pickups, type Collector } from './pickups'
 import { createPropWorld, generatePropPlacements, type PropData } from './props'
 import { mulberry32 } from './random'
@@ -239,6 +240,76 @@ describe('Simulation con varios jugadores', () => {
     // Al acercarse, el lejano también puede.
     sim.teleport(2, bench.x + bench.radius + STATION_RANGE - 0.5, bench.z, Math.PI / 2, 0)
     expect(ofType(stepAll(sim, { 2: craftAxe }), 'playerCrafted').map((e) => e.id)).toEqual([2])
+  })
+
+  it('hierro: con la mesa, el horno y el yunque se pasa del mineral a las herramientas de hierro; lejos de ellos, no', () => {
+    const sim = withPlayers(2)
+    const { inventory } = sim.slot(0)
+    inventory.add('wood', 10 + 4 + 7)
+    inventory.add('stone', 12 + 6)
+    inventory.add('iron_ore', 7)
+    inventory.add('birch_wood', 4)
+    const craft = (id: PlayerId, recipe: RecipeId, times = 1) =>
+      ofType(stepAll(sim, { [id]: { actions: Array.from({ length: times }, () => ({ kind: 'craft' as const, recipe })) } }), 'playerCrafted').length
+    /** Coloca lo que diga `item` mirando a `yaw` desde el centro del claro. */
+    const place = (item: ItemId, yaw: number) => {
+      sim.teleport(0, spot.x, spot.z, yaw, 0)
+      return ofType(stepAll(sim, { 0: { actions: [{ kind: 'select', slot: inventory.slots.indexOf(item) }, { kind: 'place' }] } }), 'structurePlaced')
+    }
+    sim.teleport(0, spot.x, spot.z, 0, 0)
+
+    // Sin estaciones no sale nada de lo nuevo.
+    expect(craft(0, 'furnace') + craft(0, 'iron_bar')).toBe(0)
+    expect(craft(0, 'workbench')).toBe(1)
+    expect(place('workbench', 0)).toHaveLength(1)
+    expect(craft(0, 'furnace')).toBe(1)
+    // El horno, a la izquierda y de frente: se funde al momento, uno por clic.
+    expect(place('furnace', Math.PI / 2)).toEqual([expect.objectContaining({ kind: 'furnace', rotY: Math.PI / 2, by: 0 })])
+    expect(craft(0, 'iron_bar', 5) + craft(0, 'iron_bar', 5)).toBe(7)
+    expect(inventory.toJSON()).toMatchObject({ iron_bar: 7, stone: 6, birch_wood: 4 })
+    expect(inventory.count('iron_ore')).toBe(0)
+    expect(inventory.count('wood')).toBe(0)
+    // El yunque sale de la mesa, y en él las herramientas.
+    expect(craft(0, 'iron_pickaxe')).toBe(0)
+    expect(craft(0, 'anvil')).toBe(1)
+    expect(place('anvil', Math.PI)).toEqual([expect.objectContaining({ kind: 'anvil', rotY: Math.PI })])
+    expect(sim.structures.list.map((s) => [s.kind, s.radius])).toEqual([['workbench', 0.7], ['furnace', 0.8], ['anvil', 0.5]])
+    expect(craft(0, 'iron_pickaxe')).toBe(1)
+    expect(craft(0, 'iron_axe')).toBe(0)
+    expect(inventory.toJSON()).toMatchObject({ iron_pickaxe: 1, birch_wood: 2 })
+
+    // El otro jugador, con todo en el inventario pero fuera del alcance del horno y del yunque, no puede.
+    const anvil = sim.structures.list[2]
+    const other = sim.slot(1).inventory
+    other.add('iron_ore', 1)
+    other.add('wood', 1)
+    other.add('iron_bar', 3)
+    other.add('birch_wood', 2)
+    sim.teleport(1, anvil.x, anvil.z + anvil.radius + STATION_RANGE + 1, 0, 0)
+    expect(craft(1, 'iron_bar') + craft(1, 'iron_axe')).toBe(0)
+    sim.teleport(1, anvil.x, anvil.z + anvil.radius + STATION_RANGE - 0.5, 0, 0)
+    expect(craft(1, 'iron_axe')).toBe(1)
+    // Ahí el horno aún queda lejos; en el centro del claro, no.
+    expect(craft(1, 'iron_bar')).toBe(0)
+    sim.teleport(1, spot.x, spot.z, 0, 0)
+    expect(craft(1, 'iron_bar')).toBe(1)
+    expect(other.toJSON()).toEqual({ iron_axe: 1, iron_bar: 1 })
+  })
+
+  it('el pico de hierro rompe una mena de hierro en 2 golpes', () => {
+    const sim = withPlayers(1)
+    const ore = sim.world.props.find((p) => p.kind === 'iron_ore')!
+    const { inventory } = sim.slot(0)
+    inventory.add('iron_pickaxe', 1)
+    inventory.select(inventory.slots.indexOf('iron_pickaxe'))
+    const look = aimAt(sim, 0, ore)
+    let broke = 0
+    for (let t = 1; t <= 60 && !broke; t++) {
+      stepAll(sim, { 0: { ...look, buttons: Btn.Attack } })
+      if (!ore.alive) broke = t
+    }
+    expect(broke).toBe(1 + Math.round(HIT_COOLDOWN / STEP))
+    expect(sim.pickups.list.filter((p) => p.item === 'iron_ore')).toHaveLength(3)
   })
 
   it('cada jugador recibe su daño; el que muere deja de moverse, de comer y de ser objetivo', () => {

@@ -77,6 +77,10 @@ const sleeve = mat('#3f6a8c')
 const handle = mat('#8a5a32')
 const woodHead = mat('#c8955a')
 const stoneHead = mat('#9a978a')
+const ironHead = new THREE.MeshStandardMaterial({ color: '#d5dae0', flatShading: true, metalness: 0.25, roughness: 0.4 })
+const darkIron = new THREE.MeshStandardMaterial({ color: '#5f6670', flatShading: true, metalness: 0.25, roughness: 0.5 })
+const furnaceStone = mat('#8f8a80')
+const ember = new THREE.MeshBasicMaterial({ color: '#ff7a1f' })
 const bark = mat('#7a5230')
 const birchBark = mat('#ece8dc')
 const birchMark = mat('#2f2c28')
@@ -151,6 +155,35 @@ function workbench() {
   return g
 }
 
+function ironBar() {
+  const g = new THREE.Group()
+  // Lingote: un tronco de pirámide, más ancho por abajo.
+  const bar = new THREE.CylinderGeometry(0.07, 0.1, 0.06, 4).rotateY(Math.PI / 4).scale(1.6, 1, 0.8).rotateY(0.4)
+  g.add(part(bar.translate(0, 0.03, 0), ironHead))
+  return g
+}
+
+function furnace() {
+  const g = new THREE.Group()
+  g.add(part(new THREE.BoxGeometry(0.17, 0.17, 0.15).translate(0, 0.09, 0), furnaceStone))
+  g.add(part(new THREE.BoxGeometry(0.05, 0.08, 0.05).translate(0.04, 0.21, -0.03), stoneHead))
+  // La boca con brasas, hacia la cámara.
+  g.add(part(new THREE.BoxGeometry(0.08, 0.05, 0.01).translate(0, 0.06, 0.076), ember))
+  return g
+}
+
+function anvil() {
+  const g = new THREE.Group()
+  const pieces = [
+    new THREE.BoxGeometry(0.12, 0.03, 0.08).translate(0, 0.015, 0),
+    new THREE.BoxGeometry(0.06, 0.05, 0.05).translate(0, 0.055, 0),
+    new THREE.BoxGeometry(0.15, 0.045, 0.07).translate(-0.01, 0.1, 0),
+    new THREE.ConeGeometry(0.022, 0.07, 5).rotateZ(-Math.PI / 2).translate(0.1, 0.105, 0),
+  ]
+  g.add(part(mergeGeometries(pieces), darkIron))
+  return g
+}
+
 function birchLog() {
   const g = new THREE.Group()
   const tilt = (geometry: THREE.BufferGeometry) => geometry.rotateX(Math.PI / 2 - 0.3).translate(0, 0.08, -0.04)
@@ -183,10 +216,14 @@ export function itemModel(item: ItemId): THREE.Group {
       return axe(woodHead)
     case 'stone_axe':
       return axe(stoneHead)
+    case 'iron_axe':
+      return axe(ironHead)
     case 'wood_pickaxe':
       return pickaxe(woodHead)
     case 'stone_pickaxe':
       return pickaxe(stoneHead)
+    case 'iron_pickaxe':
+      return pickaxe(ironHead)
     case 'wood': {
       const log = new THREE.Group()
       log.add(part(new THREE.CylinderGeometry(0.06, 0.07, 0.36, 6).rotateX(Math.PI / 2 - 0.3).translate(0, 0.08, -0.04), bark))
@@ -209,6 +246,12 @@ export function itemModel(item: ItemId): THREE.Group {
       return birchLog()
     case 'iron_ore':
       return oreChunk()
+    case 'iron_bar':
+      return ironBar()
+    case 'furnace':
+      return furnace()
+    case 'anvil':
+      return anvil()
   }
 }
 
