@@ -99,20 +99,22 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
     }
   })
 
-  // Árboles, abedules y rocas tienen las mismas caras que el modelo (el tronco del abedul está partido en franjas,
-  // pero es la misma superficie).
-  it.each(['tree', 'birch', 'rock'] as const)('%s: el mismo objetivo en todos los rayos', (kind) => {
+  // Árboles, abedules, pinos oscuros y rocas tienen las mismas caras que el modelo (el tronco del abedul está partido
+  // en franjas, pero es la misma superficie).
+  it.each(['tree', 'birch', 'darkpine', 'rock'] as const)('%s: el mismo objetivo en todos los rayos', (kind) => {
     const result = compare(propSamples(kind))
     expect(result.touched).toBeGreaterThan(800)
     expect(result.same).toBe(result.touched)
   })
 
+  // Las menas de mithril son pocas (16) y pequeñas: tocan menos rayos.
   it.each([
-    ['bush', 'las bayas'],
-    ['iron_ore', 'los cristales'],
-  ] as const)('%s: solo difiere en %s que sobresalen', (kind, _part) => {
+    ['bush', 'las bayas', 800],
+    ['iron_ore', 'los cristales', 800],
+    ['mithril_ore', 'los cristales', 300],
+  ] as const)('%s: solo difiere en %s que sobresalen', (kind, _part, minTouched) => {
     const result = compare(propSamples(kind))
-    expect(result.touched).toBeGreaterThan(800)
+    expect(result.touched).toBeGreaterThan(minTouched)
     expect(result.boxOnly).toBe(0)
     expect(result.same).toBe(result.touched - result.meshOnly)
     expect(result.meshOnly / result.touched).toBeLessThan(0.05)

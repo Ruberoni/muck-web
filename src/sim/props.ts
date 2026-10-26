@@ -1,7 +1,7 @@
 import { BERRY_REGROW, PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import type { Emit } from './events'
-import { createBirchRng, createBushRng, createIronOreRng, createPropsRng, type Rng } from './random'
+import { createBirchRng, createBushRng, createDarkpineRng, createIronOreRng, createMithrilOreRng, createPropsRng, type Rng } from './random'
 import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WORLD_SIZE } from './world/terrain'
 
 const TREE_COUNT = 180
@@ -9,9 +9,14 @@ const ROCK_COUNT = 60
 const BUSH_COUNT = 45
 export const BIRCH_COUNT = 40
 export const IRON_ORE_COUNT = 40
-/** Franjas de altura del terreno (en el centro) de los tipos nuevos: no se solapan entre sí. */
+export const DARKPINE_COUNT = 20
+export const MITHRIL_ORE_COUNT = 16
+/** Franjas de altura del terreno (en el centro) de los tipos nuevos: las de las menas no se solapan entre sí. */
 export const BIRCH_BAND = { min: 3, max: 6 }
 export const IRON_ORE_BAND = { min: 6, max: 8.5 }
+export const DARKPINE_BAND = { min: 6, max: 9 }
+/** Las cimas. */
+export const MITHRIL_ORE_BAND = { min: 8.5, max: Infinity }
 /** Los tipos nuevos no se colocan a menos de esto (hasta su borde) del punto de aparición. */
 export const SPAWN_EXCLUSION = 8
 /** Intentos por prop de cada tipo nuevo: sobran (el test de cantidad exacta lo vigila). */
@@ -44,8 +49,8 @@ export type PropKind = keyof typeof PROP_DEFS
  */
 export interface PropPlacement {
   /**
-   * Índice en la lista de colocaciones: árboles, rocas, arbustos y después los tipos nuevos (abedules y menas de
-   * hierro), cada uno al final para no mover los ids de lo anterior.
+   * Índice en la lista de colocaciones: árboles, rocas, arbustos y después los tipos nuevos (abedules, menas de
+   * hierro, pinos oscuros y menas de mithril), cada uno al final para no mover los ids de lo anterior.
    */
   id: number
   kind: PropKind
@@ -187,6 +192,27 @@ export function buildPropPlacements(): PropPlacement[] {
     if (y < IRON_ORE_BAND.min || y > IRON_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     // Como las rocas: algo hundidas, y max(sx, sz) cubre los vértices del icosaedro en XZ.
     return { kind: 'iron_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
+  })
+
+  // Los del mithril, detrás de los del hierro: no mueven sus ids ni sus posiciones.
+  const pineRng = createDarkpineRng()
+  scatter(pineRng, DARKPINE_COUNT, (x, z, y) => {
+    const scale = 1.2 + pineRng() * 0.4
+    const rotation = pineRng() * Math.PI * 2
+    if (y < DARKPINE_BAND.min || y > DARKPINE_BAND.max || slopeAt(x, z) > MAX_SLOPE) return null
+    return { kind: 'darkpine', x, y: y - 0.1, z, radius: TRUNK_BOTTOM_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
+  })
+
+  const mithrilRng = createMithrilOreRng()
+  scatter(mithrilRng, MITHRIL_ORE_COUNT, (x, z, y) => {
+    // Más pequeñas que las de hierro: caben más en las cimas.
+    const sx = 0.6 + mithrilRng() * 0.4
+    const sy = 0.6 + mithrilRng() * 0.4
+    const sz = 0.6 + mithrilRng() * 0.4
+    const rx = mithrilRng() * Math.PI
+    const ry = mithrilRng() * Math.PI * 2
+    if (y < MITHRIL_ORE_BAND.min || y > MITHRIL_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    return { kind: 'mithril_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
   return placements

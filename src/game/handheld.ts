@@ -78,14 +78,18 @@ const handle = mat('#8a5a32')
 const woodHead = mat('#c8955a')
 const stoneHead = mat('#9a978a')
 const ironHead = new THREE.MeshStandardMaterial({ color: '#d5dae0', flatShading: true, metalness: 0.25, roughness: 0.4 })
+const mithrilHead = new THREE.MeshStandardMaterial({ color: '#8fd0f2', flatShading: true, metalness: 0.25, roughness: 0.35 })
 const darkIron = new THREE.MeshStandardMaterial({ color: '#5f6670', flatShading: true, metalness: 0.25, roughness: 0.5 })
 const furnaceStone = mat('#8f8a80')
 const ember = new THREE.MeshBasicMaterial({ color: '#ff7a1f' })
 const bark = mat('#7a5230')
 const birchBark = mat('#ece8dc')
 const birchMark = mat('#2f2c28')
+const darkBark = mat('#3e2c20')
 const ore = mat('#7b7268')
 const oreVein = new THREE.MeshStandardMaterial({ color: '#c8743a', flatShading: true, metalness: 0.4, roughness: 0.5 })
+const mithrilRock = mat('#6c7080')
+const mithrilVein = new THREE.MeshStandardMaterial({ color: '#4fb3f0', flatShading: true, metalness: 0.4, roughness: 0.4 })
 const berryRed = mat('#c2304a')
 const leaf = mat('#3d7d35')
 const meat = mat('#c75a5a')
@@ -155,11 +159,11 @@ function workbench() {
   return g
 }
 
-function ironBar() {
+function ingot(material: THREE.Material) {
   const g = new THREE.Group()
   // Lingote: un tronco de pirámide, más ancho por abajo.
   const bar = new THREE.CylinderGeometry(0.07, 0.1, 0.06, 4).rotateY(Math.PI / 4).scale(1.6, 1, 0.8).rotateY(0.4)
-  g.add(part(bar.translate(0, 0.03, 0), ironHead))
+  g.add(part(bar.translate(0, 0.03, 0), material))
   return g
 }
 
@@ -184,6 +188,12 @@ function anvil() {
   return g
 }
 
+function log(material: THREE.Material) {
+  const g = new THREE.Group()
+  g.add(part(new THREE.CylinderGeometry(0.06, 0.07, 0.36, 6).rotateX(Math.PI / 2 - 0.3).translate(0, 0.08, -0.04), material))
+  return g
+}
+
 function birchLog() {
   const g = new THREE.Group()
   const tilt = (geometry: THREE.BufferGeometry) => geometry.rotateX(Math.PI / 2 - 0.3).translate(0, 0.08, -0.04)
@@ -197,15 +207,15 @@ function birchLog() {
   return g
 }
 
-function oreChunk() {
+function oreChunk(rock: THREE.Material, vein: THREE.Material) {
   const g = new THREE.Group()
-  g.add(part(new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.09, 0), ore))
+  g.add(part(new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.09, 0), rock))
   const spots = [
     [0.06, 0.14, 0.03],
     [-0.05, 0.12, -0.05],
     [0.02, 0.07, 0.08],
   ]
-  g.add(part(mergeGeometries(spots.map(([x, y, z]) => new THREE.OctahedronGeometry(0.03, 0).translate(x, y, z))), oreVein))
+  g.add(part(mergeGeometries(spots.map(([x, y, z]) => new THREE.OctahedronGeometry(0.03, 0).translate(x, y, z))), vein))
   return g
 }
 
@@ -218,17 +228,20 @@ export function itemModel(item: ItemId): THREE.Group {
       return axe(stoneHead)
     case 'iron_axe':
       return axe(ironHead)
+    case 'mithril_axe':
+      return axe(mithrilHead)
     case 'wood_pickaxe':
       return pickaxe(woodHead)
     case 'stone_pickaxe':
       return pickaxe(stoneHead)
     case 'iron_pickaxe':
       return pickaxe(ironHead)
-    case 'wood': {
-      const log = new THREE.Group()
-      log.add(part(new THREE.CylinderGeometry(0.06, 0.07, 0.36, 6).rotateX(Math.PI / 2 - 0.3).translate(0, 0.08, -0.04), bark))
-      return log
-    }
+    case 'mithril_pickaxe':
+      return pickaxe(mithrilHead)
+    case 'wood':
+      return log(bark)
+    case 'dark_wood':
+      return log(darkBark)
     case 'stone': {
       const rock = new THREE.Group()
       rock.add(part(new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.09, 0), stoneHead))
@@ -245,9 +258,13 @@ export function itemModel(item: ItemId): THREE.Group {
     case 'birch_wood':
       return birchLog()
     case 'iron_ore':
-      return oreChunk()
+      return oreChunk(ore, oreVein)
+    case 'mithril_ore':
+      return oreChunk(mithrilRock, mithrilVein)
     case 'iron_bar':
-      return ironBar()
+      return ingot(ironHead)
+    case 'mithril_bar':
+      return ingot(mithrilHead)
     case 'furnace':
       return furnace()
     case 'anvil':

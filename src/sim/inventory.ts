@@ -16,6 +16,11 @@ export type ItemId =
   | 'iron_pickaxe'
   | 'furnace'
   | 'anvil'
+  | 'dark_wood'
+  | 'mithril_ore'
+  | 'mithril_bar'
+  | 'mithril_axe'
+  | 'mithril_pickaxe'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -35,6 +40,11 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   iron_pickaxe: 'Pico de hierro',
   furnace: 'Horno',
   anvil: 'Yunque',
+  dark_wood: 'Madera oscura',
+  mithril_ore: 'Mineral de mithril',
+  mithril_bar: 'Lingote de mithril',
+  mithril_axe: 'Hacha de mithril',
+  mithril_pickaxe: 'Pico de mithril',
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

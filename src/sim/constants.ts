@@ -73,11 +73,13 @@ export const BERRIES_PER_BUSH = 6
 export const BERRY_REGROW = 15
 
 // Las claves son los tipos de prop: `PropKind` (props.ts) se saca de aquí, así que un tipo nuevo solo se añade aquí.
-export const PROP_DEFS: Record<'tree' | 'birch' | 'rock' | 'iron_ore' | 'bush', PropDef> = {
+export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush', PropDef> = {
   tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 3, drop: { item: 'wood', amount: 4 } },
   birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 12, drop: { item: 'birch_wood', amount: 4 } },
+  darkpine: { name: 'Pino oscuro', verb: 'talar', family: 'tree', tool: 'axe', tier: 3, hp: 18, drop: { item: 'dark_wood', amount: 4 } },
   rock: { name: 'Roca', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 4, drop: { item: 'stone', amount: 3 } },
   iron_ore: { name: 'Mena de hierro', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 2, hp: 12, drop: { item: 'iron_ore', amount: 3 } },
+  mithril_ore: { name: 'Mena de mithril', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 18, drop: { item: 'mithril_ore', amount: 4 } },
   bush: {
     name: 'Arbusto de bayas',
     verb: 'recoger',
@@ -103,7 +105,7 @@ export const PICKUP_MAGNET_SPEED = 6
 
 export interface ToolDef {
   family: ToolFamily
-  /** 1 madera, 2 piedra, 3 hierro (la mano es el nivel 0). */
+  /** 1 madera, 2 piedra, 3 hierro, 4 mithril (la mano es el nivel 0). */
   tier: number
   /** Daño contra los props de su familia; contra el resto se golpea como a mano (la regla está en tiers.ts). */
   damage: number
@@ -115,12 +117,15 @@ export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   wood_axe: { family: 'axe', tier: 1, damage: 2, attack: 2 },
   stone_axe: { family: 'axe', tier: 2, damage: 4, attack: 3 },
   iron_axe: { family: 'axe', tier: 3, damage: 6, attack: 4 },
+  // El mithril no abre nada de nivel 4: da velocidad y ataque.
+  mithril_axe: { family: 'axe', tier: 4, damage: 9, attack: 6 },
   wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 2 },
   stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 3 },
   iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 4 },
+  mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 9, attack: 6 },
 }
 
-// Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra o de hierro.
+// Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra o de hierro y 1 con una de mithril.
 export const ENEMY_DEF = { name: 'Trasgo', verb: 'atacar', hp: 6, drop: { item: 'raw_meat' as ItemId, amount: 1 } }
 export const ENEMY_RADIUS = 0.55
 // Algo más lento que andar: se le puede dejar atrás, pero no mientras se tala o se pica.
