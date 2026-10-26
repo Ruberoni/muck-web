@@ -141,6 +141,34 @@ describe('Simulation con varios jugadores', () => {
     expect(sim.slot(1).target).toBeNull()
   })
 
+  it('una roca: el que va a mano no le hace nada y el del pico de madera la rompe él solo', () => {
+    const sim = withPlayers(2)
+    const rock = sim.world.props.find((p) => p.kind === 'rock')!
+    const { inventory } = sim.slot(1)
+    inventory.add('wood_pickaxe', 1)
+    inventory.select(inventory.slots.indexOf('wood_pickaxe'))
+    const a = aimAt(sim, 0, rock)
+    const b = aimAt(sim, 1, rock, (x, z) => Math.hypot(x - a.x, z - a.z) > 1)
+    const events: SimEvent[] = []
+    let broke = 0
+    for (let t = 1; t <= 60 && !broke; t++) {
+      events.push(...stepAll(sim, { 0: { ...a, buttons: Btn.Attack }, 1: { ...b, buttons: Btn.Attack } }))
+      if (!rock.alive) broke = t
+    }
+    // 4 de vida y 2 por golpe: el segundo golpe del pico, al acabar el cooldown.
+    expect(broke).toBe(1 + Math.round(HIT_COOLDOWN / STEP))
+    // Los dos golpean (y se oyen), pero solo los del pico le quitan vida.
+    expect(ofType(events, 'playerSwing').filter((e) => e.target?.id === rock.id).map((e) => [e.id, e.item])).toEqual([
+      [0, null],
+      [1, 'wood_pickaxe'],
+      [0, null],
+      [1, 'wood_pickaxe'],
+    ])
+    expect(ofType(events, 'propHit')).toEqual([expect.objectContaining({ id: rock.id, hp: 2, by: 1 })])
+    expect(ofType(events, 'propDestroyed')).toEqual([expect.objectContaining({ id: rock.id, by: 1 })])
+    expect(sim.pickups.list.filter((p) => p.item === 'stone')).toHaveLength(3)
+  })
+
   it('las bayas van al inventario de quien golpea', () => {
     const sim = withPlayers(2)
     const bush = sim.world.props.find((p) => p.kind === 'bush')!

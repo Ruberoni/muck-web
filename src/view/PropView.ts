@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { BERRIES_PER_BUSH, WOBBLE_DURATION } from '../sim/constants'
+import { BERRIES_PER_BUSH, PROP_DEFS, WOBBLE_DURATION } from '../sim/constants'
 import type { SimEventData } from '../sim/events'
 import {
   BUSH_LIFT,
@@ -189,7 +189,7 @@ export class PropView {
     this.reset()
     for (const { id, kind, hp, alive } of props) {
       if (!alive) this.destroy(id)
-      else if (kind === 'bush' && hp !== this.berries[id]) this.setBerries(id, hp)
+      else if (PROP_DEFS[kind].family === 'bush' && hp !== this.berries[id]) this.setBerries(id, hp)
     }
   }
 
@@ -198,7 +198,11 @@ export class PropView {
     for (const mesh of this.allMeshes) mesh.dispose()
   }
 
-  private wobble(id: number) {
+  /**
+   * Hace temblar el prop `id`. Los golpes que le quitan vida llegan por `propHit`; Game lo llama además con los
+   * que no le hacen nada (sin la herramienta que pide), que no tienen evento propio.
+   */
+  wobble(id: number) {
     if (!this.destroyed[id]) this.wobbles.set(id, 0)
   }
 

@@ -2,11 +2,12 @@ import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes 
 import { resetProp, startRegrow, type PropData, type PropWorld } from './props'
 import { heightAt } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId, type TargetRef } from './events'
-import { BASE_DAMAGE, ENEMY_DEF, ENEMY_RADIUS, HIT_COOLDOWN, PROP_DEFS, REACH, TOOL_DEFS } from './constants'
+import { ENEMY_DEF, ENEMY_RADIUS, HIT_COOLDOWN, PROP_DEFS, REACH, type PropFamily } from './constants'
 import { ENEMY_AIM_HEIGHT, type Enemies, type EnemyData } from './enemies'
-import type { Inventory, ItemId } from './inventory'
+import type { Inventory } from './inventory'
 import type { Player } from './player'
 import type { Pickups } from './pickups'
+import { attackDamage, propDamage } from './tiers'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
 export type Target = PropData | EnemyData
@@ -31,8 +32,9 @@ export interface Fighter {
 
 export const createCombat = (): Combat => ({ cooldown: 0, pendingSwing: false })
 
-// Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan.
-const DROP_HEIGHT = { tree: 1, rock: 0.3, enemy: 0.8 }
+// Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan. Los arbustos no sueltan nada al suelo.
+const DROP_HEIGHT: Record<PropFamily, number> = { tree: 1, rock: 0.3, bush: 0 }
+const ENEMY_DROP_HEIGHT = 0.8
 
 // Validación permisiva del objetivo que dice tener delante un jugador en red (es cooperativo: no es antitrampas).
 // El cliente ve a los enemigos unos 100 ms en el pasado, de ahí el margen mayor.
@@ -122,7 +124,10 @@ export class Interaction {
     // Otro jugador lo rompió antes en este mismo paso.
     if (!prop.alive) return false
     if (PROP_DEFS[prop.kind].harvest) return this.harvest(fighter, prop)
-    prop.hp = Math.max(0, prop.hp - hitDamage(fighter.inventory.selectedItem, prop.kind))
+    // Sin la herramienta que pide (§2.4 del plan) el golpe se da, pero no le hace nada: ni vida ni `propHit`.
+    const damage = propDamage(fighter.inventory.selectedItem, prop.kind)
+    if (damage <= 0) return false
+    prop.hp = Math.max(0, prop.hp - damage)
     if (prop.hp <= 0) this.destroy(fighter, prop)
     else this.emit({ type: 'propHit', id: prop.id, hp: prop.hp, by: fighter.id })
     return !prop.alive
@@ -131,10 +136,10 @@ export class Interaction {
   private hitEnemy(fighter: Fighter, enemy: EnemyData): boolean {
     // El retroceso es en sentido contrario al atacante.
     const { pos } = fighter.player
-    if (!this.enemies?.hit(enemy, hitDamage(fighter.inventory.selectedItem, 'enemy'), pos, fighter.id)) return false
+    if (!this.enemies?.hit(enemy, attackDamage(fighter.inventory.selectedItem), pos, fighter.id)) return false
     if (fighter.target === enemy) fighter.target = null
     const { x, z } = enemy.pos
-    this.pickups.drop(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount, x, heightAt(x, z) + DROP_HEIGHT.enemy, z)
+    this.pickups.drop(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount, x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
     return true
   }
 
@@ -142,9 +147,8 @@ export class Interaction {
     prop.alive = false
     if (fighter.target === prop) fighter.target = null
     this.emit({ type: 'propDestroyed', id: prop.id, by: fighter.id })
-    const { drop } = PROP_DEFS[prop.kind]
-    const height = prop.kind === 'tree' || prop.kind === 'rock' ? DROP_HEIGHT[prop.kind] : 0
-    this.pickups.drop(drop.item, drop.amount, prop.x, prop.y + height, prop.z)
+    const { drop, family } = PROP_DEFS[prop.kind]
+    this.pickups.drop(drop.item, drop.amount, prop.x, prop.y + DROP_HEIGHT[family], prop.z)
   }
 
   /** Cada clic quita una baya; el arbusto se queda aunque esté vacío. Sin sitio en la hotbar, la baya se queda. */
@@ -179,15 +183,10 @@ export function startSwing(combat: Combat, dt: number, attackHeld: boolean, swin
   return true
 }
 
-/** Daño de un golpe con el objeto en la mano (null = mano vacía). */
-export function hitDamage(item: ItemId | null, kind: Target['kind']): number {
-  const tool = item ? TOOL_DEFS[item] : undefined
-  if (kind === 'enemy') return tool?.attack ?? BASE_DAMAGE
-  return BASE_DAMAGE * (tool?.kind === kind ? tool.multiplier : 1)
-}
+// Altura sobre la base (rocas: sobre el centro) a la que se apunta: el tronco, la roca o el centro del arbusto.
+const AIM_HEIGHT: Record<PropFamily, number> = { tree: 1.2, rock: 0.2, bush: 0.5 }
 
-/** Altura a la que se apunta a un prop: el tronco, el centro del arbusto o la roca. */
-const aimHeight = (prop: PropData) => (prop.kind === 'tree' ? prop.y + 1.2 : prop.kind === 'bush' ? prop.y + 0.5 : prop.y + 0.2)
+const aimHeight = (prop: PropData) => prop.y + AIM_HEIGHT[PROP_DEFS[prop.kind].family]
 
 /** Posición y orientación para apuntar a un prop desde fuera de su radio (debug y tests). */
 export function aimPose(prop: PropData, isFree: (x: number, z: number) => boolean) {

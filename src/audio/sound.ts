@@ -4,6 +4,8 @@ export type SoundName =
   | 'hitWood'
   | 'hitStone'
   | 'hitBush'
+  /** Golpe que no hace nada: sin la herramienta que pide el prop (una roca a mano). */
+  | 'clank'
   | 'breakWood'
   | 'breakStone'
   | 'pickup'
@@ -331,6 +333,14 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
     Math.max(
       s.noise(0.18, { filter: 'highpass', freq: 2200, gain: 0.25, attack: 0.03 }),
       s.noise(0.12, { filter: 'bandpass', freq: 900, gain: 0.15, attack: 0.02, delay: 0.05 }),
+    ),
+  // Seco y metálico, con parciales inarmónicos: distinto de hitStone, que suena a que se rompe algo.
+  clank: (s) =>
+    Math.max(
+      s.tone(1850 + s.random() * 120, 0.16, { type: 'triangle', gain: 0.16 }),
+      s.tone(2770 + s.random() * 160, 0.11, { type: 'sine', gain: 0.1 }),
+      s.tone(410, 0.05, { type: 'square', to: 300, gain: 0.08, lowpass: 1500 }),
+      s.noise(0.03, { filter: 'highpass', freq: 4000, gain: 0.2 }),
     ),
   breakWood: (s) =>
     Math.max(

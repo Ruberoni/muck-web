@@ -47,6 +47,29 @@
   white-space: nowrap;
 }
 
+/* Vida del objetivo: siempre del mismo ancho, sea cual sea su vida máxima. */
+.prompt .hp {
+  display: inline-block;
+  width: 56px;
+  height: 7px;
+  margin: 0 2px 0 8px;
+  vertical-align: middle;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.4);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.25);
+  overflow: hidden;
+}
+
+.prompt .hp .fill {
+  display: block;
+  height: 100%;
+  background: #f2efe4;
+  transform-origin: left center;
+}
+
+/* Sin la herramienta que pide: el requisito, en gris. */
+.prompt .need { color: rgb(255 255 255 / 0.6); }
+
 .day {
   position: absolute;
   left: 16px;

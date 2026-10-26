@@ -49,9 +49,19 @@ export const REACH = 3.5
 export const HIT_COOLDOWN = 0.4
 export const WOBBLE_DURATION = 0.15
 
+/** Familia de un prop: decide su forma, su hitbox, de dónde cae lo que suelta y cómo suena. */
+export type PropFamily = 'tree' | 'rock' | 'bush'
+/** Familia de una herramienta: el hacha tala árboles y el pico rompe rocas. */
+export type ToolFamily = 'axe' | 'pickaxe'
+
 export interface PropDef {
   name: string
   verb: string
+  family: PropFamily
+  /** Herramienta que le hace más daño (y la única que sirve desde el nivel 1); null: ninguna (arbustos). */
+  tool: ToolFamily | null
+  /** Nivel 0: cualquier cosa sirve. Desde el 1, solo una herramienta de su familia de ese nivel o más (tiers.ts). */
+  tier: number
   hp: number
   drop: { item: ItemId; amount: number }
   /** Se recoge poco a poco: cada golpe quita 1 de vida y da el drop; a 0 no se destruye y se rellena solo. */
@@ -63,9 +73,18 @@ export const BERRIES_PER_BUSH = 6
 export const BERRY_REGROW = 15
 
 export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
-  tree: { name: 'Árbol', verb: 'talar', hp: 3, drop: { item: 'wood', amount: 4 } },
-  rock: { name: 'Roca', verb: 'picar', hp: 4, drop: { item: 'stone', amount: 3 } },
-  bush: { name: 'Arbusto de bayas', verb: 'recoger', hp: BERRIES_PER_BUSH, drop: { item: 'berry', amount: 1 }, harvest: true },
+  tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 3, drop: { item: 'wood', amount: 4 } },
+  rock: { name: 'Roca', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 4, drop: { item: 'stone', amount: 3 } },
+  bush: {
+    name: 'Arbusto de bayas',
+    verb: 'recoger',
+    family: 'bush',
+    tool: null,
+    tier: 0,
+    hp: BERRIES_PER_BUSH,
+    drop: { item: 'berry', amount: 1 },
+    harvest: true,
+  },
 }
 
 export const BASE_DAMAGE = 1
@@ -80,18 +99,20 @@ export const PICKUP_MAGNET = 1.6
 export const PICKUP_MAGNET_SPEED = 6
 
 export interface ToolDef {
-  kind: keyof typeof PROP_DEFS
-  multiplier: number
-  /** Daño contra enemigos, sea cual sea el tipo de herramienta. */
+  family: ToolFamily
+  /** 1 madera, 2 piedra (la mano es el nivel 0). */
+  tier: number
+  /** Daño contra los props de su familia; contra el resto se golpea como a mano (la regla está en tiers.ts). */
+  damage: number
+  /** Daño contra enemigos, sea cual sea la familia de la herramienta. */
   attack: number
 }
 
-// Una herramienta solo multiplica el daño contra su tipo de prop; contra el resto se golpea como a mano.
 export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
-  wood_axe: { kind: 'tree', multiplier: 2, attack: 2 },
-  stone_axe: { kind: 'tree', multiplier: 4, attack: 3 },
-  wood_pickaxe: { kind: 'rock', multiplier: 2, attack: 2 },
-  stone_pickaxe: { kind: 'rock', multiplier: 4, attack: 3 },
+  wood_axe: { family: 'axe', tier: 1, damage: 2, attack: 2 },
+  stone_axe: { family: 'axe', tier: 2, damage: 4, attack: 3 },
+  wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 2 },
+  stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 3 },
 }
 
 // Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra.

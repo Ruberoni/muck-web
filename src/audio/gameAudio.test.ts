@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { STEP } from '../sim/constants'
 import type { SimEvent, TargetRef } from '../sim/events'
+import type { ItemId } from '../sim/inventory'
 import type { PropKind } from '../sim/props'
 import { GameAudio, GROWL_DISTANCE, REMOTE_DEATH_GAIN, REMOTE_HEARING, STRIDE, type RemoteWalker } from './gameAudio'
 import { spatialize, volumeToGain, type PlayOptions, type SoundName } from './sound'
@@ -109,18 +110,26 @@ describe('sonido', () => {
     const { audio, names } = setup()
     const kinds: PropKind[] = ['tree', 'rock', 'bush']
     const propKind = (id: number) => kinds[id]
-    const swing = (target: TargetRef | null): SimEvent => ({ tick: 1, type: 'playerSwing', id: 0, item: null, target })
+    const swing = (target: TargetRef | null, item: ItemId | null = null): SimEvent => ({ tick: 1, type: 'playerSwing', id: 0, item, target })
     const step = (...list: SimEvent[]) => audio.events(list, 0, propKind)
     step(swing(null))
     step(swing({ kind: 'prop', id: 0 }), { tick: 1, type: 'propHit', id: 0, hp: 2, by: 0 })
     step(swing({ kind: 'prop', id: 0 }), { tick: 1, type: 'propDestroyed', id: 0, by: 0 })
-    step(swing({ kind: 'prop', id: 1 }), { tick: 1, type: 'propHit', id: 1, hp: 2, by: 0 })
-    step(swing({ kind: 'prop', id: 1 }), { tick: 1, type: 'propDestroyed', id: 1, by: 0 })
+    step(swing({ kind: 'prop', id: 1 }, 'wood_pickaxe'), { tick: 1, type: 'propHit', id: 1, hp: 2, by: 0 })
+    step(swing({ kind: 'prop', id: 1 }, 'wood_pickaxe'), { tick: 1, type: 'propDestroyed', id: 1, by: 0 })
     step(swing({ kind: 'prop', id: 2 }), { tick: 1, type: 'berryTaken', id: 2, hp: 1, by: 0 })
     step(swing({ kind: 'prop', id: 2 }))
     step(swing({ kind: 'enemy', id: 0 }), { tick: 1, type: 'enemyHit', id: 0, hp: 3, kx: 1, kz: 0, by: 0 })
     step(swing({ kind: 'enemy', id: 0 }), { tick: 1, type: 'enemyDied', id: 0, by: 0 })
     expect(names()).toEqual(['swing', 'hitWood', 'breakWood', 'hitStone', 'breakStone', 'hitBush', 'pickup', 'hitBush', 'enemyHit', 'enemyDeath'])
+  })
+
+  it('golpear algo que no se puede con lo que se lleva suena a clank (una roca a mano o con hacha)', () => {
+    const { audio, names } = setup()
+    const kinds: PropKind[] = ['tree', 'rock']
+    const swing = (item: ItemId | null, id: number): SimEvent => ({ tick: 1, type: 'playerSwing', id: 0, item, target: { kind: 'prop', id } })
+    for (const event of [swing(null, 1), swing('stone_axe', 1), swing('wood_pickaxe', 1), swing(null, 0)]) audio.events([event], 0, (id) => kinds[id])
+    expect(names()).toEqual(['clank', 'clank', 'hitStone', 'hitWood'])
   })
 
   it('varias piezas recogidas en un paso suenan una vez; lo que hace otro jugador no suena como propio', () => {
@@ -175,7 +184,7 @@ describe('sonido de los demás', () => {
       [
         { tick: 1, type: 'playerSwing', id: 1, item: null, target: { kind: 'prop', id: 0 } },
         { tick: 1, type: 'playerHurt', id: 2, dmg: 5 },
-        { tick: 1, type: 'playerSwing', id: 2, item: null, target: { kind: 'prop', id: 1 } },
+        { tick: 1, type: 'playerSwing', id: 2, item: 'stone_pickaxe', target: { kind: 'prop', id: 1 } },
         { tick: 1, type: 'propDestroyed', id: 1, by: 2 },
         { tick: 1, type: 'pickupCollected', id: 4, by: 1 },
       ],
@@ -187,6 +196,18 @@ describe('sonido de los demás', () => {
     expect(played[0].options!.gain).toBeCloseTo(spatialize(10, 0, 0, REMOTE_HEARING.hit).gain)
     expect(played[0].options!.pan).toBeGreaterThan(0.5)
     expect(played[1].options!.gain).toBeLessThan(played[0].options!.gain!)
+  })
+
+  it('el golpe de otro que no hace nada también suena a clank, en su sitio', () => {
+    const { audio, played } = setup()
+    audio.remote(
+      [{ tick: 1, type: 'playerSwing', id: 1, item: 'wood', target: { kind: 'prop', id: 1 } }],
+      listener,
+      () => ({ x: -5, z: 0 }),
+      (id) => kinds[id],
+    )
+    expect(played.map((p) => p.name)).toEqual(['clank'])
+    expect(played[0].options!.pan).toBeLessThan(0)
   })
 
   it('lo que fabrica cada uno en un mismo paso suena una vez', () => {
