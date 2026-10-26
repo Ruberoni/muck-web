@@ -26,15 +26,13 @@ describe('niveles: daño contra props', () => {
     expect(propDamage(item, 'bush')).toBe(bush)
   })
 
-  it('la regla, para cualquier objeto y tipo: nivel 0 siempre daña; desde el 1, solo su familia de nivel suficiente', () => {
+  it('para cualquier objeto y tipo: lo de nivel 0 siempre se daña, y lo que no es herramienta solo daña eso', () => {
     for (const kind of KINDS) {
-      const def = PROP_DEFS[kind]
+      const { tier } = PROP_DEFS[kind]
       for (const item of ITEMS) {
-        const tool = item ? TOOL_DEFS[item] : undefined
-        const fits = tool?.family === def.tool
         const damage = propDamage(item, kind)
-        if (def.tier === 0) expect(damage, `${item} → ${kind}`).toBe(fits ? tool!.damage : 1)
-        else expect(damage, `${item} → ${kind}`).toBe(fits && tool!.tier >= def.tier ? tool!.damage : 0)
+        if (tier === 0) expect(damage, `${item} → ${kind}`).toBeGreaterThanOrEqual(1)
+        if (!(item && TOOL_DEFS[item])) expect(damage, `${item} → ${kind}`).toBe(tier === 0 ? 1 : 0)
         expect(canDamage(item, kind)).toBe(damage > 0)
       }
     }

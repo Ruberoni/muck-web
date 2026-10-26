@@ -17,8 +17,8 @@ import { placeableOf, structureSpot, type StructureKind, type StructureSpot } fr
 import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { clientCraftWorld, sendableActions } from '../ui/recipes'
-import { missingTool } from '../ui/tools'
-import { canDamage } from '../sim/tiers'
+import { missingTool, swingFeedback } from '../ui/tools'
+import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { Input } from './input'
 import { stepActions, type InventoryFocus } from './actions'
@@ -85,8 +85,8 @@ export class Game {
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
-  /** El aviso de "Necesitas …" tras un golpe que no hace nada, y los segundos que le quedan. */
-  private toolWarning = { text: '', left: 0 }
+  /** El aviso de "Necesitas …" tras un golpe que no hace nada: a qué tipo de prop y los segundos que le quedan. */
+  private toolWarning: { kind: PropKind | null; left: number } = { kind: null, left: 0 }
   readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
@@ -568,10 +568,10 @@ export class Game {
   private swingAtProp(e: Extract<SimEvent, { type: 'playerSwing' }>) {
     if (e.target?.kind !== 'prop') return
     const prop = this.sim.world.props[e.target.id]
-    if (!prop?.alive || canDamage(e.item, prop.kind)) return
-    this.propView.wobble(prop.id)
-    const need = e.id === this.slot.id && missingTool(e.item, prop.kind)
-    if (need) this.toolWarning = { text: `Necesitas ${need}`, left: TOOL_WARNING_TIME }
+    if (!prop) return
+    const { wobble, warn } = swingFeedback(e.item, prop.kind, prop.alive, e.id === this.slot.id)
+    if (wobble) this.propView.wobble(prop.id)
+    if (warn) this.toolWarning = { kind: prop.kind, left: TOOL_WARNING_TIME }
   }
 
   /** Lo que hacen los demás, ya en el tick de render: suena donde pasa, y su muerte se avisa. */
@@ -767,11 +767,13 @@ export class Game {
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)
+    // Se va antes de tiempo si ya se lleva en la mano lo que hacía falta.
+    const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating' || this.state === 'inventory') this.hud.setPrompt('')
-    else if (this.toolWarning.left > 0) this.hud.setPrompt(this.toolWarning.text)
     else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
+    else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
