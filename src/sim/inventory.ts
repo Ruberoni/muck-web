@@ -11,8 +11,10 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   raw_meat: 'Carne cruda',
   campfire: 'Fogata',
 }
-// Una tecla numérica por casilla (1–9).
+// Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9
+/** Casillas del inventario: 0–8 son la hotbar y 9–26 la mochila. */
+export const INVENTORY_SIZE = 27
 
 /** Casilla a `steps` de `selected`, dando la vuelta al pasar de un extremo. */
 export const cycleSlot = (selected: number, steps: number) => (((selected + steps) % SLOT_COUNT) + SLOT_COUNT) % SLOT_COUNT
@@ -26,10 +28,19 @@ export interface InventoryState {
 
 export class Inventory {
   private counts = new Map<ItemId, number>()
-  /** Casillas de la hotbar: un objeto nuevo ocupa la primera libre y la deja libre al llegar a 0. */
-  readonly slots: (ItemId | null)[] = Array(SLOT_COUNT).fill(null)
+  /**
+   * Casillas: un objeto nuevo ocupa la primera libre (la hotbar antes que la mochila) y la deja libre al llegar a 0.
+   * Cada tipo es una sola pila sin límite.
+   */
+  readonly slots: (ItemId | null)[]
+  /** Casilla de la hotbar elegida. */
   selected = 0
   private listeners: (() => void)[] = []
+
+  /** `size` solo cambia en las pruebas, para llenarlo con pocos objetos. */
+  constructor(size = INVENTORY_SIZE) {
+    this.slots = Array(size).fill(null)
+  }
 
   /** Cabe si ya ocupa una casilla o queda alguna libre. */
   canAdd(item: ItemId): boolean {
@@ -74,8 +85,19 @@ export class Inventory {
     return this.counts.get(item) ?? 0
   }
 
+  /** Intercambia dos casillas. Devuelve false (sin avisar) si alguna no existe o no cambia nada (la misma, o dos vacías). */
+  move(from: number, to: number): boolean {
+    const valid = (i: number) => Number.isInteger(i) && i >= 0 && i < this.slots.length
+    if (!valid(from) || !valid(to) || this.slots[from] === this.slots[to]) return false
+    const item = this.slots[from]
+    this.slots[from] = this.slots[to]
+    this.slots[to] = item
+    this.emit()
+    return true
+  }
+
   select(index: number) {
-    if (index < 0 || index >= SLOT_COUNT || index === this.selected) return
+    if (index < 0 || index >= Math.min(SLOT_COUNT, this.slots.length) || index === this.selected) return
     this.selected = index
     this.emit()
   }
@@ -106,7 +128,7 @@ export class Inventory {
   load(state: InventoryState) {
     const before = this.key()
     this.counts = new Map(Object.entries(state.counts) as [ItemId, number][])
-    for (let i = 0; i < SLOT_COUNT; i++) this.slots[i] = state.slots[i] ?? null
+    for (let i = 0; i < this.slots.length; i++) this.slots[i] = state.slots[i] ?? null
     this.selected = state.selected
     if (this.key() !== before) this.emit()
   }

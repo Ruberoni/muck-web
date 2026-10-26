@@ -245,7 +245,7 @@ describe('Simulation con varios jugadores', () => {
           buttons: t > 200 ? Btn.Fwd | (t % 90 === 0 ? Btn.Jump : 0) : 0,
           yaw: -1 + t * 0.01,
           actions:
-            t === 50 ? [{ kind: 'craft', recipe: 4 }]
+            t === 50 ? [{ kind: 'craft', recipe: 'campfire' }]
             : t === 51 && campfire >= 0 ? [{ kind: 'select', slot: campfire }]
             : t === 60 ? [{ kind: 'place' }]
             : t === 61 ? [{ kind: 'select', slot: 0 }]
@@ -391,8 +391,9 @@ describe('objetos del suelo con varios jugadores', () => {
   it('al que no le cabe ni lo atrae ni lo recoge; se va al otro', () => {
     const { pickups, collector } = setup()
     const a = collector(0, 1.4)
-    // Con 9 casillas y 9 objetos la hotbar real no se llena sin madera: una que no admite nada.
-    const b: Collector = { ...collector(1, -0.5), inventory: { add: () => false, canAdd: () => false } }
+    // Las 27 casillas no se llenan con los objetos que hay: un inventario de una casilla, ocupada.
+    const b = { ...collector(1, -0.5), inventory: new Inventory(1) }
+    b.inventory.add('stone', 1)
     const first = pickups.step(STEP, [a, b])
     expect(first[1].full).toBe(true)
     for (let i = 0; i < 30 && pickups.list.length; i++) pickups.step(STEP, [a, b])

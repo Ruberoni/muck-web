@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, missingMove, type Action, type ActionData, type Move } from '../sim/commands'
 import { campfireSpot } from '../sim/campfires'
+import { NO_STATIONS } from '../sim/crafting'
 import { generatePropPlacements } from '../sim/props'
 import { Simulation, type PlayerSlot } from '../sim/Simulation'
 import { Predictor, SMOOTH_MAX } from './predict'
@@ -11,7 +12,7 @@ const placements = generatePropPlacements()
 /** Lo que manda la sala en `snap.you`, pasado por JSON como por el cable. */
 const youOf = (slot: PlayerSlot): You =>
   JSON.parse(
-    JSON.stringify({ player: slot.player, inventory: slot.inventory.save(), combat: slot.combat, hotbarFull: slot.hotbarFull, alive: slot.alive, appliedSeq: slot.appliedSeq }),
+    JSON.stringify({ player: slot.player, inventory: slot.inventory.save(), combat: slot.combat, inventoryFull: slot.inventoryFull, alive: slot.alive, appliedSeq: slot.appliedSeq }),
   )
 
 /** Un "servidor" (la simulación entera) y un cliente que predice al mismo jugador sobre su espejo de la isla. */
@@ -20,7 +21,11 @@ function setup() {
   server.addPlayer(0)
   const mirror = new Simulation(0, placements)
   const slot = mirror.addPlayer(0)
-  const predictor = new Predictor(slot, { env: mirror.env, canPlace: (p) => campfireSpot(p.pos, p.yaw, [mirror.world.grid, mirror.campfires.grid]).valid })
+  const predictor = new Predictor(slot, {
+    env: mirror.env,
+    canPlace: (p) => campfireSpot(p.pos, p.yaw, [mirror.world.grid, mirror.campfires.grid]).valid,
+    ...NO_STATIONS,
+  })
   predictor.start(server.tick, youOf(server.slot(0)))
   /** Estado del servidor al final de cada tick, para reconciliar con retraso. */
   const states = new Map<number, You>()

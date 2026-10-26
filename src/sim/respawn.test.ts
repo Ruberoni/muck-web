@@ -38,12 +38,14 @@ function until(sim: Simulation, type: SimEvent['type'], max: number) {
 }
 
 describe('muerte en una sala', () => {
-  it('el inventario cae en un montón por objeto donde murió', () => {
+  it('el inventario (hotbar y mochila) cae en un montón por objeto donde murió', () => {
     const sim = withPlayers(2)
     const { inventory, player } = sim.slot(1)
     inventory.add('wood', 7)
     inventory.add('stone', 3)
     inventory.add('stone_axe', 1)
+    // La mochila también cae.
+    inventory.move(1, 20)
     const at = { ...player.pos }
     const events = kill(sim, 1)
 

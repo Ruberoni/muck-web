@@ -143,7 +143,7 @@ describe('sonido', () => {
       [
         { tick: 1, type: 'playerHurt', id: 0, dmg: 10 },
         { tick: 1, type: 'playerAte', id: 0 },
-        { tick: 1, type: 'playerCrafted', id: 0, recipe: 2 },
+        { tick: 1, type: 'playerCrafted', id: 0, recipe: 'stone_axe' },
         { tick: 1, type: 'campfirePlaced', id: 0, x: 0, y: 0, z: 0, rotY: 0, by: 0 },
         { tick: 1, type: 'playerPlaced', id: 0 },
         { tick: 1, type: 'playerDied', id: 0 },

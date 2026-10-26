@@ -20,9 +20,10 @@ function grassSpot() {
 
 const spot = grassSpot()
 
-function setup() {
+/** `size`: casillas del inventario (pocas para llenarlo con los objetos que hay). */
+function setup(size?: number) {
   const pickups = new Pickups([], mulberry32(1))
-  const inventory = new Inventory()
+  const inventory = new Inventory(size)
   const run = (seconds: number, player: { x: number; y: number; z: number }) => {
     let collected = 0
     let full = false
@@ -73,7 +74,7 @@ describe('objetos en el suelo', () => {
     expect(pickups.list).toHaveLength(0)
   })
 
-  it('se recogen al pasar por encima, uno a uno, y entran en la hotbar', () => {
+  it('se recogen al pasar por encima, uno a uno, y entran en el inventario', () => {
     const { pickups, inventory, run, at, dropAndLand } = setup()
     dropAndLand('wood', 4)
     let collected = 0
@@ -100,28 +101,27 @@ describe('objetos en el suelo', () => {
     expect(inventory.count('stone')).toBe(1)
   })
 
-  it('con la hotbar llena un objeto nuevo se queda en el suelo, no se desliza y avisa', () => {
-    const { pickups, inventory, at, dropAndLand } = setup()
+  it('con el inventario lleno un objeto nuevo se queda en el suelo, no se desliza y avisa', () => {
+    // Las 27 casillas no se llenan con los objetos que hay: un inventario de una casilla, ocupada.
+    const { pickups, inventory, at, dropAndLand } = setup(1)
+    inventory.add('stone', 1)
     dropAndLand('wood', 1)
-    // Las 9 casillas solo se llenan teniendo los 9 objetos: se simula una hotbar sin sitio.
-    let room = false
-    const hotbar = { canAdd: () => room, add: (item: ItemId, amount: number) => room && inventory.add(item, amount) }
     const [p] = pickups.list
     const start = { ...p.pos }
     const near = at(p.pos.x + (PICKUP_MAGNET + PICKUP_RADIUS) / 2, p.pos.z)
-    for (let i = 0; i < 30; i++) pickups.step(STEP, [{ id: 0, pos: near, inventory: hotbar }])
+    for (let i = 0; i < 30; i++) pickups.step(STEP, [{ id: 0, pos: near, inventory }])
     expect(p.pos).toEqual(start)
-    expect(pickups.step(STEP, [{ id: 0, pos: at(p.pos.x, p.pos.z), inventory: hotbar }])[0]).toEqual({ collected: 0, full: true })
+    expect(pickups.step(STEP, [{ id: 0, pos: at(p.pos.x, p.pos.z), inventory }])[0]).toEqual({ collected: 0, full: true })
     expect(pickups.list).toHaveLength(1)
 
-    room = true
-    expect(pickups.step(STEP, [{ id: 0, pos: at(p.pos.x, p.pos.z), inventory: hotbar }])[0]).toEqual({ collected: 1, full: false })
+    inventory.remove('stone', 1)
+    expect(pickups.step(STEP, [{ id: 0, pos: at(p.pos.x, p.pos.z), inventory }])[0]).toEqual({ collected: 1, full: false })
     expect(inventory.count('wood')).toBe(1)
   })
 
-  it('el que ya está en la hotbar se recoge aunque no queden casillas libres', () => {
-    const { pickups, inventory, run, at, dropAndLand } = setup()
-    const fill: ItemId[] = ['wood', 'stone', 'berry', 'wood_axe', 'wood_pickaxe', 'stone_axe', 'stone_pickaxe', 'raw_meat', 'campfire']
+  it('el que ya está en el inventario se recoge aunque no queden casillas libres', () => {
+    const { pickups, inventory, run, at, dropAndLand } = setup(2)
+    const fill: ItemId[] = ['wood', 'stone']
     fill.forEach((item) => inventory.add(item, 1))
     expect(inventory.slots.includes(null)).toBe(false)
     dropAndLand('wood', 1)

@@ -131,11 +131,12 @@ describe('Simulation', () => {
       if (t === 150) sim.setPhase(NIGHT)
       const slot = sim.slot(0).inventory.slots.indexOf('campfire')
       const actions: ActionData[] =
-        t === 100 ? [{ kind: 'craft', recipe: 4 }]
+        t === 100 ? [{ kind: 'craft', recipe: 'campfire' }]
         : t === 101 && slot >= 0 ? [{ kind: 'select', slot }]
         : t === 110 ? [{ kind: 'place' }]
         : t === 111 ? [{ kind: 'select', slot: 0 }]
         : t === 120 ? [{ kind: 'eat' }]
+        : t === 130 ? [{ kind: 'move', from: 1, to: 15 }]
         : t % 47 === 0 ? [{ kind: 'swing' }]
         : []
       if (t < 90) return { ...look, buttons: Btn.Attack }
@@ -150,6 +151,7 @@ describe('Simulation', () => {
     expect(tree.alive).toBe(false)
     expect(a.campfires.list.length).toBe(1)
     expect(a.enemies.list.length).toBeGreaterThan(0)
+    expect(a.slot(0).inventory.slots[15]).not.toBe(null)
 
     const b = Simulation.fromJSON(JSON.parse(JSON.stringify(a.toJSON())), placements)
     expect(JSON.stringify(b.toJSON())).toBe(JSON.stringify(a.toJSON()))

@@ -1,3 +1,4 @@
+import type { RecipeId } from './crafting'
 import type { TargetRef } from './events'
 import type { PlayerInput } from './player'
 
@@ -20,12 +21,14 @@ export interface Move {
 /**
  * Flancos de un solo uso: se aplican una vez, en su tick y en orden de `seq`.
  * `swing` es un golpe pedido (un clic, aunque sea más corto que un tick): si el cooldown no ha acabado,
- * queda pendiente hasta que acabe. `place` coloca la fogata que se tiene en la mano.
+ * queda pendiente hasta que acabe. `place` coloca la fogata que se tiene en la mano. `move` intercambia dos
+ * casillas del inventario (hotbar o mochila).
  */
 export type ActionData =
   | { kind: 'swing' }
   | { kind: 'select'; slot: number }
-  | { kind: 'craft'; recipe: number }
+  | { kind: 'craft'; recipe: RecipeId }
+  | { kind: 'move'; from: number; to: number }
   | { kind: 'eat' }
   | { kind: 'place' }
 

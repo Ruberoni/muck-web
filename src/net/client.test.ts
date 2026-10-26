@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { Room, MemoryStorage, ABSENT_MS } from '../../server/room'
 import { Btn, type ActionData } from '../sim/commands'
-import { EYE_HEIGHT } from '../sim/constants'
+import { EYE_HEIGHT, MAX_PITCH } from '../sim/constants'
+import { RECIPE_IDS } from '../sim/crafting'
 import { aimPose } from '../sim/interaction'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
 import { botMove, driveClient } from './bot'
-import { LEAVE_GRACE_MS, NetClient, compactMoves } from './client'
-import type { Cmds } from './protocol'
+import { LEAVE_GRACE_MS, NetClient, compactMoves, encodeCmds } from './client'
+import { MAX_ACTIONS, MAX_MESSAGE, MAX_MOVE_REPEAT, MAX_MOVES, MAX_RTT, parseClientMessage, type Cmds } from './protocol'
 import type { MoveInput } from './session'
 import { LaggyTransport, ManualTime, type Lag } from './transport'
 
@@ -89,7 +90,7 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
     expect(Math.hypot(server.pos.x - room.sim!.spawnCenter.x, server.pos.z - room.sim!.spawnCenter.z)).toBeGreaterThan(5)
   })
 
-  it('también comiendo, fabricando y colocando una fogata', () => {
+  it('también comiendo, fabricando, moviendo casillas y colocando una fogata', () => {
     const { room, time, connect } = setup()
     const { client } = connect('a', 'create')
     run(time, 500, [[client, idle]])
@@ -106,12 +107,15 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
       if (start < 0) start = tick
       const at = tick - start
       const actions: ActionData[] = []
-      if (at === 10) actions.push({ kind: 'craft', recipe: 4 })
+      if (at === 10) actions.push({ kind: 'craft', recipe: 'campfire' })
       if (at === 20) actions.push({ kind: 'select', slot: 3 })
       if (at === 30) actions.push({ kind: 'place' })
       // Dos veces en el mismo tick serían un solo bocado.
       if (at === 40 || at === 45) actions.push({ kind: 'eat' })
-      if (at === 60) actions.push({ kind: 'craft', recipe: 0 }, { kind: 'select', slot: 0 })
+      if (at === 60) actions.push({ kind: 'craft', recipe: 'wood_axe' }, { kind: 'select', slot: 0 })
+      // Mueve casillas a la mochila y entre ellas; lo siguiente que se fabrica ocupa la primera libre.
+      if (at === 70) actions.push({ kind: 'move', from: 0, to: 20 }, { kind: 'move', from: 1, to: 0 })
+      if (at === 72) actions.push({ kind: 'move', from: 20, to: 26 }, { kind: 'craft', recipe: 'wood_pickaxe' })
       // Se aparta de la fogata andando hacia atrás.
       return { buttons: at > 80 && at < 140 ? Btn.Back : 0, yaw: 0, pitch: 0, actions }
     }
@@ -122,6 +126,8 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
     expect(slot.inventory.count('berry')).toBe(1)
     expect(slot.inventory.count('wood_axe')).toBe(1)
     expect(slot.inventory.count('campfire')).toBe(0)
+    expect(slot.inventory.slots[26]).toBe('wood')
+    expect(slot.inventory.slots[1]).toBe('wood_pickaxe')
     expect(client.predictor!.stats.corrections).toBe(0)
   })
 
@@ -140,7 +146,7 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
           if (craftTick >= 0) return idle(tick)
           craftTick = tick
           transport.stall(400)
-          return { ...idle(tick), actions: [{ kind: 'craft', recipe: 0 }] }
+          return { ...idle(tick), actions: [{ kind: 'craft', recipe: 'wood_axe' }] }
         },
       ],
     ])
@@ -461,5 +467,59 @@ describe('compactMoves', () => {
     const m = (tick: number, buttons = 0) => ({ tick, buttons, yaw: 0, pitch: 0 })
     expect(compactMoves([m(1), m(2), m(3), m(4, Btn.Fwd), m(6, Btn.Fwd)])).toEqual([{ ...m(1), n: 3 }, m(4, Btn.Fwd), m(6, Btn.Fwd)])
     expect(compactMoves([{ ...m(1), aim: null }, { ...m(2), aim: { kind: 'prop', id: 3 } }])).toHaveLength(2)
+  })
+})
+
+describe('encodeCmds', () => {
+  const longest = RECIPE_IDS.reduce((a, b) => (b.length > a.length ? b : a))
+  /** Lo más largo que manda un cliente de verdad: ticks de 190 días de sala, millones de acciones y ángulos con todos sus decimales. */
+  const TICK = 1_000_000_000
+  const SEQ = 10_000_000
+  const big = (tick: number, seq: number): Cmds => ({
+    type: 'cmds',
+    t: 1_800_000_000_000.123,
+    moves: Array.from({ length: MAX_MOVES }, (_, i) => ({
+      tick: tick + i * MAX_MOVE_REPEAT,
+      buttons: 127,
+      yaw: -Math.PI / 3 - 1e-9,
+      pitch: -MAX_PITCH + 1e-12,
+      n: MAX_MOVE_REPEAT,
+      aim: { kind: 'enemy', id: 1_000_000 },
+    })),
+    actions: Array.from({ length: MAX_ACTIONS }, (_, i) => ({ kind: 'craft', recipe: longest, seq: seq + i, tick: tick + i })),
+    rtt: MAX_RTT,
+  })
+
+  it('el mensaje más largo realista cabe entero', () => {
+    const data = encodeCmds(big(TICK, SEQ))
+    expect(data.length).toBeLessThanOrEqual(MAX_MESSAGE)
+    expect(JSON.parse(data).actions).toHaveLength(MAX_ACTIONS)
+    expect(parseClientMessage(data).ok).toBe(true)
+  })
+
+  it('si no cabe, quita acciones del final hasta que quepa y la sala lo acepta', () => {
+    const cmds = big(Number.MAX_SAFE_INTEGER - 2000, Number.MAX_SAFE_INTEGER - 100)
+    expect(JSON.stringify(cmds).length).toBeGreaterThan(MAX_MESSAGE)
+    const data = encodeCmds(cmds)
+    expect(data.length).toBeLessThanOrEqual(MAX_MESSAGE)
+    const sent = JSON.parse(data)
+    expect(sent.actions.length).toBeGreaterThan(0)
+    expect(sent.actions).toEqual(cmds.actions.slice(0, sent.actions.length))
+    expect(sent.moves).toEqual(cmds.moves)
+    expect(parseClientMessage(data).ok).toBe(true)
+  })
+
+  it('sin acciones que quitar, quita los Move más viejos', () => {
+    const cmds = big(TICK, SEQ)
+    const many: Cmds = { ...cmds, actions: [], moves: Array.from({ length: 4 }, () => cmds.moves).flat() }
+    expect(JSON.stringify(many).length).toBeGreaterThan(MAX_MESSAGE)
+    const sent = JSON.parse(encodeCmds(many))
+    expect(JSON.stringify(sent).length).toBeLessThanOrEqual(MAX_MESSAGE)
+    expect(sent.moves).toEqual(many.moves.slice(-sent.moves.length))
+  })
+
+  it('nunca manda más de MAX_ACTIONS', () => {
+    const cmds: Cmds = { type: 'cmds', t: 1, moves: [], actions: Array.from({ length: MAX_ACTIONS + 5 }, (_, i) => ({ kind: 'eat', seq: i + 1, tick: 1 })) }
+    expect(JSON.parse(encodeCmds(cmds)).actions).toHaveLength(MAX_ACTIONS)
   })
 })
