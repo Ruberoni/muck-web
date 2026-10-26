@@ -19,12 +19,23 @@ const atBase = ({ mesh, index, base }: PropInstance) => {
 }
 
 describe('PropView', () => {
-  it('construye una instancia por pieza: tronco y copa, roca, arbusto y una por baya', () => {
+  it('construye una instancia por pieza: tronco y copa, roca, mena y cristales, arbusto y una por baya', () => {
     const view = new PropView(placements)
     expect(view.instancesOf(tree.id)).toHaveLength(2)
     expect(view.instancesOf(placements.find((p) => p.kind === 'rock')!.id)).toHaveLength(1)
+    expect(view.instancesOf(placements.find((p) => p.kind === 'birch')!.id)).toHaveLength(2)
+    expect(view.instancesOf(placements.find((p) => p.kind === 'iron_ore')!.id)).toHaveLength(2)
     expect(view.instancesOf(bush.id).filter((i) => i.berry !== undefined)).toHaveLength(BERRIES_PER_BUSH)
     expect(view.instancesOf(tree.id).every(atBase)).toBe(true)
+  })
+
+  it('cada tipo tiene sus propios meshes, con una instancia por prop', () => {
+    const view = new PropView(placements)
+    const { birch, iron_ore, tree: trees, rock } = view.byKind
+    expect(new Set([...trees, ...birch, ...rock, ...iron_ore]).size).toBe(trees.length + birch.length + rock.length + iron_ore.length)
+    for (const kind of ['tree', 'birch', 'rock', 'iron_ore'] as const) {
+      for (const mesh of view.byKind[kind]) expect(mesh.count).toBe(placements.filter((p) => p.kind === kind).length)
+    }
   })
 
   it('un golpe en un prop ya roto no lo vuelve a mostrar', () => {

@@ -1,4 +1,4 @@
-export type ItemId = 'wood' | 'stone' | 'berry' | 'wood_axe' | 'wood_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'raw_meat' | 'campfire' | 'workbench'
+export type ItemId = 'wood' | 'stone' | 'berry' | 'wood_axe' | 'wood_pickaxe' | 'stone_axe' | 'stone_pickaxe' | 'raw_meat' | 'campfire' | 'workbench' | 'birch_wood' | 'iron_ore'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -11,6 +11,8 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   raw_meat: 'Carne cruda',
   campfire: 'Fogata',
   workbench: 'Mesa de trabajo',
+  birch_wood: 'Madera de abedul',
+  iron_ore: 'Mineral de hierro',
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

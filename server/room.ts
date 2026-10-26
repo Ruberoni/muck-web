@@ -163,7 +163,7 @@ interface RoomBlob {
 export class Room {
   /** null: la sala no tiene isla (no se ha creado o se ha borrado). */
   sim: Simulation | null = null
-  readonly placements: PropPlacement[]
+  readonly placements: readonly PropPlacement[]
   private seats = new Map<string, Seat>()
   /** Sockets abiertos: con su hueco o, hasta el `hello`, sin él. */
   private conns = new Map<Conn, Seat | null>()

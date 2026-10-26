@@ -9,14 +9,13 @@ import { Inventory, type InventoryState } from './inventory'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
-import { createPropWorld, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
+import { createPropWorld, findSpawn, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
 import { isDead } from './survival'
 import { DAY_LENGTH, DayClock, euclideanModulo, isNight, START_PHASE } from './world/daycycle'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
+import { heightAt } from './world/terrain'
 
-const SPAWN_CLEARANCE = 3
 /** Los jugadores que no son el primero aparecen en un anillo a esta distancia del punto de aparición. */
 const SPAWN_RING = 2.5
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
@@ -127,7 +126,7 @@ export class Simulation {
         return resolveCircle(pos, PLAYER_RADIUS, this.structures.grid) || props
       },
     }
-    this.spawnCenter = findSpawn(world)
+    this.spawnCenter = findSpawn(world.grid)
   }
 
   /** Último tick simulado. */
@@ -411,23 +410,4 @@ export class Simulation {
     this.events.emit({ type: 'playerPlaced', id: slot.id, item })
     slot.inventory.remove(item, 1)
   }
-}
-
-/** Espiral desde el centro hasta el primer punto con hierba y sin props cerca. */
-function findSpawn({ grid }: PropWorld) {
-  const isClear = (x: number, z: number) => {
-    for (const prop of grid.query(x, z, SPAWN_CLEARANCE + grid.maxRadius)) {
-      if (Math.hypot(prop.x - x, prop.z - z) - prop.radius < SPAWN_CLEARANCE) return false
-    }
-    return true
-  }
-  for (let i = 0; i < 4000; i++) {
-    const angle = i * 0.5
-    const r = angle * 0.4
-    const x = Math.cos(angle) * r
-    const z = Math.sin(angle) * r
-    const h = heightAt(x, z)
-    if (h > SAND_LEVEL + 0.3 && h < ROCK_LEVEL && isClear(x, z)) return { x, z }
-  }
-  return { x: 0, z: 0 }
 }

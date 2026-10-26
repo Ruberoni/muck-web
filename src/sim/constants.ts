@@ -73,9 +73,11 @@ export const BERRIES_PER_BUSH = 6
 export const BERRY_REGROW = 15
 
 // Las claves son los tipos de prop: `PropKind` (props.ts) se saca de aquí, así que un tipo nuevo solo se añade aquí.
-export const PROP_DEFS: Record<'tree' | 'rock' | 'bush', PropDef> = {
+export const PROP_DEFS: Record<'tree' | 'birch' | 'rock' | 'iron_ore' | 'bush', PropDef> = {
   tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 3, drop: { item: 'wood', amount: 4 } },
+  birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 12, drop: { item: 'birch_wood', amount: 4 } },
   rock: { name: 'Roca', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 4, drop: { item: 'stone', amount: 3 } },
+  iron_ore: { name: 'Mena de hierro', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 2, hp: 12, drop: { item: 'iron_ore', amount: 3 } },
   bush: {
     name: 'Arbusto de bayas',
     verb: 'recoger',
