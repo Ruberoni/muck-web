@@ -1,11 +1,17 @@
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import type { StructureKind } from '../sim/structures'
 
 /** Radio del mundo (en unidades) que cabe entre el centro y el borde del minimapa. */
 export const VIEW_RADIUS = 75
 // Píxeles de la textura de la isla por unidad del mundo.
 const TEXELS_PER_UNIT = 1.5
-// Hueco entre el borde del círculo y las marcas fijadas en él (fogatas lejanas, N).
+// Hueco entre el borde del círculo y las marcas fijadas en él (estructuras lejanas, N).
 const RIM_INSET = 9
+
+/** Cómo se marca cada tipo de estructura: forma y color de cerca y de lejos (en el borde). */
+export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; near: string; far: string }> = {
+  campfire: { shape: 'dot', near: '#ff8636', far: '#ffb347' },
+}
 
 /** Un compañero en el minimapa. */
 export interface MinimapPlayer {
@@ -21,7 +27,7 @@ export interface MinimapView {
   x: number
   z: number
   yaw: number
-  campfires: readonly { x: number; z: number }[]
+  structures: readonly { kind: StructureKind; x: number; z: number }[]
   enemies: readonly { pos: { x: number; z: number } }[]
   /** Los demás jugadores (solo en red). */
   players?: readonly MinimapPlayer[]
@@ -169,13 +175,16 @@ export class Minimap {
       this.dot(c + p.x * scale, c + p.y * scale, 3.5)
     }
 
-    // Fogatas: las lejanas se quedan en el borde, apuntando hacia dónde están.
+    // Estructuras: las lejanas se quedan en el borde, apuntando hacia dónde están.
     const rim = (c - RIM_INSET) / scale
-    for (const fire of view.campfires) {
-      toMinimap(fire.x - view.x, fire.z - view.z, view.yaw, p)
+    for (const s of view.structures) {
+      toMinimap(s.x - view.x, s.z - view.z, view.yaw, p)
       const far = clampToRim(p, rim)
-      ctx.fillStyle = far ? '#ffb347' : '#ff8636'
-      this.dot(c + p.x * scale, c + p.y * scale, far ? 3.5 : 4.5)
+      const mark = STRUCTURE_MARKS[s.kind]
+      ctx.fillStyle = far ? mark.far : mark.near
+      const r = far ? 3.5 : 4.5
+      if (mark.shape === 'dot') this.dot(c + p.x * scale, c + p.y * scale, r)
+      else this.square(c + p.x * scale, c + p.y * scale, r)
     }
 
     // Compañeros: flechas de su color; los lejanos, en el borde apuntando hacia ellos.
@@ -223,6 +232,17 @@ export class Minimap {
       ctx.stroke()
     }
     ctx.restore()
+  }
+
+  /** Un cuadrado de lado 2r (las estaciones), con el mismo borde que los puntos. */
+  private square(x: number, y: number, r: number) {
+    const { ctx } = this
+    ctx.beginPath()
+    ctx.rect(x - r, y - r, 2 * r, 2 * r)
+    ctx.lineWidth = 1
+    ctx.strokeStyle = 'rgb(0 0 0 / 0.6)'
+    ctx.stroke()
+    ctx.fill()
   }
 
   private dot(x: number, y: number, r: number) {

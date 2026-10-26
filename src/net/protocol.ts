@@ -6,6 +6,7 @@ import type { Combat } from '../sim/interaction'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type InventoryState, type ItemId } from '../sim/inventory'
 import type { Player, Vec3 } from '../sim/player'
 import type { PropPlacement } from '../sim/props'
+import { STRUCTURE_KINDS, type StructureKind } from '../sim/structures'
 import type { Connection, SimState } from '../sim/Simulation'
 
 /**
@@ -13,7 +14,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 8
+export const PROTOCOL_VERSION = 9
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -105,7 +106,8 @@ export type DevOp =
   | { op: 'teleport'; x: number; z: number; yaw: number; pitch: number }
   | { op: 'setVitals'; health?: number; hunger?: number }
   | { op: 'spawnEnemy'; x: number; z: number }
-  | { op: 'placeCampfire'; x: number; z: number; yaw: number }
+  /** Delante de (x, z) mirando a `yaw`; sin (x, z), desde donde está el jugador, y sin `yaw`, hacia donde mira. */
+  | { op: 'placeStructure'; kind: StructureKind; x?: number; z?: number; yaw?: number }
   | { op: 'setPhase'; phase: number }
 
 export type Dev = { type: 'dev' } & DevOp
@@ -163,7 +165,7 @@ export interface PickupSnap {
 }
 
 /** El mundo entero, sin el azar ni los inventarios de los demás: lo que necesita un cliente para empezar. */
-export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | 'props' | 'enemies' | 'pickups' | 'campfires'> {
+export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | 'props' | 'enemies' | 'pickups' | 'structures'> {
   /** Los demás jugadores en el mundo. */
   players: (PlayerSnap & { name: string })[]
 }
@@ -495,8 +497,16 @@ function parseDev(raw: Obj): Dev | null {
     }
     case 'spawnEnemy':
       return nums('x', 'z') ? { type: 'dev', op: 'spawnEnemy', x: raw.x as number, z: raw.z as number } : null
-    case 'placeCampfire':
-      return nums('x', 'z', 'yaw') ? { type: 'dev', op: 'placeCampfire', x: raw.x as number, z: raw.z as number, yaw: raw.yaw as number } : null
+    case 'placeStructure': {
+      const optional = (x: unknown) => x === undefined || isFiniteNum(x)
+      // x y z van juntas: o las dos o ninguna.
+      if (!STRUCTURE_KINDS.includes(raw.kind as StructureKind) || (raw.x === undefined) !== (raw.z === undefined)) return null
+      if (!optional(raw.x) || !optional(raw.z) || !optional(raw.yaw)) return null
+      const dev: Dev = { type: 'dev', op: 'placeStructure', kind: raw.kind as StructureKind }
+      if (raw.x !== undefined) Object.assign(dev, { x: raw.x, z: raw.z })
+      if (raw.yaw !== undefined) dev.yaw = raw.yaw as number
+      return dev
+    }
     case 'setPhase':
       return nums('phase') ? { type: 'dev', op: 'setPhase', phase: raw.phase as number } : null
     default:

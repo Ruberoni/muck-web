@@ -1,8 +1,7 @@
 import type { Clock } from '../../server/room'
-import { campfireSpot } from '../sim/campfires'
 import type { ActionData, Move } from '../sim/commands'
 import { NO_STATIONS } from '../sim/crafting'
-import { CAMPFIRE_RADIUS, ENEMY_DEF, STEP } from '../sim/constants'
+import { ENEMY_DEF, STEP } from '../sim/constants'
 import type { EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
@@ -10,6 +9,7 @@ import type { Pickup } from '../sim/pickups'
 import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
+import { structureSpot } from '../sim/structures'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
 import { InterpBuffer, Interpolator, PresentationQueue, type Shown } from './interp'
 import { Predictor } from './predict'
@@ -156,7 +156,7 @@ export function encodeCmds(cmds: Cmds): string {
  * en el acto. Muerto, a 1 Hz (keepalive del espectador). Después, `render()` pone el espejo en el tick de render y da
  * los eventos que toca presentar.
  *
- * `sim` es un espejo de la partida para dibujarla y predecir: los props y las fogatas se actualizan con los eventos
+ * `sim` es un espejo de la partida para dibujarla y predecir: los props y las estructuras se actualizan con los eventos
  * en cuanto llegan (la predicción choca con lo que hay de verdad); los enemigos, los objetos del suelo y el reloj
  * del día están en el tick de render (lo que se ve), y el único jugador es el local, el predicho.
  * Cada `Move` lleva `aim`: lo que el jugador tiene delante en el espejo, con los enemigos como se ven.
@@ -367,7 +367,7 @@ export class NetClient {
         this.applyWorld(msg.state)
         this.predictor = new Predictor(slot, {
           env: sim.env,
-          canPlace: (p) => campfireSpot(p.pos, p.yaw, [sim.world.grid, sim.campfires.grid]).valid,
+          canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, [sim.world.grid, sim.structures.grid]).valid,
           ...NO_STATIONS,
         })
         this.predictor.start(msg.serverTick, msg.you)
@@ -504,12 +504,12 @@ export class NetClient {
     }
   }
 
-  /** La isla del espejo como dice un estado completo: props generados más los que difieren, fogatas, objetos y reloj. */
+  /** La isla del espejo como dice un estado completo: props generados más los que difieren, estructuras, objetos y reloj. */
   private applyWorld(state: WorldState) {
     const sim = this.sim!
     for (const prop of sim.world.props) resetProp(prop)
     for (const { id, hp, alive, regrowLeft } of state.props) Object.assign(sim.world.props[id], { hp, alive, regrowLeft })
-    sim.campfires.load(state.campfires)
+    sim.structures.load(state.structures)
     this.worldStartTick = state.worldStartTick
     this.pickups.clear()
     for (const p of state.pickups.list) {
@@ -534,12 +534,9 @@ export class NetClient {
       case 'propDestroyed':
         sim.world.props[e.id].alive = false
         break
-      case 'campfirePlaced': {
-        const { list, nextId } = sim.campfires.save()
-        list.push({ id: e.id, x: e.x, y: e.y, z: e.z, rotY: e.rotY, radius: CAMPFIRE_RADIUS, alive: true })
-        sim.campfires.load({ list, nextId: Math.max(nextId, e.id + 1) })
+      case 'structurePlaced':
+        sim.structures.add({ id: e.id, kind: e.kind, x: e.x, y: e.y, z: e.z, rotY: e.rotY })
         break
-      }
       case 'pickupSpawn':
         this.pickups.set(e.id, { pickup: mirrorPickup(e.id, e.item, e.amount, spinOf(e.id)), samples: new InterpBuffer(), spawnTick: e.tick, goneAt: null })
         break
@@ -553,7 +550,7 @@ export class NetClient {
         break
       case 'worldReset':
         for (const prop of sim.world.props) resetProp(prop)
-        sim.campfires.clear()
+        sim.structures.clear()
         this.pickups.clear()
         this.worldStartTick = e.worldStartTick
         break

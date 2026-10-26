@@ -1,5 +1,4 @@
 import type { PlayerCommands } from './commands'
-import { Campfires, campfireSpot, type CampfiresState, type CampfireSpot } from './campfires'
 import { resolveCircle } from './collision'
 import { NO_STATIONS, type CraftWorld, type RecipeId } from './crafting'
 import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, STEP } from './constants'
@@ -12,6 +11,7 @@ import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './pla
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
 import { createPropWorld, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
+import { placeableOf, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
 import { isDead } from './survival'
 import { DAY_LENGTH, DayClock, euclideanModulo, isNight, START_PHASE } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
@@ -60,7 +60,7 @@ export interface SimState {
   props: { id: number; hp: number; alive: boolean; regrowLeft: number }[]
   enemies: EnemiesState
   pickups: PickupsState
-  campfires: CampfiresState
+  structures: StructuresState
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
   nextPlayerId: number
@@ -71,7 +71,7 @@ export interface SimState {
 const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ...p.prev }, vel: { ...p.vel } })
 
 /**
- * La partida sin three.js ni DOM: isla, reloj, enemigos, objetos del suelo, fogatas y los jugadores.
+ * La partida sin three.js ni DOM: isla, reloj, enemigos, objetos del suelo, estructuras y los jugadores.
  * Avanza con `step(commands)` y devuelve lo que ha pasado como eventos; la vista, el HUD y el sonido
  * solo leen su estado y sus eventos. Determinista para una misma semilla y unos mismos comandos.
  * Los jugadores se recorren siempre por id, así el resultado no depende del orden en que llegan los comandos.
@@ -84,7 +84,8 @@ const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ..
 export class Simulation {
   readonly world: PropWorld
   readonly clock = new DayClock()
-  readonly campfires: Campfires
+  /** Lo colocado: fogatas (y, más adelante, estaciones). Bloquea a jugadores, enemigos y objetos del suelo. */
+  readonly structures: Structures
   readonly enemies: Enemies
   readonly pickups: Pickups
   readonly interaction: Interaction
@@ -104,7 +105,7 @@ export class Simulation {
   private nextPlayerId = 0
   /** Todos muertos: tick en que se reinicia la isla. */
   private gameOverAt: number | null = null
-  private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
+  private spot: StructureSpot = { x: 0, y: 0, z: 0, valid: false }
   /** Estaciones para fabricar: aún no hay ninguna. */
   private readonly craftWorld: CraftWorld = NO_STATIONS
 
@@ -113,15 +114,15 @@ export class Simulation {
     const world = createPropWorld(placements)
     this.world = world
     const { emit } = this.events
-    this.campfires = new Campfires(emit)
-    this.enemies = new Enemies([world.grid, this.campfires.grid], this.rng, emit)
-    this.pickups = new Pickups([world.grid, this.campfires.grid], this.rng, emit)
+    this.structures = new Structures(emit)
+    this.enemies = new Enemies([world.grid, this.structures.grid], this.rng, emit)
+    this.pickups = new Pickups([world.grid, this.structures.grid], this.rng, emit)
     this.interaction = new Interaction(world, this.pickups, this.enemies, emit)
     this.env = {
       heightAt,
       collide: (pos) => {
         const props = resolveCircle(pos, PLAYER_RADIUS, world.grid)
-        return resolveCircle(pos, PLAYER_RADIUS, this.campfires.grid) || props
+        return resolveCircle(pos, PLAYER_RADIUS, this.structures.grid) || props
       },
     }
     this.spawnCenter = findSpawn(world)
@@ -226,7 +227,7 @@ export class Simulation {
       else this.interaction.validateAim(slot, intent.aim)
       const hands = useHands(slot, intent)
       if (hands.swing) this.interaction.strike(slot)
-      if (hands.place) this.placeCampfire(slot)
+      if (hands.place) this.place(slot)
     }
     // Lo que rompió o mató otro jugador en este paso deja de ser objetivo de los demás.
     for (const slot of living) if (slot.target && !slot.target.alive) slot.target = null
@@ -266,7 +267,7 @@ export class Simulation {
     this.interaction.reset()
     this.enemies.reset()
     this.pickups.clear()
-    this.campfires.clear()
+    this.structures.clear()
     for (const slot of this.players.values()) {
       slot.inventory.clear()
       Object.assign(slot.combat, createCombat())
@@ -308,7 +309,7 @@ export class Simulation {
         .map(({ id, hp, alive, regrowLeft }) => ({ id, hp, alive, regrowLeft })),
       enemies: this.enemies.save(),
       pickups: this.pickups.save(),
-      campfires: this.campfires.save(),
+      structures: this.structures.save(),
       players: [...this.players.values()]
         .sort((a, b) => a.id - b.id)
         .map((slot) => ({
@@ -343,7 +344,7 @@ export class Simulation {
     for (const { id, hp, alive, regrowLeft } of state.props) Object.assign(this.world.props[id], { hp, alive, regrowLeft })
     this.enemies.load(state.enemies)
     this.pickups.load(state.pickups)
-    this.campfires.load(state.campfires)
+    this.structures.load(state.structures)
     this.players.clear()
     for (const saved of state.players) {
       const slot = this.addPlayer(saved.id)
@@ -399,11 +400,14 @@ export class Simulation {
   }
 
   /** Desde la posición y el yaw del jugador en este tick; dos en el mismo tick se validan por orden de id. */
-  private placeCampfire(slot: PlayerSlot) {
-    const spot = campfireSpot(slot.player.pos, slot.player.yaw, [this.world.grid, this.campfires.grid], this.spot)
-    if (!this.campfires.place(spot, slot.id)) return
-    this.events.emit({ type: 'playerPlaced', id: slot.id })
-    slot.inventory.remove('campfire', 1)
+  private place(slot: PlayerSlot) {
+    const item = slot.inventory.selectedItem
+    const def = placeableOf(item)
+    if (!item || !def) return
+    const spot = structureSpot(slot.player.pos, slot.player.yaw, def.radius, [this.world.grid, this.structures.grid], this.spot)
+    if (!this.structures.place(spot, def.kind, slot.id)) return
+    this.events.emit({ type: 'playerPlaced', id: slot.id, item })
+    slot.inventory.remove(item, 1)
   }
 }
 

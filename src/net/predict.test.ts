@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, missingMove, type Action, type ActionData, type Move } from '../sim/commands'
-import { campfireSpot } from '../sim/campfires'
 import { NO_STATIONS } from '../sim/crafting'
 import { generatePropPlacements } from '../sim/props'
 import { Simulation, type PlayerSlot } from '../sim/Simulation'
+import { structureSpot } from '../sim/structures'
 import { Predictor, SMOOTH_MAX } from './predict'
 import type { You } from './protocol'
 
@@ -23,7 +23,7 @@ function setup() {
   const slot = mirror.addPlayer(0)
   const predictor = new Predictor(slot, {
     env: mirror.env,
-    canPlace: (p) => campfireSpot(p.pos, p.yaw, [mirror.world.grid, mirror.campfires.grid]).valid,
+    canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, [mirror.world.grid, mirror.structures.grid]).valid,
     ...NO_STATIONS,
   })
   predictor.start(server.tick, youOf(server.slot(0)))

@@ -1,24 +1,25 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { Campfires } from '../sim/campfires'
+import { Structures, type StructureSpot } from '../sim/structures'
 import { CAMPFIRE_LIGHTS } from '../sim/constants'
-import { CampfireView } from './CampfireView'
+import { StructureView } from './StructureView'
 
 const lightsOf = (scene: THREE.Scene) => scene.children.filter((c): c is THREE.PointLight => c instanceof THREE.PointLight)
 
 function setup() {
   const scene = new THREE.Scene()
-  const fires = new Campfires()
-  const view = new CampfireView(scene)
+  const fires = new Structures()
+  const view = new StructureView(scene)
+  const place = (spot: StructureSpot) => fires.place(spot, 'campfire')
   const update = (phase = 0.8, viewer = { x: 0, z: 0 }) => view.update(0, phase, viewer, fires.list)
-  return { scene, fires, view, update }
+  return { scene, fires, view, update, place }
 }
 
-describe('CampfireView', () => {
+describe('StructureView', () => {
   it('dibuja cada fogata con su posición y su giro, y las quita al reiniciar', () => {
-    const { fires, view, update } = setup()
-    fires.place({ x: 0, y: 5, z: 0, valid: true })
-    fires.place({ x: 5, y: 5, z: 0, valid: true })
+    const { fires, view, update, place } = setup()
+    place({ x: 0, y: 5, z: 0, valid: true })
+    place({ x: 5, y: 5, z: 0, valid: true })
     update()
     expect(view.group.children).toHaveLength(2)
     const model = view.modelOf(1)!
@@ -28,15 +29,15 @@ describe('CampfireView', () => {
     fires.clear()
     view.reset()
     expect(view.group.children).toHaveLength(0)
-    fires.place({ x: 2, y: 5, z: 0, valid: true })
+    place({ x: 2, y: 5, z: 0, valid: true })
     update()
     expect(view.group.children).toHaveLength(1)
     expect(view.modelOf(0)!.root.position.x).toBe(2)
   })
 
   it('una fogata que sale de la lista deja de dibujarse', () => {
-    const { fires, view, update } = setup()
-    fires.place({ x: 0, y: 5, z: 0, valid: true })
+    const { fires, view, update, place } = setup()
+    place({ x: 0, y: 5, z: 0, valid: true })
     update()
     fires.clear()
     update()
@@ -44,13 +45,13 @@ describe('CampfireView', () => {
   })
 
   it('el número de luces es fijo e iluminan las fogatas más cercanas', () => {
-    const { scene, fires, update } = setup()
+    const { scene, place, update } = setup()
     const lights = lightsOf(scene)
     expect(lights).toHaveLength(CAMPFIRE_LIGHTS)
     update()
     expect(lights.every((l) => l.intensity === 0)).toBe(true)
 
-    for (let i = 0; i <= CAMPFIRE_LIGHTS; i++) fires.place({ x: 10 + i * 3, y: 5, z: 10, valid: true })
+    for (let i = 0; i <= CAMPFIRE_LIGHTS; i++) place({ x: 10 + i * 3, y: 5, z: 10, valid: true })
     update(0.8, { x: 10, z: 10 })
     expect(lightsOf(scene)).toHaveLength(CAMPFIRE_LIGHTS)
     expect(lights.every((l) => l.intensity > 0)).toBe(true)
@@ -60,9 +61,9 @@ describe('CampfireView', () => {
   })
 
   it('de noche ilumina bastante más que a mediodía', () => {
-    const { scene, fires, update } = setup()
+    const { scene, place, update } = setup()
     const [light] = lightsOf(scene)
-    fires.place({ x: 0, y: 5, z: 0, valid: true })
+    place({ x: 0, y: 5, z: 0, valid: true })
     update(0.325)
     const noon = light.intensity
     update(0.825)
@@ -71,12 +72,27 @@ describe('CampfireView', () => {
   })
 
   it('reset apaga las luces y oculta la vista previa', () => {
-    const { scene, fires, view, update } = setup()
-    fires.place({ x: 0, y: 5, z: 0, valid: true })
-    view.setGhost({ x: 0, y: 5, z: 3, valid: true })
+    const { scene, place, view, update } = setup()
+    place({ x: 0, y: 5, z: 0, valid: true })
+    view.setGhost({ kind: 'campfire', spot: { x: 0, y: 5, z: 3, valid: true } })
     update()
     view.reset()
     expect(lightsOf(scene).every((l) => l.intensity === 0)).toBe(true)
     expect(scene.children.some((c) => c !== view.group && c.type === 'Group' && c.visible)).toBe(false)
+  })
+
+  it('la vista previa sigue al sitio y cambia de color; null la oculta', () => {
+    const { scene, view } = setup()
+    const ghosts = () => scene.children.filter((c) => c !== view.group && c.type === 'Group')
+    view.setGhost({ kind: 'campfire', spot: { x: 1, y: 5, z: 3, valid: true } })
+    expect(ghosts()).toHaveLength(1)
+    const [ghost] = ghosts()
+    expect(ghost.visible).toBe(true)
+    expect(ghost.position.x).toBe(1)
+    view.setGhost({ kind: 'campfire', spot: { x: 2, y: 5, z: 3, valid: false } })
+    expect(ghosts()).toHaveLength(1)
+    expect(ghost.position.x).toBe(2)
+    view.setGhost(null)
+    expect(ghost.visible).toBe(false)
   })
 })

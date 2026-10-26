@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type PlayerCommands } from './commands'
-import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, STEP } from './constants'
+import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, STEP } from './constants'
 import { Enemies, enemyCap, enemyCapFor, spawnIntervalFor, type EnemyPrey } from './enemies'
 import type { PlayerId, SimEvent, SimEventData, TargetRef } from './events'
 import { aimPose } from './interaction'
@@ -160,10 +160,27 @@ describe('Simulation con varios jugadores', () => {
       sim.teleport(id, spot.x, spot.z, 0, 0)
     }
     const events = stepAll(sim, { 0: { actions: [{ kind: 'place' }] }, 1: { actions: [{ kind: 'place' }] } })
-    expect(ofType(events, 'campfirePlaced').map((e) => e.by)).toEqual([0])
-    expect(sim.campfires.list).toHaveLength(1)
+    expect(ofType(events, 'structurePlaced').map((e) => e.by)).toEqual([0])
+    expect(ofType(events, 'playerPlaced')).toEqual([expect.objectContaining({ id: 0, item: 'campfire' })])
+    expect(sim.structures.list).toHaveLength(1)
     expect(sim.slot(0).inventory.count('campfire')).toBe(0)
     expect(sim.slot(1).inventory.count('campfire')).toBe(1)
+  })
+
+  it('dos fogatas en sitios distintos y el mismo tick: caben las dos, con ids por orden de jugador', () => {
+    const sim = withPlayers(2)
+    for (const id of [0, 1]) {
+      const { inventory } = sim.slot(id)
+      inventory.add('campfire', 1)
+      inventory.select(inventory.slots.indexOf('campfire'))
+      // Uno mira hacia -z y el otro hacia +z: caen a 4,4 m una de otra.
+      sim.teleport(id, spot.x, spot.z, id * Math.PI, 0)
+    }
+    const events = stepAll(sim, { 1: { yaw: Math.PI, actions: [{ kind: 'place' }] }, 0: { actions: [{ kind: 'place' }] } })
+    expect(ofType(events, 'structurePlaced').map((e) => [e.id, e.by])).toEqual([[0, 0], [1, 1]])
+    expect(sim.structures.list.map((s) => s.kind)).toEqual(['campfire', 'campfire'])
+    expect(sim.structures.list[1].z - sim.structures.list[0].z).toBeCloseTo(2 * PLACE_DISTANCE)
+    expect([0, 1].map((id) => sim.slot(id).inventory.count('campfire'))).toEqual([0, 0])
   })
 
   it('cada jugador recibe su daño; el que muere deja de moverse, de comer y de ser objetivo', () => {
@@ -259,7 +276,7 @@ describe('Simulation con varios jugadores', () => {
     const SPLIT = 500
     for (let t = 1; t <= SPLIT; t++) stepAll(a, script(a, t))
     expect(tree.alive).toBe(false)
-    expect(a.campfires.list).toHaveLength(1)
+    expect(a.structures.list).toHaveLength(1)
     expect(a.enemies.list.length).toBeGreaterThan(0)
     expect(a.slot(0).connection).toBe('gone')
 

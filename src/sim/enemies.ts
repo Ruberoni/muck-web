@@ -102,7 +102,7 @@ export class Enemies {
   /** A qué jugador vivo le toca la siguiente aparición (por turnos). */
   private spawnTurn = 0
 
-  /** `grids`: obstáculos que rodean (props, fogatas…). */
+  /** `grids`: obstáculos que rodean (props, estructuras…). */
   constructor(
     private grids: SpatialGrid<Collider>[],
     private rng: () => number = Math.random,
