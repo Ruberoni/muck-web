@@ -10,6 +10,7 @@ import { ENEMY_AIM_HEIGHT } from './sim/enemies'
 import { campfireSpot } from './sim/campfires'
 import { isRecipeId, RECIPE_IDS, type RecipeId } from './sim/crafting'
 import type { DevOp } from './net/protocol'
+import { CRAFT_MANY } from './ui/recipes'
 import { LocalSession } from './net/session'
 import { NetSession, startBot, type Bot } from './net/netSession'
 
@@ -191,6 +192,7 @@ export function installDebug(game: Game) {
     craft: (id: RecipeId, times = 1) => {
       // En red, una receta que no existe hace que la sala expulse al jugador.
       if (!isRecipeId(id)) throw new Error(`no existe la receta ${id} (son ${RECIPE_IDS.join(', ')})`)
+      if (!Number.isInteger(times) || times < 1 || times > CRAFT_MANY) throw new Error(`times debe ser un entero de 1 a ${CRAFT_MANY}`)
       for (let i = 0; i < times; i++) game.queueAction({ kind: 'craft', recipe: id })
     },
     /** Intercambia dos casillas del inventario (0–8 hotbar, 9–26 mochila). */

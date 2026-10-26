@@ -73,6 +73,7 @@ export function sendableActions(actions: readonly ActionData[], inventory: Inven
   const scratch = new Inventory(inventory.slots.length)
   scratch.load(inventory.save())
   return actions.filter((action) => {
+    // Hoy mover no cambia si cabe lo fabricado, pero se aplica igual para seguir a la simulación al pie de la letra.
     if (action.kind === 'move') scratch.move(action.from, action.to)
     if (action.kind !== 'craft') return true
     const recipe = recipeById(action.recipe)

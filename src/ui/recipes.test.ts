@@ -72,7 +72,7 @@ describe('qué craft se mandan', () => {
     expect(inventory.count('wood_axe')).toBe(0)
   })
 
-  it('lo demás pasa tal cual y en orden; un ingrediente fabricado en el paso cuenta', () => {
+  it('lo demás pasa tal cual y en orden; lo que gastan los craft anteriores del paso cuenta', () => {
     const inventory = inventoryWith({ wood: 5 })
     const actions: ActionData[] = [{ kind: 'select', slot: 3 }, craftAction('campfire'), { kind: 'move', from: 0, to: 20 }, craftAction('wood_pickaxe'), { kind: 'eat' }, craftAction('wood_axe')]
     expect(sendableActions(actions, inventory, NO_STATIONS, POS)).toEqual([{ kind: 'select', slot: 3 }, { kind: 'move', from: 0, to: 20 }, craftAction('wood_pickaxe'), { kind: 'eat' }])

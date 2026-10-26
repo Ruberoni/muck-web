@@ -244,6 +244,8 @@ export class Game {
     // El espectador registra teclas que solo consume con ticks: las que queden no se aplican al reaparecer.
     if (state === 'playing' && this.state === 'spectating') this.input.takePresses()
     if (state === 'spectating') this.snapSpectator = true
+    // Lo que se pidió en la pantalla justo antes de pausar (Esc, otra pestaña) no se manda al volver, minutos después.
+    if (this.state === 'inventory' && state === 'paused') this.queued.length = 0
     if (state !== 'playing') this.input.clear()
     if (!inGame(state)) this.hud.net.closeChat()
     this.hud.setCrosshair(showsCrosshair(state))
