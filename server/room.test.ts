@@ -225,7 +225,7 @@ describe('Room', () => {
     const bad = [
       { kind: 'move', from: 0, to: INVENTORY_SIZE },
       { kind: 'craft', recipe: 0 },
-      { kind: 'craft', recipe: 'mithril_pickaxe' },
+      { kind: 'craft', recipe: 'adamantite_pickaxe' },
     ]
     for (const data of bad) {
       const c = new Client(room, time, 'x')

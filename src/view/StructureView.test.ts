@@ -119,14 +119,21 @@ describe('StructureView', () => {
     expect(anvil.root.rotation.y).toBe(-0.3)
     expect(anvil.flame).toBeNull()
     expect(lightsOf(scene).every((l) => l.intensity === 0)).toBe(true)
-    // Cada modelo cabe en el radio de su estructura (en horizontal), con un poco de holgura por el fuego.
+    // Cada modelo, fuego incluido, cabe en el círculo de colisión de su estructura (en horizontal, todos los vértices).
     for (const [id, kind] of [[0, 'furnace'], [1, 'anvil']] as const) {
       const root = view.modelOf(id)!.root
-      root.rotation.y = 0
       root.updateMatrixWorld(true)
-      const box = new THREE.Box3().setFromObject(root)
-      const half = Math.max(box.max.x - root.position.x, root.position.x - box.min.x, box.max.z - root.position.z, root.position.z - box.min.z)
-      expect(half, kind).toBeLessThan(STRUCTURE_DEFS[kind].radius + 0.15)
+      let farthest = 0
+      const v = new THREE.Vector3()
+      root.traverse((node) => {
+        if (!(node instanceof THREE.Mesh)) return
+        const position = node.geometry.getAttribute('position')
+        for (let i = 0; i < position.count; i++) {
+          v.fromBufferAttribute(position, i).applyMatrix4(node.matrixWorld)
+          farthest = Math.max(farthest, Math.hypot(v.x - root.position.x, v.z - root.position.z))
+        }
+      })
+      expect(farthest, kind).toBeLessThanOrEqual(STRUCTURE_DEFS[kind].radius)
     }
   })
 

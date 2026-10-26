@@ -5,6 +5,8 @@ describe('herramienta que falta', () => {
   it('nombra la herramienta más baja que cumple el requisito, en minúscula', () => {
     expect(toolName({ family: 'pickaxe', tier: 1 })).toBe('pico de madera')
     expect(toolName({ family: 'pickaxe', tier: 2 })).toBe('pico de piedra')
+    expect(toolName({ family: 'pickaxe', tier: 3 })).toBe('pico de hierro')
+    expect(toolName({ family: 'axe', tier: 3 })).toBe('hacha de hierro')
     expect(toolName({ family: 'axe', tier: 1 })).toBe('hacha de madera')
     // Un nivel sin herramienta todavía.
     expect(toolName({ family: 'axe', tier: 9 })).toBe('hacha de nivel 9')

@@ -21,12 +21,13 @@ const hammerHandleGeometry = new THREE.BoxGeometry(0.05, 0.04, 0.34)
 const plankGeometry = new THREE.BoxGeometry(0.5, 0.05, 0.18)
 
 // El cuerpo del horno también se hunde en el suelo, por las pendientes.
-const furnaceBodyGeometry = new THREE.BoxGeometry(1.1, 1.2, 0.95)
+const furnaceBodyGeometry = new THREE.BoxGeometry(1.1, 1.5, 0.95)
 const furnaceTopGeometry = new THREE.BoxGeometry(1.2, 0.1, 1.05)
 const chimneyGeometry = new THREE.BoxGeometry(0.3, 0.55, 0.3)
 const mouthGeometry = new THREE.BoxGeometry(0.5, 0.4, 0.04)
-const furnaceOuterFlameGeometry = new THREE.ConeGeometry(0.13, 0.3, 5).translate(0, 0.15, 0)
-const furnaceInnerFlameGeometry = new THREE.ConeGeometry(0.07, 0.18, 5).translate(0, 0.09, 0)
+// Llamas aplastadas contra la boca: se ven dentro de ella sin salir de la cara del horno.
+const furnaceOuterFlameGeometry = new THREE.ConeGeometry(0.13, 0.3, 5).scale(1, 1, 0.2).translate(0, 0.15, 0)
+const furnaceInnerFlameGeometry = new THREE.ConeGeometry(0.07, 0.18, 5).scale(1, 1, 0.2).translate(0, 0.09, 0)
 
 const stumpGeometry = new THREE.CylinderGeometry(0.28, 0.32, 0.9, 7)
 const anvilFootGeometry = new THREE.BoxGeometry(0.42, 0.08, 0.3)
@@ -41,7 +42,8 @@ const handleMaterial = new THREE.MeshStandardMaterial({ color: '#8a5a32', flatSh
 const furnaceMaterial = new THREE.MeshStandardMaterial({ color: '#9a958a', flatShading: true })
 const furnaceTopMaterial = new THREE.MeshStandardMaterial({ color: '#77736a', flatShading: true })
 const mouthMaterial = new THREE.MeshStandardMaterial({ color: '#2a211c', flatShading: true })
-const ironMaterial = new THREE.MeshStandardMaterial({ color: '#4d535c', flatShading: true, metalness: 0.5, roughness: 0.5 })
+// Poco metálico: sin envMap, el metal pierde la luz difusa y se vería casi negro.
+const ironMaterial = new THREE.MeshStandardMaterial({ color: '#5f6670', flatShading: true, metalness: 0.25, roughness: 0.5 })
 // Las llamas no dependen de la luz: de noche se ven brillantes.
 const outerFlameMaterial = new THREE.MeshBasicMaterial({ color: '#ff7a1f' })
 const innerFlameMaterial = new THREE.MeshBasicMaterial({ color: '#ffd23f' })
@@ -112,16 +114,17 @@ function buildWorkbench(m: MaterialFor, shadows: boolean): StructureModel {
 function buildFurnace(m: MaterialFor, shadows: boolean): StructureModel {
   const root = new THREE.Group()
   const mesh = piece(root, m, shadows)
-  mesh(furnaceBodyGeometry, furnaceMaterial, 0, 0.35, 0)
+  mesh(furnaceBodyGeometry, furnaceMaterial, 0, 0.2, 0)
   mesh(furnaceTopGeometry, furnaceTopMaterial, 0, 1, 0)
   mesh(chimneyGeometry, furnaceTopMaterial, 0.28, 1.3, -0.22)
-  mesh(mouthGeometry, mouthMaterial, 0, 0.36, 0.485)
+  // La boca, alta para que no quede enterrada si se coloca de cara a una cuesta.
+  mesh(mouthGeometry, mouthMaterial, 0, 0.55, 0.485)
   // El fuego asoma por la boca; no da luz (solo las fogatas iluminan), pero parpadea como ellas.
   const flame = new THREE.Group()
   const fire = piece(flame, m, false)
   fire(furnaceOuterFlameGeometry, outerFlameMaterial, 0, 0, 0)
-  fire(furnaceInnerFlameGeometry, innerFlameMaterial, 0, 0, 0.02)
-  flame.position.set(0, 0.17, 0.51)
+  fire(furnaceInnerFlameGeometry, innerFlameMaterial, 0, 0, 0.012)
+  flame.position.set(0, 0.36, 0.53)
   root.add(flame)
   return { root, flame }
 }
