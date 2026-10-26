@@ -1,6 +1,7 @@
 import type { PlayerCommands } from './commands'
 import { Campfires, campfireSpot, type CampfiresState, type CampfireSpot } from './campfires'
 import { resolveCircle } from './collision'
+import { NO_STATIONS, type CraftWorld, type RecipeId } from './crafting'
 import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
@@ -28,8 +29,8 @@ export type Connection = 'present' | 'absent' | 'gone'
 
 /** Un jugador en la simulación: su cuerpo, su inventario, sus golpes y lo que lleva aplicado de sus acciones. */
 export interface PlayerSlot extends Actor {
-  /** Está encima de algo que no cabe en la hotbar. */
-  hotbarFull: boolean
+  /** Está encima de algo que no cabe en el inventario. */
+  inventoryFull: boolean
   connection: Connection
   spawn: { x: number; z: number }
   /** Muerto en una sala: tick en que reaparece. null si está vivo (o con un jugador, donde no se reaparece). */
@@ -42,7 +43,7 @@ export interface PlayerSlotState {
   player: Player
   inventory: InventoryState
   combat: Combat
-  hotbarFull: boolean
+  inventoryFull: boolean
   alive: boolean
   connection: Connection
   appliedSeq: number
@@ -104,6 +105,8 @@ export class Simulation {
   /** Todos muertos: tick en que se reinicia la isla. */
   private gameOverAt: number | null = null
   private spot: CampfireSpot = { x: 0, y: 0, z: 0, valid: false }
+  /** Estaciones para fabricar: aún no hay ninguna. */
+  private readonly craftWorld: CraftWorld = NO_STATIONS
 
   constructor(seed: number, placements: readonly PropPlacement[] = generatePropPlacements()) {
     this.rng = mulberry32(seed)
@@ -157,7 +160,7 @@ export class Simulation {
       inventory: new Inventory(),
       combat: createCombat(),
       target: null,
-      hotbarFull: false,
+      inventoryFull: false,
       alive: true,
       connection: 'present',
       appliedSeq: 0,
@@ -200,7 +203,7 @@ export class Simulation {
     const intents = new Map<PlayerSlot, Intent>()
     for (const slot of present) {
       const command = commands.get(slot.id)
-      const intent = applyActions(slot, command, this.events.emit)
+      const intent = applyActions(slot, command, this.craftWorld, this.events.emit)
       if (!slot.alive) continue
       intents.set(slot, intent)
       movePlayer(slot, command, this.env)
@@ -229,7 +232,7 @@ export class Simulation {
     for (const slot of living) if (slot.target && !slot.target.alive) slot.target = null
 
     const collected = this.pickups.step(STEP, living.map(({ id, player, inventory }) => ({ id, pos: player.pos, inventory })))
-    living.forEach((slot, i) => (slot.hotbarFull = collected[i].full))
+    living.forEach((slot, i) => (slot.inventoryFull = collected[i].full))
 
     for (const slot of living) {
       finishPlayerTick(slot, intents.get(slot)!, this.events.emit)
@@ -242,9 +245,9 @@ export class Simulation {
     return this.events.drain()
   }
 
-  /** El jugador `id` fabrica la receta por índice (el de su tecla menos 1). */
-  craft(id: PlayerId, index: number): boolean {
-    return craftRecipe(this.slot(id), index, this.events.emit)
+  /** El jugador `id` fabrica la receta `recipe` (sin pasar por sus acciones). */
+  craft(id: PlayerId, recipe: RecipeId): boolean {
+    return craftRecipe(this.slot(id), recipe, this.craftWorld, this.events.emit)
   }
 
   /** Tick del próximo amanecer. */
@@ -268,7 +271,7 @@ export class Simulation {
       slot.inventory.clear()
       Object.assign(slot.combat, createCombat())
       slot.target = null
-      slot.hotbarFull = false
+      slot.inventoryFull = false
       slot.alive = true
       slot.respawnAt = null
       Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
@@ -313,7 +316,7 @@ export class Simulation {
           player: copyPlayer(slot.player),
           inventory: slot.inventory.save(),
           combat: { ...slot.combat },
-          hotbarFull: slot.hotbarFull,
+          inventoryFull: slot.inventoryFull,
           alive: slot.alive,
           connection: slot.connection,
           appliedSeq: slot.appliedSeq,
@@ -347,7 +350,7 @@ export class Simulation {
       Object.assign(slot.player, copyPlayer(saved.player))
       slot.inventory.load(saved.inventory)
       Object.assign(slot.combat, saved.combat)
-      slot.hotbarFull = saved.hotbarFull
+      slot.inventoryFull = saved.inventoryFull
       slot.alive = saved.alive
       slot.connection = saved.connection
       slot.appliedSeq = saved.appliedSeq
@@ -370,7 +373,7 @@ export class Simulation {
     slot.inventory.clear()
     Object.assign(slot.combat, createCombat())
     slot.target = null
-    slot.hotbarFull = false
+    slot.inventoryFull = false
     slot.respawnAt = isNight(this.clock.phase) ? this.nextDawnTick() : this.tick + Math.round(RESPAWN_DAY_DELAY / STEP)
   }
 

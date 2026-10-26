@@ -682,7 +682,7 @@ export class Game {
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating') this.hud.setPrompt('')
     else if (spot) this.hud.setPrompt(spot.valid ? 'Clic para colocar la fogata' : 'No se puede colocar aquí')
-    else if (slot.hotbarFull && !slot.target) this.hud.setPrompt('Hotbar llena')
+    else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else this.hud.setTarget(slot.target)
     this.hud.setDay(sim.clock.day)
     this.hud.minimap.draw({

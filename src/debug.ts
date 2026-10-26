@@ -1,6 +1,6 @@
 import { aimPose } from './sim/interaction'
 import type { Game } from './game/Game'
-import type { ItemId } from './sim/inventory'
+import { INVENTORY_SIZE, SLOT_COUNT, type ItemId } from './sim/inventory'
 import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
@@ -8,7 +8,7 @@ import { heightAt, WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, WADE_DEPTH } from './sim/constants'
 import { ENEMY_AIM_HEIGHT } from './sim/enemies'
 import { campfireSpot } from './sim/campfires'
-import { RECIPES } from './sim/crafting'
+import { isRecipeId, RECIPE_IDS, type RecipeId } from './sim/crafting'
 import type { DevOp } from './net/protocol'
 import { LocalSession } from './net/session'
 import { NetSession, startBot, type Bot } from './net/netSession'
@@ -24,7 +24,7 @@ const frames = (n = 2) => new Promise<void>((resolve) => {
  * directamente y devuelven el resultado al momento. En red (`__debug.net`) los hace el servidor de desarrollo
  * (mensajes `dev`): devuelven una promesa que se cumple cuando la predicción ya los recoge. Los de solo lectura
  * leen siempre `game.sim`, que en red es el espejo del cliente. `advance`, `start({manual})` y `restart` son solo
- * de un jugador; `select` y `craft` pasan por acciones, como las teclas (se aplican en el siguiente paso).
+ * de un jugador; `select`, `craft` y `move` pasan por acciones, como las teclas (se aplican en el siguiente paso).
  */
 export function installDebug(game: Game) {
   const sim = () => game.sim
@@ -178,13 +178,21 @@ export function installDebug(game: Game) {
       return targetPropId()
     },
     inventory: () => inventory().toJSON(),
-    hotbar: () => ({ slots: [...inventory().slots], selected: inventory().selected }),
+    hotbar: () => ({ slots: inventory().slots.slice(0, SLOT_COUNT), selected: inventory().selected }),
+    /** Las casillas de la mochila (9–26). */
+    backpack: () => inventory().slots.slice(SLOT_COUNT),
     give: (item: ItemId, amount = 1) => dev({ op: 'give', item, amount }, () => inventory().add(item, amount)),
     select: (index: number) => game.queueAction({ kind: 'select', slot: index }),
-    craft: (index: number) => {
+    craft: (id: RecipeId) => {
       // En red, una receta que no existe hace que la sala expulse al jugador.
-      if (!Number.isInteger(index) || index < 0 || index >= RECIPES.length) throw new Error(`no existe la receta ${index}`)
-      game.queueAction({ kind: 'craft', recipe: index })
+      if (!isRecipeId(id)) throw new Error(`no existe la receta ${id} (son ${RECIPE_IDS.join(', ')})`)
+      game.queueAction({ kind: 'craft', recipe: id })
+    },
+    /** Intercambia dos casillas del inventario (0–8 hotbar, 9–26 mochila). */
+    move: (from: number, to: number) => {
+      const valid = (i: number) => Number.isInteger(i) && i >= 0 && i < INVENTORY_SIZE
+      if (!valid(from) || !valid(to)) throw new Error(`casillas fuera de rango: ${from}, ${to}`)
+      game.queueAction({ kind: 'move', from, to })
     },
     setCrafting: (open: boolean) => game.setCrafting(open),
     campfires: () => sim().campfires.list.map(({ id, x, y, z }) => ({ id, x, y, z })),

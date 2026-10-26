@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Inventory, SLOT_COUNT, type ItemId } from './inventory'
+import { Inventory, INVENTORY_SIZE, SLOT_COUNT, type ItemId } from './inventory'
 
 const empty = (n: number) => Array<null>(n).fill(null)
 
@@ -13,7 +13,7 @@ describe('Inventory', () => {
     inv.add('stone', 3)
     expect(inv.count('stone')).toBe(6)
     expect(inv.count('wood')).toBe(4)
-    expect(inv.slots).toEqual(['stone', 'wood', ...empty(SLOT_COUNT - 2)])
+    expect(inv.slots).toEqual(['stone', 'wood', ...empty(INVENTORY_SIZE - 2)])
     expect(changes).toBe(3)
   })
 
@@ -21,7 +21,7 @@ describe('Inventory', () => {
     const inv = new Inventory()
     expect(inv.add('wood', 0)).toBe(false)
     expect(inv.remove('wood', 0)).toBe(false)
-    expect(inv.slots).toEqual(empty(SLOT_COUNT))
+    expect(inv.slots).toEqual(empty(INVENTORY_SIZE))
     expect(inv.count('wood')).toBe(0)
   })
 
@@ -63,7 +63,7 @@ describe('Inventory', () => {
     inv.add('stone', 3)
     inv.clear()
     expect(inv.count('stone')).toBe(0)
-    expect(inv.slots).toEqual(empty(SLOT_COUNT))
+    expect(inv.slots).toEqual(empty(INVENTORY_SIZE))
     expect(inv.selected).toBe(0)
     expect(changes).toBe(2)
   })
@@ -91,16 +91,72 @@ describe('Inventory', () => {
     expect(inv.slots.slice(0, 2)).toEqual(['wood_axe', 'stone'])
   })
 
-  it('con todas las casillas ocupadas rechaza objetos nuevos pero acepta los que ya tiene', () => {
+  it('lo nuevo va a la hotbar y, si está llena, a la mochila', () => {
     const inv = new Inventory()
-    // Rellena la hotbar burlando el tipo: hay menos objetos que casillas.
+    // Burlando el tipo: hay menos objetos que casillas en la hotbar.
     const fillers = Array.from({ length: SLOT_COUNT }, (_, i) => `item${i}` as ItemId)
+    fillers.forEach((item) => inv.add(item, 1))
+    expect(inv.slots.slice(0, SLOT_COUNT)).toEqual(fillers)
+    expect(inv.add('wood', 2)).toBe(true)
+    expect(inv.slots[SLOT_COUNT]).toBe('wood')
+    // Al vaciar una casilla de la hotbar, lo siguiente nuevo vuelve a ella.
+    inv.remove(fillers[3], 1)
+    inv.add('stone', 1)
+    expect(inv.slots[3]).toBe('stone')
+  })
+
+  it('con todas las casillas ocupadas rechaza objetos nuevos pero acepta los que ya tiene', () => {
+    const inv = new Inventory(4)
+    // Un inventario reducido: con los objetos que hay, el de 27 casillas no se llena.
+    const fillers = Array.from({ length: 4 }, (_, i) => `item${i}` as ItemId)
     fillers.forEach((item) => inv.add(item, 1))
     expect(inv.canAdd('wood')).toBe(false)
     expect(inv.add('wood', 4)).toBe(false)
     expect(inv.count('wood')).toBe(0)
     expect(inv.add(fillers[0], 2)).toBe(true)
     expect(inv.count(fillers[0])).toBe(3)
+  })
+
+  it('move intercambia dos casillas, también con la mochila, y sin casillas que no existen no hace nada', () => {
+    const inv = new Inventory()
+    inv.add('wood', 3)
+    inv.add('stone', 2)
+    let changes = 0
+    inv.onChange(() => changes++)
+    expect(inv.move(0, 1)).toBe(true)
+    expect(inv.slots.slice(0, 2)).toEqual(['stone', 'wood'])
+    expect(inv.move(1, INVENTORY_SIZE - 1)).toBe(true)
+    expect(inv.slots[1]).toBe(null)
+    expect(inv.slots[INVENTORY_SIZE - 1]).toBe('wood')
+    expect(changes).toBe(2)
+    for (const [from, to] of [[0, 0], [0, INVENTORY_SIZE], [-1, 0], [0.5, 1]]) expect(inv.move(from, to)).toBe(false)
+    expect(changes).toBe(2)
+    // Las cantidades no cambian, y lo que se agota libera su casilla en la mochila.
+    expect(inv.toJSON()).toEqual({ wood: 3, stone: 2 })
+    inv.remove('wood', 3)
+    expect(inv.slots[INVENTORY_SIZE - 1]).toBe(null)
+  })
+
+  it('la mano lleva lo que haya en la casilla elegida, también tras mover', () => {
+    const inv = new Inventory()
+    inv.add('wood', 1)
+    inv.add('stone_axe', 1)
+    inv.move(1, 20)
+    inv.select(1)
+    expect(inv.selectedItem).toBe(null)
+    inv.move(20, 1)
+    expect(inv.selectedItem).toBe('stone_axe')
+  })
+
+  it('save y load conservan la mochila', () => {
+    const inv = new Inventory()
+    inv.add('wood', 2)
+    inv.move(0, 15)
+    const copy = new Inventory()
+    copy.load(JSON.parse(JSON.stringify(inv.save())))
+    expect(copy.slots).toEqual(inv.slots)
+    expect(copy.slots[15]).toBe('wood')
+    expect(copy.count('wood')).toBe(2)
   })
 
   it('la casilla seleccionada da el objeto en la mano', () => {

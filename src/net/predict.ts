@@ -12,7 +12,7 @@ export const SMOOTH_MAX = 0.3
 /** La corrección suavizada casi desaparece en este tiempo (tres constantes de tiempo). */
 const SMOOTH_MS = 100
 
-/** Lo que la predicción compara con el `you` del servidor (sin `hotbarFull`, que solo sabe el servidor). */
+/** Lo que la predicción compara con el `you` del servidor (sin `inventoryFull`, que solo sabe el servidor). */
 interface Predicted {
   player: Player
   inventory: InventoryState
@@ -166,7 +166,7 @@ export class Predictor {
     Object.assign(player, you.player, { pos: { ...you.player.pos }, vel: { ...you.player.vel } }, { yaw, pitch, prev })
     this.slot.inventory.load(you.inventory)
     Object.assign(this.slot.combat, you.combat)
-    this.slot.hotbarFull = you.hotbarFull
+    this.slot.inventoryFull = you.inventoryFull
     this.slot.alive = you.alive
     this.slot.respawnAt = you.respawnAt
     this.slot.appliedSeq = you.appliedSeq

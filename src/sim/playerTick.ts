@@ -1,6 +1,6 @@
 import { buttonsInput, Btn, type PlayerCommands } from './commands'
 import { BERRY_FOOD, STEP } from './constants'
-import { craft, RECIPES } from './crafting'
+import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
 import { startSwing, type Fighter } from './interaction'
 import { stepPlayer, type Player, type PlayerEnv } from './player'
@@ -32,10 +32,10 @@ export interface Intent {
 }
 
 /**
- * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla y fabricar en el acto;
+ * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla, mover casillas y fabricar en el acto;
  * golpear, colocar y comer se devuelven para su momento del paso. Las de un muerto se descartan.
  */
-export function applyActions(actor: Actor, command: PlayerCommands | undefined, emit: Emit): Intent {
+export function applyActions(actor: Actor, command: PlayerCommands | undefined, world: CraftWorld, emit: Emit): Intent {
   const move = command?.move
   const intent: Intent = { aim: move?.aim, attack: ((move?.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false }
   if (!command) return intent
@@ -47,8 +47,11 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
       case 'select':
         actor.inventory.select(action.slot)
         break
+      case 'move':
+        actor.inventory.move(action.from, action.to)
+        break
       case 'craft':
-        craftRecipe(actor, action.recipe, emit)
+        craftRecipe(actor, action.recipe, world, emit)
         break
       case 'swing':
         intent.swing = true
@@ -64,12 +67,17 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
   return intent
 }
 
-/** Fabrica la receta por índice (el de su tecla menos 1). */
-export function craftRecipe(actor: Actor, index: number, emit: Emit): boolean {
-  const recipe = RECIPES[index]
-  const ok = recipe ? craft(actor.inventory, recipe) : false
-  if (ok) emit({ type: 'playerCrafted', id: actor.id, recipe: index })
-  return ok
+/**
+ * Fabrica la receta `id` si hay ingredientes y, si la pide, su estación al alcance. La posición es la del final
+ * del tick anterior (las acciones se aplican antes de moverse), igual en la simulación y en la predicción.
+ */
+export function craftRecipe(actor: Actor, id: RecipeId, world: CraftWorld, emit: Emit): boolean {
+  const recipe = recipeById(id)
+  if (!recipe) return false
+  if (recipe.station !== null && !world.nearStation(recipe.station, actor.player.pos)) return false
+  if (!craft(actor.inventory, recipe)) return false
+  emit({ type: 'playerCrafted', id: actor.id, recipe: id })
+  return true
 }
 
 /** Orienta al jugador como dice su `Move` (sin él, mira a donde miraba) y lo mueve un paso. */
@@ -106,8 +114,8 @@ function eatBerry(actor: Actor, emit: Emit) {
   emit({ type: 'playerAte', id })
 }
 
-/** Lo que la predicción necesita del mundo del cliente. */
-export interface PredictWorld {
+/** Lo que la predicción necesita del mundo del cliente: `nearStation` mira las estaciones de su espejo. */
+export interface PredictWorld extends CraftWorld {
   env: PlayerEnv
   /** Si una fogata colocada desde aquí caería en un sitio válido (campfireSpot contra las rejillas del cliente). */
   canPlace(player: Player): boolean
@@ -122,7 +130,7 @@ export interface PredictWorld {
  * Devuelve si empieza un golpe.
  */
 export function predictPlayer(actor: Actor, command: PlayerCommands | undefined, world: PredictWorld): boolean {
-  const intent = applyActions(actor, command, world.emit)
+  const intent = applyActions(actor, command, world, world.emit)
   if (!actor.alive) return false
   movePlayer(actor, command, world.env)
   const hands = useHands(actor, intent)

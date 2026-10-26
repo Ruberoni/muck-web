@@ -18,6 +18,7 @@ import { EYE_HEIGHT } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
 import { campfireSpot } from '../src/sim/campfires'
 import { aimPose } from '../src/sim/interaction'
+import { INVENTORY_SIZE } from '../src/sim/inventory'
 import type { PropData } from '../src/sim/props'
 import type { Simulation } from '../src/sim/Simulation'
 import { DAY_FRACTION } from '../src/sim/world/daycycle'
@@ -209,6 +210,33 @@ describe('Room', () => {
     expect(raw().filter((s) => s.you.inventory)).toHaveLength(1)
   })
 
+  it('mover casillas llega al `you` con las 27; una casilla o una receta que no existen expulsan', () => {
+    const { room, time } = setup()
+    const a = new Client(room, time)
+    join(a)
+    room.sim!.slot(a.id).inventory.add('wood', 3)
+    play(time, 300, [[a]])
+    a.cmds([], [a.action({ kind: 'move', from: 0, to: INVENTORY_SIZE - 1 }, room.sim!.tick + 1)])
+    play(time, 300, [[a]])
+    expect(a.snap.you.inventory.slots).toHaveLength(INVENTORY_SIZE)
+    expect(a.snap.you.inventory.slots[0]).toBe(null)
+    expect(a.snap.you.inventory.slots[INVENTORY_SIZE - 1]).toBe('wood')
+
+    const bad = [
+      { kind: 'move', from: 0, to: INVENTORY_SIZE },
+      { kind: 'craft', recipe: 0 },
+      { kind: 'craft', recipe: 'iron_pickaxe' },
+    ]
+    for (const data of bad) {
+      const c = new Client(room, time, 'x')
+      c.hello('join')
+      time.advance(0)
+      c.cmds([], [c.action(data as ActionData, room.sim!.tick + 1)])
+      time.advance(0)
+      expect(c.closed, JSON.stringify(data)).toBe(CloseCode.Invalid)
+    }
+  })
+
   it('el chat llega a todos con el nombre de quien escribe; más de uno cada 400 ms se ignora', () => {
     const { room, time } = setup()
     const a = new Client(room, time)
@@ -253,7 +281,7 @@ describe('Room', () => {
     expect(room.sim!.slot(a.id).inventory.selected).toBe(5)
     expect(a.snap.ackSeq).toBe(after.seq)
 
-    const late = a.action({ kind: 'craft', recipe: 0 }, room.sim!.tick - 5)
+    const late = a.action({ kind: 'craft', recipe: 'wood_axe' }, room.sim!.tick - 5)
     a.cmds([], [late])
     time.advance(0)
     const next = room.sim!.tick + 1

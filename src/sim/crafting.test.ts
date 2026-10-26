@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { canCraft, craft, RECIPES } from './crafting'
-import { Inventory, SLOT_COUNT, type ItemId } from './inventory'
+import { canCraft, craft, isRecipeId, RECIPE_IDS, RECIPES } from './crafting'
+import { Inventory, type ItemId } from './inventory'
 
 const recipe = (result: ItemId) => RECIPES.find((r) => r.result === result)!
 
@@ -41,13 +41,20 @@ describe('crafteo', () => {
     expect(inv.toJSON()).toEqual({ campfire: 1 })
   })
 
-  it('con la hotbar llena solo se fabrica si un ingrediente se agota', () => {
-    const inv = new Inventory()
+  it('con el inventario lleno solo se fabrica si un ingrediente se agota', () => {
+    // Un inventario reducido: con los objetos que hay, el de 27 casillas no se llena.
+    const inv = new Inventory(4)
     inv.add('wood', 10)
-    for (let i = 1; i < SLOT_COUNT; i++) inv.add(`item${i}` as ItemId, 1)
+    for (let i = 1; i < 4; i++) inv.add(`item${i}` as ItemId, 1)
     expect(canCraft(inv, recipe('wood_axe'))).toBe(false)
     inv.remove('wood', 5)
     expect(craft(inv, recipe('wood_axe'))).toBe(true)
     expect(inv.slots[0]).toBe('wood_axe')
+  })
+
+  it('cada receta tiene un id distinto y solo esos ids son válidos', () => {
+    expect(new Set(RECIPE_IDS).size).toBe(RECIPES.length)
+    for (const id of RECIPE_IDS) expect(isRecipeId(id)).toBe(true)
+    for (const bad of [0, 4, '', 'iron_pickaxe', 'toString', '__proto__', null, undefined]) expect(isRecipeId(bad)).toBe(false)
   })
 })

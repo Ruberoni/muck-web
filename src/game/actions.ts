@@ -42,7 +42,7 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
   for (let i = 0; i < SLOT_COUNT; i++) {
     if (!k.presses.has(`Digit${i + 1}`)) continue
     if (crafting) {
-      if (i < RECIPES.length) actions.push({ kind: 'craft', recipe: i })
+      if (i < RECIPES.length) actions.push({ kind: 'craft', recipe: RECIPES[i].id })
     } else {
       actions.push({ kind: 'select', slot: i })
       selected = i

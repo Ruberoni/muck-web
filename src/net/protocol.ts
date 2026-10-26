@@ -1,9 +1,9 @@
 import type { Action, ActionData, Move } from '../sim/commands'
 import { MAX_PITCH } from '../sim/constants'
-import { RECIPES } from '../sim/crafting'
+import { isRecipeId } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { Combat } from '../sim/interaction'
-import { ITEM_NAMES, SLOT_COUNT, type InventoryState, type ItemId } from '../sim/inventory'
+import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type InventoryState, type ItemId } from '../sim/inventory'
 import type { Player, Vec3 } from '../sim/player'
 import type { PropPlacement } from '../sim/props'
 import type { Connection, SimState } from '../sim/Simulation'
@@ -13,7 +13,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 7
+export const PROTOCOL_VERSION = 8
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -119,7 +119,7 @@ export interface You {
   player: Player
   inventory: InventoryState
   combat: Combat
-  hotbarFull: boolean
+  inventoryFull: boolean
   alive: boolean
   /** Muerto: tick en que reaparece (ver `Simulation`). */
   respawnAt: number | null
@@ -452,8 +452,12 @@ function parseAction(a: unknown): Action | null {
       if (!isInt(a.slot, 0, SLOT_COUNT - 1)) return null
       data = { kind: 'select', slot: a.slot }
       break
+    case 'move':
+      if (!isInt(a.from, 0, INVENTORY_SIZE - 1) || !isInt(a.to, 0, INVENTORY_SIZE - 1)) return null
+      data = { kind: 'move', from: a.from, to: a.to }
+      break
     case 'craft':
-      if (!isInt(a.recipe, 0, RECIPES.length - 1)) return null
+      if (!isRecipeId(a.recipe)) return null
       data = { kind: 'craft', recipe: a.recipe }
       break
     case 'swing':

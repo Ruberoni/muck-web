@@ -21,13 +21,13 @@ describe('teclas a acciones', () => {
     const digits = Array.from({ length: SLOT_COUNT }, (_, i) => `Digit${i + 1}`)
     const { actions, crafting } = step(digits, { crafting: true })
     expect(crafting).toBe(true)
-    expect(actions).toEqual(RECIPES.map((_, i) => ({ kind: 'craft', recipe: i })))
+    expect(actions).toEqual(RECIPES.map(({ id }) => ({ kind: 'craft', recipe: id })))
     // Condición previa de la prueba: con tantas recetas como casillas no quedarían teclas de más que filtrar.
     expect(RECIPES.length).toBeLessThan(SLOT_COUNT)
   })
 
   it('C abre o cierra el crafteo y vale ya para los números del mismo paso', () => {
-    expect(step(['KeyC', 'Digit1'])).toEqual({ actions: [{ kind: 'craft', recipe: 0 }], crafting: true })
+    expect(step(['KeyC', 'Digit1'])).toEqual({ actions: [{ kind: 'craft', recipe: RECIPES[0].id }], crafting: true })
     expect(step(['KeyC', 'Digit1'], { crafting: true })).toEqual({ actions: [{ kind: 'select', slot: 0 }], crafting: false })
   })
 

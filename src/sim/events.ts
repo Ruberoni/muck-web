@@ -1,3 +1,4 @@
+import type { RecipeId } from './crafting'
 import type { ItemId } from './inventory'
 
 /** Identificador de jugador. Con un jugador siempre es LOCAL_PLAYER. */
@@ -27,7 +28,7 @@ export type SimEventData =
   | { type: 'enemiesDespawn' }
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId }
-  | { type: 'playerCrafted'; id: PlayerId; recipe: number }
+  | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
   | { type: 'playerPlaced'; id: PlayerId }
   | { type: 'playerHurt'; id: PlayerId; dmg: number }
   | { type: 'playerDied'; id: PlayerId }

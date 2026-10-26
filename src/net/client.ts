@@ -1,6 +1,7 @@
 import type { Clock } from '../../server/room'
 import { campfireSpot } from '../sim/campfires'
 import type { ActionData, Move } from '../sim/commands'
+import { NO_STATIONS } from '../sim/crafting'
 import { CAMPFIRE_RADIUS, ENEMY_DEF, STEP } from '../sim/constants'
 import type { EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
@@ -14,6 +15,7 @@ import { InterpBuffer, Interpolator, PresentationQueue, type Shown } from './int
 import { Predictor } from './predict'
 import {
   MAX_ACTIONS,
+  MAX_MESSAGE,
   MAX_MOVE_REPEAT,
   MAX_MOVES,
   MAX_RTT,
@@ -21,6 +23,7 @@ import {
   PONG,
   PROTOCOL_VERSION,
   ServerDecoder,
+  type Cmds,
   type DevOp,
   type EnemySnap,
   type Hello,
@@ -122,6 +125,21 @@ export function compactMoves(moves: readonly Move[]): MoveMsg[] {
   }
   for (const move of out) if (move.n === 1) delete move.n
   return out
+}
+
+/**
+ * `cmds` como texto que cabe en MAX_MESSAGE (uno más largo hace que la sala expulse): como mucho MAX_ACTIONS
+ * acciones y, si aun así no cabe, sin las últimas. Las que se quedan fuera siguen sin confirmar y salen en un
+ * envío siguiente.
+ */
+export function encodeCmds(cmds: Cmds): string {
+  const actions = cmds.actions.slice(0, MAX_ACTIONS)
+  let data = JSON.stringify({ ...cmds, actions })
+  while (data.length > MAX_MESSAGE && actions.length) {
+    actions.pop()
+    data = JSON.stringify({ ...cmds, actions })
+  }
+  return data
 }
 
 /**
@@ -248,7 +266,7 @@ export class NetClient {
     // Los nuevos y los no confirmados; los que el reloj se saltó no (el servidor los rellena igual).
     const moves = compactMoves(predictor.history.filter((h) => !h.filled && h.move.tick > this.ackTick).map((h) => h.move)).slice(-MAX_MOVES)
     const rtt = Math.min(MAX_RTT, Math.round(this.clock.rtt))
-    this.send({ type: 'cmds', t: now, moves, actions: actions.slice(0, MAX_ACTIONS), ...(rtt > 0 ? { rtt } : {}) })
+    this.transport.send(encodeCmds({ type: 'cmds', t: now, moves, actions, ...(rtt > 0 ? { rtt } : {}) }))
     // El margen solo dice algo del ritmo en los envíos normales: no en el primero tras estar quieto ni tras un tirón.
     const span = this.lastSent && !this.quiet ? newest.tick - this.lastSent.tick - 1 : null
     this.clock.sent(now, quiet || span === null || span > MAX_SPAN ? null : span)
@@ -346,6 +364,7 @@ export class NetClient {
         this.predictor = new Predictor(slot, {
           env: sim.env,
           canPlace: (p) => campfireSpot(p.pos, p.yaw, [sim.world.grid, sim.campfires.grid]).valid,
+          ...NO_STATIONS,
         })
         this.predictor.start(msg.serverTick, msg.you)
         this.clock.sync(now, msg.serverTick, msg)

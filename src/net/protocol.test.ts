@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_PITCH } from '../sim/constants'
-import { RECIPES } from '../sim/crafting'
-import { SLOT_COUNT } from '../sim/inventory'
+import { RECIPE_IDS } from '../sim/crafting'
+import { INVENTORY_SIZE, SLOT_COUNT, type InventoryState } from '../sim/inventory'
 import {
   cleanChat,
   cleanName,
@@ -71,10 +71,11 @@ describe('protocolo', () => {
   it('cmds válido', () => {
     const actions = [
       { seq: 1, tick: 10, kind: 'select', slot: SLOT_COUNT - 1 },
-      { seq: 2, tick: 10, kind: 'craft', recipe: RECIPES.length - 1 },
+      { seq: 2, tick: 10, kind: 'craft', recipe: RECIPE_IDS.at(-1) },
       { seq: 3, tick: 11, kind: 'swing' },
       { seq: 4, tick: 11, kind: 'eat' },
       { seq: 5, tick: 12, kind: 'place', junk: true },
+      { seq: 6, tick: 12, kind: 'move', from: 0, to: INVENTORY_SIZE - 1 },
     ]
     const moves = [
       { ...move, n: 4, aim: { kind: 'prop', id: 3 } },
@@ -105,7 +106,14 @@ describe('protocolo', () => {
     const badActions = [
       { seq: 0, tick: 1, kind: 'eat' },
       { seq: 1, tick: 1, kind: 'select', slot: SLOT_COUNT },
-      { seq: 1, tick: 1, kind: 'craft', recipe: RECIPES.length },
+      { seq: 1, tick: 1, kind: 'craft', recipe: 0 },
+      { seq: 1, tick: 1, kind: 'craft', recipe: 'nada' },
+      { seq: 1, tick: 1, kind: 'craft', recipe: 'toString' },
+      { seq: 1, tick: 1, kind: 'craft' },
+      { seq: 1, tick: 1, kind: 'move', from: 0, to: INVENTORY_SIZE },
+      { seq: 1, tick: 1, kind: 'move', from: -1, to: 0 },
+      { seq: 1, tick: 1, kind: 'move', from: 1.5, to: 0 },
+      { seq: 1, tick: 1, kind: 'move', from: 0 },
       { seq: 1, tick: 1, kind: 'fly' },
       { seq: 1, kind: 'eat' },
     ]
@@ -156,12 +164,12 @@ describe('snap en el cable', () => {
   const player: PlayerSnap = { id: 2, pos: { x: 1.25, y: 5.5, z: -3 }, yaw: 1.5, pitch: -0.2, item: 'wood', health: 80, alive: true, connection: 'absent', ping: 87 }
   const enemy: EnemySnap = { id: 9, pos: { x: -10.5, z: 4.25 }, yaw: 3.1, hp: 4 }
   const pickup: PickupSnap = { id: 4, pos: { x: 1, y: 2, z: 3 }, grounded: true }
-  const inventory = { slots: ['wood', null, null, null, null, null, null, null, null], counts: { wood: 3 }, selected: 0 } as const
+  const inventory: InventoryState = { slots: ['wood', ...Array<null>(INVENTORY_SIZE - 1).fill(null)], counts: { wood: 3 }, selected: 0 }
   const you = (withInventory: boolean): SnapWire['you'] => ({
     player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, health: 100, hunger: 90 },
     ...(withInventory ? { inventory: { ...inventory, slots: [...inventory.slots], counts: { ...inventory.counts } } } : {}),
     combat: { cooldown: 0, pendingSwing: false },
-    hotbarFull: false,
+    inventoryFull: false,
     alive: true,
     respawnAt: null,
     appliedSeq: 3,
@@ -195,7 +203,7 @@ describe('snap en el cable', () => {
     decoder.decode(JSON.stringify(wire(true)))
     const snap = decoder.decode(JSON.stringify(wire(false)))
     expect(snap.type === 'snap' && snap.you.inventory).toEqual(inventory)
-    const empty = { slots: Array(9).fill(null), counts: {}, selected: 2 }
+    const empty = { slots: Array(INVENTORY_SIZE).fill(null), counts: {}, selected: 2 }
     decoder.decode(JSON.stringify({ type: 'state', tick: 40, worldStartTick: 0, state: {}, you: { ...you(false), inventory: empty } }))
     const after = decoder.decode(JSON.stringify(wire(false)))
     expect(after.type === 'snap' && after.you.inventory).toEqual(empty)
