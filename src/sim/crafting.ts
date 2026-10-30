@@ -1,12 +1,10 @@
 import type { Inventory, ItemId } from './inventory'
 import type { Vec3 } from './player'
+import type { StructureKind } from './structures'
 
-/** Estaciones junto a las que se fabrican algunas recetas. */
-export type StationKind = 'workbench' | 'furnace' | 'anvil'
-
-/** Lo que fabricar necesita del mundo: si hay una estación de ese tipo al alcance desde `pos`. */
+/** Lo que fabricar necesita del mundo: si hay una estructura de ese tipo al alcance desde `pos`. */
 export interface CraftWorld {
-  nearStation(kind: StationKind, pos: Vec3): boolean
+  nearStation(kind: StructureKind, pos: Vec3): boolean
 }
 
 /** Un mundo sin estaciones. */
@@ -28,13 +26,15 @@ export type RecipeId =
   | 'mithril_bar'
   | 'mithril_axe'
   | 'mithril_pickaxe'
+  | 'cooked_meat'
+  | 'berry_infusion'
 
 export interface Recipe {
   id: RecipeId
   result: ItemId
   cost: { item: ItemId; amount: number }[]
-  /** Estación que hay que tener cerca; null, en cualquier sitio. */
-  station: StationKind | null
+  /** Estructura que hay que tener cerca (la fogata también cuenta como estación); null, en cualquier sitio. */
+  station: StructureKind | null
 }
 
 // El orden solo sirve para la UI: es el de la columna de recetas de la pantalla de inventario.
@@ -54,6 +54,9 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'iron_pickaxe', result: 'iron_pickaxe', cost: [{ item: 'iron_bar', amount: 3 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_axe', result: 'mithril_axe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_pickaxe', result: 'mithril_pickaxe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
+  // Cocinar es instantáneo, como fundir: junto a una fogata.
+  { id: 'cooked_meat', result: 'cooked_meat', cost: [{ item: 'raw_meat', amount: 1 }], station: 'campfire' },
+  { id: 'berry_infusion', result: 'berry_infusion', cost: [{ item: 'berry', amount: 4 }], station: 'campfire' },
 ]
 
 const BY_ID = new Map<string, Recipe>(RECIPES.map((r) => [r.id, r]))

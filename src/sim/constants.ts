@@ -48,8 +48,10 @@ export interface ConsumableDef {
 
 export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
   berry: { food: 15 },
-  // Se puede comer, pero llena poco.
+  // Se puede comer, pero llena poco: compensa asarla.
   raw_meat: { food: 8 },
+  cooked_meat: { food: 45, heal: 15 },
+  berry_infusion: { food: 0, regen: { perSec: 2, seconds: 20 } },
 }
 
 export const MOUSE_SENSITIVITY = 0.002

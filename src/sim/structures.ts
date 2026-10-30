@@ -3,13 +3,12 @@ import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { ItemId } from './inventory'
 import { PLACE_DISTANCE } from './constants'
-import type { StationKind } from './crafting'
 import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
 
-/** Lo que se puede colocar en el mundo: la fogata y las estaciones de crafteo. */
-export type StructureKind = 'campfire' | StationKind
+/** Lo que se puede colocar en el mundo. Todas sirven de estación: las recetas dicen cuál hay que tener cerca. */
+export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil'
 
 export interface StructureDef {
   /** El objeto que se gasta al colocarla. */
@@ -91,7 +90,7 @@ export function structureSpot(
  * borde de la estación. La usan la simulación (con STATION_RANGE) y el cliente (con algo menos, para no fabricar en
  * el borde y acabar en una corrección).
  */
-export function stationNear(structures: readonly Structure[], kind: StationKind, pos: Vec3, range: number): boolean {
+export function stationNear(structures: readonly Structure[], kind: StructureKind, pos: Vec3, range: number): boolean {
   return structures.some((s) => s.kind === kind && Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius <= range)
 }
 

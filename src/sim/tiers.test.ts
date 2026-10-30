@@ -19,6 +19,8 @@ describe('niveles: daño contra props', () => {
     ['stone', 1, 0, 0, 0, 0, 0, 1],
     ['berry', 1, 0, 0, 0, 0, 0, 1],
     ['raw_meat', 1, 0, 0, 0, 0, 0, 1],
+    ['cooked_meat', 1, 0, 0, 0, 0, 0, 1],
+    ['berry_infusion', 1, 0, 0, 0, 0, 0, 1],
     ['campfire', 1, 0, 0, 0, 0, 0, 1],
     ['birch_wood', 1, 0, 0, 0, 0, 0, 1],
     ['dark_wood', 1, 0, 0, 0, 0, 0, 1],

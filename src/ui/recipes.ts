@@ -1,8 +1,8 @@
 import type { ActionData } from '../sim/commands'
-import { canCraft, craft, RECIPES, recipeById, type CraftWorld, type Recipe, type StationKind } from '../sim/crafting'
+import { canCraft, craft, RECIPES, recipeById, type CraftWorld, type Recipe } from '../sim/crafting'
 import { Inventory, ITEM_NAMES, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
-import { stationNear, type Structure } from '../sim/structures'
+import { stationNear, type Structure, type StructureKind } from '../sim/structures'
 
 /** Cuántas veces fabrica Mayúsculas + clic (cada una es una acción `craft`, en el mismo paso). */
 export const CRAFT_MANY = 5
@@ -18,21 +18,22 @@ export const clientCraftWorld = (structures: () => readonly Structure[]): CraftW
   nearStation: (kind, pos) => stationNear(structures(), kind, pos, CLIENT_STATION_RANGE),
 })
 
-const STATION_NAMES: Record<StationKind, string> = { workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque' }
-const STATION_NEEDED: Record<StationKind, string> = {
+const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque' }
+const STATION_NEEDED: Record<StructureKind, string> = {
+  campfire: 'Necesitas una fogata cerca',
   workbench: 'Necesitas una mesa de trabajo cerca',
   furnace: 'Necesitas un horno cerca',
   anvil: 'Necesitas un yunque cerca',
 }
 
 export interface RecipeGroup {
-  station: StationKind | null
+  station: StructureKind | null
   title: string
   recipes: readonly Recipe[]
 }
 
 /** Las recetas por estación, en el orden de `RECIPES` (sin los grupos que aún no tienen ninguna). */
-export const RECIPE_GROUPS: readonly RecipeGroup[] = ([null, 'workbench', 'furnace', 'anvil'] as const)
+export const RECIPE_GROUPS: readonly RecipeGroup[] = ([null, 'campfire', 'workbench', 'furnace', 'anvil'] as const)
   .map((station) => ({ station, title: station ? STATION_NAMES[station] : 'Sin estación', recipes: RECIPES.filter((r) => r.station === station) }))
   .filter((group) => group.recipes.length > 0)
 

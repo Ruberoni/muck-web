@@ -93,7 +93,9 @@ const mithrilVein = new THREE.MeshStandardMaterial({ color: '#4fb3f0', flatShadi
 const berryRed = mat('#c2304a')
 const leaf = mat('#3d7d35')
 const meat = mat('#c75a5a')
+const roast = mat('#8f5128')
 const fat = mat('#f0d6c8')
+const mug = mat('#d9cdb8')
 
 const part = (geometry: THREE.BufferGeometry, material: THREE.Material) => new THREE.Mesh(geometry, material)
 
@@ -131,10 +133,17 @@ function berries() {
   return g
 }
 
-function rawMeat() {
+function meatCut(flesh: THREE.Material) {
   const g = new THREE.Group()
-  g.add(part(new THREE.IcosahedronGeometry(0.11, 0).scale(1, 0.8, 1.3).translate(0, 0.14, -0.04), meat))
+  g.add(part(new THREE.IcosahedronGeometry(0.11, 0).scale(1, 0.8, 1.3).translate(0, 0.14, -0.04), flesh))
   g.add(part(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 5).translate(0, 0.04, 0), fat))
+  return g
+}
+
+function infusion() {
+  const g = new THREE.Group()
+  g.add(part(new THREE.CylinderGeometry(0.075, 0.06, 0.14, 7).translate(0, 0.08, 0), mug))
+  g.add(part(new THREE.CylinderGeometry(0.066, 0.066, 0.01, 7).translate(0, 0.15, 0), berryRed))
   return g
 }
 
@@ -250,7 +259,11 @@ export function itemModel(item: ItemId): THREE.Group {
     case 'berry':
       return berries()
     case 'raw_meat':
-      return rawMeat()
+      return meatCut(meat)
+    case 'cooked_meat':
+      return meatCut(roast)
+    case 'berry_infusion':
+      return infusion()
     case 'campfire':
       return campfireBundle()
     case 'workbench':

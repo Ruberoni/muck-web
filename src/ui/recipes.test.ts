@@ -23,9 +23,10 @@ describe('recetas en la pantalla de inventario', () => {
     expect(listed).toHaveLength(RECIPES.length)
     expect(new Set(listed)).toEqual(new Set(RECIPES))
     expect(RECIPE_GROUPS.every((g) => g.recipes.length > 0 && g.recipes.every((r) => r.station === g.station))).toBe(true)
-    expect(RECIPE_GROUPS.map((g) => g.title)).toEqual(['Sin estación', 'Mesa de trabajo', 'Horno', 'Yunque'])
+    expect(RECIPE_GROUPS.map((g) => g.title)).toEqual(['Sin estación', 'Fogata', 'Mesa de trabajo', 'Horno', 'Yunque'])
     expect(RECIPE_GROUPS.map((g) => g.recipes.map((r) => r.id))).toEqual([
       ['wood_axe', 'wood_pickaxe', 'campfire', 'workbench'],
+      ['cooked_meat', 'berry_infusion'],
       ['stone_axe', 'stone_pickaxe', 'furnace', 'anvil'],
       ['iron_bar', 'mithril_bar'],
       ['iron_axe', 'iron_pickaxe', 'mithril_axe', 'mithril_pickaxe'],
@@ -60,6 +61,7 @@ describe('recetas en la pantalla de inventario', () => {
     expect(seen).toEqual([['workbench', { x: 1, y: 2, z: 3 }]])
     // El horno y el yunque, con su nombre.
     expect(recipeStatus(inventoryWith({ iron_ore: 1, wood: 1 }), recipe('iron_bar'), NO_STATIONS, POS).reason).toBe('Necesitas un horno cerca')
+    expect(recipeStatus(inventoryWith({ raw_meat: 1 }), recipe('cooked_meat'), NO_STATIONS, POS).reason).toBe('Necesitas una fogata cerca')
     expect(recipeStatus(inventoryWith({ iron_bar: 3 }), recipe('iron_pickaxe'), NO_STATIONS, POS).reason).toBe(
       'Faltan 2 madera de abedul · Necesitas un yunque cerca',
     )

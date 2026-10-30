@@ -55,6 +55,8 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | — | hacha o pico de madera | 5 madera |
 | — | fogata | 6 madera + 3 piedra |
 | — | mesa de trabajo | 10 madera |
+| fogata | carne asada | 1 carne cruda |
+| fogata | infusión de bayas | 4 bayas |
 | mesa de trabajo | hacha o pico de piedra | 3 madera + 5 piedra |
 | mesa de trabajo | horno | 12 piedra + 4 madera |
 | mesa de trabajo | yunque | 4 lingotes de hierro + 6 piedra |
@@ -63,7 +65,7 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | yunque | hacha o pico de hierro | 3 lingotes de hierro + 2 madera de abedul |
 | yunque | hacha o pico de mithril | 3 lingotes de mithril + 2 madera oscura |
 
-Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un horno cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas. Fundir es instantáneo: cada clic junto al horno convierte un mineral en un lingote.
+Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un horno cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas. Fundir y cocinar son instantáneos: cada clic junto al horno convierte un mineral en un lingote, y junto a una fogata, una carne cruda en una asada.
 
 Las herramientas de hierro hacen 6 de daño a lo de su familia y 4 a los trasgos, y son las que abren el pino oscuro y la mena de mithril. Las de mithril, las mejores, hacen 12 y 6: nada pide mithril, pero tumban abedules, menas de hierro y trasgos de un golpe, y pinos oscuros y menas de mithril de dos.
 
@@ -73,11 +75,11 @@ La mesa de trabajo, el horno y el yunque se colocan como la fogata, con vista pr
 
 ## Fogata
 
-Se fabrica con 6 de madera y 3 de piedra. Con ella en la mano aparece una vista previa delante del jugador (verde si se puede colocar, roja si cae en el agua, en una pendiente o encima de algo) y un clic la coloca. Da luz cálida que de noche ilumina el entorno; de día apenas se nota. No se puede atravesar y desaparece al morir, con el resto de la partida.
+Se fabrica con 6 de madera y 3 de piedra. Con ella en la mano aparece una vista previa delante del jugador (verde si se puede colocar, roja si cae en el agua, en una pendiente o encima de algo) y un clic la coloca. Da luz cálida que de noche ilumina el entorno; de día apenas se nota. A unos 3 m de ella se cocina (ver [Crafteo](#crafteo)). No se puede atravesar y desaparece al morir, con el resto de la partida.
 
 ## Supervivencia
 
-El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya devuelve 15 y la carne cruda 8. Lo que no mejora nada (comer lleno, por ejemplo) no se gasta. Con el hambre por encima del 30 % la vida se regenera 1 por segundo, salvo durante los 8 s siguientes a recibir un golpe, y con el hambre a 0 la vida baja hasta morir. Los consumibles se definen en `CONSUMABLE_DEFS` (`src/sim/constants.ts`) y pueden curar al momento o poco a poco; la curación poco a poco se suma a la natural, sigue aunque te golpeen, la barra de vida late en verde con los segundos que quedan y tomar otro solo renueva el tiempo. Al morir la partida empieza de nuevo: inventario vacío, isla restaurada y el jugador en el punto de aparición.
+El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya devuelve 15, la carne cruda 8 y la carne asada 45, y esta además cura 15 de vida al momento. La infusión de bayas recupera 2 de vida por segundo durante 20 s. Lo que no mejora nada (comer lleno, por ejemplo) no se gasta. Con el hambre por encima del 30 % la vida se regenera 1 por segundo, salvo durante los 8 s siguientes a recibir un golpe, y con el hambre a 0 la vida baja hasta morir. Los consumibles se definen en `CONSUMABLE_DEFS` (`src/sim/constants.ts`) y pueden curar al momento o poco a poco; la curación poco a poco se suma a la natural, sigue aunque te golpeen, la barra de vida late en verde con los segundos que quedan y tomar otro solo renueva el tiempo. Al morir la partida empieza de nuevo: inventario vacío, isla restaurada y el jugador en el punto de aparición.
 
 ## Enemigos
 

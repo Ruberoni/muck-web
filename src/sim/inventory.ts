@@ -21,6 +21,8 @@ export type ItemId =
   | 'mithril_bar'
   | 'mithril_axe'
   | 'mithril_pickaxe'
+  | 'cooked_meat'
+  | 'berry_infusion'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -45,6 +47,8 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   mithril_bar: 'Lingote de mithril',
   mithril_axe: 'Hacha de mithril',
   mithril_pickaxe: 'Pico de mithril',
+  cooked_meat: 'Carne asada',
+  berry_infusion: 'Infusión de bayas',
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

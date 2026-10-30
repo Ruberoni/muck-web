@@ -4,6 +4,7 @@ import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HIT_COOLDO
 import { aimPose } from './interaction'
 import { generatePropPlacements, type PropData } from './props'
 import { Simulation } from './Simulation'
+import { STRUCTURE_DEFS, structureSpot } from './structures'
 import { DAY_FRACTION } from './world/daycycle'
 import { heightAt } from './world/terrain'
 
@@ -152,6 +153,35 @@ describe('Simulation', () => {
     player.hunger = HUNGER_MAX
     expect(step(sim, { actions: [{ kind: 'select', slot: 0 }, { kind: 'eat' }] }).map((e) => e.type)).not.toContain('playerAte')
     expect(inventory.count('raw_meat')).toBe(1)
+  })
+
+  it('junto a una fogata se cocina: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
+    const sim = solo(1)
+    const { inventory, player } = sim.slot(0)
+    inventory.add('raw_meat', 2)
+    inventory.add('berry', 4)
+    // Sin fogata cerca no se puede.
+    step(sim, { actions: [{ kind: 'craft', recipe: 'cooked_meat' }] })
+    expect(inventory.count('raw_meat')).toBe(2)
+
+    sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.campfire.radius, [sim.world.grid, sim.structures.grid]), 'campfire')
+    const events = step(sim, { actions: [{ kind: 'craft', recipe: 'cooked_meat' }, { kind: 'craft', recipe: 'berry_infusion' }] })
+    expect(events).toContainEqual(expect.objectContaining({ type: 'playerCrafted', recipe: 'cooked_meat' }))
+    expect(inventory.toJSON()).toEqual({ raw_meat: 1, cooked_meat: 1, berry_infusion: 1 })
+
+    const cooked = CONSUMABLE_DEFS.cooked_meat!
+    expect(cooked.food).toBeGreaterThanOrEqual(CONSUMABLE_DEFS.berry!.food * 3)
+    expect(cooked.food).toBeGreaterThan(CONSUMABLE_DEFS.raw_meat!.food * 5)
+    player.hunger = 40
+    player.health = 50
+    step(sim, { actions: [{ kind: 'select', slot: inventory.slots.indexOf('cooked_meat') }, { kind: 'eat' }] })
+    expect(player.hunger).toBeCloseTo(40 + cooked.food, 1)
+    expect(player.health).toBeCloseTo(50 + cooked.heal!, 1)
+
+    step(sim, { actions: [{ kind: 'select', slot: inventory.slots.indexOf('berry_infusion') }, { kind: 'eat' }] })
+    expect(player.regenLeft).toBeCloseTo(20, 1)
+    expect(player.regenPerSec).toBe(2)
+    expect(inventory.count('berry_infusion')).toBe(0)
   })
 
   it('un enemigo que pega pausa la regeneración natural', () => {
