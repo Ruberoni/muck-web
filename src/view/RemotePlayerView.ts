@@ -53,7 +53,8 @@ export class RemotePlayerView {
   /** Animaciones de los demás (los eventos propios no llegan aquí con modelo, así que se ignoran). */
   present(events: readonly SimEventData[]) {
     for (const e of events) {
-      const action = e.type === 'playerSwing' ? 'swing' : e.type === 'playerAte' ? 'eat' : e.type === 'playerPlaced' ? 'place' : null
+      const action =
+        e.type === 'playerSwing' ? 'swing' : e.type === 'playerAte' ? 'eat' : e.type === 'playerPlaced' || e.type === 'playerDropped' ? 'place' : null
       if (!action || !('id' in e)) continue
       const model = this.models.get(e.id)
       if (!model) continue

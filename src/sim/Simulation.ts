@@ -5,7 +5,7 @@ import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, S
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
-import { Inventory, type InventoryState } from './inventory'
+import { Inventory, type InventoryState, type ItemId } from './inventory'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
@@ -19,6 +19,8 @@ import { heightAt } from './world/terrain'
 /** Los jugadores que no son el primero aparecen en un anillo a esta distancia del punto de aparición. */
 const SPAWN_RING = 2.5
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+/** Altura sobre los pies desde la que sale lo que tira un jugador. */
+const TOSS_HEIGHT = 1.2
 
 /**
  * Conexión de un jugador. `present` y `absent` (conectado pero sin mandar comandos) están en el mundo;
@@ -229,6 +231,7 @@ export class Simulation {
       const hands = useHands(slot, intent)
       if (hands.swing) this.interaction.strike(slot)
       if (hands.place) this.place(slot)
+      for (const { item, amount } of intent.drops) this.toss(slot, item, amount)
     }
     // Lo que rompió o mató otro jugador en este paso deja de ser objetivo de los demás.
     for (const slot of living) if (slot.target && !slot.target.alive) slot.target = null
@@ -288,6 +291,14 @@ export class Simulation {
   setPhase(phase: number) {
     const cycles = START_PHASE + this.clock.elapsed / DAY_LENGTH
     const elapsed = (Math.floor(cycles) + euclideanModulo(phase, 1) - START_PHASE) * DAY_LENGTH
+    this.worldStartTick = this.tick - Math.round(elapsed / STEP)
+    this.syncClock()
+    this.events.emit({ type: 'clockSet', worldStartTick: this.worldStartTick })
+  }
+
+  /** Salta al día `day` (desde 1) a la misma hora, redondeada al tick (para probar las noches de un día concreto). */
+  setDay(day: number) {
+    const elapsed = (Math.max(1, Math.floor(day)) - 1 + this.clock.phase - START_PHASE) * DAY_LENGTH
     this.worldStartTick = this.tick - Math.round(elapsed / STEP)
     this.syncClock()
     this.events.emit({ type: 'clockSet', worldStartTick: this.worldStartTick })
@@ -409,5 +420,11 @@ export class Simulation {
     if (!this.structures.place(spot, def.kind, slot.id, slot.player.yaw)) return
     this.events.emit({ type: 'playerPlaced', id: slot.id, item })
     slot.inventory.remove(item, 1)
+  }
+
+  /** Lo que ha tirado (ya fuera de su inventario, ver `dropFromSlot`) sale a la altura del pecho hacia donde mira. */
+  private toss(slot: PlayerSlot, item: ItemId, amount: number) {
+    const { pos, yaw } = slot.player
+    this.pickups.toss(item, amount, pos.x, pos.y + TOSS_HEIGHT, pos.z, yaw, slot.id)
   }
 }

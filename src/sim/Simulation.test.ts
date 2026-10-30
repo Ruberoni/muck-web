@@ -116,6 +116,49 @@ describe('Simulation', () => {
     expect(events[0]).toMatchObject({ type: 'worldReset', worldStartTick: sim.tick - 1 })
   })
 
+  it('setDay salta al día pedido a la misma hora y lo avisa con clockSet', () => {
+    const sim = solo(1)
+    sim.setPhase(NIGHT)
+    step(sim)
+    const { phase } = sim.clock
+    sim.setDay(3)
+    expect(sim.clock.day).toBe(3)
+    expect(sim.clock.phase).toBeCloseTo(phase, 4)
+    expect(step(sim).map((e) => e.type)).toContain('clockSet')
+    sim.setDay(1)
+    expect(sim.clock.day).toBe(1)
+    expect(sim.clock.phase).toBeCloseTo(phase, 3)
+  })
+
+  it('tirar saca una unidad (o la pila) de la casilla y la deja en el suelo delante, con quién la tiró', () => {
+    const sim = solo(1)
+    const { inventory, player } = sim.slot(0)
+    inventory.add('wood', 5)
+    inventory.add('stone', 2)
+    const events = step(sim, { actions: [{ kind: 'drop', slot: 0, all: false }] })
+    expect(events).toContainEqual(expect.objectContaining({ type: 'playerDropped', id: 0, item: 'wood', amount: 1 }))
+    expect(events).toContainEqual(expect.objectContaining({ type: 'pickupSpawn', item: 'wood', amount: 1 }))
+    expect(inventory.count('wood')).toBe(4)
+    expect(sim.pickups.list).toMatchObject([{ item: 'wood', amount: 1, droppedBy: 0 }])
+
+    step(sim, { actions: [{ kind: 'drop', slot: 1, all: true }] })
+    expect(inventory.count('stone')).toBe(0)
+    expect(inventory.slots[1]).toBeNull()
+    expect(sim.pickups.list.at(-1)).toMatchObject({ item: 'stone', amount: 2 })
+
+    // Una casilla vacía no hace nada.
+    expect(step(sim, { actions: [{ kind: 'drop', slot: 5, all: true }] }).map((e) => e.type)).not.toContain('playerDropped')
+    // Sale hacia donde mira (yaw 0 → -z) y, quieto encima, no lo recoge hasta pasados los 2 s.
+    for (let i = 0; i < 60; i++) step(sim)
+    const wood = sim.pickups.list[0]
+    expect(player.pos.z - wood.pos.z).toBeGreaterThan(1)
+    sim.teleport(0, wood.pos.x, wood.pos.z, 0, 0)
+    for (let i = 0; i < 30; i++) step(sim)
+    expect(inventory.count('wood')).toBe(4)
+    for (let i = 0; i < 90; i++) step(sim)
+    expect(inventory.count('wood')).toBe(5)
+  })
+
   it('serializar, restaurar y seguir da lo mismo que no serializar', () => {
     const a = solo(7)
     const { inventory, player } = a.slot(0)

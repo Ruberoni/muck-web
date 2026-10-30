@@ -3,6 +3,7 @@ import { BERRY_FOOD, STEP } from './constants'
 import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
 import { startSwing, type Fighter } from './interaction'
+import type { ItemId } from './inventory'
 import { stepPlayer, type Player, type PlayerEnv } from './player'
 import { placeableOf } from './structures'
 import { eat, stepSurvival } from './survival'
@@ -30,15 +31,17 @@ export interface Intent {
   swing: boolean
   place: boolean
   eat: boolean
+  /** Lo tirado en este paso, ya fuera del inventario: la simulación lo deja en el suelo (la predicción no). */
+  drops: { item: ItemId; amount: number }[]
 }
 
 /**
- * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla, mover casillas y fabricar en el acto;
- * golpear, colocar y comer se devuelven para su momento del paso. Las de un muerto se descartan.
+ * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla, mover casillas, fabricar y tirar en el
+ * acto; golpear, colocar y comer se devuelven para su momento del paso. Las de un muerto se descartan.
  */
 export function applyActions(actor: Actor, command: PlayerCommands | undefined, world: CraftWorld, emit: Emit): Intent {
   const move = command?.move
-  const intent: Intent = { aim: move?.aim, attack: ((move?.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false }
+  const intent: Intent = { aim: move?.aim, attack: ((move?.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false, drops: [] }
   if (!command) return intent
   for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
     if (action.seq <= actor.appliedSeq) continue
@@ -54,6 +57,11 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
       case 'craft':
         craftRecipe(actor, action.recipe, world, emit)
         break
+      case 'drop': {
+        const dropped = dropFromSlot(actor, action.slot, action.all, emit)
+        if (dropped) intent.drops.push(dropped)
+        break
+      }
       case 'swing':
         intent.swing = true
         break
@@ -79,6 +87,16 @@ export function craftRecipe(actor: Actor, id: RecipeId, world: CraftWorld, emit:
   if (!craft(actor.inventory, recipe)) return false
   emit({ type: 'playerCrafted', id: actor.id, recipe: id })
   return true
+}
+
+/** Saca del inventario una unidad de la casilla `slot` (o la pila entera, con `all`); null si está vacía o no existe. */
+export function dropFromSlot(actor: Actor, slot: number, all: boolean, emit: Emit): { item: ItemId; amount: number } | null {
+  const item = actor.inventory.slots[slot]
+  if (!item) return null
+  const amount = all ? actor.inventory.count(item) : 1
+  if (!actor.inventory.remove(item, amount)) return null
+  emit({ type: 'playerDropped', id: actor.id, item, amount })
+  return { item, amount }
 }
 
 /** Orienta al jugador como dice su `Move` (sin él, mira a donde miraba) y lo mueve un paso. */
@@ -127,7 +145,8 @@ export interface PredictWorld extends CraftWorld {
  * Un tick del jugador del cliente sin tocar el mundo: lo mismo que hace `Simulation.step` con él, salvo lo que
  * depende de los demás (daño de enemigos, golpes que aciertan, recogidas y bayas) y sin consumir el azar.
  * `place` gasta lo que se coloca si el sitio es válido, pero no crea la estructura: la crea el servidor y llega en su evento.
- * Emite lo que el jugador hace (golpe con el objetivo que dice tener delante, fabricar, comer, colocar).
+ * `drop` lo saca del inventario, pero no lo deja en el suelo: lo tira el servidor y llega en su `pickupSpawn`.
+ * Emite lo que el jugador hace (golpe con el objetivo que dice tener delante, fabricar, tirar, comer, colocar).
  * Devuelve si empieza un golpe.
  */
 export function predictPlayer(actor: Actor, command: PlayerCommands | undefined, world: PredictWorld): boolean {

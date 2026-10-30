@@ -14,7 +14,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 15
+export const PROTOCOL_VERSION = 16
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -109,6 +109,7 @@ export type DevOp =
   /** Delante de (x, z) mirando a `yaw`; sin (x, z), desde donde está el jugador, y sin `yaw`, hacia donde mira. */
   | { op: 'placeStructure'; kind: StructureKind; x?: number; z?: number; yaw?: number }
   | { op: 'setPhase'; phase: number }
+  | { op: 'setDay'; day: number }
 
 export type Dev = { type: 'dev' } & DevOp
 
@@ -458,6 +459,10 @@ function parseAction(a: unknown): Action | null {
       if (!isInt(a.from, 0, INVENTORY_SIZE - 1) || !isInt(a.to, 0, INVENTORY_SIZE - 1)) return null
       data = { kind: 'move', from: a.from, to: a.to }
       break
+    case 'drop':
+      if (!isInt(a.slot, 0, INVENTORY_SIZE - 1) || typeof a.all !== 'boolean') return null
+      data = { kind: 'drop', slot: a.slot, all: a.all }
+      break
     case 'craft':
       if (!isRecipeId(a.recipe)) return null
       data = { kind: 'craft', recipe: a.recipe }
@@ -477,6 +482,8 @@ const ITEMS = Object.keys(ITEM_NAMES) as ItemId[]
 const MAX_GIVE = 999
 /** Vida y hambre de `setVitals`: de sobra para cualquier máximo. */
 const MAX_VITAL = 1000
+/** Día más alto de `setDay`. */
+const MAX_DAY = 999
 
 function parseDev(raw: Obj): Dev | null {
   const nums = (...keys: string[]) => keys.every((k) => isFiniteNum(raw[k]))
@@ -509,6 +516,8 @@ function parseDev(raw: Obj): Dev | null {
     }
     case 'setPhase':
       return nums('phase') ? { type: 'dev', op: 'setPhase', phase: raw.phase as number } : null
+    case 'setDay':
+      return isInt(raw.day, 1, MAX_DAY) ? { type: 'dev', op: 'setDay', day: raw.day } : null
     default:
       return null
   }

@@ -81,6 +81,8 @@ describe('protocolo', () => {
       { seq: 4, tick: 11, kind: 'eat' },
       { seq: 5, tick: 12, kind: 'place', junk: true },
       { seq: 6, tick: 12, kind: 'move', from: 0, to: INVENTORY_SIZE - 1 },
+      { seq: 7, tick: 12, kind: 'drop', slot: INVENTORY_SIZE - 1, all: true },
+      { seq: 8, tick: 13, kind: 'drop', slot: 0, all: false },
     ]
     const moves = [
       { ...move, n: 4, aim: { kind: 'prop', id: 3 } },
@@ -119,6 +121,10 @@ describe('protocolo', () => {
       { seq: 1, tick: 1, kind: 'move', from: -1, to: 0 },
       { seq: 1, tick: 1, kind: 'move', from: 1.5, to: 0 },
       { seq: 1, tick: 1, kind: 'move', from: 0 },
+      { seq: 1, tick: 1, kind: 'drop', slot: INVENTORY_SIZE, all: false },
+      { seq: 1, tick: 1, kind: 'drop', slot: -1, all: false },
+      { seq: 1, tick: 1, kind: 'drop', slot: 0 },
+      { seq: 1, tick: 1, kind: 'drop', slot: 0, all: 1 },
       { seq: 1, tick: 1, kind: 'fly' },
       { seq: 1, kind: 'eat' },
     ]
@@ -143,6 +149,7 @@ describe('protocolo', () => {
     expect(dev({ op: 'placeStructure', kind: 'campfire', extra: 1 })).toEqual({ ok: true, msg: { type: 'dev', op: 'placeStructure', kind: 'campfire' } })
     expect(dev({ op: 'placeStructure', kind: 'campfire', yaw: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'placeStructure', kind: 'campfire', yaw: 2 } })
     expect(dev({ op: 'setPhase', phase: 0.5 }).ok).toBe(true)
+    expect(dev({ op: 'setDay', day: 6 })).toEqual({ ok: true, msg: { type: 'dev', op: 'setDay', day: 6 } })
     const bad = [
       { op: 'give', item: 'diamante', amount: 1 },
       { op: 'give', item: 'wood', amount: 0 },
@@ -159,6 +166,9 @@ describe('protocolo', () => {
       { op: 'placeStructure', kind: 'campfire', yaw: '0' },
       { op: 'placeCampfire', x: 1, z: 2, yaw: 0 },
       { op: 'setPhase' },
+      { op: 'setDay', day: 0 },
+      { op: 'setDay', day: 2.5 },
+      { op: 'setDay' },
       { op: 'fly' },
     ]
     for (const extra of bad) expect(dev(extra).ok, JSON.stringify(extra)).toBe(false)

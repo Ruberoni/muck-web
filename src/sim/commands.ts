@@ -22,13 +22,14 @@ export interface Move {
  * Flancos de un solo uso: se aplican una vez, en su tick y en orden de `seq`.
  * `swing` es un golpe pedido (un clic, aunque sea más corto que un tick): si el cooldown no ha acabado,
  * queda pendiente hasta que acabe. `place` coloca lo que se tiene en la mano (la fogata). `move` intercambia dos
- * casillas del inventario (hotbar o mochila).
+ * casillas del inventario (hotbar o mochila). `drop` tira al suelo una unidad de una casilla (o la pila, con `all`).
  */
 export type ActionData =
   | { kind: 'swing' }
   | { kind: 'select'; slot: number }
   | { kind: 'craft'; recipe: RecipeId }
   | { kind: 'move'; from: number; to: number }
+  | { kind: 'drop'; slot: number; all: boolean }
   | { kind: 'eat' }
   | { kind: 'place' }
 

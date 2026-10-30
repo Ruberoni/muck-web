@@ -59,6 +59,24 @@ describe('Predictor', () => {
     expect(predictor.pending).toEqual([])
   })
 
+  it('tirar se predice: el inventario queda como en el servidor sin correcciones', () => {
+    const { server, predictor, slot, states, serverStep } = setup()
+    server.slot(0).inventory.add('wood', 5)
+    slot.inventory.add('wood', 5)
+    // Menos de DROP_PICKUP_DELAY: lo tirado sigue en el suelo del servidor (las recogidas no se predicen).
+    for (let i = 0; i < 100; i++) {
+      const tick = predictor.tick + 1
+      const actions: ActionData[] = i === 20 ? [{ kind: 'drop', slot: 0, all: false }] : i === 50 ? [{ kind: 'drop', slot: 0, all: true }] : []
+      predictor.step(tick, walk(tick), actions)
+      serverStep({ ...walk(tick), tick }, predictor.pending.filter((a) => a.tick === tick))
+      if (tick > 12 && tick % 3 === 0) predictor.reconcile(tick - 12, states.get(tick - 12)!)
+    }
+    expect(predictor.stats.corrections).toBe(0)
+    expect(slot.inventory.count('wood')).toBe(0)
+    expect(server.slot(0).inventory.count('wood')).toBe(0)
+    expect(server.pickups.list.map((p) => p.amount)).toEqual([1, 4])
+  })
+
   it('al corregir re-simula con la orientación de cada Move y deja la actual', () => {
     const { server, predictor, slot, states, serverStep } = setup()
     for (let i = 0; i < 30; i++) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { INVENTORY_SIZE, SLOT_COUNT, type ItemId } from '../sim/inventory'
 import { stepActions, type KeyStep } from './actions'
-import { CLICK, RIGHT_CLICK } from './input'
+import { CLICK, RIGHT_CLICK, withCtrl } from './input'
 
 const slots = (items: Partial<Record<number, ItemId>> = {}) => Array.from({ length: SLOT_COUNT }, (_, i) => items[i] ?? null)
 
@@ -57,6 +57,14 @@ describe('teclas a acciones', () => {
   it('F o el clic derecho comen', () => {
     expect(step(['KeyF']).actions).toEqual([{ kind: 'eat' }])
     expect(step([RIGHT_CLICK]).actions).toEqual([{ kind: 'eat' }])
+  })
+
+  it('Q tira uno de la casilla elegida y Ctrl + Q la pila; con la mano vacía no hace nada', () => {
+    const wood = slots({ 2: 'wood' })
+    expect(step(['KeyQ'], { slots: wood, selected: 2 }).actions).toEqual([{ kind: 'drop', slot: 2, all: false }])
+    expect(step(['KeyQ', withCtrl('KeyQ')], { slots: wood, selected: 2 }).actions).toEqual([{ kind: 'drop', slot: 2, all: true }])
+    expect(step(['KeyQ', 'Digit3'], { slots: wood }).actions).toEqual([{ kind: 'select', slot: 2 }, { kind: 'drop', slot: 2, all: false }])
+    expect(step(['KeyQ'], { slots: wood }).actions).toEqual([])
   })
 
   it('Tab o E piden la pantalla de inventario en las casillas', () => {

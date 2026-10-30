@@ -138,6 +138,10 @@ export class GameAudio {
         case 'playerAte':
           if (e.id === me) s.play('eat')
           break
+        // Tirar algo suena como un golpe al aire.
+        case 'playerDropped':
+          if (e.id === me) s.play('swing')
+          break
         case 'playerCrafted':
           if (e.id === me && !crafted.has(e.tick)) s.play('craft')
           if (e.id === me) crafted.add(e.tick)
@@ -182,6 +186,9 @@ export class GameAudio {
           break
         case 'playerAte':
           at(e, REMOTE_HEARING.other, 'eat')
+          break
+        case 'playerDropped':
+          at(e, REMOTE_HEARING.other, 'swing')
           break
         case 'playerCrafted':
           if (!crafted.has(`${e.id}:${e.tick}`)) at(e, REMOTE_HEARING.other, 'craft')

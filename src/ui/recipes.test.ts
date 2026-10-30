@@ -94,6 +94,15 @@ describe('qué craft se mandan', () => {
     expect(sendableActions(actions, inventory, NO_STATIONS, POS)).toEqual([{ kind: 'select', slot: 3 }, { kind: 'move', from: 0, to: 20 }, craftAction('wood_pickaxe'), { kind: 'eat' }])
   })
 
+  it('lo tirado antes en el mismo paso no cuenta para fabricar', () => {
+    const inventory = inventoryWith({ wood: 6 })
+    const one: ActionData = { kind: 'drop', slot: 0, all: false }
+    expect(sendableActions([one, craftAction('wood_axe')], inventory, NO_STATIONS, POS)).toEqual([one, craftAction('wood_axe')])
+    const all: ActionData = { kind: 'drop', slot: 0, all: true }
+    expect(sendableActions([all, craftAction('wood_axe')], inventory, NO_STATIONS, POS)).toEqual([all])
+    expect(sendableActions([one, one, craftAction('wood_axe')], inventory, NO_STATIONS, POS)).toEqual([one, one])
+  })
+
   it('una receta sin estación no pregunta por ninguna', () => {
     const world: CraftWorld = {
       nearStation: () => {

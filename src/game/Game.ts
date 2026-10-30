@@ -159,6 +159,7 @@ export class Game {
     this.hud = new Hud(container, () => this.onOverlayClick())
     this.hud.net.onsay = (text) => this.net?.client.say(text)
     this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
+    this.hud.inventory.ondrop = (slot, all) => this.queueAction({ kind: 'drop', slot, all })
     this.hud.inventory.oncraft = (recipe, times) => {
       for (let i = 0; i < times; i++) this.queueAction({ kind: 'craft', recipe })
     }
@@ -543,6 +544,7 @@ export class Game {
           this.swingAtProp(e)
           break
         case 'playerPlaced':
+        case 'playerDropped':
           if (e.id === slot.id) this.handheld.play('place', e.item)
           break
         case 'playerAte':
@@ -595,6 +597,7 @@ export class Game {
         case 'playerDied':
         case 'playerAte':
         case 'playerCrafted':
+        case 'playerDropped':
           return playerAt(e.id)
         default:
           return null

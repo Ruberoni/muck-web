@@ -4,6 +4,8 @@ import type { PlayerInput } from '../sim/player'
 /** Códigos de pulsación única del clic izquierdo y derecho (no son e.code reales). */
 export const CLICK = 'Mouse0'
 export const RIGHT_CLICK = 'Mouse2'
+/** Una tecla pulsada con Ctrl cuenta además como esta pulsación (tampoco es un e.code real): `withCtrl('KeyQ')`. */
+export const withCtrl = (code: string) => `Ctrl+${code}`
 
 /**
  * Convierte la rueda en pasos de -1, 0 o 1. Una muesca de ratón da 100 px (Chrome) o 3 líneas (Firefox)
@@ -63,7 +65,10 @@ export class Input {
       // Tab cambia a quién mira el espectador: con el ratón capturado no debe mover el foco.
       if (e.code === 'Space' || (e.code === 'Tab' && this.locked)) e.preventDefault()
       this.keys.add(e.code)
-      if (!e.repeat) this.press(e.code)
+      if (e.repeat) return
+      this.press(e.code)
+      // Ctrl se mira al pulsar: en el siguiente paso puede estar ya suelta.
+      if (e.ctrlKey) this.press(withCtrl(e.code))
     })
     window.addEventListener('keyup', (e) => this.keys.delete(e.code))
     window.addEventListener('blur', () => this.clear())

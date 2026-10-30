@@ -378,6 +378,9 @@ export class Room {
       case 'setPhase':
         sim.setPhase(msg.phase)
         break
+      case 'setDay':
+        sim.setDay(msg.day)
+        break
     }
   }
 

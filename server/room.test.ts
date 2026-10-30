@@ -240,6 +240,23 @@ describe('Room', () => {
     }
   })
 
+  it('tirar llega por la red: sale del `you` y el montón llega a todos en su pickupSpawn', () => {
+    const { room, time } = setup()
+    const a = new Client(room, time)
+    const b = new Client(room, time, 'b')
+    join(a, b)
+    room.sim!.slot(a.id).inventory.add('wood', 3)
+    play(time, 300, [[a], [b]])
+    a.cmds([], [a.action({ kind: 'drop', slot: 0, all: true }, room.sim!.tick + 1)])
+    play(time, 300, [[a], [b]])
+    expect(a.snap.you.inventory.slots[0]).toBe(null)
+    for (const c of [a, b]) {
+      expect(c.events).toContainEqual(expect.objectContaining({ type: 'pickupSpawn', item: 'wood', amount: 3 }))
+      expect(c.events).toContainEqual(expect.objectContaining({ type: 'playerDropped', id: a.id, item: 'wood', amount: 3 }))
+    }
+    expect(a.closed).toBe(null)
+  })
+
   it('el chat llega a todos con el nombre de quien escribe; más de uno cada 400 ms se ignora', () => {
     const { room, time } = setup()
     const a = new Client(room, time)
@@ -682,6 +699,10 @@ describe('Room', () => {
     expect(slot.player.pitch).toBe(0.2)
     expect(slot.player.health).toBe(50)
     expect(slot.player.hunger).toBe(20)
+    expect(sim.clock.phase).toBeCloseTo(0.8, 3)
+    a.send({ type: 'dev', op: 'setDay', day: 3 })
+    time.advance(0)
+    expect(sim.clock.day).toBe(3)
     expect(sim.clock.phase).toBeCloseTo(0.8, 3)
     expect(sim.enemies.list).toHaveLength(1)
     play(time, LOOP_MS * 2, [[a]])

@@ -102,6 +102,8 @@ export const PICKUP_RADIUS = 0.9
 /** Más cerca que esto, si cabe en la hotbar, se desliza hacia el jugador. */
 export const PICKUP_MAGNET = 1.6
 export const PICKUP_MAGNET_SPEED = 6
+/** Lo que tira un jugador (Q) no lo puede recoger él durante este tiempo: si no, el imán se lo devolvería al momento. */
+export const DROP_PICKUP_DELAY = 2
 
 export interface ToolDef {
   family: ToolFamily

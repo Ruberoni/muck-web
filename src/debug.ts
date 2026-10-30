@@ -208,6 +208,12 @@ export function installDebug(game: Game) {
       if (!valid(from) || !valid(to)) throw new Error(`casillas fuera de rango: ${from}, ${to}`)
       game.queueAction({ kind: 'move', from, to })
     },
+    /** Tira uno de la casilla `slot` del inventario (0–8 hotbar, 9–26 mochila), o la pila entera con `all` (Q y Ctrl + Q). */
+    drop: (slot: number, all = false) => {
+      // En red, una casilla fuera de rango hace que la sala expulse al jugador.
+      if (!Number.isInteger(slot) || slot < 0 || slot >= INVENTORY_SIZE) throw new Error(`no existe la casilla ${slot}`)
+      game.queueAction({ kind: 'drop', slot, all })
+    },
     /**
      * Abre (jugando) o cierra la pantalla de inventario. Cerrarla desde aquí no recaptura el ratón (no hay gesto del
      * usuario): vuelve a jugar sin él, como `start`.
@@ -284,6 +290,15 @@ export function installDebug(game: Game) {
         sim().setPhase(phase)
         game.advance(0)
       }),
+    /** Salta al día `day` (desde 1) a la misma hora, para probar las noches de un día concreto, y renderiza. */
+    setDay: (day: number) => {
+      // En red, un día no válido hace que la sala expulse al jugador.
+      if (!Number.isInteger(day) || day < 1) throw new Error(`el día debe ser un entero desde 1`)
+      return dev({ op: 'setDay', day }, () => {
+        sim().setDay(day)
+        game.advance(0)
+      })
+    },
   }
 
   window.__debug = api

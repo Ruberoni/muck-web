@@ -1,7 +1,7 @@
 import { heightAt, WATER_LEVEL } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
-import { GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS } from './constants'
+import { DROP_PICKUP_DELAY, GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS } from './constants'
 import type { Inventory, ItemId } from './inventory'
 
 const RADIUS = 0.2
@@ -9,6 +9,11 @@ const RADIUS = 0.2
 const POP_SPEED = 1.2
 const POP_SPEED_RANDOM = 1.2
 const POP_UP = 3.5
+// Lo que tira un jugador sale hacia delante, más lejos que el imán (PICKUP_MAGNET).
+const TOSS_SPEED = 5.5
+const TOSS_UP = 3.5
+/** Desvío máximo (rad) a cada lado: lo que se tira seguido no cae justo en el mismo sitio. */
+const TOSS_SPREAD = 0.25
 /** Con los pies más arriba o más abajo que esto no se recoge (p. ej. saltando por encima). */
 const REACH_Y = 1.6
 
@@ -29,6 +34,8 @@ export interface Pickup {
   spin: number
   /** Hacia quién se desliza con el imán: lo sigue mientras pueda cogerlo, aunque otro se acerque más. */
   claimedBy: PlayerId | null
+  /** Quién lo tiró (null: lo soltó un prop o un enemigo): no lo puede recoger hasta DROP_PICKUP_DELAY. */
+  droppedBy: PlayerId | null
 }
 
 /** Un jugador que puede recoger: está en el mundo y vivo. */
@@ -84,18 +91,26 @@ export class Pickups {
     this.spawn(item, amount, x, y, z, this.rng() * Math.PI * 2, POP_SPEED)
   }
 
-  private spawn(item: ItemId, amount: number, x: number, y: number, z: number, angle: number, speed: number) {
+  /** El jugador `by` tira un montón de `amount` unidades desde (x, y, z) hacia donde mira (`yaw`). */
+  toss(item: ItemId, amount: number, x: number, y: number, z: number, yaw: number, by: PlayerId) {
+    // forward = (-sin(yaw), -cos(yaw)), que es el ángulo atan2(-cos, -sin) en el plano XZ.
+    const angle = Math.atan2(-Math.cos(yaw), -Math.sin(yaw)) + (this.rng() * 2 - 1) * TOSS_SPREAD
+    this.spawn(item, amount, x, y, z, angle, TOSS_SPEED, TOSS_UP, by)
+  }
+
+  private spawn(item: ItemId, amount: number, x: number, y: number, z: number, angle: number, speed: number, up = POP_UP, by: PlayerId | null = null) {
     const pickup: Pickup = {
       id: this.nextId++,
       item,
       amount,
       pos: { x, y, z },
       prev: { x, y, z },
-      vel: { x: Math.cos(angle) * speed, y: POP_UP, z: Math.sin(angle) * speed },
+      vel: { x: Math.cos(angle) * speed, y: up, z: Math.sin(angle) * speed },
       grounded: false,
       age: 0,
       spin: this.rng() * Math.PI * 2,
       claimedBy: null,
+      droppedBy: by,
     }
     this.list.push(pickup)
     this.emit({ type: 'pickupSpawn', id: pickup.id, item, amount })
@@ -120,9 +135,12 @@ export class Pickups {
         continue
       }
       if (p.age < PICKUP_DELAY - 1e-9) continue
+      // Quien lo acaba de tirar no cuenta: ni lo recoge ni lo atrae.
+      const tossing = p.droppedBy !== null && p.age < DROP_PICKUP_DELAY - 1e-9
       // Quién lo tiene a su alcance, del más cercano al más lejano.
       const near: { index: number; d: number }[] = []
       collectors.forEach((c, index) => {
+        if (tossing && c.id === p.droppedBy) return
         if (Math.abs(c.pos.y - p.pos.y) > REACH_Y) return
         const d = Math.hypot(c.pos.x - p.pos.x, c.pos.z - p.pos.z)
         if (d <= PICKUP_MAGNET) near.push({ index, d })

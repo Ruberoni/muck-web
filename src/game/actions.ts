@@ -2,12 +2,14 @@ import type { ActionData } from '../sim/commands'
 import { EAT_KEY } from '../sim/constants'
 import { cycleSlot, SLOT_COUNT, type ItemId } from '../sim/inventory'
 import { placeableOf } from '../sim/structures'
-import { CLICK, RIGHT_CLICK } from './input'
+import { CLICK, RIGHT_CLICK, withCtrl } from './input'
 
 /** Teclas que abren la pantalla de inventario jugando (y la cierran, desde la pantalla). */
 export const INVENTORY_KEYS: ReadonlySet<string> = new Set(['Tab', 'KeyE'])
 /** Abre la misma pantalla con las recetas a la vista (y también la cierra). */
 export const RECIPES_KEY = 'KeyC'
+/** Tira uno de la casilla elegida; con Ctrl, la pila entera (en la pantalla de inventario, la casilla bajo el ratón). */
+export const DROP_KEY = 'KeyQ'
 
 /** Qué se quiere ver al abrir la pantalla de inventario. */
 export type InventoryFocus = 'slots' | 'recipes'
@@ -28,7 +30,7 @@ export interface KeyStep {
 /**
  * Acciones de las pulsaciones de un paso, detrás de las ya encoladas (`queued`, de `__debug` o de la pantalla de
  * inventario). Los números y la rueda eligen casilla. El clic coloca lo que queda en la mano si es colocable (la fogata) y, si
- * no, golpea. Devuelve también si se pide abrir la pantalla de inventario: Tab o E, en las casillas, o C, en las
+ * no, golpea. Q tira uno de lo que haya en la mano (Ctrl + Q, todo). Devuelve también si se pide abrir la pantalla de inventario: Tab o E, en las casillas, o C, en las
  * recetas (null, si no). Fabricar se hace desde la pantalla.
  */
 export function stepActions(queued: readonly ActionData[], k: KeyStep): { actions: ActionData[]; inventory: InventoryFocus | null } {
@@ -55,6 +57,7 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
     else if (k.clickSwings) actions.push({ kind: 'swing' })
   }
   if (k.presses.has(EAT_KEY) || k.presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })
+  if (k.presses.has(DROP_KEY) && slots[selected]) actions.push({ kind: 'drop', slot: selected, all: k.presses.has(withCtrl(DROP_KEY)) })
   const inventory = k.presses.has(RECIPES_KEY) ? 'recipes' : [...INVENTORY_KEYS].some((code) => k.presses.has(code)) ? 'slots' : null
   return { actions, inventory }
 }

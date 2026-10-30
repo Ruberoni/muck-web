@@ -81,7 +81,7 @@ const SNAP_TICKS = 3
 const spinOf = (id: number) => (id * 2.39996) % (2 * Math.PI)
 
 /** Lo que el jugador local ya ha presentado al predecirlo: el servidor se lo repite, pero no se presenta otra vez. */
-const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerAte', 'playerCrafted', 'playerPlaced'])
+const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerAte', 'playerCrafted', 'playerPlaced', 'playerDropped'])
 
 /** Un evento que trata del jugador `me` (lo que le pasa o lo que ha provocado), o del mundo entero. */
 function concerns(e: SimEvent, me: PlayerId): boolean {
@@ -91,6 +91,7 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
     case 'playerAte':
     case 'playerCrafted':
     case 'playerPlaced':
+    case 'playerDropped':
     case 'playerHurt':
     case 'playerDied':
     case 'playerRespawn':
@@ -579,5 +580,5 @@ function mirrorEnemy(id: number): EnemyData {
 }
 
 function mirrorPickup(id: number, item: ItemId, amount: number, spin: number): Pickup {
-  return { id, item, amount, pos: { x: 0, y: 0, z: 0 }, prev: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, grounded: false, age: 0, spin, claimedBy: null }
+  return { id, item, amount, pos: { x: 0, y: 0, z: 0 }, prev: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, grounded: false, age: 0, spin, claimedBy: null, droppedBy: null }
 }

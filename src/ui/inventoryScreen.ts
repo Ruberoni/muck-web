@@ -1,4 +1,4 @@
-import { INVENTORY_KEYS, RECIPES_KEY, type InventoryFocus } from '../game/actions'
+import { DROP_KEY, INVENTORY_KEYS, RECIPES_KEY, type InventoryFocus } from '../game/actions'
 import type { CraftWorld, Recipe, RecipeId } from '../sim/crafting'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
@@ -10,7 +10,7 @@ const CLOSE_KEYS: ReadonlySet<string> = new Set([...INVENTORY_KEYS, RECIPES_KEY]
 /** Con la pantalla abierta no hacen nada: no deben pulsar lo que tenga el foco ni llegar al juego. */
 const BLOCKED_KEYS: ReadonlySet<string> = new Set(['Space', 'Enter', 'NumpadEnter'])
 
-const PICK_HINT = 'Clic en una casilla y en otra para intercambiarlas'
+const PICK_HINT = 'Clic en una casilla y en otra para intercambiarlas · Q: tirar uno · Ctrl + Q: todos'
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement) => {
   const node = document.createElement(tag)
@@ -40,7 +40,7 @@ interface RecipeView {
 /**
  * Pantalla de inventario (Tab o E; C la abre con las recetas a la vista). A la izquierda, la mochila (2 × 9) encima
  * de la hotbar (1 × 9): un clic elige una casilla y otro en otra las intercambia (`onmove`, que en el juego es la
- * acción `move`). A la derecha, todas las recetas por estación, con lo que falta en rojo y el motivo si no se puede:
+ * acción `move`); Q tira uno de la casilla bajo el ratón y Ctrl + Q la pila (`ondrop`, la acción `drop`). A la derecha, todas las recetas por estación, con lo que falta en rojo y el motivo si no se puede:
  * un clic fabrica una y Mayúsculas + clic, hasta CRAFT_MANY (`oncraft`; el juego solo manda las que su predicción da
  * por buenas). Las filas no son enfocables, para que Espacio o Enter no repitan una receta. Abierta tiene su propio
  * teclado: Tab, E y C cierran (`onclose`, que recaptura el ratón dentro del propio evento, que cuenta como gesto del
@@ -48,6 +48,7 @@ interface RecipeView {
  */
 export class InventoryScreen {
   onmove: ((from: number, to: number) => void) | null = null
+  ondrop: ((slot: number, all: boolean) => void) | null = null
   oncraft: ((recipe: RecipeId, times: number) => void) | null = null
   onclose: (() => void) | null = null
   onescape: (() => void) | null = null
@@ -59,6 +60,8 @@ export class InventoryScreen {
   private inventory: Inventory | null = null
   /** La casilla elegida con el primer clic, a la espera del segundo. */
   private picked: number | null = null
+  /** La casilla bajo el ratón: la que tira Q. */
+  private hovered: number | null = null
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'inventory', parent)
@@ -72,6 +75,10 @@ export class InventoryScreen {
       const root = el('div', 'slot', i < SLOT_COUNT ? hotbar : backpack)
       if (i < SLOT_COUNT) el('span', 'key', root).textContent = String(i + 1)
       root.addEventListener('click', () => this.click(i))
+      root.addEventListener('mouseenter', () => (this.hovered = i))
+      root.addEventListener('mouseleave', () => {
+        if (this.hovered === i) this.hovered = null
+      })
       this.slots.push({ root, icon: el('div', 'icon', root), count: el('span', 'count', root), item: undefined })
     }
     this.label = el('p', 'label', slotsColumn)
@@ -157,6 +164,14 @@ export class InventoryScreen {
       if (!e.repeat) this.onclose?.()
     } else if (e.code === 'Escape') {
       if (!e.repeat) this.onescape?.()
+    } else if (e.code === DROP_KEY) {
+      const slot = this.hovered
+      if (e.repeat || slot === null || !this.inventory?.slots[slot]) return
+      e.preventDefault()
+      // Lo que se iba a intercambiar puede dejar de estar: se empieza de nuevo.
+      this.picked = null
+      this.ondrop?.(slot, e.ctrlKey)
+      this.render()
     } else if (BLOCKED_KEYS.has(e.code)) {
       e.preventDefault()
     }

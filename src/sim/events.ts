@@ -32,6 +32,8 @@ export type SimEventData =
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
   /** Ha colocado `item` (la estructura llega en su `structurePlaced`). */
   | { type: 'playerPlaced'; id: PlayerId; item: ItemId }
+  /** Ha tirado `amount` de `item` (el objeto del suelo llega en su `pickupSpawn`). */
+  | { type: 'playerDropped'; id: PlayerId; item: ItemId; amount: number }
   | { type: 'playerHurt'; id: PlayerId; dmg: number }
   | { type: 'playerDied'; id: PlayerId }
   | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }

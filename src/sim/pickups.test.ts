@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mulberry32 } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
-import { PICKUP_DELAY, PICKUP_MAGNET, PICKUP_RADIUS, STEP } from './constants'
+import { DROP_PICKUP_DELAY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_RADIUS, STEP } from './constants'
 import { Inventory, type ItemId } from './inventory'
 import { Pickups } from './pickups'
 
@@ -187,5 +187,44 @@ describe('objetos en el suelo', () => {
       return pickups.list.map((p) => p.pos)
     }
     expect(positions()).toEqual(positions())
+  })
+
+  it('lo que tira un jugador sale hacia donde mira, más lejos que el imán', () => {
+    const { pickups, run, away } = setup()
+    const y = heightAt(spot.x, spot.z) + 1.2
+    // yaw 0 mira a -z; yaw π/2, a -x.
+    pickups.toss('wood', 3, spot.x, y, spot.z, 0, 0)
+    pickups.toss('stone', 1, spot.x, y, spot.z, Math.PI / 2, 0)
+    run(1, away)
+    const [wood, stone] = pickups.list
+    expect(wood).toMatchObject({ item: 'wood', amount: 3, droppedBy: 0, grounded: true })
+    // Hacia delante, con un desvío pequeño.
+    expect(spot.z - wood.pos.z).toBeGreaterThan(PICKUP_MAGNET)
+    expect(Math.abs(wood.pos.x - spot.x)).toBeLessThan((spot.z - wood.pos.z) * 0.3)
+    expect(spot.x - stone.pos.x).toBeGreaterThan(PICKUP_MAGNET)
+    expect(Math.abs(stone.pos.z - spot.z)).toBeLessThan((spot.x - stone.pos.x) * 0.3)
+  })
+
+  it('quien lo tira no lo recoge ni lo atrae hasta DROP_PICKUP_DELAY; los demás, sí', () => {
+    const { pickups, inventory, at } = setup()
+    const other = new Inventory()
+    const y = heightAt(spot.x, spot.z) + 1.2
+    pickups.toss('wood', 2, spot.x, y, spot.z, 0, 0)
+    const steps = (seconds: number, who: { id: number; inventory: Inventory }) => {
+      for (let i = 0; i < Math.round(seconds / STEP); i++) {
+        const p = pickups.list[0]
+        // Siempre encima, aunque se mueva.
+        pickups.step(STEP, p ? [{ ...who, pos: at(p.pos.x, p.pos.z) }] : [])
+      }
+    }
+    steps(DROP_PICKUP_DELAY - 0.1, { id: 0, inventory })
+    expect(inventory.count('wood')).toBe(0)
+    expect(pickups.list).toHaveLength(1)
+    steps(0.2, { id: 0, inventory })
+    expect(inventory.count('wood')).toBe(2)
+
+    pickups.toss('stone', 1, spot.x, y, spot.z, 0, 0)
+    steps(PICKUP_DELAY + 0.6, { id: 1, inventory: other })
+    expect(other.count('stone')).toBe(1)
   })
 })
