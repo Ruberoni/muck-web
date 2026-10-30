@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, missingMove, type Action, type ActionData, type Move } from '../sim/commands'
+import { CONSUMABLE_DEFS } from '../sim/constants'
 import { NO_STATIONS } from '../sim/crafting'
 import { generatePropPlacements } from '../sim/props'
 import { Simulation, type PlayerSlot } from '../sim/Simulation'
@@ -75,6 +76,30 @@ describe('Predictor', () => {
     expect(slot.inventory.count('wood')).toBe(0)
     expect(server.slot(0).inventory.count('wood')).toBe(0)
     expect(server.pickups.list.map((p) => p.amount)).toEqual([1, 4])
+  })
+
+  it('comer y curarse poco a poco se predicen sin correcciones', () => {
+    const { raw_meat } = CONSUMABLE_DEFS
+    CONSUMABLE_DEFS.raw_meat = { food: 5, heal: 10, regen: { perSec: 2, seconds: 0.5 } }
+    const { server, predictor, slot, states, serverStep } = setup()
+    for (const s of [server.slot(0), slot]) {
+      s.inventory.add('raw_meat', 2)
+      s.player.health = 40
+      s.player.hunger = 60
+    }
+    predictor.start(server.tick, youOf(server.slot(0)))
+    for (let i = 0; i < 90; i++) {
+      const tick = predictor.tick + 1
+      const actions: ActionData[] = i === 10 || i === 30 ? [{ kind: 'eat' }] : []
+      predictor.step(tick, walk(tick), actions)
+      serverStep({ ...walk(tick), tick }, predictor.pending.filter((a) => a.tick === tick))
+      if (tick > 12 && tick % 3 === 0) predictor.reconcile(tick - 12, states.get(tick - 12)!)
+    }
+    CONSUMABLE_DEFS.raw_meat = raw_meat
+    expect(predictor.stats.corrections).toBe(0)
+    expect(slot.player.health).toBe(server.slot(0).player.health)
+    expect(slot.player.regenLeft).toBe(server.slot(0).player.regenLeft)
+    expect(slot.inventory.count('raw_meat')).toBe(0)
   })
 
   it('al corregir re-simula con la orientación de cada Move y deja la actual', () => {

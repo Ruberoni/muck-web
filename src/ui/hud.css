@@ -88,6 +88,7 @@
 }
 
 .bar {
+  position: relative;
   height: 12px;
   border-radius: 6px;
   background: rgb(0 0 0 / 0.35);
@@ -101,10 +102,37 @@
 }
 
 .bar.health .fill { background: #e05a4f; }
+.bar.health.regen .fill { background: #5fc46a; animation: regen-pulse 1s ease-in-out infinite; }
 .bar.hunger .fill { background: #e0913a; }
 .bar.hunger.starving { box-shadow: 0 0 0 2px #e05a4f; }
 .bar.stamina .fill { background: #f2c94c; }
 .bar.stamina.exhausted .fill { background: #9b8b5a; }
+
+@keyframes regen-pulse {
+  50% { filter: brightness(1.3); }
+}
+
+.regen-left {
+  position: absolute;
+  right: 6px;
+  top: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  color: #fff;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.6);
+}
+
+/* A la derecha de la barra de hambre (12 de la vida + 6 de hueco, centrada en ella). */
+.next-food {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 12px;
+  width: 24px;
+  height: 24px;
+}
+
+.next-food svg { width: 100%; height: 100%; display: block; }
 
 /* La hotbar centrada mide 9 casillas de 56 (52 + borde) y 8 huecos de 6,
    unos 552 px; con las barras (16 + 220 + margen) a cada lado hacen falta

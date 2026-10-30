@@ -28,9 +28,10 @@ function kill(sim: Simulation, id: PlayerId) {
   return idle(sim)
 }
 
-/** Avanza hasta que pase `type` (como mucho `max` ticks) y devuelve sus eventos. */
-function until(sim: Simulation, type: SimEvent['type'], max: number) {
+/** Avanza hasta que pase `type` (como mucho `max` ticks, con `each` antes de cada uno) y devuelve sus eventos. */
+function until(sim: Simulation, type: SimEvent['type'], max: number, each = () => {}) {
   for (let i = 0; i < max; i++) {
+    each()
     const events = idle(sim)
     if (events.some((e) => e.type === type)) return events
   }
@@ -82,7 +83,8 @@ describe('muerte en una sala', () => {
     const slot = sim.slot(1)
     // Lo que queda de noche: (1 − fase) del ciclo.
     expect((slot.respawnAt! - sim.tick) * STEP).toBeCloseTo((1 - NIGHT) * DAY_LENGTH, 0)
-    until(sim, 'playerRespawn', Math.round(DAY_LENGTH / STEP))
+    // Sin enemigos: el otro jugador tiene que seguir vivo hasta el amanecer.
+    until(sim, 'playerRespawn', Math.round(DAY_LENGTH / STEP), () => sim.enemies.reset())
     expect(sim.clock.day).toBe(day + 1)
     expect(sim.clock.phase).toBeLessThan(0.001)
   })

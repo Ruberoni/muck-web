@@ -141,7 +141,7 @@ describe('sonido', () => {
       { tick: 2, type: 'pickupCollected', id: 2, by: 1 },
       { tick: 2, type: 'playerSwing', id: 1, item: null, target: null },
       { tick: 2, type: 'playerHurt', id: 1, dmg: 10 },
-      { tick: 2, type: 'playerAte', id: 1 },
+      { tick: 2, type: 'playerAte', id: 1, item: 'berry' },
     )
     expect(names()).toEqual(['pickup'])
   })
@@ -151,7 +151,7 @@ describe('sonido', () => {
     audio.events(
       [
         { tick: 1, type: 'playerHurt', id: 0, dmg: 10 },
-        { tick: 1, type: 'playerAte', id: 0 },
+        { tick: 1, type: 'playerAte', id: 0, item: 'berry' },
         { tick: 1, type: 'playerCrafted', id: 0, recipe: 'stone_axe' },
         { tick: 1, type: 'structurePlaced', id: 0, kind: 'campfire', x: 0, y: 0, z: 0, rotY: 0, by: 0 },
         { tick: 1, type: 'playerPlaced', id: 0, item: 'campfire' },

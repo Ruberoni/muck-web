@@ -1,6 +1,7 @@
 import { ENEMY_DEFS, PROP_DEFS } from '../sim/constants'
 import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Target } from '../sim/interaction'
+import { nextFood } from '../sim/playerTick'
 import { ICONS } from './icons'
 import { InventoryScreen } from './inventoryScreen'
 import { Minimap } from './minimap'
@@ -31,7 +32,7 @@ const CONTROLS = `
     <li><kbd>Espacio</kbd> saltar</li>
     <li><kbd>Shift</kbd> correr</li>
     <li><kbd>Clic</kbd> golpear (mantener para repetir)</li>
-    <li><kbd>Clic derecho</kbd> o <kbd>F</kbd> comer bayas</li>
+    <li><kbd>Clic derecho</kbd> o <kbd>F</kbd> comer lo que llevas en la mano (si no, una baya)</li>
     <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
     <li><kbd>Q</kbd> tirar uno de la mano (<kbd>Ctrl</kbd> + <kbd>Q</kbd>: todos)</li>
     <li><kbd>Tab</kbd> o <kbd>E</kbd> inventario (clic en dos casillas: cambiarlas)</li>
@@ -57,11 +58,14 @@ export class Hud {
   readonly inventory: InventoryScreen
   /** El texto del menú cuando hay lobby (los botones del panel deciden cómo jugar). */
   menuText: string | null = null
+  private healthBar: HTMLElement
   private healthFill: HTMLElement
+  private regenLeft: HTMLElement
   private hungerBar: HTMLElement
   private hungerFill: HTMLElement
   private staminaBar: HTMLElement
   private staminaFill: HTMLElement
+  private food: HTMLElement
   private prompt: HTMLElement
   private day: HTMLElement
   private slots: { root: HTMLElement; icon: HTMLElement; count: HTMLElement }[] = []
@@ -72,7 +76,7 @@ export class Hud {
   private overlayTitle: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
   readonly panel: HTMLElement
-  private last = { health: -1, hunger: -1, stamina: -1, exhausted: false, prompt: '', day: 0 }
+  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', day: 0 }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
@@ -84,11 +88,15 @@ export class Hud {
     this.net = new MultiplayerHud(root)
 
     const bars = el('div', 'bars', root)
-    this.healthFill = el('div', 'fill', el('div', 'bar health', bars))
+    this.healthBar = el('div', 'bar health', bars)
+    this.healthFill = el('div', 'fill', this.healthBar)
+    this.regenLeft = el('span', 'regen-left', this.healthBar)
     this.hungerBar = el('div', 'bar hunger', bars)
     this.hungerFill = el('div', 'fill', this.hungerBar)
     this.staminaBar = el('div', 'bar stamina', bars)
     this.staminaFill = el('div', 'fill', this.staminaBar)
+    this.food = el('div', 'next-food', bars)
+    this.food.hidden = true
 
     const dock = el('div', 'dock', root)
     this.held = el('div', 'held', dock)
@@ -123,7 +131,14 @@ export class Hud {
     this.overlayTitle.textContent = text
   }
 
-  setHealth(value: number, max: number) {
+  /** `regenLeft`: segundos de curación poco a poco que quedan (la barra late en verde y los muestra). */
+  setHealth(value: number, max: number, regenLeft = 0) {
+    const regen = Math.ceil(regenLeft)
+    if (regen !== this.last.regen) {
+      this.last.regen = regen
+      this.healthBar.classList.toggle('regen', regen > 0)
+      this.regenLeft.textContent = regen > 0 ? `${regen} s` : ''
+    }
     const v = Math.ceil(value)
     if (v === this.last.health) return
     this.last.health = v
@@ -190,6 +205,15 @@ export class Hud {
     this.crosshair.hidden = !visible
   }
 
+  /** Junto a la barra de hambre, lo que comerá la F. */
+  private setFood(item: ItemId | null) {
+    if (item === this.last.food) return
+    this.last.food = item
+    this.food.hidden = !item
+    this.food.title = item ? ITEM_NAMES[item] : ''
+    this.food.innerHTML = item ? ICONS[item] : ''
+  }
+
   /** Destello rojo en los bordes al recibir daño. */
   flashHurt() {
     this.hurt.classList.remove('active')
@@ -209,6 +233,7 @@ export class Hud {
     })
     const held = inventory.selectedItem
     this.held.textContent = held ? ITEM_NAMES[held] : ''
+    this.setFood(nextFood(inventory))
     this.inventory.setInventory(inventory)
   }
   setDay(day: number) {

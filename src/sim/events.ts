@@ -29,7 +29,7 @@ export type SimEventData =
   | { type: 'enemyDied'; id: number; by: PlayerId }
   | { type: 'enemiesDespawn' }
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
-  | { type: 'playerAte'; id: PlayerId }
+  | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
   /** Ha colocado `item` (la estructura llega en su `structurePlaced`). */
   | { type: 'playerPlaced'; id: PlayerId; item: ItemId }

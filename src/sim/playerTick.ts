@@ -1,12 +1,12 @@
 import { buttonsInput, Btn, type PlayerCommands } from './commands'
-import { BERRY_FOOD, STEP } from './constants'
+import { CONSUMABLE_DEFS, STEP } from './constants'
 import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
 import { startSwing, type Fighter } from './interaction'
-import type { ItemId } from './inventory'
+import type { Inventory, ItemId } from './inventory'
 import { stepPlayer, type Player, type PlayerEnv } from './player'
 import { placeableOf } from './structures'
-import { eat, stepSurvival } from './survival'
+import { eat, isDead, stepSurvival } from './survival'
 
 // La parte de un tick que toca solo al jugador y que el cliente predice: acciones sobre su inventario,
 // movimiento, espera entre golpes, comer y hambre. `Simulation.step` la ejecuta por trozos alrededor de lo que
@@ -120,17 +120,29 @@ export function useHands(actor: Actor, intent: Intent): { swing: boolean; place:
   return { swing, place: placing && intent.place }
 }
 
-/** Final del paso del jugador: comer y hambre (morir lo decide la simulación). */
+/**
+ * Final del paso del jugador: comer y hambre (morir lo decide la simulación). Con la vida a 0 por un golpe de este
+ * mismo paso ya no hace nada: ni comer ni regenerar devuelven a la vida.
+ */
 export function finishPlayerTick(actor: Actor, intent: Intent, emit: Emit) {
-  if (intent.eat) eatBerry(actor, emit)
+  if (isDead(actor.player)) return
+  if (intent.eat) consume(actor, emit)
   stepSurvival(actor.player, STEP)
 }
 
-function eatBerry(actor: Actor, emit: Emit) {
+/** Lo que se comería ahora: lo que se lleva en la mano, si es consumible; si no, una baya, si hay. */
+export function nextFood(inventory: Inventory): ItemId | null {
+  const held = inventory.selectedItem
+  if (held && CONSUMABLE_DEFS[held]) return held
+  return inventory.has('berry') ? 'berry' : null
+}
+
+function consume(actor: Actor, emit: Emit) {
   const { inventory, player, id } = actor
-  if (inventory.count('berry') === 0 || !eat(player, BERRY_FOOD)) return
-  inventory.remove('berry', 1)
-  emit({ type: 'playerAte', id })
+  const item = nextFood(inventory)
+  if (!item || !eat(player, CONSUMABLE_DEFS[item]!)) return
+  inventory.remove(item, 1)
+  emit({ type: 'playerAte', id, item })
 }
 
 /** Lo que la predicción necesita del mundo del cliente: `nearStation` mira las estaciones de su espejo. */

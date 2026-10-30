@@ -12,7 +12,7 @@ import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
-import { isDead } from './survival'
+import { hurt, isDead } from './survival'
 import { DAY_LENGTH, DayClock, euclideanModulo, isNight, START_PHASE } from './world/daycycle'
 import { heightAt } from './world/terrain'
 
@@ -216,8 +216,7 @@ export class Simulation {
     this.syncClock()
     const prey = present.map(({ id, player, alive }) => ({ id, pos: player.pos, alive }))
     for (const { playerId, damage } of this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)) {
-      const { player } = this.slot(playerId)
-      player.health = Math.max(0, player.health - damage)
+      hurt(this.slot(playerId).player, damage)
       this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
     }
 

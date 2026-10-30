@@ -548,8 +548,8 @@ export class Game {
           if (e.id === slot.id) this.handheld.play('place', e.item)
           break
         case 'playerAte':
-          // Se come aunque se tenga otra cosa en la mano: la animación se hace con una baya.
-          if (e.id === slot.id) this.handheld.play('eat', 'berry')
+          // Se come aunque se tenga otra cosa en la mano: la animación se hace con lo que se come.
+          if (e.id === slot.id) this.handheld.play('eat', e.item)
           break
         case 'playerDied':
           // En una sala el muerto pasa a espectador cuando lo dice su `you` (ver frame).
@@ -768,7 +768,7 @@ export class Game {
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, [sim.world.grid, structures.grid], this.spot) : null
     this.structureView.setGhost(placing && spot && { kind: placing.kind, spot, yaw: look.yaw })
 
-    this.hud.setHealth(p.health, HEALTH_MAX)
+    this.hud.setHealth(p.health, HEALTH_MAX, p.regenLeft)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)

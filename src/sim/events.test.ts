@@ -143,11 +143,11 @@ describe('eventos de la simulación', () => {
   it('el registro sella cada evento con el tick en curso y se vacía al leerlo', () => {
     const log = new EventLog()
     log.tick = 5
-    log.emit({ type: 'playerAte', id: 0 })
+    log.emit({ type: 'playerAte', id: 0, item: 'berry' })
     log.tick = 6
     log.emit({ type: 'enemiesDespawn' })
     expect(log.drain()).toEqual([
-      { type: 'playerAte', id: 0, tick: 5 },
+      { type: 'playerAte', id: 0, item: 'berry', tick: 5 },
       { type: 'enemiesDespawn', tick: 6 },
     ])
     expect(log.drain()).toEqual([])

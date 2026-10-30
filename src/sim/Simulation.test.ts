@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type Move } from './commands'
-import { EYE_HEIGHT, HIT_COOLDOWN, STEP } from './constants'
+import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HIT_COOLDOWN, HUNGER_MAX, STEP } from './constants'
 import { aimPose } from './interaction'
 import { generatePropPlacements, type PropData } from './props'
 import { Simulation } from './Simulation'
@@ -128,6 +128,72 @@ describe('Simulation', () => {
     sim.setDay(1)
     expect(sim.clock.day).toBe(1)
     expect(sim.clock.phase).toBeCloseTo(phase, 3)
+  })
+
+  it('comer gasta lo que se lleva en la mano si es consumible; si no, una baya; y si no mejora nada, no gasta', () => {
+    const sim = solo(1)
+    const { inventory, player } = sim.slot(0)
+    inventory.add('raw_meat', 2)
+    inventory.add('berry', 2)
+    inventory.add('wood', 1)
+    player.hunger = 50
+    // La carne, en la casilla elegida.
+    expect(step(sim, { actions: [{ kind: 'eat' }] })).toContainEqual(expect.objectContaining({ type: 'playerAte', id: 0, item: 'raw_meat' }))
+    expect(inventory.count('raw_meat')).toBe(1)
+    expect(player.hunger).toBeCloseTo(50 + CONSUMABLE_DEFS.raw_meat!.food, 1)
+    // Con madera en la mano, una baya aunque haya carne.
+    step(sim, { actions: [{ kind: 'select', slot: 2 }, { kind: 'eat' }] })
+    expect(inventory.count('berry')).toBe(1)
+    expect(inventory.count('raw_meat')).toBe(1)
+    // Con la mano vacía y sin bayas, nada.
+    inventory.remove('berry', 1)
+    expect(step(sim, { actions: [{ kind: 'select', slot: 5 }, { kind: 'eat' }] }).map((e) => e.type)).not.toContain('playerAte')
+    // Lleno: no se gasta.
+    player.hunger = HUNGER_MAX
+    expect(step(sim, { actions: [{ kind: 'select', slot: 0 }, { kind: 'eat' }] }).map((e) => e.type)).not.toContain('playerAte')
+    expect(inventory.count('raw_meat')).toBe(1)
+  })
+
+  it('un enemigo que pega pausa la regeneración natural', () => {
+    const sim = solo(1)
+    const { player } = sim.slot(0)
+    sim.setPhase(NIGHT)
+    player.health = 50
+    sim.enemies.spawnAt(player.pos.x + 1, player.pos.z)
+    let hurtTick = 0
+    for (let i = 0; i < 120 && !hurtTick; i++) if (step(sim).some((e) => e.type === 'playerHurt')) hurtTick = sim.tick
+    expect(hurtTick).toBeGreaterThan(0)
+    expect(player.healDelay).toBeCloseTo(HEALTH_REGEN_DELAY - STEP, 6)
+    const health = player.health
+    sim.enemies.reset()
+    for (let i = 0; i < 60; i++) step(sim)
+    expect(player.health).toBe(health)
+  })
+
+  it('un golpe mortal mata aunque no tenga hambre', () => {
+    const sim = solo(1)
+    const slot = sim.slot(0)
+    sim.setPhase(NIGHT)
+    slot.player.health = ENEMY_DEFS.goblin.damage
+    slot.player.hunger = 50
+    sim.enemies.spawnAt(slot.player.pos.x + 1, slot.player.pos.z)
+    const events: string[] = []
+    for (let i = 0; i < 120 && slot.alive; i++) events.push(...step(sim).map((e) => e.type))
+    expect(slot.alive).toBe(false)
+    expect(slot.player.health).toBe(0)
+    expect(events).toContain('playerDied')
+  })
+
+  it('con la vida a 0 ya no se come: no salva del golpe mortal de ese mismo paso', () => {
+    const sim = solo(1)
+    const slot = sim.slot(0)
+    slot.inventory.add('berry', 1)
+    slot.player.hunger = 50
+    slot.player.health = 0
+    const events = step(sim, { actions: [{ kind: 'eat' }] }).map((e) => e.type)
+    expect(events).not.toContain('playerAte')
+    expect(events).toContain('playerDied')
+    expect(slot.inventory.count('berry')).toBe(1)
   })
 
   it('tirar saca una unidad (o la pila) de la casilla y la deja en el suelo delante, con quién la tiró', () => {

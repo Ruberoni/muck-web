@@ -33,8 +33,24 @@ export const STARVE_DAMAGE_PER_SEC = 2
 // Por encima de este hambre la vida se regenera.
 export const HEALTH_REGEN_HUNGER = 30
 export const HEALTH_REGEN_PER_SEC = 1
-export const BERRY_FOOD = 15
+/** Segundos sin regeneración natural tras recibir daño: esperando no se cura en mitad de una pelea. */
+export const HEALTH_REGEN_DELAY = 8
 export const EAT_KEY = 'KeyF'
+
+export interface ConsumableDef {
+  /** Hambre que devuelve. */
+  food: number
+  /** Vida que cura al momento. */
+  heal?: number
+  /** Curación poco a poco: se suma a la natural, sigue aunque se reciba daño y otra solo renueva el tiempo. */
+  regen?: { perSec: number; seconds: number }
+}
+
+export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
+  berry: { food: 15 },
+  // Se puede comer, pero llena poco.
+  raw_meat: { food: 8 },
+}
 
 export const MOUSE_SENSITIVITY = 0.002
 export const MAX_PITCH = (89 * Math.PI) / 180

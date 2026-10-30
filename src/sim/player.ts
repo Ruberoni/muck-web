@@ -19,7 +19,7 @@ import {
   WATER_SPEED_FACTOR,
   WORLD_BOUND_FACTOR,
 } from './constants'
-import type { Vitals } from './survival'
+import { NO_HEALING, type Vitals } from './survival'
 
 export interface Vec3 {
   x: number
@@ -82,6 +82,7 @@ export function createPlayer(env: PlayerEnv, x: number, z: number, yaw = 0): Pla
     regenDelay: 0,
     health: HEALTH_MAX,
     hunger: HUNGER_MAX,
+    ...NO_HEALING,
   }
 }
 

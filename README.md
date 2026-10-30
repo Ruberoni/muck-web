@@ -34,7 +34,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Espacio** | saltar (gasta stamina) |
 | **Shift** | correr (gasta stamina) |
 | **Clic izquierdo** | golpear; mantenerlo repite el golpe |
-| **Clic derecho** o **F** | comer una baya |
+| **Clic derecho** o **F** | comer lo que se lleva en la mano; si no es comida, una baya. Junto a la barra de hambre se ve qué se comerá |
 | **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo) |
 | **Q** | tirar uno de lo que se tiene en la mano; **Ctrl + Q**, todos. En la pantalla de inventario, la casilla que está bajo el ratón |
 | **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra para intercambiarlas. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
@@ -77,7 +77,7 @@ Se fabrica con 6 de madera y 3 de piedra. Con ella en la mano aparece una vista 
 
 ## Supervivencia
 
-El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya devuelve 15. Con el hambre por encima del 30 % la vida se regenera, y con el hambre a 0 la vida baja hasta morir. Al morir la partida empieza de nuevo: inventario vacío, isla restaurada y el jugador en el punto de aparición.
+El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya devuelve 15 y la carne cruda 8. Lo que no mejora nada (comer lleno, por ejemplo) no se gasta. Con el hambre por encima del 30 % la vida se regenera 1 por segundo, salvo durante los 8 s siguientes a recibir un golpe, y con el hambre a 0 la vida baja hasta morir. Los consumibles se definen en `CONSUMABLE_DEFS` (`src/sim/constants.ts`) y pueden curar al momento o poco a poco; la curación poco a poco se suma a la natural, sigue aunque te golpeen, la barra de vida late en verde con los segundos que quedan y tomar otro solo renueva el tiempo. Al morir la partida empieza de nuevo: inventario vacío, isla restaurada y el jugador en el punto de aparición.
 
 ## Enemigos
 
