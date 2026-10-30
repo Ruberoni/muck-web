@@ -5,9 +5,9 @@ import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
 import { heightAt, WATER_LEVEL } from './sim/world/terrain'
-import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH } from './sim/constants'
+import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH, type EnemyType } from './sim/constants'
 import type { PropKind } from './sim/props'
-import { ENEMY_AIM_HEIGHT } from './sim/enemies'
+import { enemyAimHeight } from './sim/enemies'
 import { STRUCTURE_DEFS, STRUCTURE_KINDS, structureSpot, type StructureKind } from './sim/structures'
 import { isRecipeId, RECIPE_IDS, type RecipeId } from './sim/crafting'
 import type { DevOp } from './net/protocol'
@@ -255,12 +255,12 @@ export function installDebug(game: Game) {
     /** Objetos en el suelo, por recoger. */
     pickups: () => sim().pickups.list.map(({ id, item, pos, grounded }) => ({ id, item, x: pos.x, y: pos.y, z: pos.z, grounded })),
     enemies: () =>
-      sim().enemies.list.map(({ id, pos, hp }) => {
+      sim().enemies.list.map(({ id, type, pos, hp }) => {
         const target = slot().target
-        return { id, x: pos.x, z: pos.z, hp, targeted: target?.kind === 'enemy' && target.id === id }
+        return { id, type, x: pos.x, z: pos.z, hp, targeted: target?.kind === 'enemy' && target.id === id }
       }),
     /** Con un jugador devuelve su id; en red aparece en el siguiente `snap`. */
-    spawnEnemy: (x: number, z: number) => dev({ op: 'spawnEnemy', x, z }, () => sim().enemies.spawnAt(x, z).id),
+    spawnEnemy: (x: number, z: number, enemy: EnemyType = 'goblin') => dev({ op: 'spawnEnemy', x, z, enemy }, () => sim().enemies.spawnAt(x, z, enemy).id),
     /** Gira la cámara hacia el enemigo sin mover al jugador; devuelve si queda apuntado (en red, en una promesa). */
     aimAtEnemy(id: number) {
       const e = sim().enemies.list.find((en) => en.id === id)
@@ -268,7 +268,7 @@ export function installDebug(game: Game) {
       const p = player()
       const dx = e.pos.x - p.pos.x
       const dz = e.pos.z - p.pos.z
-      const dy = heightAt(e.pos.x, e.pos.z) + ENEMY_AIM_HEIGHT - (p.pos.y + EYE_HEIGHT)
+      const dy = heightAt(e.pos.x, e.pos.z) + enemyAimHeight(e.type) - (p.pos.y + EYE_HEIGHT)
       const yaw = Math.atan2(-dx, -dz)
       const pitch = Math.atan2(dy, Math.hypot(dx, dz))
       // En red solo cambia la mirada, que es del cliente: el objetivo sale del siguiente paso.

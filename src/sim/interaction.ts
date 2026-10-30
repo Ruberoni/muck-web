@@ -2,8 +2,8 @@ import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes 
 import { resetProp, startRegrow, type PropData, type PropWorld } from './props'
 import { heightAt } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId, type TargetRef } from './events'
-import { ENEMY_DEF, ENEMY_RADIUS, HIT_COOLDOWN, PROP_DEFS, REACH, type PropFamily } from './constants'
-import { ENEMY_AIM_HEIGHT, type Enemies, type EnemyData } from './enemies'
+import { ENEMY_DEFS, HIT_COOLDOWN, PROP_DEFS, REACH, type PropFamily } from './constants'
+import { enemyAimHeight, type Enemies, type EnemyData } from './enemies'
 import type { Inventory } from './inventory'
 import type { Player } from './player'
 import type { Pickups } from './pickups'
@@ -82,8 +82,8 @@ export class Interaction {
     if (!target?.alive) return null
     const enemy = target.kind === 'enemy'
     const { x, z } = enemy ? target.pos : target
-    const y = enemy ? heightAt(x, z) + ENEMY_AIM_HEIGHT : aimHeight(target)
-    const radius = enemy ? ENEMY_RADIUS + AIM_SLACK_ENEMY : target.radius + AIM_SLACK_PROP
+    const y = enemy ? heightAt(x, z) + enemyAimHeight(target.type) : aimHeight(target)
+    const radius = enemy ? ENEMY_DEFS[target.type].radius + AIM_SLACK_ENEMY : target.radius + AIM_SLACK_PROP
     const ray = aimRay(fighter.player, this.ray)
     const dx = x - ray.ox
     const dy = y - ray.oy
@@ -139,7 +139,7 @@ export class Interaction {
     if (!this.enemies?.hit(enemy, attackDamage(fighter.inventory.selectedItem), pos, fighter.id)) return false
     if (fighter.target === enemy) fighter.target = null
     const { x, z } = enemy.pos
-    this.pickups.drop(ENEMY_DEF.drop.item, ENEMY_DEF.drop.amount, x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
+    for (const { item, amount } of ENEMY_DEFS[enemy.type].loot) this.pickups.drop(item, amount, x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
     return true
   }
 

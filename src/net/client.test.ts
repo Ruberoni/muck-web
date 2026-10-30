@@ -366,6 +366,7 @@ describe('el espejo de NetClient', () => {
     for (const e of mirror.enemies.list) {
       const real = sim.enemies.list.find((r) => r.id === e.id)!
       expect(Math.hypot(e.pos.x - real.pos.x, e.pos.z - real.pos.z)).toBeLessThan(1.5)
+      expect(e).toMatchObject({ type: real.type, maxHp: real.maxHp })
     }
   })
 

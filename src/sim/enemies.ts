@@ -1,43 +1,37 @@
 import { isNight } from './world/daycycle'
 import { heightAt, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
-import { ENEMY_MODEL_SCALE } from './aim'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import {
-  ENEMY_ATTACK_INTERVAL,
   ENEMY_BASE_COUNT,
-  ENEMY_DAMAGE,
-  ENEMY_DEF,
-  ENEMY_GAP,
+  ENEMY_DEFS,
   ENEMY_HARD_MAX,
-  ENEMY_KNOCKBACK,
   ENEMY_MAX,
   ENEMY_PER_NIGHT,
   ENEMY_PER_PLAYER,
-  ENEMY_RADIUS,
-  ENEMY_REACH,
   ENEMY_RETARGET,
   ENEMY_RETARGET_MARGIN,
   ENEMY_SPAWN_INTERVAL,
   ENEMY_SPAWN_MAX,
   ENEMY_SPAWN_MIN,
-  ENEMY_SPEED,
-  ENEMY_STAGGER,
-  ENEMY_WINDUP,
   PLAYER_RADIUS,
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
+  type EnemyType,
 } from './constants'
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
-const CONTACT = PLAYER_RADIUS + ENEMY_RADIUS
 const SPAWN_ATTEMPTS = 12
-/** Altura del centro del cuerpo: a donde apunta aimAtEnemy. */
-export const ENEMY_AIM_HEIGHT = 0.8 * ENEMY_MODEL_SCALE
+/** Altura del centro del cuerpo de un tipo de enemigo: a donde apunta aimAtEnemy. */
+export const enemyAimHeight = (type: EnemyType) => 0.8 * ENEMY_DEFS[type].scale
+/** Distancia entre centros a la que un enemigo de este tipo toca a un jugador. */
+const contactOf = (type: EnemyType) => PLAYER_RADIUS + ENEMY_DEFS[type].radius
 
 /** Un enemigo en la simulación. Su modelo y sus animaciones (bote, golpe, embestida, muerte) son de EnemyView. */
 export interface EnemyData {
+  /** Lo distingue de un prop en `Target`; qué enemigo es lo dice `type`. */
   kind: 'enemy'
+  type: EnemyType
   id: number
   pos: { x: number; z: number }
   /** Posición al empezar el paso, para interpolar al dibujar. */
@@ -138,9 +132,10 @@ export class Enemies {
       e.prev.z = e.pos.z
       const target = this.chooseTarget(e, prey, dt)
       if (!this.chase(e, target, dt) || !target) continue
+      const dealt = ENEMY_DEFS[e.type].damage
       const hurt = damage.find((d) => d.playerId === target.id)
-      if (hurt) hurt.damage += ENEMY_DAMAGE
-      else damage.push({ playerId: target.id, damage: ENEMY_DAMAGE })
+      if (hurt) hurt.damage += dealt
+      else damage.push({ playerId: target.id, damage: dealt })
     }
     this.separate(prey)
     return damage
@@ -165,14 +160,15 @@ export class Enemies {
 
   /** Mueve un enemigo hacia `prey` (o lo deja quieto si no hay nadie) y devuelve si ataca en este paso. */
   private chase(e: EnemyData, prey: EnemyPrey | null, dt: number): boolean {
+    const def = ENEMY_DEFS[e.type]
     if (e.stagger > 0) {
-      const k = e.stagger / ENEMY_STAGGER
+      const k = e.stagger / def.stagger
       this.move(e, e.knock.x * k * dt, e.knock.z * k * dt)
       e.stagger = Math.max(0, e.stagger - dt)
       return false
     }
     if (!prey) {
-      e.attackCooldown = Math.max(e.attackCooldown - dt, ENEMY_WINDUP)
+      e.attackCooldown = Math.max(e.attackCooldown - dt, def.windup)
       return false
     }
     const player = prey.pos
@@ -180,17 +176,18 @@ export class Enemies {
     const dz = player.z - e.pos.z
     const dist = Math.hypot(dx, dz)
     if (dist > 1e-6) e.yaw = Math.atan2(dx, dz)
-    if (dist > CONTACT + ENEMY_GAP) {
-      const step = Math.min(ENEMY_SPEED * dt, dist - CONTACT - ENEMY_GAP)
+    const contact = contactOf(e.type)
+    if (dist > contact + def.gap) {
+      const step = Math.min(def.speed * dt, dist - contact - def.gap)
       this.move(e, (dx / dist) * step, (dz / dist) * step)
     }
-    if (dist > CONTACT + ENEMY_REACH) {
-      e.attackCooldown = Math.max(e.attackCooldown - dt, ENEMY_WINDUP)
+    if (dist > contact + def.reach) {
+      e.attackCooldown = Math.max(e.attackCooldown - dt, def.windup)
       return false
     }
     e.attackCooldown -= dt
     if (e.attackCooldown > 1e-9) return false
-    e.attackCooldown = ENEMY_ATTACK_INTERVAL
+    e.attackCooldown = def.attackInterval
     this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return true
   }
@@ -210,7 +207,7 @@ export class Enemies {
 
   /** Lo saca de los props; si eso lo empuja al agua profunda, vuelve a (x, z). */
   private settle(e: EnemyData, x: number, z: number) {
-    for (const grid of this.grids) resolveCircle(e.pos, ENEMY_RADIUS, grid)
+    for (const grid of this.grids) resolveCircle(e.pos, ENEMY_DEFS[e.type].radius, grid)
     if (!walkable(e.pos.x, e.pos.z)) {
       e.pos.x = x
       e.pos.z = z
@@ -234,18 +231,19 @@ export class Enemies {
         const b = this.list[j].pos
         const ax = a.x
         const az = a.z
-        push(a, b.x, b.z, ENEMY_RADIUS * 2, 0.5)
-        push(b, ax, az, ENEMY_RADIUS * 2, 0.5)
+        const min = ENEMY_DEFS[this.list[i].type].radius + ENEMY_DEFS[this.list[j].type].radius
+        push(a, b.x, b.z, min, 0.5)
+        push(b, ax, az, min, 0.5)
       }
     }
     for (const e of this.list) {
-      for (const { pos } of prey) push(e.pos, pos.x, pos.z, CONTACT, 1)
+      for (const { pos } of prey) push(e.pos, pos.x, pos.z, contactOf(e.type), 1)
       this.settle(e, e.prev.x, e.prev.z)
     }
   }
 
   /** Alrededor de `around` y a ENEMY_SPAWN_MIN como poco de todos los jugadores vivos. */
-  private trySpawn(around: EnemyPrey, prey: readonly EnemyPrey[]) {
+  private trySpawn(around: EnemyPrey, prey: readonly EnemyPrey[], type: EnemyType = 'goblin') {
     for (let i = 0; i < SPAWN_ATTEMPTS; i++) {
       const angle = this.rng() * Math.PI * 2
       const r = ENEMY_SPAWN_MIN + this.rng() * (ENEMY_SPAWN_MAX - ENEMY_SPAWN_MIN)
@@ -254,31 +252,33 @@ export class Enemies {
       if (Math.hypot(x, z) > BOUND || heightAt(x, z) < WATER_LEVEL + 0.2) continue
       if (prey.some((p) => p !== around && Math.hypot(p.pos.x - x, p.pos.z - z) < ENEMY_SPAWN_MIN)) continue
       const pos = { x, z }
-      if (this.grids.some((grid) => resolveCircle(pos, ENEMY_RADIUS, grid))) continue
-      return this.spawnAt(x, z)
+      if (this.grids.some((grid) => resolveCircle(pos, ENEMY_DEFS[type].radius, grid))) continue
+      return this.spawnAt(x, z, type)
     }
     return null
   }
 
-  /** Crea un enemigo en (x, z) mirando hacia +Z. */
-  spawnAt(x: number, z: number): EnemyData {
+  /** Crea un enemigo de tipo `type` en (x, z) mirando hacia +Z. */
+  spawnAt(x: number, z: number, type: EnemyType = 'goblin'): EnemyData {
+    const def = ENEMY_DEFS[type]
     const e: EnemyData = {
       kind: 'enemy',
+      type,
       id: this.nextId++,
       pos: { x, z },
       prev: { x, z },
       yaw: 0,
-      hp: ENEMY_DEF.hp,
-      maxHp: ENEMY_DEF.hp,
+      hp: def.hp,
+      maxHp: def.hp,
       alive: true,
-      attackCooldown: ENEMY_WINDUP,
+      attackCooldown: def.windup,
       stagger: 0,
       knock: { x: 0, z: 0 },
       target: null,
       retarget: 0,
     }
     this.list.push(e)
-    this.emit({ type: 'enemySpawn', id: e.id, x, z })
+    this.emit({ type: 'enemySpawn', id: e.id, enemy: type, x, z })
     return e
   }
 
@@ -291,13 +291,14 @@ export class Enemies {
       this.emit({ type: 'enemyDied', id: e.id, by })
       return true
     }
+    const def = ENEMY_DEFS[e.type]
     const dx = e.pos.x - from.x
     const dz = e.pos.z - from.z
     const d = Math.hypot(dx, dz) || 1
-    e.knock.x = (dx / d) * ENEMY_KNOCKBACK
-    e.knock.z = (dz / d) * ENEMY_KNOCKBACK
-    e.stagger = ENEMY_STAGGER
-    e.attackCooldown = Math.max(e.attackCooldown, ENEMY_WINDUP)
+    e.knock.x = (dx / d) * def.knockback
+    e.knock.z = (dz / d) * def.knockback
+    e.stagger = def.stagger
+    e.attackCooldown = Math.max(e.attackCooldown, def.windup)
     this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by })
     return false
   }

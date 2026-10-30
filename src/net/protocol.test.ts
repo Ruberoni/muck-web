@@ -144,7 +144,8 @@ describe('protocolo', () => {
     expect(dev({ op: 'give', item: 'wood', amount: 3, extra: 1 })).toEqual({ ok: true, msg: { type: 'dev', op: 'give', item: 'wood', amount: 3 } })
     expect(dev({ op: 'teleport', x: 1, z: 2, yaw: 3, pitch: 0.1 }).ok).toBe(true)
     expect(dev({ op: 'setVitals', hunger: 10 })).toEqual({ ok: true, msg: { type: 'dev', op: 'setVitals', hunger: 10 } })
-    expect(dev({ op: 'spawnEnemy', x: 1, z: 2 }).ok).toBe(true)
+    expect(dev({ op: 'spawnEnemy', x: 1, z: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'spawnEnemy', x: 1, z: 2 } })
+    expect(dev({ op: 'spawnEnemy', x: 1, z: 2, enemy: 'goblin' })).toEqual({ ok: true, msg: { type: 'dev', op: 'spawnEnemy', x: 1, z: 2, enemy: 'goblin' } })
     expect(dev({ op: 'placeStructure', kind: 'campfire', x: 1, z: 2, yaw: 0 }).ok).toBe(true)
     expect(dev({ op: 'placeStructure', kind: 'campfire', extra: 1 })).toEqual({ ok: true, msg: { type: 'dev', op: 'placeStructure', kind: 'campfire' } })
     expect(dev({ op: 'placeStructure', kind: 'campfire', yaw: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'placeStructure', kind: 'campfire', yaw: 2 } })
@@ -159,6 +160,9 @@ describe('protocolo', () => {
       { op: 'setVitals', health: -1 },
       { op: 'setVitals', hunger: 'mucha' },
       { op: 'spawnEnemy', x: 1 },
+      { op: 'spawnEnemy', x: 1, z: 2, enemy: 'dragon' },
+      { op: 'spawnEnemy', x: 1, z: 2, enemy: 'toString' },
+      { op: 'spawnEnemy', x: 1, z: 2, enemy: 3 },
       { op: 'placeStructure', kind: 'castillo' },
       { op: 'placeStructure', kind: 'toString' },
       { op: 'placeStructure', kind: 'campfire', x: 1 },
@@ -185,7 +189,7 @@ describe('protocolo', () => {
 
 describe('snap en el cable', () => {
   const player: PlayerSnap = { id: 2, pos: { x: 1.25, y: 5.5, z: -3 }, yaw: 1.5, pitch: -0.2, item: 'wood', health: 80, alive: true, connection: 'absent', ping: 87 }
-  const enemy: EnemySnap = { id: 9, pos: { x: -10.5, z: 4.25 }, yaw: 3.1, hp: 4 }
+  const enemy: EnemySnap = { id: 9, type: 'goblin', pos: { x: -10.5, z: 4.25 }, yaw: 3.1, hp: 4 }
   const pickup: PickupSnap = { id: 4, pos: { x: 1, y: 2, z: 3 }, grounded: true }
   const inventory: InventoryState = { slots: ['wood', ...Array<null>(INVENTORY_SIZE - 1).fill(null)], counts: { wood: 3 }, selected: 0 }
   const you = (withInventory: boolean): SnapWire['you'] => ({

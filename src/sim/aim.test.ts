@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { aimRay, createPropHitboxes, enemyHitbox, ENEMY_BODY_LIFT, ENEMY_MODEL_SCALE, pickTarget, rayDistance } from './aim'
-import { EYE_HEIGHT, REACH } from './constants'
+import { aimRay, createPropHitboxes, enemyHitbox, ENEMY_BODY_LIFT, pickTarget, rayDistance } from './aim'
+import { ENEMY_DEFS, EYE_HEIGHT, REACH } from './constants'
 import { createPropWorld, TRUNK_BOTTOM_RADIUS, TRUNK_TOP_RADIUS, TRUNK_HEIGHT, type PropPlacement } from './props'
 import { heightAt } from './world/terrain'
 
@@ -57,7 +57,7 @@ describe('aim', () => {
 
   it('elige lo más cercano; los muertos no tapan lo de detrás', () => {
     // Los ojos a la altura del centro del enemigo, que está sobre el terreno.
-    const y = heightAt(101.5, 0) + ENEMY_BODY_LIFT * ENEMY_MODEL_SCALE - EYE_HEIGHT
+    const y = heightAt(101.5, 0) + ENEMY_BODY_LIFT * ENEMY_DEFS.goblin.scale - EYE_HEIGHT
     const world = createPropWorld([tree(0, 101, 0, y), tree(1, 102.5, 0, y)])
     const hitboxes = createPropHitboxes(world.placements)
     const ray = aimRay(lookingEast(100, 0, y))
@@ -65,7 +65,7 @@ describe('aim', () => {
     world.props[0].alive = false
     expect(pickTarget(ray, world.grid, hitboxes, [])).toBe(world.props[1])
     // Un enemigo delante del árbol gana; muerto, no cuenta.
-    const enemy = { alive: true, pos: { x: 101.5, z: 0 }, yaw: 0 }
+    const enemy = { alive: true, type: 'goblin' as const, pos: { x: 101.5, z: 0 }, yaw: 0 }
     expect(pickTarget(ray, world.grid, hitboxes, [enemy])).toBe(enemy)
     enemy.alive = false
     expect(pickTarget(ray, world.grid, hitboxes, [enemy])).toBe(world.props[1])
@@ -74,8 +74,8 @@ describe('aim', () => {
   it('el enemigo se toca en el centro de su cuerpo, gire como gire', () => {
     const [x, z] = [100, 0]
     for (const yaw of [0, 1, 2, 3]) {
-      const box = enemyHitbox(x, z, yaw)
-      const centre = heightAt(x, z) + ENEMY_BODY_LIFT * ENEMY_MODEL_SCALE
+      const box = enemyHitbox(x, z, yaw, 'goblin')
+      const centre = heightAt(x, z) + ENEMY_BODY_LIFT * ENEMY_DEFS.goblin.scale
       const from = { pos: { x: x - 2, y: centre - EYE_HEIGHT, z }, yaw: -Math.PI / 2, pitch: 0 }
       const d = rayDistance(aimRay(from), box)
       expect(d).toBeGreaterThan(1.3)
@@ -83,8 +83,18 @@ describe('aim', () => {
     }
   })
 
+  it('la hitbox tiene la escala de su tipo, también al reutilizarla', () => {
+    const { scale } = ENEMY_DEFS.goblin
+    const box = enemyHitbox(0, 0, 0, 'goblin')
+    expect(box.sx).toBe(scale)
+    ENEMY_DEFS.goblin.scale = 2
+    enemyHitbox(1, 1, 0, 'goblin', box)
+    ENEMY_DEFS.goblin.scale = scale
+    expect([box.sx, box.sy, box.sz]).toEqual([2, 2, 2])
+  })
+
   it('desde dentro no se toca', () => {
-    const box = enemyHitbox(0, 0, 0)
+    const box = enemyHitbox(0, 0, 0, 'goblin')
     const inside = { pos: { x: 0, y: box.y + 0.9 - EYE_HEIGHT, z: 0 }, yaw: 0, pitch: 0 }
     expect(rayDistance(aimRay(inside), box)).toBe(Infinity)
   })

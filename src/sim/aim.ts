@@ -1,4 +1,4 @@
-import { EYE_HEIGHT, PROP_DEFS, REACH, type PropFamily } from './constants'
+import { ENEMY_DEFS, EYE_HEIGHT, PROP_DEFS, REACH, type EnemyType, type PropFamily } from './constants'
 import type { Collider, SpatialGrid } from './collision'
 import {
   BUSH_LIFT,
@@ -17,13 +17,11 @@ import {
 } from './props'
 import { heightAt } from './world/terrain'
 
-// Cuerpo del enemigo: un icosaedro estirado sobre el suelo, y el modelo entero escalado.
+// Cuerpo del enemigo: un icosaedro estirado sobre el suelo, y el modelo entero escalado (ENEMY_DEFS[tipo].scale).
 // Los cuernos, los pies y los ojos son detalles de la vista y no cuentan para apuntar.
 export const ENEMY_BODY_RADIUS = 0.5
 export const ENEMY_BODY_SCALE = { x: 1, y: 1.25, z: 0.9 }
 export const ENEMY_BODY_LIFT = 0.75
-// El modelo mide unos 1,4 sin escalar: escalado, los ojos quedan algo por debajo de los del jugador.
-export const ENEMY_MODEL_SCALE = 1.25
 
 /** Rayo de puntería: desde los ojos, con dirección unitaria. */
 export interface AimRay {
@@ -172,15 +170,15 @@ export function createPropHitboxes(placements: readonly PropPlacement[]): PropHi
   return { boxes, reach }
 }
 
-/** Hitbox de un enemigo en (x, z) mirando a `yaw`, sobre el suelo: sin el bote al andar ni la embestida. */
-export function enemyHitbox(x: number, z: number, yaw: number, out?: Hitbox): Hitbox {
-  const s = ENEMY_MODEL_SCALE
-  const box = out ?? { x, y: 0, z, cosX: 1, sinX: 0, cosY: 1, sinY: 0, sx: s, sy: s, sz: s, parts: ENEMY_SHAPE }
+/** Hitbox de un enemigo de tipo `type` en (x, z) mirando a `yaw`, sobre el suelo: sin el bote al andar ni la embestida. */
+export function enemyHitbox(x: number, z: number, yaw: number, type: EnemyType, out?: Hitbox): Hitbox {
+  const box = out ?? { x, y: 0, z, cosX: 1, sinX: 0, cosY: 1, sinY: 0, sx: 1, sy: 1, sz: 1, parts: ENEMY_SHAPE }
   box.x = x
   box.y = heightAt(x, z)
   box.z = z
   box.cosY = Math.cos(yaw)
   box.sinY = Math.sin(yaw)
+  box.sx = box.sy = box.sz = ENEMY_DEFS[type].scale
   return box
 }
 
@@ -239,7 +237,7 @@ function rayConvex(o: Vec, d: Vec, planes: Convex): number {
  * Lo primero que toca el rayo a como mucho `far` metros: un prop vivo o un enemigo vivo.
  * Los muertos no tapan lo que hay detrás.
  */
-export function pickTarget<P extends Collider & { id: number }, E extends { alive: boolean; pos: { x: number; z: number }; yaw: number }>(
+export function pickTarget<P extends Collider & { id: number }, E extends { alive: boolean; type: EnemyType; pos: { x: number; z: number }; yaw: number }>(
   ray: AimRay,
   grid: SpatialGrid<P>,
   hitboxes: PropHitboxes,
@@ -258,7 +256,7 @@ export function pickTarget<P extends Collider & { id: number }, E extends { aliv
   }
   for (const enemy of enemies) {
     if (!enemy.alive) continue
-    const d = rayDistance(ray, enemyHitbox(enemy.pos.x, enemy.pos.z, enemy.yaw, ENEMY_BOX))
+    const d = rayDistance(ray, enemyHitbox(enemy.pos.x, enemy.pos.z, enemy.yaw, enemy.type, ENEMY_BOX))
     if (d <= bestDistance) {
       best = enemy
       bestDistance = d
@@ -267,4 +265,4 @@ export function pickTarget<P extends Collider & { id: number }, E extends { aliv
   return best
 }
 
-const ENEMY_BOX = enemyHitbox(0, 0, 0)
+const ENEMY_BOX = enemyHitbox(0, 0, 0, 'goblin')

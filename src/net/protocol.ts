@@ -1,5 +1,5 @@
 import type { Action, ActionData, Move } from '../sim/commands'
-import { MAX_PITCH } from '../sim/constants'
+import { ENEMY_DEFS, ENEMY_TYPES, MAX_PITCH, type EnemyType } from '../sim/constants'
 import { isRecipeId } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { Combat } from '../sim/interaction'
@@ -14,7 +14,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 16
+export const PROTOCOL_VERSION = 17
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -105,7 +105,8 @@ export type DevOp =
   | { op: 'give'; item: ItemId; amount: number }
   | { op: 'teleport'; x: number; z: number; yaw: number; pitch: number }
   | { op: 'setVitals'; health?: number; hunger?: number }
-  | { op: 'spawnEnemy'; x: number; z: number }
+  /** Sin `enemy`, un trasgo. */
+  | { op: 'spawnEnemy'; x: number; z: number; enemy?: EnemyType }
   /** Delante de (x, z) mirando a `yaw`; sin (x, z), desde donde está el jugador, y sin `yaw`, hacia donde mira. */
   | { op: 'placeStructure'; kind: StructureKind; x?: number; z?: number; yaw?: number }
   | { op: 'setPhase'; phase: number }
@@ -153,6 +154,7 @@ export interface PlayerSnap {
 
 export interface EnemySnap {
   id: number
+  type: EnemyType
   pos: { x: number; z: number }
   yaw: number
   hp: number
@@ -267,8 +269,8 @@ export interface SnapWire extends Omit<Snap, 'you' | 'players' | 'enemies' | 'mo
 
 /** `[id, x, y, z, yaw, pitch, item, health, vivo (1/0), ausente (1/0), ping]`: solo van los que están en el mundo. */
 export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number]
-/** `[id, x, z, yaw, hp]` */
-export type EnemyTuple = [number, number, number, number, number]
+/** `[id, x, z, yaw, hp, tipo]`, con `tipo` el índice en ENEMY_TYPES. */
+export type EnemyTuple = [number, number, number, number, number, number]
 /** `[id, x, y, z, en el suelo (1/0)]` */
 export type PickupTuple = [number, number, number, number, 0 | 1]
 
@@ -285,7 +287,7 @@ export const playerTuple = (p: PlayerSnap): PlayerTuple => [
   p.connection === 'absent' ? 1 : 0,
   p.ping,
 ]
-export const enemyTuple = (e: EnemySnap): EnemyTuple => [e.id, e.pos.x, e.pos.z, e.yaw, e.hp]
+export const enemyTuple = (e: EnemySnap): EnemyTuple => [e.id, e.pos.x, e.pos.z, e.yaw, e.hp, ENEMY_TYPES.indexOf(e.type)]
 export const pickupTuple = (p: PickupSnap): PickupTuple => [p.id, p.pos.x, p.pos.y, p.pos.z, p.grounded ? 1 : 0]
 
 /**
@@ -320,7 +322,7 @@ export class ServerDecoder {
             connection: absent === 1 ? 'absent' : 'present',
             ping,
           })),
-          enemies: msg.enemies.map(([id, x, z, yaw, hp]) => ({ id, pos: { x, z }, yaw, hp })),
+          enemies: msg.enemies.map(([id, x, z, yaw, hp, type]) => ({ id, type: ENEMY_TYPES[type], pos: { x, z }, yaw, hp })),
           movingPickups: msg.movingPickups.map(([id, x, y, z, grounded]) => ({ id, pos: { x, y, z }, grounded: grounded === 1 })),
         }
       }
@@ -502,8 +504,12 @@ function parseDev(raw: Obj): Dev | null {
       if (raw.hunger !== undefined) dev.hunger = raw.hunger as number
       return dev
     }
-    case 'spawnEnemy':
-      return nums('x', 'z') ? { type: 'dev', op: 'spawnEnemy', x: raw.x as number, z: raw.z as number } : null
+    case 'spawnEnemy': {
+      if (!nums('x', 'z') || (raw.enemy !== undefined && !Object.hasOwn(ENEMY_DEFS, raw.enemy as string))) return null
+      const dev: Dev = { type: 'dev', op: 'spawnEnemy', x: raw.x as number, z: raw.z as number }
+      if (raw.enemy !== undefined) dev.enemy = raw.enemy as EnemyType
+      return dev
+    }
     case 'placeStructure': {
       const optional = (x: unknown) => x === undefined || isFiniteNum(x)
       // x y z van juntas: o las dos o ninguna.

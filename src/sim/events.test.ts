@@ -4,7 +4,7 @@ import { DAY_FRACTION } from './world/daycycle'
 import { createPropWorld, growBerries, type PropData } from './props'
 import { mulberry32 } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
-import { BERRY_REGROW, ENEMY_RADIUS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from './constants'
+import { BERRY_REGROW, ENEMY_DEFS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from './constants'
 import { Enemies } from './enemies'
 import { aimPose, createCombat, Interaction, type Fighter } from './interaction'
 import { Inventory } from './inventory'
@@ -118,9 +118,9 @@ describe('eventos de la simulación', () => {
     run(STEP)
     // Aparece y en el mismo paso ya da el primer paso: `prev` es donde apareció.
     const { x, z } = ctx.enemies.list[0].prev
-    expect(ctx.events).toEqual([{ type: 'enemySpawn', id: 0, x, z }])
+    expect(ctx.events).toEqual([{ type: 'enemySpawn', id: 0, enemy: 'goblin', x, z }])
 
-    const e = ctx.enemies.spawnAt(player.x + PLAYER_RADIUS + ENEMY_RADIUS + 0.1, player.z)
+    const e = ctx.enemies.spawnAt(player.x + PLAYER_RADIUS + ENEMY_DEFS.goblin.radius + 0.1, player.z)
     ctx.events.length = 0
     run(0.6)
     expect(ctx.events).toContainEqual({ type: 'enemyAttack', id: e.id, target: 0 })

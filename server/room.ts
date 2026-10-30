@@ -366,7 +366,7 @@ export class Room {
         if (msg.hunger !== undefined) slot.player.hunger = msg.hunger
         break
       case 'spawnEnemy':
-        sim.enemies.spawnAt(msg.x, msg.z)
+        sim.enemies.spawnAt(msg.x, msg.z, msg.enemy)
         break
       case 'placeStructure': {
         const { pos, yaw } = slot.player
@@ -435,7 +435,7 @@ export class Room {
     if (events.length) this.broadcast({ type: 'ev', list: events })
     const players = this.playerSnaps()
     const tuples = players.map(playerTuple)
-    const enemies = sim.enemies.list.map((e) => enemyTuple({ id: e.id, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp }))
+    const enemies = sim.enemies.list.map((e) => enemyTuple({ id: e.id, type: e.type, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp }))
     const movingPickups = sim.pickups.list
       .filter((p) => this.movedPickups.has(p.id))
       .map((p) => pickupTuple({ id: p.id, pos: { x: cm(p.pos.x), y: cm(p.pos.y), z: cm(p.pos.z) }, grounded: p.grounded }))

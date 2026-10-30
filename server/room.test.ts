@@ -688,7 +688,7 @@ describe('Room', () => {
     a.send({ type: 'dev', op: 'teleport', x: x + 1, z: z + 1, yaw: 1, pitch: 0.2 })
     a.send({ type: 'dev', op: 'setVitals', health: 50, hunger: 20 })
     a.send({ type: 'dev', op: 'setPhase', phase: 0.8 })
-    a.send({ type: 'dev', op: 'spawnEnemy', x: x + 8, z })
+    a.send({ type: 'dev', op: 'spawnEnemy', x: x + 8, z, enemy: 'goblin' })
     a.send({ type: 'dev', op: 'placeStructure', kind: 'campfire', x: free[0].x, z: free[0].z, yaw: 0 })
     time.advance(0)
     expect(sim.structures.list).toMatchObject([{ kind: 'campfire', x: free[0].x, z: free[0].z - PLACE_DISTANCE }])

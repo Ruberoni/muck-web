@@ -1,4 +1,4 @@
-import { ENEMY_DEF, PROP_DEFS } from '../sim/constants'
+import { ENEMY_DEFS, PROP_DEFS } from '../sim/constants'
 import { ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Target } from '../sim/interaction'
 import { ICONS } from './icons'
@@ -161,7 +161,7 @@ export class Hud {
       const { name, verb } = PROP_DEFS[target.kind]
       return this.setPrompt(target.hp > 0 ? `${name} (${target.hp}) — clic para ${verb}` : `${name} — sin bayas`)
     }
-    const def = target.kind === 'enemy' ? ENEMY_DEF : PROP_DEFS[target.kind]
+    const def = target.kind === 'enemy' ? ENEMY_DEFS[target.type] : PROP_DEFS[target.kind]
     const need = target.kind === 'enemy' ? null : missingTool(held, target.kind)
     // Empieza por \0 para no confundirse nunca con un texto de setPrompt.
     const key = `\0${def.name}|${target.hp}|${target.maxHp}|${need}`

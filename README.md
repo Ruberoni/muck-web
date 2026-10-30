@@ -83,6 +83,8 @@ El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya dev
 
 Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera, 2 con uno de piedra o de hierro y 1 con uno de mithril; cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo, y al amanecer los que quedan desaparecen.
 
+Cada tipo de enemigo es una entrada de `ENEMY_DEFS` (`src/sim/constants.ts`): vida, velocidad, tamaño, daño, ritmo de ataque, botín, debilidades… Por ahora solo está el trasgo. Vida y daño contra enemigos van en una escala ×10 respecto a los golpes (el trasgo tiene 60 de vida y la mano hace 10), para poder ajustar armas y debilidades sin decimales.
+
 ## Sonido y ajustes
 
 Todos los sonidos se generan en el navegador con Web Audio (`src/audio/`), sin archivos de audio: golpes en madera, piedra y arbustos, recoger, comer, fabricar, colocar la fogata o una estación, pasos (también en el agua), saltos, daño, trasgos que gruñen desde donde están y la muerte. De fondo hay viento, pájaros de día, grillos de noche y el crepitar de las fogatas cercanas; el ambiente se calla en el menú y en la pausa. El navegador no deja sonar nada hasta el primer clic.
@@ -91,7 +93,7 @@ En el menú y en la pausa hay deslizadores para la sensibilidad del ratón, el c
 
 ## Mundo
 
-El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/sim/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, los abedules, las menas de hierro, los pinos oscuros y las menas de mithril, uno propio cada uno y en ese orden, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`, `props({ kind })`, `drop(casilla, todo)`, `setDay(n)` para saltar al día n a la misma hora…); no se incluye en el build de producción.
+El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/sim/random.ts`): el terreno usa ruido simplex y los árboles y rocas usan un segundo generador independiente (los arbustos, los abedules, las menas de hierro, los pinos oscuros y las menas de mithril, uno propio cada uno y en ese orden, para no alterar los anteriores), así que el mapa es idéntico en cada carga. En modo desarrollo, `window.__debug` expone un hash del mundo (`worldHash`) y helpers para probar el juego sin ratón (`start`, `advance`, `setKeys`, `aimAt`, `props({ kind })`, `drop(casilla, todo)`, `setDay(n)` para saltar al día n a la misma hora, `spawnEnemy(x, z, tipo)`…); no se incluye en el build de producción.
 
 La lógica que no depende de three.js ni del DOM (jugador, supervivencia, colisiones, inventario, fabricación, constantes, generador aleatorio, altura del terreno y reloj del día) vive en `src/sim/`, para que la pueda ejecutar también un servidor. `npm run typecheck:sim` la compila sin la librería del DOM y un test comprueba que no importa three ni nada de fuera de `src/sim/`.
 

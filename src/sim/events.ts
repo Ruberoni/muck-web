@@ -1,3 +1,4 @@
+import type { EnemyType } from './constants'
 import type { RecipeId } from './crafting'
 import type { ItemId } from './inventory'
 import type { StructureKind } from './structures'
@@ -22,7 +23,7 @@ export type SimEventData =
   | { type: 'pickupSpawn'; id: number; item: ItemId; amount: number }
   | { type: 'pickupCollected'; id: number; by: PlayerId }
   | { type: 'structurePlaced'; id: number; kind: StructureKind; x: number; y: number; z: number; rotY: number; by: PlayerId }
-  | { type: 'enemySpawn'; id: number; x: number; z: number }
+  | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId }
   | { type: 'enemyAttack'; id: number; target: PlayerId }
   | { type: 'enemyDied'; id: number; by: PlayerId }

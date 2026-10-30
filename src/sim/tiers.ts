@@ -1,4 +1,4 @@
-import { BASE_DAMAGE, PROP_DEFS, TOOL_DEFS, type ToolFamily } from './constants'
+import { BASE_DAMAGE, HAND_ATTACK, PROP_DEFS, TOOL_DEFS, type ToolFamily } from './constants'
 import type { ItemId } from './inventory'
 import type { PropKind } from './props'
 
@@ -31,7 +31,7 @@ export function requiredTool(kind: PropKind): ToolRequirement | null {
   return tool && tier > 0 ? { family: tool, tier } : null
 }
 
-/** Daño contra un enemigo: el ataque de la herramienta, sea cual sea su familia; a mano o con otra cosa, 1. */
+/** Daño contra un enemigo: el ataque de la herramienta, sea cual sea su familia; a mano o con otra cosa, HAND_ATTACK. */
 export function attackDamage(item: ItemId | null): number {
-  return (item ? TOOL_DEFS[item]?.attack : undefined) ?? BASE_DAMAGE
+  return (item ? TOOL_DEFS[item]?.attack : undefined) ?? HAND_ATTACK
 }

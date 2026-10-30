@@ -2,8 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { Enemies } from '../sim/enemies'
 import { DAY_FRACTION } from '../sim/world/daycycle'
-import { ENEMY_MODEL_SCALE } from '../sim/aim'
-import { STEP } from '../sim/constants'
+import { ENEMY_DEFS, STEP } from '../sim/constants'
 import { EnemyView } from './EnemyView'
 
 const HURT = new THREE.Color('#ff3b2f')
@@ -27,7 +26,7 @@ describe('EnemyView', () => {
     expect(model().position.x).toBeCloseTo(10)
     expect(model().position.z).toBeCloseTo(20)
     expect(model().rotation.y).toBe(1)
-    expect(model().scale.y).toBeCloseTo(ENEMY_MODEL_SCALE)
+    expect(model().scale.y).toBeCloseTo(ENEMY_DEFS.goblin.scale)
   })
 
   it('interpola entre el paso anterior y el actual', () => {
@@ -45,7 +44,7 @@ describe('EnemyView', () => {
     enemies.hit(e, 100, { x: 0, z: 20 }, 0)
     frame(0.1)
     expect(view.group.children).toHaveLength(1)
-    expect(model().scale.y).toBeLessThan(ENEMY_MODEL_SCALE)
+    expect(model().scale.y).toBeLessThan(ENEMY_DEFS.goblin.scale)
     frame(0.3)
     expect(view.group.children).toHaveLength(0)
   })

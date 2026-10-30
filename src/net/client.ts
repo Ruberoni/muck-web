@@ -1,6 +1,6 @@
 import type { Clock } from '../../server/room'
 import type { ActionData, Move } from '../sim/commands'
-import { ENEMY_DEF, STATION_RANGE, STEP } from '../sim/constants'
+import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType } from '../sim/constants'
 import type { EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
@@ -63,6 +63,7 @@ export interface RemotePlayer {
 }
 
 export interface RemoteEnemy {
+  type: EnemyType
   hp: number
 }
 
@@ -451,7 +452,7 @@ export class NetClient {
     )
     this.enemies.push(
       tick,
-      enemies.map(({ id, pos, yaw, hp }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { hp } })),
+      enemies.map(({ id, type, pos, yaw, hp }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { type, hp } })),
     )
   }
 
@@ -470,7 +471,7 @@ export class NetClient {
     list.length = 0
     for (const { id, pose, data } of shown) {
       let enemy = this.mirrorEnemies.get(id)
-      if (!enemy) this.mirrorEnemies.set(id, (enemy = mirrorEnemy(id)))
+      if (!enemy) this.mirrorEnemies.set(id, (enemy = mirrorEnemy(id, data.type)))
       enemy.pos.x = enemy.prev.x = pose.x
       enemy.pos.z = enemy.prev.z = pose.z
       enemy.yaw = pose.yaw
@@ -559,11 +560,12 @@ export class NetClient {
   }
 }
 
-/** Un enemigo del espejo: solo se dibuja y se apunta, así que basta con su pose y su vida. */
-function mirrorEnemy(id: number): EnemyData {
-  const hp = ENEMY_DEF.hp
+/** Un enemigo del espejo: solo se dibuja y se apunta, así que basta con su tipo, su pose y su vida. */
+function mirrorEnemy(id: number, type: EnemyType): EnemyData {
+  const { hp } = ENEMY_DEFS[type]
   return {
     kind: 'enemy',
+    type,
     id,
     pos: { x: 0, z: 0 },
     prev: { x: 0, z: 0 },

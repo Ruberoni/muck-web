@@ -1,3 +1,4 @@
+import { ENEMY_DEFS, type EnemyType } from '../sim/constants'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 import type { StructureKind } from '../sim/structures'
 
@@ -7,6 +8,8 @@ export const VIEW_RADIUS = 75
 const TEXELS_PER_UNIT = 1.5
 // Hueco entre el borde del círculo y las marcas fijadas en él (estructuras lejanas, N).
 const RIM_INSET = 9
+/** Radio (px) del punto de un enemigo de la escala del trasgo: los más grandes se ven mayores. */
+const ENEMY_DOT = 3.5
 
 /** Cómo se marca cada tipo de estructura: forma y color de cerca y de lejos (en el borde). */
 export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; near: string; far: string }> = {
@@ -31,7 +34,7 @@ export interface MinimapView {
   z: number
   yaw: number
   structures: readonly { kind: StructureKind; x: number; z: number }[]
-  enemies: readonly { pos: { x: number; z: number } }[]
+  enemies: readonly { type: EnemyType; pos: { x: number; z: number } }[]
   /** Los demás jugadores (solo en red). */
   players?: readonly MinimapPlayer[]
 }
@@ -175,7 +178,7 @@ export class Minimap {
     for (const e of view.enemies) {
       toMinimap(e.pos.x - view.x, e.pos.z - view.z, view.yaw, p)
       if (Math.hypot(p.x, p.y) > VIEW_RADIUS) continue
-      this.dot(c + p.x * scale, c + p.y * scale, 3.5)
+      this.dot(c + p.x * scale, c + p.y * scale, (ENEMY_DOT * ENEMY_DEFS[e.type].scale) / ENEMY_DEFS.goblin.scale)
     }
 
     // Estructuras: las lejanas se quedan en el borde, apuntando hacia dónde están.

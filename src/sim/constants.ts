@@ -92,7 +92,10 @@ export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_or
   },
 }
 
+/** Daño de un golpe contra props a mano o con una herramienta de otra familia. */
 export const BASE_DAMAGE = 1
+/** Daño de un golpe contra enemigos a mano o con algo que no es un arma. */
+export const HAND_ATTACK = 10
 
 // Lo que sueltan árboles, rocas y trasgos cae al suelo (una pieza por unidad) y se recoge al pasar por encima.
 /** Segundos desde que cae hasta que se puede recoger: se ve saltar antes de que el jugador lo coja. */
@@ -116,32 +119,86 @@ export interface ToolDef {
 }
 
 export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
-  wood_axe: { family: 'axe', tier: 1, damage: 2, attack: 2 },
-  stone_axe: { family: 'axe', tier: 2, damage: 4, attack: 3 },
-  iron_axe: { family: 'axe', tier: 3, damage: 6, attack: 4 },
+  wood_axe: { family: 'axe', tier: 1, damage: 2, attack: 20 },
+  stone_axe: { family: 'axe', tier: 2, damage: 4, attack: 30 },
+  iron_axe: { family: 'axe', tier: 3, damage: 6, attack: 40 },
   // El mithril no abre nada de nivel 4: da velocidad (abedul y mena de hierro de un golpe) y ataque.
-  mithril_axe: { family: 'axe', tier: 4, damage: 12, attack: 6 },
-  wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 2 },
-  stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 3 },
-  iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 4 },
-  mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 12, attack: 6 },
+  mithril_axe: { family: 'axe', tier: 4, damage: 12, attack: 60 },
+  wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 20 },
+  stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 30 },
+  iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 40 },
+  mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 12, attack: 60 },
 }
 
-// Enemigos nocturnos: 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra o de hierro y 1 con una de mithril.
-export const ENEMY_DEF = { name: 'Trasgo', verb: 'atacar', hp: 6, drop: { item: 'raw_meat' as ItemId, amount: 1 } }
-export const ENEMY_RADIUS = 0.55
-// Algo más lento que andar: se le puede dejar atrás, pero no mientras se tala o se pica.
-export const ENEMY_SPEED = 5
-export const ENEMY_DAMAGE = 10
-/** Hueco (entre bordes) que deja al llegar al jugador, para que no le tape la vista. */
-export const ENEMY_GAP = 0.35
-/** Hueco máximo (entre bordes) desde el que alcanza al jugador. */
-export const ENEMY_REACH = 0.7
-export const ENEMY_ATTACK_INTERVAL = 1.2
-/** Espera desde que llega al jugador (o se recupera de un golpe) hasta su primer ataque. */
-export const ENEMY_WINDUP = 0.5
-export const ENEMY_KNOCKBACK = 6
-export const ENEMY_STAGGER = 0.3
+/** Con qué se golpea a un enemigo: una familia de herramienta o, con cualquier otra cosa, la mano. */
+export type WeaponClass = ToolFamily | 'hand'
+/** Cómo se comporta un enemigo. */
+export type EnemyAI = 'chase' | 'charge' | 'ranged' | 'guard'
+
+export interface EnemyDef {
+  name: string
+  verb: string
+  hp: number
+  speed: number
+  /** Radio de colisión. */
+  radius: number
+  /** Escala del modelo y de su hitbox (el cuerpo de aim.ts). */
+  scale: number
+  damage: number
+  /** Hueco (entre bordes) que deja al llegar al jugador, para que no le tape la vista. */
+  gap: number
+  /** Hueco máximo (entre bordes) desde el que alcanza al jugador. */
+  reach: number
+  attackInterval: number
+  /** Espera desde que llega al jugador (o se recupera de un golpe) hasta su primer ataque. */
+  windup: number
+  /** Velocidad a la que lo empuja un golpe. */
+  knockback: number
+  /** Segundos que un golpe lo deja aturdido. */
+  stagger: number
+  /** Segundos tras un aturdimiento en los que no se le puede volver a aturdir. */
+  staggerGap: number
+  /** Solo sale de noche. */
+  nocturnal: boolean
+  ai: EnemyAI
+  /** Multiplicador del daño por clase de arma; lo que no está vale 1. */
+  weakness: Partial<Record<WeaponClass, number>>
+  /** Lo que suelta al morir. */
+  loot: { item: ItemId; amount: number }[]
+  /** Puntos que gasta al salir, para el futuro director de apariciones (docs/diseno-del-juego.md §4). */
+  cost: number
+}
+
+export const ENEMY_DEFS: Record<'goblin', EnemyDef> = {
+  // 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra o de hierro y 1 con una de mithril.
+  goblin: {
+    name: 'Trasgo',
+    verb: 'atacar',
+    hp: 60,
+    // Algo más lento que andar: se le puede dejar atrás, pero no mientras se tala o se pica.
+    speed: 5,
+    radius: 0.55,
+    // El modelo mide unos 1,4 sin escalar: escalado, los ojos quedan algo por debajo de los del jugador.
+    scale: 1.25,
+    damage: 10,
+    gap: 0.35,
+    reach: 0.7,
+    attackInterval: 1.2,
+    windup: 0.5,
+    knockback: 6,
+    stagger: 0.3,
+    staggerGap: 0.6,
+    nocturnal: true,
+    ai: 'chase',
+    weakness: {},
+    loot: [{ item: 'raw_meat', amount: 1 }],
+    cost: 1,
+  },
+}
+export type EnemyType = keyof typeof ENEMY_DEFS
+/** Los tipos en orden fijo: un `snap` lleva el índice en vez del nombre. */
+export const ENEMY_TYPES = Object.keys(ENEMY_DEFS) as EnemyType[]
+
 export const ENEMY_SPAWN_INTERVAL = 5
 export const ENEMY_SPAWN_MIN = 26
 export const ENEMY_SPAWN_MAX = 40
