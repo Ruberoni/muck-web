@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PROP_DEFS } from './constants'
+import { PLACE_DISTANCE, PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import {
   BIRCH_BAND,
@@ -20,9 +20,10 @@ import {
   type PropPlacement,
 } from './props'
 import { Simulation } from './Simulation'
+import { biomeAt } from './world/biomes'
 import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt } from './world/terrain'
 
-/** Los props de antes del PR 8 (árboles, rocas y arbustos): sus ids, posiciones y el hash del mundo no cambian. */
+/** Árboles, rocas y arbustos, que salen primero y deciden el punto de aparición. */
 const ORIGINAL_COUNT = 180 + 60 + 45
 /** Los tipos de cada franja, con su cantidad exacta, su franja y la pendiente máxima. */
 const BANDED = [
@@ -59,7 +60,7 @@ describe('colocación de props', () => {
     for (let i = 1; i < kinds.length; i++) expect(order.indexOf(kinds[i])).toBeGreaterThanOrEqual(order.indexOf(kinds[i - 1]))
     for (const kind of order) expect(kinds).toContain(kind)
     expect(kinds.slice(0, ORIGINAL_COUNT).every((k) => k === 'tree' || k === 'rock' || k === 'bush')).toBe(true)
-    // Los del PR 10 van detrás de los del PR 8: no mueven sus ids (ni sus posiciones, que vigila world.test.ts).
+    // Los del mithril van detrás de los del hierro: no mueven sus ids (ni sus posiciones, que vigila world.test.ts).
     expect(kinds.slice(ORIGINAL_COUNT, ORIGINAL_COUNT + BIRCH_COUNT + IRON_ORE_COUNT).every((k) => k === 'birch' || k === 'iron_ore')).toBe(true)
   })
 
@@ -86,12 +87,27 @@ describe('colocación de props', () => {
     expect(Math.max(...scales('darkpine'))).toBeLessThanOrEqual(1.6)
   })
 
-  it('los tipos nuevos no mueven el punto de aparición, quedan lejos de él y no se solapan con nada', () => {
+  it('sale exactamente el mismo número de cada tipo, sea cual sea su bioma', () => {
+    const counts: Record<string, number> = {}
+    for (const { kind } of placements) counts[kind] = (counts[kind] ?? 0) + 1
+    expect(counts).toEqual({ tree: 180, rock: 60, bush: 45, birch: 40, iron_ore: 40, darkpine: 20, mithril_ore: 16 })
+  })
+
+  it('el punto de aparición es pradera llana: se puede colocar algo en cualquier dirección', () => {
+    const { x, z } = new Simulation(1).spawnCenter
+    expect(biomeAt(x, z)).toBe('meadow')
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2
+      expect(slopeAt(x + Math.cos(angle) * PLACE_DISTANCE, z + Math.sin(angle) * PLACE_DISTANCE)).toBeLessThanOrEqual(MAX_SLOPE)
+    }
+  })
+
+  it('los que salen después de los arbustos no mueven el punto de aparición, quedan lejos de él y no se solapan con nada', () => {
     const before = findSpawn(gridOf(placements.slice(0, ORIGINAL_COUNT)))
     expect(findSpawn(gridOf(placements))).toEqual(before)
     expect(new Simulation(1).spawnCenter).toEqual(before)
-    // Referencia en Node, como el hash del mundo: la de antes del PR 8.
-    expect(before).toEqual({ x: 1.5590735034407721, z: -1.5521887162548624 })
+    // Referencia en Node, como el hash del mundo.
+    expect(before).toEqual({ x: 7.902813040340096, z: -5.795303792678219 })
     for (const p of placements.slice(ORIGINAL_COUNT)) {
       expect(Math.hypot(p.x - before.x, p.z - before.z) - p.radius).toBeGreaterThanOrEqual(SPAWN_EXCLUSION)
       for (const other of placements) {

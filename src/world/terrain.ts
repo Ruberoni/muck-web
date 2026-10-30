@@ -1,12 +1,8 @@
 import * as THREE from 'three'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import { biomeBlend, terrainColor } from './ground'
 
 const SEGMENTS = 80
-
-const SAND = new THREE.Color('#e3cf8e')
-const GRASS_LOW = new THREE.Color('#6fae45')
-const GRASS_HIGH = new THREE.Color('#4a8a35')
-const ROCK = new THREE.Color('#8b8878')
 
 export function createTerrain(): THREE.Mesh {
   const indexed = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, SEGMENTS, SEGMENTS)
@@ -29,12 +25,12 @@ export function createTerrain(): THREE.Mesh {
   const color = new THREE.Color()
 
   for (let i = 0; i < position.count; i += 3) {
+    const avgX = (position.getX(i) + position.getX(i + 1) + position.getX(i + 2)) / 3
     const avgY = (position.getY(i) + position.getY(i + 1) + position.getY(i + 2)) / 3
+    const avgZ = (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3
     const steep = normal.getY(i) < 0.8
-
-    if (avgY < SAND_LEVEL) color.copy(SAND)
-    else if (steep || avgY > ROCK_LEVEL) color.copy(ROCK)
-    else color.lerpColors(GRASS_LOW, GRASS_HIGH, (avgY - SAND_LEVEL) / (ROCK_LEVEL - SAND_LEVEL))
+    const [r, g, b] = terrainColor(avgY, steep, biomeBlend(avgX, avgZ, avgY))
+    color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
 
     for (let v = 0; v < 3; v++) color.toArray(colors, (i + v) * 3)
   }

@@ -68,6 +68,7 @@ export class Hud {
   private food: HTMLElement
   private prompt: HTMLElement
   private day: HTMLElement
+  private biome: HTMLElement
   private slots: { root: HTMLElement; icon: HTMLElement; count: HTMLElement }[] = []
   private held: HTMLElement
   private hurt: HTMLElement
@@ -84,6 +85,7 @@ export class Hud {
     this.crosshair = el('div', 'crosshair', root)
     this.prompt = el('div', 'prompt', root)
     this.day = el('div', 'day', root)
+    this.biome = el('div', 'biome-notice', root)
     this.minimap = new Minimap(root)
     this.net = new MultiplayerHud(root)
 
@@ -212,6 +214,15 @@ export class Hud {
     this.food.hidden = !item
     this.food.title = item ? ITEM_NAMES[item] : ''
     this.food.innerHTML = item ? ICONS[item] : ''
+  }
+
+  /** Aviso discreto del bioma en el que se acaba de entrar. */
+  showBiome(name: string) {
+    this.biome.textContent = name
+    this.biome.classList.remove('active')
+    // Forzar reflow para que la animación vuelva a empezar aunque siga activa.
+    void this.biome.offsetWidth
+    this.biome.classList.add('active')
   }
 
   /** Destello rojo en los bordes al recibir daño. */

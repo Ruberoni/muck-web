@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { clampToRim, teammateMark, terrainColor, toMinimap } from './minimap'
+import { clampToRim, teammateMark, toMinimap } from './minimap'
 import { ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
+import { terrainColor } from '../world/ground'
 
 /** Punto a `dist` por delante (forward) y `side` a la derecha de quien mira a `yaw`. */
 const offset = (yaw: number, dist: number, side = 0) => ({
@@ -43,13 +44,28 @@ describe('clampToRim', () => {
 })
 
 describe('terrainColor', () => {
-  it('usa los mismos tramos que la isla: agua, arena, hierba y roca', () => {
+  it('usa los mismos tramos en toda la isla: agua, arena, hierba y roca', () => {
     const sand = terrainColor((0 + SAND_LEVEL) / 2, false)
     const grass = terrainColor((SAND_LEVEL + ROCK_LEVEL) / 2, false)
     expect(terrainColor(-1, false)[2]).toBeGreaterThan(terrainColor(-1, false)[0])
     expect(sand[0]).toBeGreaterThan(sand[2])
     expect(grass[1]).toBeGreaterThan(grass[0])
     expect(terrainColor(ROCK_LEVEL + 1, false)).toEqual(terrainColor(4, true))
+  })
+
+  it('el bosque es más oscuro que la pradera y la montaña más gris, y se mezclan poco a poco', () => {
+    const sum = (c: number[]) => c.reduce((a, b) => a + b)
+    const h = 4
+    const meadow = terrainColor(h, false)
+    const forest = terrainColor(h, false, { forest: 1, mountain: 0 })
+    const mountain = terrainColor(h, false, { forest: 0, mountain: 1 })
+    expect(sum(forest)).toBeLessThan(sum(meadow))
+    const half = terrainColor(h, false, { forest: 0.5, mountain: 0 })
+    expect(sum(half)).toBeLessThan(sum(meadow))
+    expect(sum(half)).toBeGreaterThan(sum(forest))
+    expect(mountain[1] - mountain[0]).toBeLessThan(meadow[1] - meadow[0])
+    // Arena y agua no dependen del bioma.
+    expect(terrainColor(0.5, false, { forest: 1, mountain: 1 })).toEqual(terrainColor(0.5, false))
   })
 
   it('el agua profunda es más oscura que la de la orilla', () => {

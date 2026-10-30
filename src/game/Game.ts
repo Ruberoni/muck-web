@@ -8,10 +8,12 @@ import { PickupView } from '../view/PickupView'
 import { StructureView } from '../view/StructureView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
+import { BiomeNotice } from '../ui/biomeNotice'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
+import { biomeAt, BIOME_NAMES } from '../sim/world/biomes'
 import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
@@ -118,6 +120,7 @@ export class Game {
   private sun = new THREE.Vector3()
   /** Acciones de `__debug` y de la pantalla de inventario (select, move, craft) para el siguiente paso. */
   private queued: ActionData[] = []
+  private biomeNotice = new BiomeNotice()
   /** Las estaciones al fabricar, como las ve el cliente (con margen): para el filtro de envío y la pantalla. */
   private craftWorld = clientCraftWorld(() => this.sim.structures.list)
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
@@ -783,6 +786,10 @@ export class Game {
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
     this.hud.setDay(sim.clock.day)
+    if (this.state === 'playing') {
+      const entered = this.biomeNotice.update(biomeAt(p.pos.x, p.pos.z), dt)
+      if (entered) this.hud.showBiome(BIOME_NAMES[entered])
+    }
     this.hud.minimap.draw({
       x: this.renderPos.x,
       z: this.renderPos.z,

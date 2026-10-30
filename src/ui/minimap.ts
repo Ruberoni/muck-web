@@ -1,6 +1,7 @@
 import { ENEMY_DEFS, type EnemyType } from '../sim/constants'
-import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import { heightAt, WORLD_SIZE } from '../sim/world/terrain'
 import type { StructureKind } from '../sim/structures'
+import { biomeBlend, DEEP, terrainColor } from '../world/ground'
 
 /** Radio del mundo (en unidades) que cabe entre el centro y el borde del minimapa. */
 export const VIEW_RADIUS = 75
@@ -73,28 +74,6 @@ export function teammateMark(dx: number, dz: number, yaw: number, viewYaw: numbe
   return { x: p.x, y: p.y, angle, far }
 }
 
-type Rgb = [number, number, number]
-const DEEP: Rgb = [38, 98, 150]
-const SHALLOW: Rgb = [92, 170, 205]
-const SAND: Rgb = [227, 207, 142]
-const GRASS_LOW: Rgb = [111, 174, 69]
-const GRASS_HIGH: Rgb = [74, 138, 53]
-const ROCK: Rgb = [139, 136, 120]
-const SHALLOW_DEPTH = 3
-
-const mix = (a: Rgb, b: Rgb, t: number): Rgb => {
-  const k = Math.min(1, Math.max(0, t))
-  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]
-}
-
-/** Color del minimapa para una altura de terreno, con los mismos tramos que la malla de la isla. */
-export function terrainColor(h: number, steep: boolean): Rgb {
-  if (h < WATER_LEVEL) return mix(SHALLOW, DEEP, (WATER_LEVEL - h) / SHALLOW_DEPTH)
-  if (h < SAND_LEVEL) return SAND
-  if (steep || h > ROCK_LEVEL) return ROCK
-  return mix(GRASS_LOW, GRASS_HIGH, (h - SAND_LEVEL) / (ROCK_LEVEL - SAND_LEVEL))
-}
-
 /** Textura de la isla vista desde arriba, con -Z (norte) hacia arriba. Se genera una vez. */
 function renderIsland(): HTMLCanvasElement {
   const size = Math.round(WORLD_SIZE * TEXELS_PER_UNIT)
@@ -110,7 +89,7 @@ function renderIsland(): HTMLCanvasElement {
       const h = heightAt(x, z)
       // Pendiente aproximada: mismo umbral que la malla (normal.y < 0.8 ⇔ pendiente > 0.75).
       const slope = Math.hypot(heightAt(x + unit, z) - h, heightAt(x, z + unit) - h) / unit
-      const [r, g, b] = terrainColor(h, slope > 0.75)
+      const [r, g, b] = terrainColor(h, slope > 0.75, biomeBlend(x, z, h))
       const k = (j * size + i) * 4
       image.data[k] = r
       image.data[k + 1] = g

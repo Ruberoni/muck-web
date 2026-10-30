@@ -78,6 +78,24 @@
   font-weight: 700;
 }
 
+.biome-notice {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  opacity: 0;
+}
+
+.biome-notice.active { animation: biome-notice 2.6s ease-out; }
+
+@keyframes biome-notice {
+  15%, 70% { opacity: 1; }
+}
+
 .bars {
   position: absolute;
   left: 16px;

@@ -8,27 +8,27 @@ describe('mundo determinista', () => {
   const world = createPropWorld()
   const view = new PropView(world.placements)
 
-  // El código de la fase 1 da '50ef32fe' en Node y '2e7f5c79' en Chromium (las funciones
-  // matemáticas difieren en los últimos bits). El valor del navegador se comprueba con Playwright.
-  it('conserva el hash de la fase 1 (referencia en Node)', () => {
-    expect(computeWorldHash(islandMeshes(view))).toBe('50ef32fe')
+  // La isla con biomas da '2db37a80' en Node y '2dceb132' en Chromium (las funciones matemáticas difieren en los
+  // últimos bits). El valor del navegador se comprueba con `__debug.worldHash`.
+  it('conserva el hash de la isla (referencia en Node)', () => {
+    expect(computeWorldHash(islandMeshes(view))).toBe('2db37a80')
   })
 
-  // Los tipos del PR 8 van en sus propios meshes y detrás en la lista: no cambian el hash anterior. Este es el suyo
-  // (referencia en Node; en Chromium, `__debug.levelPropsHash` da 'e93e8633'); los del PR 10 van detrás sin cambiarlo.
+  // Van en sus propios meshes y detrás en la lista: no cambian el hash anterior. Este es el suyo (referencia en Node,
+  // y `__debug.levelPropsHash` da lo mismo en Chromium).
   it('abedules y menas de hierro tienen su propio hash', () => {
     const { birch, iron_ore } = view.byKind
     expect(birch[0].count).toBeGreaterThan(0)
     expect(iron_ore[0].count).toBeGreaterThan(0)
-    expect(computeWorldHash([...birch, ...iron_ore])).toBe('95333a1f')
+    expect(computeWorldHash([...birch, ...iron_ore])).toBe('72fab417')
   })
 
-  // Lo mismo con los del PR 10 (`__debug.mithrilPropsHash` da lo mismo en Chromium).
+  // Lo mismo con los del mithril (`__debug.mithrilPropsHash` da lo mismo en Chromium).
   it('pinos oscuros y menas de mithril tienen su propio hash', () => {
     const { darkpine, mithril_ore } = view.byKind
     expect(darkpine[0].count).toBeGreaterThan(0)
     expect(mithril_ore[0].count).toBeGreaterThan(0)
-    expect(computeWorldHash([...darkpine, ...mithril_ore])).toBe('45edcf5f')
+    expect(computeWorldHash([...darkpine, ...mithril_ore])).toBe('908639bf')
   })
 
   it('los arbustos son deterministas', () => {
@@ -37,8 +37,8 @@ describe('mundo determinista', () => {
     expect(bushes.count).toBeGreaterThan(30)
     for (const mesh of berries) expect(mesh.count).toBe(bushes.count)
     expect(computeWorldHash([again.meshes.bushes, ...again.meshes.berries])).toBe(computeWorldHash([bushes, ...berries]))
-    // Referencia en Node: los tipos nuevos van detrás y con su propio stream, así que tampoco mueven los arbustos.
-    expect(computeWorldHash([bushes, ...berries])).toBe('0d7d3a36')
+    // Referencia en Node: lo que se coloca después va detrás y con su propio stream, así que no mueve los arbustos.
+    expect(computeWorldHash([bushes, ...berries])).toBe('0b002036')
   })
 
   it('las posiciones de las colocaciones coinciden con las matrices de instancia', () => {

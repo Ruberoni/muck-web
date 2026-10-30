@@ -494,7 +494,7 @@ describe('Simulation con varios jugadores', () => {
     expect(JSON.stringify(b.toJSON())).toBe(JSON.stringify(a.toJSON()))
     const seen = new Set<string>()
     const hurt = new Set<PlayerId>()
-    for (let t = SPLIT + 1; t <= SPLIT + 900; t++) {
+    for (let t = SPLIT + 1; t <= SPLIT + 1500; t++) {
       const eventsA = stepAll(a, script(a, t))
       const eventsB = stepAll(b, script(b, t))
       expect(JSON.stringify(eventsB)).toBe(JSON.stringify(eventsA))
