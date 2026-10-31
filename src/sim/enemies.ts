@@ -25,7 +25,9 @@ import {
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
   type ChargeDef,
+  type EnemyDef,
   type EnemyType,
+  type GuardDef,
   type HitEfficacy,
   type RangedDef,
 } from './constants'
@@ -65,6 +67,8 @@ export interface EnemyData {
   pos: { x: number; z: number }
   /** Posición al empezar el paso, para interpolar al dibujar. */
   prev: { x: number; z: number }
+  /** Donde salió: el sitio que guarda un guardián. */
+  home: { x: number; z: number }
   /** Hacia donde mira (rotación Y del modelo: +Z local hacia el jugador). */
   yaw: number
   hp: number
@@ -109,7 +113,7 @@ export interface EnemiesState {
   bossDay: number
 }
 
-const copyEnemy = (e: EnemyData): EnemyData => ({ ...e, pos: { ...e.pos }, prev: { ...e.prev }, knock: { ...e.knock }, charge: { ...e.charge } })
+const copyEnemy = (e: EnemyData): EnemyData => ({ ...e, pos: { ...e.pos }, prev: { ...e.prev }, home: { ...e.home }, knock: { ...e.knock }, charge: { ...e.charge } })
 
 export const NO_CHARGE: EnemyCharge = { state: 'idle', time: 0, cooldown: 0, dx: 0, dz: 0 }
 
@@ -131,6 +135,9 @@ export function bossOfNight(day: number): EnemyType | null {
 
 /** Por cuánto se multiplican la vida y el botín de un jefe con `players` jugadores. */
 export const bossScale = (players: number) => 1 + BOSS_PER_PLAYER * Math.max(0, players - 1)
+
+/** Por cuánto se multiplican la vida y el botín de un enemigo con `players` jugadores: el guardián, por jugador. */
+const hpScale = (def: EnemyDef, players: number) => (def.guard ? Math.max(1, players) : def.boss ? bossScale(players) : 1)
 
 /** Probabilidad de que una aparición de la noche `day` en `biome` sea de tipo `type` en vez de un trasgo. */
 export function spawnChance(type: EnemyType, day: number, biome: Biome): number {
@@ -178,7 +185,7 @@ export class Enemies {
     if (isNight(phase)) {
       this.spawnTimer -= dt
       if (this.spawnTimer <= 1e-9) {
-        const count = this.list.filter((e) => !ENEMY_DEFS[e.type].boss).length
+        const count = this.list.filter((e) => !ENEMY_DEFS[e.type].boss && !ENEMY_DEFS[e.type].guard).length
         if (prey.length && count < enemyCapFor(day, players.length)) {
           // Por turnos: cada aparición elige a un jugador vivo distinto.
           const around = prey[this.spawnTurn++ % prey.length]
@@ -212,6 +219,8 @@ export class Enemies {
    * ENEMY_RETARGET_MARGIN metros más cerca, para que no dude entre dos. Si el suyo ya no está, elige al momento.
    */
   private chooseTarget(e: EnemyData, prey: readonly EnemyPrey[], dt: number): EnemyPrey | null {
+    const { guard } = ENEMY_DEFS[e.type]
+    if (guard) return this.guardTarget(e, guard, prey)
     let current = e.target === null ? undefined : prey.find((p) => p.id === e.target)
     e.retarget -= dt
     if (current && e.retarget > 1e-9) return current
@@ -222,6 +231,26 @@ export class Enemies {
     if (nearest && (!current || distance(nearest) < distance(current) - ENEMY_RETARGET_MARGIN)) current = nearest
     e.target = current?.id ?? null
     return current ?? null
+  }
+
+  /**
+   * A quién persigue un guardián: al suyo mientras no se aleje de su sitio; si no, al vivo más cercano de los que tenga
+   * a `aggro` metros sin salir de ese sitio. null: a nadie, y vuelve a él.
+   */
+  private guardTarget(e: EnemyData, { aggro, leash }: GuardDef, prey: readonly EnemyPrey[]): EnemyPrey | null {
+    const inside = (p: EnemyPrey) => Math.hypot(p.pos.x - e.home.x, p.pos.z - e.home.z) < leash
+    const current = prey.find((p) => p.id === e.target)
+    if (current && inside(current)) return current
+    let nearest: EnemyPrey | null = null
+    let best = aggro
+    for (const p of prey) {
+      const distance = Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z)
+      if (distance > best || !inside(p)) continue
+      best = distance
+      nearest = p
+    }
+    e.target = nearest?.id ?? null
+    return nearest
   }
 
   /** Mueve un enemigo hacia `prey` (o lo deja quieto si no hay nadie) y devuelve si ataca en este paso. */
@@ -237,6 +266,7 @@ export class Enemies {
     }
     if (!prey) {
       e.attackCooldown = Math.max(e.attackCooldown - dt, def.windup)
+      if (def.guard) this.goHome(e, def.speed * dt)
       return false
     }
     const player = prey.pos
@@ -267,6 +297,17 @@ export class Enemies {
     e.attackCooldown = def.attackInterval
     this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return true
+  }
+
+  /** Sin nadie a quien perseguir, un guardián vuelve a su sitio. La vida que le hayan quitado no la recupera. */
+  private goHome(e: EnemyData, step: number) {
+    const dx = e.home.x - e.pos.x
+    const dz = e.home.z - e.pos.z
+    const dist = Math.hypot(dx, dz)
+    if (dist < 1e-6) return
+    e.yaw = Math.atan2(dx, dz)
+    const k = Math.min(step, dist) / dist
+    this.move(e, dx * k, dz * k)
   }
 
   /**
@@ -415,16 +456,17 @@ export class Enemies {
     return null
   }
 
-  /** Crea un enemigo de tipo `type` en (x, z) mirando hacia +Z. Un jefe sale con más vida cuantos más `players` haya. */
+  /** Crea un enemigo de tipo `type` en (x, z) mirando hacia +Z. Un jefe o un guardián sale con más vida cuantos más `players` haya. */
   spawnAt(x: number, z: number, type: EnemyType = 'goblin', players = 1): EnemyData {
     const def = ENEMY_DEFS[type]
-    const hp = def.boss ? def.hp * bossScale(players) : def.hp
+    const hp = def.hp * hpScale(def, players)
     const e: EnemyData = {
       kind: 'enemy',
       type,
       id: this.nextId++,
       pos: { x, z },
       prev: { x, z },
+      home: { x, z },
       yaw: 0,
       hp,
       maxHp: hp,

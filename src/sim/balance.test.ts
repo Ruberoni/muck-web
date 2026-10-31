@@ -61,6 +61,13 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })
 
+  it(`la espada de meteorito, una para cada uno de los ${MAX_PLAYERS}, cabe en la madera oscura de la isla`, () => {
+    const need: Amounts = {}
+    for (const r of [...PER_PLAYER, 'meteor_sword'] as const) rawCost(r, need, MAX_PLAYERS)
+    expect(need.meteor_fragment).toBe(ENEMY_DEFS.guardian.loot[0].amount * MAX_PLAYERS)
+    expect(need.dark_wood).toBeLessThanOrEqual(supply().dark_wood!)
+  })
+
   it('un jugador solo rompe unos 19 árboles, 11 rocas, 5 menas de hierro, 2 de mithril, 2 abedules y 2 pinos oscuros', () => {
     const need: Amounts = {}
     for (const r of [...PER_PLAYER, ...SHARED]) rawCost(r, need)
@@ -93,6 +100,7 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
     expect(timeToKill(null, 'goblin')).toBeCloseTo(6 * HIT_COOLDOWN, 6)
     expect(LEVELS.map(([tool]) => timeToKill(tool, 'goblin'))).toEqual([1.2000000000000002, 0.8, 0.4, 0.4])
     expect(LEVELS.map(([, sword]) => timeToKill(sword, 'goblin'))).toEqual([1, 0.5, 0.25, 0.25])
+    expect(timeToKill('meteor_sword', 'goblin')).toBeCloseTo(0.22, 6)
   })
 
   it.each(LEVELS)('contra un trasgo y los jefes, %s mata más despacio que %s', (tool, sword) => {
@@ -133,6 +141,23 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
     for (const material of MATERIALS) {
       expect(timeToKill(`${material}_${wrong}`, type), material).toBeGreaterThanOrEqual(timeToKill(`${material}_sword`, type) * 2)
     }
+  })
+
+  it('contra el guardián, con cualquier grupo, el pico gana a la espada como mucho por el doble, y la espada al hacha', () => {
+    for (const players of [1, 2, 4, 8]) {
+      const hp = ENEMY_DEFS.guardian.hp * players
+      for (const material of MATERIALS) {
+        const pickaxe = timeToKill(`${material}_pickaxe`, 'guardian', hp)
+        const sword = timeToKill(`${material}_sword`, 'guardian', hp)
+        expect(pickaxe, material).toBeLessThan(sword)
+        expect(sword, material).toBeLessThanOrEqual(pickaxe * 2)
+        expect(sword, material).toBeLessThan(timeToKill(`${material}_axe`, 'guardian', hp))
+      }
+    }
+  })
+
+  it('la espada de meteorito es la mejor espada contra todos', () => {
+    for (const type of ENEMY_TYPES) expect(timeToKill('meteor_sword', type), type).toBeLessThan(timeToKill('mithril_sword', type))
   })
 
   it('ejemplo: el gólem con equipo de piedra', () => {

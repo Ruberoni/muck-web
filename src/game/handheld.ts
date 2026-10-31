@@ -98,6 +98,10 @@ const ore = mat('#7b7268')
 const oreVein = new THREE.MeshStandardMaterial({ color: '#c8743a', flatShading: true, metalness: 0.4, roughness: 0.5 })
 const mithrilRock = mat('#6c7080')
 const mithrilVein = new THREE.MeshStandardMaterial({ color: '#4fb3f0', flatShading: true, metalness: 0.4, roughness: 0.4 })
+// Lo del meteorito brilla un poco por sí mismo, como su roca.
+const meteorHead = new THREE.MeshStandardMaterial({ color: '#ff7a2f', emissive: '#c8400f', emissiveIntensity: 0.6, flatShading: true })
+const meteorRock = mat('#3b322d')
+const meteorVein = new THREE.MeshStandardMaterial({ color: '#ff7a1f', emissive: '#ff5a1f', flatShading: true })
 const berryRed = mat('#c2304a')
 const leaf = mat('#3d7d35')
 const meat = mat('#c75a5a')
@@ -280,6 +284,10 @@ export function itemModel(item: ItemId): THREE.Group {
       return sword(ironHead)
     case 'mithril_sword':
       return sword(mithrilHead)
+    case 'meteor_sword':
+      return sword(meteorHead)
+    case 'meteor_fragment':
+      return oreChunk(meteorRock, meteorVein)
     case 'wood':
       return log(bark)
     case 'dark_wood':

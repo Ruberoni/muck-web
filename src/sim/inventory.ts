@@ -28,6 +28,8 @@ export type ItemId =
   | 'stone_sword'
   | 'iron_sword'
   | 'mithril_sword'
+  | 'meteor_fragment'
+  | 'meteor_sword'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -59,6 +61,8 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   stone_sword: 'Espada de piedra',
   iron_sword: 'Espada de hierro',
   mithril_sword: 'Espada de mithril',
+  meteor_fragment: 'Fragmento de meteorito',
+  meteor_sword: 'Espada de meteorito',
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

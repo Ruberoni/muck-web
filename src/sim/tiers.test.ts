@@ -29,6 +29,7 @@ describe('niveles: daño contra props', () => {
     ['iron_bar', 1, 0, 0, 0, 0, 0, 1],
     ['mithril_ore', 1, 0, 0, 0, 0, 0, 1],
     ['mithril_bar', 1, 0, 0, 0, 0, 0, 1],
+    ['meteor_fragment', 1, 0, 0, 0, 0, 0, 1],
     ['workbench', 1, 0, 0, 0, 0, 0, 1],
     ['furnace', 1, 0, 0, 0, 0, 0, 1],
     ['anvil', 1, 0, 0, 0, 0, 0, 1],
@@ -45,6 +46,7 @@ describe('niveles: daño contra props', () => {
     ['stone_sword', 1, 0, 0, 0, 0, 0, 1],
     ['iron_sword', 1, 0, 0, 0, 0, 0, 1],
     ['mithril_sword', 1, 0, 0, 0, 0, 0, 1],
+    ['meteor_sword', 1, 0, 0, 0, 0, 0, 1],
   ]
   it.each(TABLE)(
     '%s: árbol %i, abedul %i, pino oscuro %i, roca %i, mena de hierro %i, mena de mithril %i, arbusto %i',

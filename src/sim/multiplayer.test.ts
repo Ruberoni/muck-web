@@ -396,6 +396,7 @@ describe('Simulation con varios jugadores', () => {
       'stone_sword',
       'iron_sword',
       'mithril_sword',
+      'meteor_sword',
       'cooked_meat',
       'berry_infusion',
     ])

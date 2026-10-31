@@ -67,6 +67,7 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | yunque | hacha, pico o espada de hierro | 3 lingotes de hierro + 2 madera de abedul |
 | yunque | hacha o pico de mithril | 3 lingotes de mithril + 2 madera oscura |
 | yunque | espada de mithril | 2 lingotes de mithril + 2 madera oscura |
+| yunque | espada de meteorito | 3 fragmentos de meteorito + 2 madera oscura |
 
 Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un horno cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas. Fundir y cocinar son instantáneos: cada clic junto al horno convierte un mineral en un lingote, y junto a una fogata, una carne cruda en una asada.
 
@@ -81,6 +82,7 @@ Las espadas son las armas para pelear: no talan ni pican, golpean cada 0,25 s (l
 | piedra | 30 | 25 |
 | hierro | 40 | 35 |
 | mithril | 60 | 50 |
+| meteorito | — | 65 |
 
 ## Estaciones
 
@@ -129,7 +131,9 @@ La lógica que no depende de three.js ni del DOM (jugador, supervivencia, colisi
 
 ## Meteoritos
 
-Desde el día 2 cae un meteorito al día, a media mañana o a mediodía, a la hora que toque en cada partida. Se anuncia 6 s antes con una bola de fuego en el cielo, un silbido, el aviso "¡Cae un meteorito al norte!" (según dónde estés) y una marca roja en el suelo. Cae en hierba libre, entre 40 y 70 m de un jugador vivo, y quien esté a menos de 4 m recibe 20 de daño. Deja un cráter y una roca que no se puede atravesar, con su rombo en el minimapa; la roca se enfría y desaparece al amanecer siguiente. Mientras siga ahí no cae otro. Los decide `src/sim/worldEvents.ts`, y en red el cliente sigue sus eventos.
+Desde el día 2 cae un meteorito al día, a media mañana o a mediodía, a la hora que toque en cada partida. Se anuncia 6 s antes con una bola de fuego en el cielo, un silbido, el aviso "¡Cae un meteorito al norte!" (según dónde estés) y una marca roja en el suelo. Cae en hierba libre, entre 40 y 70 m de un jugador vivo, y quien esté a menos de 4 m recibe 20 de daño. Deja un cráter y una roca que no se puede atravesar, con su rombo en el minimapa, y junto a ella aparece su guardián. Mientras viva, la roca sigue al rojo y no cae otro; al morir, la roca se enfría y desaparece al amanecer siguiente. Los decide `src/sim/worldEvents.ts`, y en red el cliente sigue sus eventos.
+
+El **Guardián del meteorito** tiene 500 de vida por cada jugador en el mundo, hace 15 de daño, es más lento que andar y no se aturde. El pico le hace ×1,5. Se queda quieto junto al cráter hasta que un jugador vivo se acerca a 15 m; entonces lo persigue mientras no se aleje más de 25 m de su sitio, y si se aleja vuelve a él sin curarse. Sigue ahí de día y de noche hasta que lo matan, y suelta 3 fragmentos de meteorito por jugador. Con 3 fragmentos y 2 de madera oscura, en el yunque, se hace la espada de meteorito: 65 de ataque y un golpe cada 0,22 s, la mejor espada del juego.
 
 ## Despliegue
 

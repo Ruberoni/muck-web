@@ -595,6 +595,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     id,
     pos: { x: 0, z: 0 },
     prev: { x: 0, z: 0 },
+    home: { x: 0, z: 0 },
     yaw: 0,
     hp,
     maxHp: hp,

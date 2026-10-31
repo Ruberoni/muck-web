@@ -410,7 +410,7 @@ describe('el espejo de NetClient', () => {
     expect(blocked(mirror)).toBe(false)
 
     run(time, 6000, [[client, idle]])
-    expect(mirror.worldEvents.meteor).toMatchObject({ landed: true, coolDay: sim.clock.day })
+    expect(mirror.worldEvents.meteor).toMatchObject({ landed: true, coolDay: null })
     // La predicción choca con la roca como el servidor.
     expect(blocked(mirror)).toBe(true)
 
@@ -418,6 +418,12 @@ describe('el espejo de NetClient', () => {
     run(time, 500, [[client, idle], [late, idle]])
     expect(late.sim!.worldEvents.meteor).toEqual(sim.worldEvents.meteor)
     expect(blocked(late.sim!)).toBe(true)
+
+    const guardian = sim.enemies.list.find((e) => e.type === 'guardian')!
+    sim.enemies.hit(guardian, guardian.hp, { x, z }, client.id)
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(mirror.worldEvents.meteor).toMatchObject({ coolDay: sim.clock.day })
+    expect(late.sim!.worldEvents.meteor).toMatchObject({ coolDay: sim.clock.day })
 
     sim.setDay(sim.clock.day + 1)
     run(time, 500, [[client, idle], [late, idle]])

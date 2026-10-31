@@ -79,6 +79,8 @@ function flashesOf(material: THREE.MeshStandardMaterial) {
 }
 const standard = (color: string) => new THREE.MeshStandardMaterial({ color, flatShading: true })
 const rockMaterial = standard('#8a877c')
+// Los puños y los hombros del guardián, al rojo como su meteorito.
+const emberMaterial = new THREE.MeshStandardMaterial({ color: '#4a403a', emissive: '#ff5a1f', emissiveIntensity: 0.8, flatShading: true })
 // Sin iluminación: los ojos se ven de noche.
 const eyes = (color: string) => ({ geometry: eyeGeometry, material: new THREE.MeshBasicMaterial({ color }), castShadow: false })
 
@@ -117,6 +119,7 @@ const LOOKS: Record<EnemyType, EnemyLook> = {
     ],
     { geometry: heldRockGeometry, material: rockMaterial },
   ),
+  guardian: look('#3b322d', '#1c0c06', [{ geometry: golemDetailGeometry, material: emberMaterial, castShadow: true }, eyes('#ffd23f')]),
 }
 
 /** Modelo de un enemigo y sus animaciones, que solo existen en la vista. */

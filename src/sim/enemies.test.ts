@@ -506,6 +506,115 @@ describe('jefes', () => {
   })
 })
 
+describe('guardián', () => {
+  const GUARDIAN = ENEMY_DEFS.guardian
+  const { aggro, leash } = GUARDIAN.guard!
+  const DAYTIME = 0.3
+  let enemies: Enemies
+  let guardian: EnemyData
+  let player: { x: number; z: number }
+
+  beforeEach(() => {
+    enemies = new Enemies([], mulberry32(7))
+    guardian = enemies.spawnAt(spot.x, spot.z, 'guardian')
+    player = { x: spot.x + aggro + 5, z: spot.z }
+  })
+
+  const prey = (alive = true) => [{ id: 0, pos: player, alive }]
+  const run = (steps: number, phase = DAYTIME, who = prey()) => {
+    let damage = 0
+    for (let i = 0; i < steps; i++) for (const hit of enemies.step(STEP, who, phase, 2)) damage += hit.damage
+    return damage
+  }
+
+  it('se queda quieto mientras nadie vivo se acerque a 15 m', () => {
+    run(60)
+    expect(guardian.pos).toEqual(guardian.home)
+    player.x = spot.x + aggro - 1
+    run(60, DAYTIME, prey(false))
+    expect(guardian.pos).toEqual(guardian.home)
+    run(1)
+    expect(guardian.target).toBe(0)
+    expect(guardian.pos.x).toBeGreaterThan(spot.x)
+  })
+
+  it('persigue y pega como cualquiera, también de noche', () => {
+    player.x = spot.x + 6
+    expect(run(60 * 4)).toBeGreaterThanOrEqual(GUARDIAN.damage)
+    expect(dist(guardian, player)).toBeLessThan(3)
+    guardian.attackCooldown = 0
+    expect(run(60 * 2, NIGHT)).toBeGreaterThanOrEqual(GUARDIAN.damage)
+  })
+
+  it('más lento que andar: se le puede dejar atrás', () => {
+    expect(GUARDIAN.speed).toBeLessThan(WALK_SPEED)
+  })
+
+  it('si te alejas 25 m de su sitio te deja y vuelve, sin curarse', () => {
+    player.x = spot.x + 6
+    run(60 * 2)
+    guardian.hp = 100
+    const away = guardian.pos.x
+    expect(away).toBeGreaterThan(spot.x)
+    player.x = spot.x + leash + 1
+    run(1)
+    expect(guardian.target).toBeNull()
+    run(60 * 3)
+    expect(guardian.pos).toEqual(guardian.home)
+    expect(guardian.hp).toBe(100)
+  })
+
+  it('aunque esté pegado a ti, no sale de su sitio', () => {
+    guardian.pos.x = guardian.prev.x = spot.x + leash - 1
+    player.x = spot.x + leash + 0.5
+    run(1)
+    expect(guardian.target).toBeNull()
+  })
+
+  it('volviendo, se despierta otra vez si te acercas', () => {
+    player.x = spot.x + leash + 1
+    guardian.pos.x = guardian.prev.x = spot.x + 10
+    run(1)
+    expect(guardian.target).toBeNull()
+    player.x = spot.x + 14
+    run(1)
+    expect(guardian.target).toBe(0)
+  })
+
+  it('sigue a quien persigue aunque otro esté más cerca, mientras no se aleje', () => {
+    const other = { x: spot.x - 3, z: spot.z }
+    player.x = spot.x + 10
+    run(1)
+    const both = [...prey(), { id: 1, pos: other, alive: true }]
+    run(5, DAYTIME, both)
+    expect(guardian.target).toBe(0)
+    player.x = spot.x + leash + 1
+    run(1, DAYTIME, both)
+    expect(guardian.target).toBe(1)
+  })
+
+  it('un golpe no lo aturde ni lo empuja', () => {
+    const { x } = guardian.pos
+    enemies.hit(guardian, 10, player, 0)
+    expect(guardian.stagger).toBe(0)
+    expect(guardian.pos.x).toBe(x)
+  })
+
+  it('tiene 500 de vida por jugador', () => {
+    expect(enemies.spawnAt(0, 0, 'guardian', 4).maxHp).toBe(GUARDIAN.hp * 4)
+    expect(enemies.spawnAt(0, 0, 'guardian', 0).maxHp).toBe(GUARDIAN.hp)
+  })
+
+  it('no cuenta para el tope de enemigos ni como jefe', () => {
+    for (let i = 0; i < enemyCap(2) - 1; i++) enemies.spawnAt(spot.x + 30 + i, spot.z)
+    for (let i = 0; i < 600; i++) enemies.step(STEP, prey(), NIGHT, 2)
+    expect(enemies.list.filter((e) => e.type !== 'guardian')).toHaveLength(enemyCap(2))
+    expect(bossOfNight(3)).toBe('giant')
+    for (let i = 0; i < 60; i++) enemies.step(STEP, prey(), DAY_FRACTION + 21 / DAY_LENGTH, 3)
+    expect(enemies.list.filter((e) => e.type === 'giant')).toHaveLength(1)
+  })
+})
+
 describe('combate', () => {
   const setup = (type: EnemyType = 'goblin') => {
     const inventory = new Inventory()
@@ -603,6 +712,16 @@ describe('combate', () => {
     hold(STEP)
     expect(pickups.list.filter((p) => p.item === 'raw_meat')).toHaveLength(6)
     expect(pickups.list.filter((p) => p.item === 'iron_bar')).toHaveLength(4)
+  })
+
+  it('el botín del guardián va por jugador', () => {
+    const { enemies, enemy, hold, equip, pickups } = setup()
+    enemies.reset()
+    const guardian = enemies.spawnAt(enemy.pos.x, enemy.pos.z, 'guardian', 3)
+    equip('wood_sword')
+    guardian.hp = 1
+    hold(STEP)
+    expect(pickups.list.filter((p) => p.item === 'meteor_fragment')).toHaveLength(9)
   })
 
   it('al morir suelta todo su botín', () => {

@@ -32,6 +32,7 @@ export type RecipeId =
   | 'stone_sword'
   | 'iron_sword'
   | 'mithril_sword'
+  | 'meteor_sword'
 
 export interface Recipe {
   id: RecipeId
@@ -62,6 +63,7 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'mithril_axe', result: 'mithril_axe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_pickaxe', result: 'mithril_pickaxe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_sword', result: 'mithril_sword', cost: [{ item: 'mithril_bar', amount: 2 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
+  { id: 'meteor_sword', result: 'meteor_sword', cost: [{ item: 'meteor_fragment', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   // Cocinar es instantáneo, como fundir: junto a una fogata.
   { id: 'cooked_meat', result: 'cooked_meat', cost: [{ item: 'raw_meat', amount: 1 }], station: 'campfire' },
   { id: 'berry_infusion', result: 'berry_infusion', cost: [{ item: 'berry', amount: 4 }], station: 'campfire' },

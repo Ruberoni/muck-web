@@ -12,7 +12,7 @@ describe('MeteorView', () => {
   const setup = () => {
     const view = new MeteorView()
     const [fireball, rock, burst] = view.group.children as [THREE.Group, THREE.Mesh, THREE.Mesh]
-    const meteor: Meteor = { x: 7, y: heightAt(7, -5), z: -5, radius: METEOR_RADIUS, alive: true, landTick: LAND_TICK, landed: false, coolDay: null }
+    const meteor: Meteor = { x: 7, y: heightAt(7, -5), z: -5, radius: METEOR_RADIUS, alive: true, landTick: LAND_TICK, landed: false, coolDay: null, guardian: null }
     const heat = () => ((rock.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity
     // Los discos del suelo: el aviso (rojo) y el cráter comparten forma.
     const disc = (color: string) =>

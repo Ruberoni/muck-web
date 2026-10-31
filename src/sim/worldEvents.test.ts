@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resolveCircle } from './collision'
 import {
+  ENEMY_DEFS,
   HEALTH_REGEN_DELAY,
   METEOR_BLAST,
   METEOR_DAMAGE,
@@ -27,18 +28,21 @@ const world = createPropWorld()
 const home = findSpawn(world.grid)
 const WARNING = Math.round(METEOR_WARNING / STEP)
 const AFTERNOON = 0.5
+const GUARDIAN_ID = 7
 
 describe('meteoritos', () => {
   let events: SimEventData[]
   let worldEvents: WorldEvents
   let tick: number
+  let guardianAlive: boolean
   const player = (x: number, z: number, alive = true): WorldEventTarget => ({ id: 0, pos: { x, z }, alive })
   const players = [player(home.x, home.z)]
 
   beforeEach(() => {
     events = []
     tick = 0
-    worldEvents = new WorldEvents([world.grid], mulberry32(3), (e) => events.push(e))
+    guardianAlive = false
+    worldEvents = new WorldEvents([world.grid], mulberry32(3), (e) => events.push(e), { spawn: () => GUARDIAN_ID, alive: () => guardianAlive })
   })
 
   const step = (phase: number, day: number, who = players) => worldEvents.step(++tick, who, phase, day)
@@ -117,15 +121,19 @@ describe('meteoritos', () => {
     expect(count('meteorIncoming')).toBe(1)
   })
 
-  it('mientras siga caliente no cae otro, ni desaparece al amanecer', () => {
+  it('mientras viva su guardián sigue caliente: no cae otro ni desaparece al amanecer', () => {
+    guardianAlive = true
     strike(home.x, home.z, 2)
     const { meteor } = worldEvents
-    // Lo que hará el guardián: mantenerlo caliente.
-    meteor!.coolDay = null
+    expect(meteor).toMatchObject({ guardian: GUARDIAN_ID, coolDay: null })
     fullDay(3)
     expect(worldEvents.meteor).toBe(meteor)
     expect(count('meteorIncoming')).toBe(1)
-    worldEvents.setCooled(3)
+    expect(count('meteorCooled')).toBe(0)
+    // Muerto el guardián, se enfría en ese momento y dura hasta el amanecer siguiente.
+    guardianAlive = false
+    step(AFTERNOON, 3)
+    expect(events.at(-1)).toEqual({ type: 'meteorCooled', day: 3 })
     fullDay(3)
     expect(worldEvents.meteor).toBe(meteor)
     // Al amanecer siguiente ya no está, y ese día vuelve a caer otro.
@@ -146,6 +154,7 @@ describe('meteoritos', () => {
 
   it('al amanecer siguiente desaparece, y ya no choca', () => {
     strike(home.x, home.z, 2)
+    step(AFTERNOON, 2)
     expect(events.at(-1)).toEqual({ type: 'meteorCooled', day: 2 })
     step(0.9, 2)
     expect(worldEvents.meteor).not.toBeNull()
@@ -185,6 +194,29 @@ describe('meteoritos', () => {
       expect(seen).toHaveLength(1)
       expect(sim.clock.phase).toBeLessThanOrEqual(METEOR_PHASE_MAX + 0.001)
       expect(run(WARNING).map((e) => e.type)).toContain('meteorLanded')
+    })
+
+    it('al caer sale su guardián, por jugador, junto a la roca; muerto, la roca se enfría y se va', () => {
+      const { sim, player, run } = setup()
+      sim.addPlayer(1)
+      const [x, z] = [player.pos.x + 30, player.pos.z]
+      sim.meteor(x, z)
+      run(WARNING + 1)
+      const guardian = sim.enemies.list.find((e) => e.type === 'guardian')!
+      expect(guardian.maxHp).toBe(ENEMY_DEFS.guardian.hp * 2)
+      expect(Math.hypot(guardian.pos.x - x, guardian.pos.z - z)).toBeLessThan(METEOR_BLAST)
+      expect(sim.worldEvents.meteor).toMatchObject({ guardian: guardian.id, coolDay: null })
+
+      const { day } = sim.clock
+      sim.setDay(day + 1)
+      run(1)
+      expect(sim.worldEvents.meteor).not.toBeNull()
+
+      sim.enemies.hit(guardian, guardian.hp, player.pos, 0)
+      expect(run(1)).toContainEqual(expect.objectContaining({ type: 'meteorCooled', day: day + 1 }))
+      expect(sim.worldEvents.meteor).not.toBeNull()
+      sim.setDay(day + 2)
+      expect(run(1).map((e) => e.type)).toContain('meteorGone')
     })
 
     it('quien está debajo recibe el daño, se pausa su regeneración y lo aparta la roca', () => {

@@ -1,7 +1,7 @@
 import type { PlayerCommands } from './commands'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
-import { DEATH_DROP_HEIGHT, ENEMY_DEFS, EYE_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
+import { DEATH_DROP_HEIGHT, ENEMY_DEFS, EYE_HEIGHT, GAME_OVER_DELAY, METEOR_RADIUS, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
@@ -131,7 +131,11 @@ export class Simulation {
     this.world = world
     const { emit } = this.events
     this.structures = new Structures(emit)
-    this.worldEvents = new WorldEvents([world.grid, this.structures.grid], this.rng, emit)
+    this.worldEvents = new WorldEvents([world.grid, this.structures.grid], this.rng, emit, {
+      // Pegado a la roca, en lo que queda libre de props alrededor de ella.
+      spawn: (x, z, players) => this.enemies.spawnAt(x + METEOR_RADIUS + ENEMY_DEFS.guardian.radius + 0.1, z, 'guardian', players).id,
+      alive: (id) => this.enemies.list.some((e) => e.id === id),
+    })
     this.obstacles = [world.grid, this.structures.grid, this.worldEvents.grid]
     this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage))
     this.pickups = new Pickups(this.obstacles, this.rng, emit)

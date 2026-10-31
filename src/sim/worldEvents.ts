@@ -26,7 +26,18 @@ export interface Meteor extends Collider {
   landed: boolean
   /** Día en que se enfrió: desaparece al amanecer siguiente. null: sigue caliente. */
   coolDay: number | null
+  /** El enemigo que lo guarda (en el cliente, null): mientras viva sigue caliente. */
+  guardian: number | null
 }
+
+/** Quien guarda un meteorito: lo pone Simulation, que es quien tiene a los enemigos. */
+export interface MeteorGuardian {
+  /** Lo crea junto a (x, z), con `players` jugadores en el mundo. Devuelve su id. */
+  spawn(x: number, z: number, players: number): number
+  alive(id: number): boolean
+}
+
+const NO_GUARDIAN: MeteorGuardian = { spawn: () => 0, alive: () => false }
 
 /** Un jugador que puede pillar debajo: en el mundo y vivo (`alive` falso: no le da, como con los enemigos). */
 export interface WorldEventTarget {
@@ -72,6 +83,7 @@ export class WorldEvents {
     private grids: SpatialGrid<Collider>[] = [],
     private rng: () => number = Math.random,
     private emit: Emit = NO_EMIT,
+    private guardians: MeteorGuardian = NO_GUARDIAN,
   ) {}
 
   /** Paso fijo al tick `tick`. `players`: los que están en el mundo. Devuelve el daño a cada jugador en este paso. */
@@ -82,7 +94,14 @@ export class WorldEvents {
       this.fallPhase = day >= METEOR_FROM_DAY ? METEOR_PHASE_MIN + this.rng() * (METEOR_PHASE_MAX - METEOR_PHASE_MIN) : null
     }
     const { meteor } = this
-    if (meteor) return !meteor.landed && tick >= meteor.landTick ? this.land(meteor, players, day) : []
+    if (meteor) {
+      if (!meteor.landed) return tick >= meteor.landTick ? this.land(meteor, players) : []
+      if (meteor.coolDay === null && meteor.guardian !== null && !this.guardians.alive(meteor.guardian)) {
+        this.setCooled(day)
+        this.emit({ type: 'meteorCooled', day })
+      }
+      return []
+    }
     if (this.fallPhase !== null && phase >= this.fallPhase && !isNight(phase)) {
       const spot = this.findSpot(players)
       if (spot) this.fall(tick, spot.x, spot.z)
@@ -118,7 +137,7 @@ export class WorldEvents {
 
   /** Lo pone en la lista: en la simulación lo hace `fall`; en el cliente, su evento. */
   add({ x, y, z, landTick }: Pick<Meteor, 'x' | 'y' | 'z' | 'landTick'>) {
-    this.meteor = { x, y, z, radius: METEOR_RADIUS, alive: true, landTick, landed: false, coolDay: null }
+    this.meteor = { x, y, z, radius: METEOR_RADIUS, alive: true, landTick, landed: false, coolDay: null, guardian: null }
   }
 
   /** La roca ya está en el suelo y se choca con ella. */
@@ -138,13 +157,11 @@ export class WorldEvents {
     this.grid.clear()
   }
 
-  private land(meteor: Meteor, players: readonly WorldEventTarget[], day: number): WorldEventDamage[] {
+  private land(meteor: Meteor, players: readonly WorldEventTarget[]): WorldEventDamage[] {
     this.settle()
     const { x, y, z } = meteor
     this.emit({ type: 'meteorLanded', x, y, z })
-    // Aún no tiene guardián que lo mantenga caliente.
-    this.setCooled(day)
-    this.emit({ type: 'meteorCooled', day })
+    meteor.guardian = this.guardians.spawn(x, z, players.length)
     return players
       .filter((p) => p.alive && Math.hypot(p.pos.x - x, p.pos.z - z) < METEOR_BLAST)
       .map((p) => ({ playerId: p.id, damage: METEOR_DAMAGE }))

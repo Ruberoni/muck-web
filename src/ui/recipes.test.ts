@@ -29,7 +29,7 @@ describe('recetas en la pantalla de inventario', () => {
       ['cooked_meat', 'berry_infusion'],
       ['wood_sword', 'stone_axe', 'stone_pickaxe', 'stone_sword', 'furnace', 'anvil'],
       ['iron_bar', 'mithril_bar'],
-      ['iron_axe', 'iron_pickaxe', 'iron_sword', 'mithril_axe', 'mithril_pickaxe', 'mithril_sword'],
+      ['iron_axe', 'iron_pickaxe', 'iron_sword', 'mithril_axe', 'mithril_pickaxe', 'mithril_sword', 'meteor_sword'],
     ])
   })
 

@@ -25,6 +25,8 @@ export const ICONS: Record<ItemId, string> = {
   stone_sword: sword('#b8b5a8', '#7c796e'),
   iron_sword: sword('#dfe3e8', '#9aa3ad'),
   mithril_sword: sword('#8fd0f2', '#4f9cc8'),
+  meteor_sword: sword('#ff8a3b', '#c8400f'),
+  meteor_fragment: `<svg viewBox="0 0 32 32"><polygon points="6,22 10,10 20,6 27,14 25,24 14,27" fill="#3b322d"/><polygon points="10,10 20,6 18,15" fill="#554a43"/><polygon points="18,15 27,14 25,24" fill="#2a2320"/><polygon points="12,15 15,13 16,17 13,19" fill="#ff7a1f"/><polygon points="20,9 23,10 21,13" fill="#ffb347"/><polygon points="16,21 19,20 19,24 16,24" fill="#ff5a1f"/></svg>`,
   raw_meat: `<svg viewBox="0 0 32 32"><rect x="20" y="17" width="9" height="4" rx="2" transform="rotate(35 24 19)" fill="#efe6d2"/><path d="M5 15 Q6 6 15 6 Q24 7 23 15 Q22 24 13 25 Q4 24 5 15" fill="#d9566a"/><path d="M9 14 Q11 9 16 10" stroke="#f2a0ad" stroke-width="2" fill="none"/><circle cx="14" cy="17" r="2.5" fill="#f4e2c8"/></svg>`,
   cooked_meat: `<svg viewBox="0 0 32 32"><rect x="20" y="17" width="9" height="4" rx="2" transform="rotate(35 24 19)" fill="#efe6d2"/><path d="M5 15 Q6 6 15 6 Q24 7 23 15 Q22 24 13 25 Q4 24 5 15" fill="#9c5a2e"/><path d="M9 14 Q11 9 16 10" stroke="#c98a52" stroke-width="2" fill="none"/><path d="M9 20 L13 16 M13 22 L17 18 M16 17 L19 14" stroke="#6b3a1c" stroke-width="1.6" fill="none"/></svg>`,
   berry_infusion: `<svg viewBox="0 0 32 32"><path d="M21 14 H25 Q28 14 28 18 Q28 22 25 22 H20" fill="none" stroke="#bfb29a" stroke-width="2.5"/><path d="M6 11 H22 L20 27 Q19.5 28 18 28 H10 Q8.5 28 8 27 Z" fill="#d9cdb8"/><ellipse cx="14" cy="11.5" rx="8" ry="2.5" fill="#c2304a"/><path d="M11 7 Q9 5 11 3 M16 7 Q14 5 16 3" stroke="#e8e2d4" stroke-width="1.5" fill="none"/></svg>`,

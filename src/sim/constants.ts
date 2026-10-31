@@ -147,7 +147,7 @@ export const DROP_PICKUP_DELAY = 2
 
 export interface ToolDef {
   family: ToolFamily
-  /** 1 madera, 2 piedra, 3 hierro, 4 mithril (la mano es el nivel 0). */
+  /** 1 madera, 2 piedra, 3 hierro, 4 mithril, 5 meteorito (la mano es el nivel 0). */
   tier: number
   /** Daño contra los props de su familia; contra el resto se golpea como a mano (la regla está en tiers.ts). */
   damage: number
@@ -172,6 +172,8 @@ export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   stone_sword: { family: 'sword', tier: 2, damage: 1, attack: 25, cooldown: SWORD_COOLDOWN },
   iron_sword: { family: 'sword', tier: 3, damage: 1, attack: 35, cooldown: SWORD_COOLDOWN },
   mithril_sword: { family: 'sword', tier: 4, damage: 1, attack: 50, cooldown: SWORD_COOLDOWN },
+  // La mejor arma del juego, y la única con más cadencia que las demás espadas.
+  meteor_sword: { family: 'sword', tier: 5, damage: 1, attack: 65, cooldown: 0.22 },
 }
 
 /** Con qué se golpea a un enemigo: una familia de herramienta o, con cualquier otra cosa, la mano. */
@@ -201,6 +203,12 @@ export interface RangedDef {
   max: number
   range: number
   height: number
+}
+
+/** Guarda un sitio: se despierta con un jugador a `aggro` metros y persigue mientras siga a menos de `leash` de ese sitio. */
+export interface GuardDef {
+  aggro: number
+  leash: number
 }
 
 export interface EnemyDef {
@@ -241,9 +249,11 @@ export interface EnemyDef {
   boss?: boolean
   charge?: ChargeDef
   ranged?: RangedDef
+  /** Sale de un evento, no de la noche: no cuenta para el tope, y su vida y su botín van por jugador. */
+  guard?: GuardDef
 }
 
-export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower', EnemyDef> = {
+export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian', EnemyDef> = {
   // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
@@ -361,6 +371,29 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     cost: 7,
     boss: true,
     ranged: { flee: 8, max: 14, range: 20, height: 3 },
+  },
+  // Guarda el meteorito de día y de noche, hasta que lo matan. Más lento que andar, y el pico lo rompe antes.
+  guardian: {
+    name: 'Guardián del meteorito',
+    verb: 'atacar',
+    hp: 500,
+    speed: 4.5,
+    radius: 0.9,
+    scale: 2,
+    damage: 15,
+    gap: 0.35,
+    reach: 0.9,
+    attackInterval: 1.4,
+    windup: 0.6,
+    knockback: 0,
+    stagger: 0,
+    staggerGap: 0,
+    nocturnal: false,
+    ai: 'guard',
+    weakness: { pickaxe: 1.5 },
+    loot: [{ item: 'meteor_fragment', amount: 3 }],
+    cost: 6,
+    guard: { aggro: 15, leash: 25 },
   },
 }
 export type EnemyType = keyof typeof ENEMY_DEFS
