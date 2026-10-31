@@ -97,9 +97,11 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
 
   it.each(LEVELS)('contra un trasgo y los jefes, %s mata más despacio que %s', (tool, sword) => {
     expect(timeToKill(sword, 'goblin')).toBeLessThan(timeToKill(tool, 'goblin'))
-    for (const players of [1, 2, 4, 8]) {
-      const hp = ENEMY_DEFS.giant.hp * bossScale(players)
-      expect(timeToKill(sword, 'giant', hp)).toBeLessThan(timeToKill(tool, 'giant', hp))
+    for (const boss of ['giant', 'thrower'] as const) {
+      for (const players of [1, 2, 4, 8]) {
+        const hp = ENEMY_DEFS[boss].hp * bossScale(players)
+        expect(timeToKill(sword, boss, hp), `${boss} con ${players}`).toBeLessThan(timeToKill(tool, boss, hp))
+      }
     }
   })
 

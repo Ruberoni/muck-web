@@ -163,6 +163,24 @@ describe('sonido', () => {
     expect(names()).toEqual(['hurt', 'eat', 'craft', 'place', 'death'])
   })
 
+  it('el aviso de un lanzamiento y las rocas: suenan al salir y al chocar con el mundo, no al dar a un jugador', () => {
+    const { audio, names } = setup()
+    const rock = { id: 0, kind: 'rock', x: 0, y: 0, z: 0 } as const
+    audio.events(
+      [
+        { tick: 1, type: 'enemyCharge', id: 0, state: 'aim' },
+        { tick: 1, type: 'projectileThrown', ...rock, vx: 1, vy: 1, vz: 1 },
+        { tick: 1, type: 'projectileHit', ...rock, end: 'ground' },
+        { tick: 1, type: 'projectileHit', ...rock, end: 'obstacle' },
+        { tick: 1, type: 'projectileHit', ...rock, end: 'player' },
+        { tick: 1, type: 'projectileHit', ...rock, end: 'expired' },
+      ],
+      0,
+      () => 'tree',
+    )
+    expect(names()).toEqual(['growl', 'swing', 'hitStone', 'hitStone'])
+  })
+
   it('fabricar varias en un paso (Mayúsculas + clic) suena una vez; en el siguiente, otra', () => {
     const { audio, names } = setup()
     const crafted = (tick: number, id = 0): SimEvent => ({ tick, type: 'playerCrafted', id, recipe: 'wood_axe' })
@@ -196,6 +214,23 @@ describe('sonido de los demás', () => {
     expect(played[0].options!.gain).toBeCloseTo(spatialize(10, 0, 0, REMOTE_HEARING.hit).gain)
     expect(played[0].options!.pan).toBeGreaterThan(0.5)
     expect(played[1].options!.gain).toBeLessThan(played[0].options!.gain!)
+  })
+
+  it('las rocas suenan donde pasan', () => {
+    const { audio, played } = setup()
+    const rock = { id: 0, kind: 'rock', x: 10, y: 0, z: 0 } as const
+    audio.remote(
+      [
+        { tick: 1, type: 'projectileThrown', ...rock, vx: 1, vy: 1, vz: 1 },
+        { tick: 1, type: 'projectileHit', ...rock, end: 'ground' },
+        { tick: 1, type: 'projectileHit', ...rock, end: 'player' },
+      ],
+      listener,
+      (e) => (e.type === 'projectileThrown' || e.type === 'projectileHit' ? e : null),
+      (id) => kinds[id],
+    )
+    expect(played.map((p) => p.name)).toEqual(['swing', 'hitStone'])
+    expect(played[0].options!.pan).toBeGreaterThan(0.5)
   })
 
   it('el golpe de otro que no hace nada también suena a clank, en su sitio', () => {

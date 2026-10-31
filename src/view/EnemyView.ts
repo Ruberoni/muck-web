@@ -11,6 +11,8 @@ const LUNGE_TIME = 0.2
 const DEATH_TIME = 0.35
 const CROUCH_SQUASH = new THREE.Vector3(1.15, 0.7, 1.15)
 const RUSH_LEAN = 0.4
+const AIM_STRETCH = new THREE.Vector3(0.95, 1.08, 0.95)
+const AIM_LEAN = -0.2
 // Por debajo de esta fracción de su velocidad no se considera que ande (los empujones entre ellos no lo hacen botar).
 const WALK_MIN_SPEED = 0.1
 
@@ -52,6 +54,17 @@ const spiritLeafGeometry = mergeGeometries([
   new THREE.IcosahedronGeometry(0.13, 0).translate(-0.56, 1.56, 0),
   new THREE.IcosahedronGeometry(0.12, 0).translate(0.02, 1.84, -0.04),
 ])
+// Las rocas que carga a la espalda el lanzarrocas, y sus puños.
+const throwerRockGeometry = mergeGeometries([
+  new THREE.IcosahedronGeometry(0.22, 0).translate(0.17, 1.02, -0.44),
+  new THREE.IcosahedronGeometry(0.19, 0).translate(-0.18, 0.96, -0.46),
+  new THREE.IcosahedronGeometry(0.16, 0).translate(0, 1.26, -0.4),
+  new THREE.IcosahedronGeometry(0.17, 0).translate(0.5, 0.66, 0.12),
+  new THREE.IcosahedronGeometry(0.17, 0).translate(-0.5, 0.66, 0.12),
+])
+// La que levanta antes de lanzarla, justo donde sale la de verdad.
+const { thrower } = ENEMY_DEFS
+const heldRockGeometry = new THREE.IcosahedronGeometry(0.2, 0).translate(0, thrower.ranged!.height / thrower.scale, 0)
 // El destello de un golpe, según lo que le haya hecho: rojo normal, amarillo si es débil a esa arma y gris si la resiste.
 const FLASH_COLORS: Record<HitEfficacy, string> = { normal: '#ff3b2f', effective: '#ffc21f', resisted: '#8e8e8e' }
 
@@ -65,6 +78,7 @@ function flashesOf(material: THREE.MeshStandardMaterial) {
   return { normal: flash(FLASH_COLORS.normal), effective: flash(FLASH_COLORS.effective), resisted: flash(FLASH_COLORS.resisted) }
 }
 const standard = (color: string) => new THREE.MeshStandardMaterial({ color, flatShading: true })
+const rockMaterial = standard('#8a877c')
 // Sin iluminación: los ojos se ven de noche.
 const eyes = (color: string) => ({ geometry: eyeGeometry, material: new THREE.MeshBasicMaterial({ color }), castShadow: false })
 
@@ -74,12 +88,14 @@ interface EnemyLook {
   material: THREE.Material
   flashes: Record<HitEfficacy, THREE.Material>
   details: { geometry: THREE.BufferGeometry; material: THREE.Material; castShadow: boolean }[]
+  /** Lo que solo enseña al preparar un lanzamiento. */
+  held?: { geometry: THREE.BufferGeometry; material: THREE.Material }
 }
 
 /** `glow`: un poco de emisivo para que la silueta se lea de noche. */
-function look(color: string, glow: string, details: EnemyLook['details']): EnemyLook {
+function look(color: string, glow: string, details: EnemyLook['details'], held?: EnemyLook['held']): EnemyLook {
   const material = new THREE.MeshStandardMaterial({ color, emissive: glow, flatShading: true })
-  return { body: bodyGeometry, material, flashes: flashesOf(material), details }
+  return { body: bodyGeometry, material, flashes: flashesOf(material), details, held }
 }
 
 const LOOKS: Record<EnemyType, EnemyLook> = {
@@ -91,6 +107,16 @@ const LOOKS: Record<EnemyType, EnemyLook> = {
     { geometry: spiritLeafGeometry, material: standard('#4f9a3f'), castShadow: true },
     eyes('#b6ff6a'),
   ]),
+  thrower: look(
+    '#3f7f6f',
+    '#0e2420',
+    [
+      { geometry: detailGeometry, material: standard('#1f3f38'), castShadow: true },
+      { geometry: throwerRockGeometry, material: rockMaterial, castShadow: true },
+      eyes('#ff9a3b'),
+    ],
+    { geometry: heldRockGeometry, material: rockMaterial },
+  ),
 }
 
 /** Modelo de un enemigo y sus animaciones, que solo existen en la vista. */
@@ -98,6 +124,7 @@ interface EnemyModel {
   type: EnemyType
   object: THREE.Group
   body: THREE.Mesh
+  held: THREE.Mesh | null
   /** Dónde se dibujó en el último frame (al morir se queda ahí). */
   x: number
   z: number
@@ -108,7 +135,7 @@ interface EnemyModel {
   /** El destello que toca mientras dura `hurt`. */
   efficacy: HitEfficacy
   lunge: number
-  /** Por dónde va su embestida: agachado avisa, y cargando va inclinado. */
+  /** Por dónde va su embestida (agachado avisa, y cargando va inclinado) o su lanzamiento (con la roca en alto, también avisa). */
   charge: ChargeState
   /** Retroceso tras un golpe: no bota mientras dura. */
   stagger: number
@@ -211,8 +238,15 @@ export class EnemyView {
     }
     // Para reconocerlo en un raycast contra la vista (test de paridad con sim/aim.ts).
     for (const mesh of object.children) mesh.userData.enemy = id
+    // Después: no es parte de la hitbox.
+    const held = look.held ? new THREE.Mesh(look.held.geometry, look.held.material) : null
+    if (held) {
+      held.castShadow = true
+      held.visible = false
+      object.add(held)
+    }
     this.group.add(object)
-    const model: EnemyModel = { type, object, body, x, z, yaw: 0, walk: 0, hurt: 0, efficacy: 'normal', lunge: 0, charge: 'idle', stagger: 0, dying: null }
+    const model: EnemyModel = { type, object, body, held, x, z, yaw: 0, walk: 0, hurt: 0, efficacy: 'normal', lunge: 0, charge: 'idle', stagger: 0, dying: null }
     this.models.set(id, model)
     return model
   }
@@ -233,11 +267,14 @@ export class EnemyView {
     // Muere encogiéndose y hundiéndose.
     const s = model.dying === null ? 1 : Math.max(0, model.dying / DEATH_TIME)
     o.scale.set(1 + (1 - s) * 0.3, s, 1 + (1 - s) * 0.3).multiplyScalar(ENEMY_DEFS[model.type].scale)
-    // Antes de embestir se agacha y brilla; embistiendo va inclinado hacia delante.
-    const crouching = model.charge === 'crouch'
-    if (crouching) o.scale.multiply(CROUCH_SQUASH)
-    o.rotation.x = model.charge === 'rush' ? RUSH_LEAN : 0
+    // Antes de embestir se agacha y brilla; embistiendo va inclinado hacia delante. Antes de lanzar se echa atrás con la roca en alto, y también brilla.
+    const { charge } = model
+    if (charge === 'crouch') o.scale.multiply(CROUCH_SQUASH)
+    if (charge === 'aim') o.scale.multiply(AIM_STRETCH)
+    o.rotation.x = charge === 'rush' ? RUSH_LEAN : charge === 'aim' ? AIM_LEAN : 0
+    if (model.held) model.held.visible = charge === 'aim'
     const look = LOOKS[model.type]
-    model.body.material = crouching ? look.flashes.normal : model.hurt > 0 ? look.flashes[model.efficacy] : look.material
+    const warning = charge === 'crouch' || charge === 'aim'
+    model.body.material = warning ? look.flashes.normal : model.hurt > 0 ? look.flashes[model.efficacy] : look.material
   }
 }

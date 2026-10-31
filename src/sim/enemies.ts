@@ -27,27 +27,29 @@ import {
   type ChargeDef,
   type EnemyType,
   type HitEfficacy,
+  type RangedDef,
 } from './constants'
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
 const SPAWN_ATTEMPTS = 12
 /** Noches que tarda un tipo nuevo en llegar a toda su probabilidad, desde la primera en que sale. */
 const SPAWN_RAMP = 3
-/** Los jefes, por turnos: el de la noche 3, el de la 6, y vuelta a empezar. La noche 6 aún no tiene jefe. */
-const BOSSES: readonly (EnemyType | null)[] = ['giant', null]
+/** Los jefes, por turnos: el de la noche 3, el de la 6, y vuelta a empezar. */
+const BOSSES: readonly EnemyType[] = ['giant', 'thrower']
 /** Altura del centro del cuerpo de un tipo de enemigo: a donde apunta aimAtEnemy. */
 export const enemyAimHeight = (type: EnemyType) => 0.8 * ENEMY_DEFS[type].scale
 /** Distancia entre centros a la que un enemigo de este tipo toca a un jugador. */
 const contactOf = (type: EnemyType) => PLAYER_RADIUS + ENEMY_DEFS[type].radius
 
-export type ChargeState = 'idle' | 'crouch' | 'rush'
+/** `crouch` y `rush`: la embestida. `aim`: preparando un lanzamiento. */
+export type ChargeState = 'idle' | 'crouch' | 'rush' | 'aim'
 
-/** Por dónde va una embestida. */
+/** Por dónde va una embestida o un lanzamiento. */
 export interface EnemyCharge {
   state: ChargeState
-  /** Segundos que le quedan a `crouch` o a `rush`. */
+  /** Segundos que le quedan al estado actual. */
   time: number
-  /** Segundos hasta poder embestir de nuevo. */
+  /** Segundos hasta poder embestir o lanzar de nuevo. */
   cooldown: number
   /** Dirección de la carga, fijada al salir: se esquiva apartándose. */
   dx: number
@@ -80,6 +82,9 @@ export interface EnemyData {
   /** Segundos hasta volver a elegir a quién persigue. */
   retarget: number
 }
+
+/** Lanza una roca desde `from` hacia el jugador `target`. */
+export type ThrowRock = (from: { x: number; y: number; z: number }, target: PlayerId, damage: number) => void
 
 /** Lo que los enemigos ven de un jugador que está en el mundo. Los muertos y quien acaba de reaparecer no son objetivo, pero cuentan para N. */
 export interface EnemyPrey {
@@ -156,11 +161,12 @@ export class Enemies {
   private spawnTurn = 0
   private bossDay = 0
 
-  /** `grids`: obstáculos que rodean (props, estructuras…). */
+  /** `grids`: obstáculos que rodean (props, estructuras…). `throwRock`: lo que vuela va por los proyectiles de la partida. */
   constructor(
     private grids: SpatialGrid<Collider>[],
     private rng: () => number = Math.random,
     private emit: Emit = NO_EMIT,
+    private throwRock: ThrowRock = () => {},
   ) {}
 
   /**
@@ -242,6 +248,10 @@ export class Enemies {
       const hit = this.charge(e, def.charge, prey, dist, dt)
       if (hit !== null) return hit
     }
+    if (def.ranged) {
+      this.ranged(e, def.ranged, prey, dist, dt)
+      return false
+    }
     const contact = contactOf(e.type)
     if (dist > contact + def.gap) {
       const step = Math.min(def.speed * dt, dist - contact - def.gap)
@@ -296,6 +306,34 @@ export class Enemies {
     this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
     if (hit) this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return hit
+  }
+
+  /**
+   * A distancia: mantiene las distancias y cada `attackInterval` segundos se para, avisa y lanza una roca hacia donde
+   * está el jugador al soltarla. Su daño lo hace la roca al llegar, no este paso.
+   */
+  private ranged(e: EnemyData, def: RangedDef, prey: EnemyPrey, dist: number, dt: number) {
+    const c = e.charge
+    const { attackInterval, damage, speed, windup } = ENEMY_DEFS[e.type]
+    c.cooldown = Math.max(0, c.cooldown - dt)
+    if (c.state === 'aim') {
+      c.time -= dt
+      if (c.time > 1e-9) return
+      c.state = 'idle'
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
+      this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+      this.throwRock({ x: e.pos.x, y: heightAt(e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, damage)
+      return
+    }
+    if (c.cooldown <= 1e-9 && dist <= def.range) {
+      c.state = 'aim'
+      c.time = windup
+      c.cooldown = attackInterval
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'aim' })
+      return
+    }
+    const away = dist < def.flee ? Math.min(speed * dt, def.flee - dist) : dist > def.max ? -Math.min(speed * dt, dist - def.max) : 0
+    if (away !== 0 && dist > 1e-6) this.move(e, ((e.pos.x - prey.pos.x) / dist) * away, ((e.pos.z - prey.pos.z) / dist) * away)
   }
 
   /** Cada eje por separado, para que resbale por la orilla en vez de pararse. */

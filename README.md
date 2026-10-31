@@ -107,6 +107,7 @@ Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 
 Cada 3 noches sale además un **mini-boss**, unos 20 s después de anochecer. Al amanecer de ese día se anuncia con un cartel, y hasta que llega se ve "Esta noche: …" bajo el día; mientras vive, arriba sale su barra de vida. No cuenta para el tope de enemigos y, como el resto, no se va al amanecer: si sigue vivo, no sale otro. Su vida y su botín crecen un 50 % por cada jugador a partir del segundo.
 
 - **Trasgo gigante** (noches 3, 9, 15…): 400 de vida, 25 de daño y más rápido que andar. No se aturde. A 5–9 m se agacha 0,8 s, brillando y rugiendo, y carga en línea recta hacia donde estabas: se esquiva apartándose, y se para al chocar con algo. Suelta 3 carnes crudas y 2 lingotes de hierro.
+- **Lanzarrocas** (noches 6, 12…): 300 de vida, 15 de daño por roca y algo más lento que andar. No se aturde. Se te acerca hasta unos 14 m y retrocede si llegas a menos de 8. Cada 2,5 s, hasta 20 m, se para 0,7 s con la roca en alto, brillando y gruñendo, y la lanza hacia donde estás al soltarla: se esquiva moviéndose, y los árboles y las rocas la paran. Suelta 2 minerales de mithril y 6 de piedra.
 
 El gólem no se aturde ni retrocede. Al trasgo y al espíritu, tras un golpe que los empuja y los aturde 0,3 s les quedan 0,6 s de aguante: durante ese rato los golpes les quitan vida, pero no los empujan ni les retrasan el ataque, así que golpear sin parar no evita que te peguen.
 

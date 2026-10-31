@@ -596,6 +596,8 @@ export class Game {
         case 'propDestroyed':
           return sim.world.props[e.id]
         case 'structurePlaced':
+        case 'projectileThrown':
+        case 'projectileHit':
           return e
         case 'enemyDied':
           return sim.enemies.list.find((en) => en.id === e.id)?.pos ?? playerAt(e.by)

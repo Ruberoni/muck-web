@@ -1,6 +1,7 @@
 import { PROP_DEFS, type PropFamily } from '../sim/constants'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
+import type { ProjectileEnd } from '../sim/projectiles'
 import type { PropKind } from '../sim/props'
 import { canDamage } from '../sim/tiers'
 import type { SoundName, SoundOut } from './sound'
@@ -23,6 +24,13 @@ const breakOf = (kind: PropKind) => BREAK[PROP_DEFS[kind].family]
 export const REMOTE_HEARING = { hit: 30, place: 25, hurt: 20, step: 15, other: 15 } as const
 /** La muerte de otro se oye siempre, aunque esté lejos (con esta ganancia como mínimo). */
 export const REMOTE_DEATH_GAIN = 0.35
+
+/** Una roca que sale y una que choca con algo, más bajo que un golpe propio. */
+const ROCK_THROW_GAIN = 0.5
+const ROCK_HIT_GAIN = 0.4
+
+/** Una roca suena al chocar con el mundo; al dar a un jugador ya suena su daño. */
+const rockLands = (end: ProjectileEnd) => end === 'ground' || end === 'obstacle'
 
 /** Quién escucha: la cámara del jugador local. */
 export interface Listener {
@@ -126,6 +134,14 @@ export class GameAudio {
           break
         case 'enemyCharge':
           if (e.state === 'crouch') s.play('roar')
+          if (e.state === 'aim') s.play('growl')
+          break
+        // Como un golpe al aire.
+        case 'projectileThrown':
+          s.play('swing', { gain: ROCK_THROW_GAIN })
+          break
+        case 'projectileHit':
+          if (rockLands(e.end)) s.play('hitStone', { gain: ROCK_HIT_GAIN })
           break
         // Las bayas van directas al inventario; lo demás suena al recogerlo del suelo.
         case 'berryTaken':
@@ -186,6 +202,13 @@ export class GameAudio {
           break
         case 'enemyCharge':
           if (e.state === 'crouch') this.sound.play('roar')
+          if (e.state === 'aim') this.sound.play('growl')
+          break
+        case 'projectileThrown':
+          at(e, REMOTE_HEARING.hit, 'swing')
+          break
+        case 'projectileHit':
+          if (rockLands(e.end)) at(e, REMOTE_HEARING.hit, 'hitStone')
           break
         case 'structurePlaced':
           at(e, REMOTE_HEARING.place, 'place')

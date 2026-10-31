@@ -1,7 +1,7 @@
 import type { PlayerCommands } from './commands'
 import { resolveCircle } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
-import { DEATH_DROP_HEIGHT, EYE_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_DAMAGE, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
+import { DEATH_DROP_HEIGHT, ENEMY_DEFS, EYE_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
@@ -126,7 +126,7 @@ export class Simulation {
     this.world = world
     const { emit } = this.events
     this.structures = new Structures(emit)
-    this.enemies = new Enemies([world.grid, this.structures.grid], this.rng, emit)
+    this.enemies = new Enemies([world.grid, this.structures.grid], this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage))
     this.pickups = new Pickups([world.grid, this.structures.grid], this.rng, emit)
     this.projectiles = new Projectiles([world.grid, this.structures.grid], emit)
     this.interaction = new Interaction(world, this.pickups, this.enemies, emit)
@@ -319,9 +319,13 @@ export class Simulation {
 
   /** Lanza una roca desde (x, z), a la altura del pecho, hacia el jugador `id`. */
   throwRock(x: number, z: number, id: PlayerId) {
+    this.launchRock({ x, y: heightAt(x, z) + THROW_HEIGHT, z }, id, ENEMY_DEFS.thrower.damage)
+  }
+
+  /** Una roca hacia donde está ahora el jugador `id`. */
+  private launchRock(from: { x: number; y: number; z: number }, id: PlayerId, damage: number) {
     const { pos } = this.slot(id).player
-    const from = { x, y: heightAt(x, z) + THROW_HEIGHT, z }
-    this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, ROCK_SPEED), ROCK_DAMAGE)
+    this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, ROCK_SPEED), damage)
   }
 
   teleport(id: PlayerId, x: number, z: number, yaw: number, pitch: number) {

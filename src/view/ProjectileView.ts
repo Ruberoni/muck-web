@@ -4,7 +4,8 @@ import { PROJECTILE_DEFS, type Projectile, type ProjectileKind } from '../sim/pr
 const SPIN = 7
 
 const geometries: Record<ProjectileKind, THREE.BufferGeometry> = { rock: new THREE.IcosahedronGeometry(PROJECTILE_DEFS.rock.radius, 0) }
-const materials: Record<ProjectileKind, THREE.Material> = { rock: new THREE.MeshStandardMaterial({ color: '#8a877c', flatShading: true }) }
+// Un poco de emisivo para que se vea venir de noche.
+const materials: Record<ProjectileKind, THREE.Material> = { rock: new THREE.MeshStandardMaterial({ color: '#8a877c', emissive: '#3a3226', flatShading: true }) }
 
 /** Lo que vuela. Sigue la lista de la simulación en cada frame: crea el modelo de los nuevos y quita los que ya no están. */
 export class ProjectileView {

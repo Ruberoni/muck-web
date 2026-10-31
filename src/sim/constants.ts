@@ -192,6 +192,17 @@ export interface ChargeDef {
   cooldown: number
 }
 
+/**
+ * A distancia: se acerca hasta `max` metros y retrocede si tiene al jugador a menos de `flee`. Hasta `range` metros
+ * se para `windup` segundos y lanza una roca desde `height` metros de altura, cada `attackInterval` segundos.
+ */
+export interface RangedDef {
+  flee: number
+  max: number
+  range: number
+  height: number
+}
+
 export interface EnemyDef {
   name: string
   verb: string
@@ -229,9 +240,10 @@ export interface EnemyDef {
   /** Jefe: sale solo en su noche (`bossOfNight`), con vida y botín según los jugadores, y no cuenta para el tope. */
   boss?: boolean
   charge?: ChargeDef
+  ranged?: RangedDef
 }
 
-export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant', EnemyDef> = {
+export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower', EnemyDef> = {
   // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
@@ -326,6 +338,30 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant', EnemyDe
     boss: true,
     charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 4 },
   },
+  // Mini-boss a distancia: más lento que andar, para que se le pueda alcanzar, y sus rocas se esquivan.
+  thrower: {
+    name: 'Lanzarrocas',
+    verb: 'atacar',
+    hp: 300,
+    speed: 5,
+    radius: 0.8,
+    scale: 1.9,
+    damage: 15,
+    gap: 0.35,
+    reach: 0.9,
+    attackInterval: 2.5,
+    windup: 0.7,
+    knockback: 0,
+    stagger: 0,
+    staggerGap: 0,
+    nocturnal: true,
+    ai: 'ranged',
+    weakness: {},
+    loot: [{ item: 'mithril_ore', amount: 2 }, { item: 'stone', amount: 6 }],
+    cost: 7,
+    boss: true,
+    ranged: { flee: 8, max: 14, range: 20, height: 3 },
+  },
 }
 export type EnemyType = keyof typeof ENEMY_DEFS
 /** Los tipos en orden fijo: un `snap` lleva el índice en vez del nombre. */
@@ -337,9 +373,8 @@ export const BOSS_EVERY = 3
 export const BOSS_DELAY = 20
 export const BOSS_SPAWN_MIN = 30
 export const BOSS_SPAWN_MAX = 40
-/** Las rocas que se lanzan: velocidad horizontal y daño. */
+/** Velocidad horizontal de las rocas que se lanzan. */
 export const ROCK_SPEED = 14
-export const ROCK_DAMAGE = 15
 /** Vida y botín de un jefe: un 50 % más por cada jugador a partir del segundo. */
 export const BOSS_PER_PLAYER = 0.5
 export const ENEMY_SPAWN_MIN = 26

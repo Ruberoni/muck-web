@@ -118,6 +118,23 @@ describe('EnemyView', () => {
     expect(model().scale.y).toBeCloseTo(scale)
   })
 
+  it('antes de lanzar levanta la roca, se echa atrás y brilla; al soltarla ya no la lleva', () => {
+    const { enemies, view, frame, model, body } = setup()
+    const e = enemies.spawnAt(10, 20, 'thrower')
+    frame()
+    const hidden = () => model().children.filter((mesh) => !mesh.visible).length
+    expect(hidden()).toBe(1)
+    view.present([{ type: 'enemyCharge', id: e.id, state: 'aim' }])
+    frame(0)
+    expect(hidden()).toBe(0)
+    expect(model().rotation.x).toBeLessThan(0)
+    expect(body().material.emissive.getHexString()).toBe('ff3b2f')
+    view.present([{ type: 'enemyCharge', id: e.id, state: 'idle' }])
+    frame(0)
+    expect(hidden()).toBe(1)
+    expect(model().rotation.x).toBe(0)
+  })
+
   it('un golpe lo pone rojo un momento', () => {
     const { enemies, view, frame, body } = setup()
     const e = enemies.spawnAt(10, 20)

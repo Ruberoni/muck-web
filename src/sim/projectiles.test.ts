@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { SpatialGrid, type Collider } from './collision'
-import { GRAVITY, HEALTH_REGEN_DELAY, PLAYER_RADIUS, ROCK_DAMAGE, STEP } from './constants'
+import { ENEMY_DEFS, GRAVITY, HEALTH_REGEN_DELAY, PLAYER_RADIUS, STEP } from './constants'
 import type { SimEventData } from './events'
 import { aimedVelocity, projectilePos, PROJECTILE_DEFS, Projectiles } from './projectiles'
 import { Simulation } from './Simulation'
@@ -20,6 +20,7 @@ function grassSpot() {
 }
 
 const spot = grassSpot()
+const ROCK_DAMAGE = ENEMY_DEFS.thrower.damage
 
 describe('proyectiles', () => {
   let events: SimEventData[]
@@ -159,5 +160,45 @@ describe('proyectiles', () => {
     sim.throwRock(player.pos.x + 5, player.pos.z, 0)
     sim.reset()
     expect(sim.projectiles.list).toEqual([])
+  })
+
+  describe('el lanzarrocas en la partida', () => {
+    const setup = () => {
+      const sim = new Simulation(1)
+      sim.addPlayer(0)
+      const { player } = sim.slot(0)
+      const boss = sim.enemies.spawnAt(player.pos.x + 11, player.pos.z, 'thrower')
+      /** Avanza hasta el paso en que aparece un evento de tipo `type`. */
+      const until = (type: SimEventData['type'], game = sim) => {
+        for (let i = 0; i < 300; i++) {
+          const found = game.step(new Map()).find((e) => e.type === type)
+          if (found) return found
+        }
+        return null
+      }
+      return { sim, player, boss, until }
+    }
+
+    it('si te quedas quieto la roca te da', () => {
+      const { player, until } = setup()
+      expect(until('playerHurt')).toMatchObject({ id: 0, dmg: ROCK_DAMAGE })
+      expect(player.healDelay).toBeGreaterThan(0)
+    })
+
+    it('apartándose se esquiva: va adonde estabas al soltarla', () => {
+      const { sim, player, until } = setup()
+      until('projectileThrown')
+      sim.teleport(0, player.pos.x, player.pos.z + 4, 0, 0)
+      for (let i = 0; i < 40; i++) expect(sim.step(new Map()).map((e) => e.type)).not.toContain('playerHurt')
+      expect(player.health).toBe(100)
+    })
+
+    it('guardar la partida mientras avisa no cambia nada', () => {
+      const { sim, boss, until } = setup()
+      for (let i = 0; i < 5; i++) sim.step(new Map())
+      expect(boss.charge.state).toBe('aim')
+      const copy = Simulation.fromJSON(JSON.parse(JSON.stringify(sim.toJSON())))
+      expect(until('projectileThrown', copy)).toEqual(until('projectileThrown'))
+    })
   })
 })

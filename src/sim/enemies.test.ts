@@ -14,6 +14,7 @@ import {
   PLAYER_RADIUS,
   STEP,
   WADE_DEPTH,
+  WALK_SPEED,
 } from './constants'
 import { bossOfNight, bossScale, Enemies, enemyAimHeight, enemyCap, spawnChance, spawnType, type EnemyData } from './enemies'
 import type { SimEventData } from './events'
@@ -285,8 +286,14 @@ describe('jefes', () => {
   const step = (phase: number, day: number) => enemies.step(STEP, prey(), phase, day)
   const bosses = () => enemies.list.filter((e) => ENEMY_DEFS[e.type].boss)
 
-  it('el trasgo gigante toca en las noches 3, 9 y 15; la 6 y la 12 aún no tienen jefe', () => {
-    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 15].map(bossOfNight)).toEqual([null, null, 'giant', null, null, null, null, null, 'giant', null, 'giant'])
+  it('se turnan: el trasgo gigante en las noches 3, 9 y 15, y el lanzarrocas en la 6 y la 12', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 15].map(bossOfNight)).toEqual([null, null, 'giant', null, null, 'thrower', null, null, 'giant', 'thrower', 'giant'])
+  })
+
+  it('el lanzarrocas sale igual que el gigante', () => {
+    for (let i = 0; i < 60; i++) step(BOSS_PHASE, 6)
+    expect(bosses().map((e) => e.type)).toEqual(['thrower'])
+    expect(dist(bosses()[0], player)).toBeGreaterThanOrEqual(25)
   })
 
   it('sale una vez, a los 20 s de anochecer y a 30–40 m, sin contar para el tope', () => {
@@ -391,6 +398,110 @@ describe('jefes', () => {
       expect(boss.charge.state).toBe('idle')
       expect(boss.pos.x).toBeGreaterThan(rock.x + rock.radius)
       expect(damage).toBe(0)
+    })
+  })
+
+  describe('lanzarrocas', () => {
+    const THROWER = ENEMY_DEFS.thrower
+    const RANGED = THROWER.ranged!
+    const INTERVAL = Math.round(THROWER.attackInterval / STEP)
+    const WINDUP = Math.round(THROWER.windup / STEP)
+    let events: SimEventData[]
+    let rocks: { tick: number; from: { x: number; y: number; z: number }; target: number; damage: number }[]
+    let tick: number
+
+    beforeEach(() => {
+      events = []
+      rocks = []
+      tick = 0
+      enemies = new Enemies([], mulberry32(7), (e) => events.push(e), (from, target, damage) => rocks.push({ tick, from, target, damage }))
+    })
+
+    /** Un lanzarrocas a `distance` metros, sin aparición de otros: es de día. */
+    const facing = (distance: number) => enemies.spawnAt(player.x + distance, player.z, 'thrower')
+    const run = (steps: number) => {
+      let damage = 0
+      for (let i = 0; i < steps; i++) {
+        tick++
+        for (const hit of step(0.3, 6)) damage += hit.damage
+      }
+      return damage
+    }
+    /** Que no lance, para ver solo cómo se mueve. */
+    const holdFire = (boss: EnemyData) => {
+      boss.charge.cooldown = 1000
+    }
+
+    it('se acerca hasta su distancia y no más', () => {
+      const boss = facing(30)
+      holdFire(boss)
+      run(60 * 6)
+      expect(dist(boss, player)).toBeCloseTo(RANGED.max, 3)
+    })
+
+    it('entre medias se queda donde está', () => {
+      const boss = facing(11)
+      holdFire(boss)
+      const { x, z } = boss.pos
+      run(60)
+      expect(boss.pos).toEqual({ x, z })
+    })
+
+    it('si te acercas retrocede, sin dejar de mirarte, y se le alcanza corriendo', () => {
+      const boss = facing(4)
+      holdFire(boss)
+      run(1)
+      expect(boss.yaw).toBeCloseTo(-Math.PI / 2, 6)
+      run(60 * 2)
+      expect(dist(boss, player)).toBeCloseTo(RANGED.flee, 3)
+      expect(THROWER.speed).toBeLessThan(WALK_SPEED)
+    })
+
+    it('cada 2,5 s se para, avisa 0,7 s y lanza; no pega por su cuenta', () => {
+      const boss = facing(12)
+      run(1)
+      expect(boss.charge.state).toBe('aim')
+      expect(events).toContainEqual({ type: 'enemyCharge', id: boss.id, state: 'aim' })
+      expect(run(WINDUP - 1)).toBe(0)
+      expect(rocks).toEqual([])
+      run(1)
+      expect(boss.charge.state).toBe('idle')
+      expect(rocks).toEqual([{ tick: WINDUP + 1, from: { x: boss.pos.x, y: heightAt(boss.pos.x, boss.pos.z) + RANGED.height, z: boss.pos.z }, target: 0, damage: THROWER.damage }])
+      expect(events.at(-1)).toEqual({ type: 'enemyAttack', id: boss.id, target: 0 })
+      expect(run(INTERVAL * 2)).toBe(0)
+      expect(rocks.map((r) => r.tick)).toEqual([WINDUP + 1, WINDUP + 1 + INTERVAL, WINDUP + 1 + INTERVAL * 2])
+    })
+
+    it('mientras avisa no se mueve', () => {
+      const boss = facing(3)
+      run(1)
+      const { x, z } = boss.pos
+      run(WINDUP - 1)
+      expect(boss.charge.state).toBe('aim')
+      expect(boss.pos).toEqual({ x, z })
+    })
+
+    it('más allá de su alcance no lanza', () => {
+      const boss = facing(RANGED.range + 3)
+      run(10)
+      expect(boss.charge.state).toBe('idle')
+    })
+
+    it('sin nadie a quien lanzar se queda quieto', () => {
+      const boss = facing(12)
+      const { x, z } = boss.pos
+      enemies.step(STEP, [], 0.3, 6)
+      expect(boss.charge.state).toBe('idle')
+      expect(boss.pos).toEqual({ x, z })
+    })
+
+    it('un golpe no lo interrumpe', () => {
+      const boss = facing(12)
+      run(1)
+      enemies.hit(boss, 10, player, 0)
+      expect(boss.charge.state).toBe('aim')
+      run(WINDUP)
+      expect(rocks).toHaveLength(1)
     })
   })
 })
