@@ -23,6 +23,7 @@ export type ItemId =
   | 'mithril_pickaxe'
   | 'cooked_meat'
   | 'berry_infusion'
+  | 'healing_herb'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -49,6 +50,7 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   mithril_pickaxe: 'Pico de mithril',
   cooked_meat: 'Carne asada',
   berry_infusion: 'Infusión de bayas',
+  healing_herb: 'Hierba curativa',
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

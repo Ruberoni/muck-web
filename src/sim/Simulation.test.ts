@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type Move } from './commands'
-import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HIT_COOLDOWN, HUNGER_MAX, STEP } from './constants'
+import { BERRY_REGROW, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
 import { aimPose } from './interaction'
 import { generatePropPlacements, type PropData } from './props'
 import { Simulation } from './Simulation'
@@ -182,6 +182,33 @@ describe('Simulation', () => {
     expect(player.regenLeft).toBeCloseTo(20, 1)
     expect(player.regenPerSec).toBe(2)
     expect(inventory.count('berry_infusion')).toBe(0)
+  })
+
+  it('la hierba curativa se recoge sin herramienta, cura al momento y vuelve a crecer sola', () => {
+    const sim = solo(1)
+    const { inventory, player } = sim.slot(0)
+    const herb = sim.world.props.find((p) => p.kind === 'healing_herb')!
+    const look = aimAt(sim, herb)
+    expect(step(sim, { ...look, actions: [{ kind: 'swing' }] })).toContainEqual(expect.objectContaining({ type: 'berryTaken', id: herb.id, hp: 0 }))
+    expect(inventory.count('healing_herb')).toBe(1)
+    expect(herb).toMatchObject({ hp: 0, alive: true })
+    // Sin hierba no da nada, ni se rompe.
+    for (let i = 0; i < 40; i++) step(sim, { ...look, actions: [{ kind: 'swing' }] })
+    expect(inventory.count('healing_herb')).toBe(1)
+    expect(herb.alive).toBe(true)
+
+    player.health = 40
+    step(sim, { actions: [{ kind: 'eat' }] })
+    expect(player.health).toBeCloseTo(40 + CONSUMABLE_DEFS.healing_herb!.heal!, 1)
+    expect(inventory.count('healing_herb')).toBe(0)
+
+    const regrow = PROP_DEFS.healing_herb.harvest!.regrow
+    expect(regrow).toBeGreaterThan(BERRY_REGROW)
+    const grew: string[] = []
+    for (let i = 0; i < Math.round(regrow / STEP); i++) grew.push(...step(sim).map((e) => e.type))
+    expect(grew).toContain('berryGrew')
+    expect(herb.hp).toBe(1)
+    expect(herb.regrowLeft).toBe(0)
   })
 
   it('un enemigo que pega pausa la regeneración natural', () => {

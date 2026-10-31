@@ -33,12 +33,12 @@ function rawCost(recipe: RecipeId, into: Amounts = {}, times = 1): Amounts {
   return into
 }
 
-/** Lo que dan todos los árboles y rocas de la isla (no vuelven). */
+/** Lo que dan todos los árboles y rocas de la isla (no vuelven); lo que se recoge poco a poco no cuenta. */
 function supply(): Amounts {
   const total: Amounts = {}
   for (const { kind } of generatePropPlacements()) {
     const { item, amount } = PROP_DEFS[kind].drop
-    if (kind !== 'bush') total[item] = (total[item] ?? 0) + amount
+    if (!PROP_DEFS[kind].harvest) total[item] = (total[item] ?? 0) + amount
   }
   return total
 }

@@ -32,8 +32,8 @@ export interface Fighter {
 
 export const createCombat = (): Combat => ({ cooldown: 0, pendingSwing: false })
 
-// Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan. Los arbustos no sueltan nada al suelo.
-const DROP_HEIGHT: Record<PropFamily, number> = { tree: 1, rock: 0.3, bush: 0 }
+// Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan. Lo que se recoge no suelta nada al suelo.
+const DROP_HEIGHT: Record<PropFamily, number> = { tree: 1, rock: 0.3, bush: 0, herb: 0 }
 const ENEMY_DROP_HEIGHT = 0.8
 
 // Validación permisiva del objetivo que dice tener delante un jugador en red (es cooperativo: no es antitrampas).
@@ -184,7 +184,7 @@ export function startSwing(combat: Combat, dt: number, attackHeld: boolean, swin
 }
 
 // Altura sobre la base (rocas: sobre el centro) a la que se apunta: el tronco, la roca o el centro del arbusto.
-const AIM_HEIGHT: Record<PropFamily, number> = { tree: 1.2, rock: 0.2, bush: 0.5 }
+const AIM_HEIGHT: Record<PropFamily, number> = { tree: 1.2, rock: 0.2, bush: 0.5, herb: 0.2 }
 
 const aimHeight = (prop: PropData) => prop.y + AIM_HEIGHT[PROP_DEFS[prop.kind].family]
 

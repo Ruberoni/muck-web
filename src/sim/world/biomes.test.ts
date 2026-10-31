@@ -75,6 +75,13 @@ describe('biomas', () => {
     expect(density(['bush'], 'meadow')).toBeGreaterThan(density(['bush'], 'forest') * 3)
   })
 
+  it('la hierba curativa sale sobre todo en el bosque', () => {
+    const herbs = generatePropPlacements().filter((p) => p.kind === 'healing_herb')
+    const inForest = herbs.filter((p) => biomeAt(p.x, p.z) === 'forest').length
+    expect(inForest).toBeGreaterThan(herbs.length * 0.6)
+    expect(inForest).toBeLessThan(herbs.length)
+  })
+
   it('las menas y los pinos oscuros solo están en la montaña', () => {
     const inMountain = generatePropPlacements().filter((p) => ['iron_ore', 'darkpine', 'mithril_ore'].includes(p.kind))
     expect(inMountain.length).toBeGreaterThan(0)

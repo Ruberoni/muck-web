@@ -75,6 +75,13 @@ describe('supervivencia', () => {
     expect(eat(v, { food: 15 })).toBe(false)
   })
 
+  it('lo que no llena no se gasta por tener hambre si la vida está llena', () => {
+    const v = vitals(HEALTH_MAX, 50)
+    expect(eat(v, { food: 0, heal: 25 })).toBe(false)
+    expect(eat(v, { food: 0, regen: { perSec: 2, seconds: 5 } })).toBe(false)
+    expect(v.regenLeft).toBe(0)
+  })
+
   it('lo que cura poco a poco se suma a la regeneración natural, acaba solo y otro solo renueva el tiempo', () => {
     const regen = { food: 0, regen: { perSec: 2, seconds: 10 } }
     const v = vitals(20, HUNGER_MAX)

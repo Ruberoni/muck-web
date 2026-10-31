@@ -15,8 +15,8 @@ const MIN_AIR_TIME = 0.3
 export const GROWL_DISTANCE = 28
 const GROWL_MIN_INTERVAL = 2.5
 const GROWL_RANDOM_INTERVAL = 4
-const IMPACT: Record<PropFamily, SoundName> = { tree: 'hitWood', rock: 'hitStone', bush: 'hitBush' }
-const BREAK: Record<PropFamily, SoundName> = { tree: 'breakWood', rock: 'breakStone', bush: 'breakWood' }
+const IMPACT: Record<PropFamily, SoundName> = { tree: 'hitWood', rock: 'hitStone', bush: 'hitBush', herb: 'hitBush' }
+const BREAK: Record<PropFamily, SoundName> = { tree: 'breakWood', rock: 'breakStone', bush: 'breakWood', herb: 'breakWood' }
 const breakOf = (kind: PropKind) => BREAK[PROP_DEFS[kind].family]
 
 /** Hasta dónde se oye lo que hacen los demás (§8 del plan): golpes y roturas, colocar estructuras, daño, pasos y lo demás. */

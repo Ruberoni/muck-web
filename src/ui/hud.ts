@@ -174,9 +174,11 @@ export class Hud {
    */
   setTarget(target: Target | null, held: ItemId | null) {
     if (!target) return this.setPrompt('')
-    if (target.kind !== 'enemy' && PROP_DEFS[target.kind].family === 'bush') {
+    const harvest = target.kind === 'enemy' ? undefined : PROP_DEFS[target.kind].harvest
+    if (target.kind !== 'enemy' && harvest) {
       const { name, verb } = PROP_DEFS[target.kind]
-      return this.setPrompt(target.hp > 0 ? `${name} (${target.hp}) — clic para ${verb}` : `${name} — sin bayas`)
+      if (target.hp <= 0) return this.setPrompt(`${name} — ${harvest.empty}`)
+      return this.setPrompt(`${name}${target.maxHp > 1 ? ` (${target.hp})` : ''} — clic para ${verb}`)
     }
     const def = target.kind === 'enemy' ? ENEMY_DEFS[target.type] : PROP_DEFS[target.kind]
     const need = target.kind === 'enemy' ? null : missingTool(held, target.kind)

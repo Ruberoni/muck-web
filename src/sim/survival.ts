@@ -43,9 +43,9 @@ export function hurt(v: Vitals, damage: number) {
   v.healDelay = HEALTH_REGEN_DELAY
 }
 
-/** Toma un consumible si mejora algo: el hambre no está llena, o la vida no lo está y cura. Si no, no se gasta. */
+/** Toma un consumible si mejora algo: llena y el hambre no está llena, o cura y la vida no lo está. Si no, no se gasta. */
 export function eat(v: Vitals, def: ConsumableDef): boolean {
-  const feeds = v.hunger < HUNGER_MAX
+  const feeds = def.food > 0 && v.hunger < HUNGER_MAX
   const heals = v.health < HEALTH_MAX && (def.heal !== undefined || def.regen !== undefined)
   if (!feeds && !heals) return false
   v.hunger = Math.min(HUNGER_MAX, v.hunger + def.food)

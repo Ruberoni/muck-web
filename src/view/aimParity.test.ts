@@ -112,6 +112,7 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
     ['bush', 'las bayas', 800],
     ['iron_ore', 'los cristales', 800],
     ['mithril_ore', 'los cristales', 300],
+    ['healing_herb', 'la flor', 100],
   ] as const)('%s: solo difiere en %s que sobresalen', (kind, _part, minTouched) => {
     const result = compare(propSamples(kind))
     expect(result.touched).toBeGreaterThan(minTouched)

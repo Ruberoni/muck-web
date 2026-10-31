@@ -8,6 +8,9 @@ import {
   FOLIAGE_HEIGHT,
   FOLIAGE_RADIUS,
   FOLIAGE_SIDES,
+  HERB_LIFT,
+  HERB_RADIUS,
+  HERB_SQUASH,
   ROCK_RADIUS,
   TRUNK_BOTTOM_RADIUS,
   TRUNK_HEIGHT,
@@ -142,9 +145,10 @@ const SHAPES: Record<PropFamily, readonly Convex[]> = {
   ],
   rock: [icosahedron(ROCK_RADIUS, { x: 1, y: 1, z: 1 }, 0)],
   bush: [icosahedron(BUSH_RADIUS, { x: 1, y: BUSH_SQUASH, z: 1 }, BUSH_LIFT)],
+  herb: [icosahedron(HERB_RADIUS, { x: 1, y: HERB_SQUASH, z: 1 }, HERB_LIFT)],
 }
 // Radio horizontal de cada forma sin escalar (la inclinación de las rocas es pequeña: se cubre con la escala mayor).
-const SHAPE_REACH: Record<PropFamily, number> = { tree: FOLIAGE_RADIUS, rock: ROCK_RADIUS, bush: BUSH_RADIUS }
+const SHAPE_REACH: Record<PropFamily, number> = { tree: FOLIAGE_RADIUS, rock: ROCK_RADIUS, bush: BUSH_RADIUS, herb: HERB_RADIUS }
 const ENEMY_SHAPE = [icosahedron(ENEMY_BODY_RADIUS, ENEMY_BODY_SCALE, ENEMY_BODY_LIFT)]
 
 /** Hitboxes de los props a partir de sus colocaciones (no cambian durante la partida). */

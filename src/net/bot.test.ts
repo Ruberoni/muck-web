@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { Btn } from '../sim/commands'
 import type { SimEvent } from '../sim/events'
+import { biomeAt } from '../sim/world/biomes'
 import { LocalSession } from './session'
 import { BOT_RECIPES, botMove, botStep } from './bot'
 
 const ofType = <T extends SimEvent['type']>(events: readonly SimEvent[], type: T) =>
   events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type)
 
-/** Un bot solo en la isla durante `seconds` de juego; devuelve su sesión y lo que ha pasado. */
+/** Un bot solo en el bosque durante `seconds` de juego (no busca árboles: tiene que cruzárselos); devuelve su sesión y lo que ha pasado. */
 function play(seconds: number) {
   const session = new LocalSession(1)
+  const { sim } = session
+  const tree = sim.world.props.find((p) => p.kind === 'tree' && biomeAt(p.x, p.z) === 'forest')!
+  sim.teleport(session.me, tree.x + 2, tree.z, 0, 0)
   const events: SimEvent[] = []
   for (let tick = 1; tick <= seconds * 60; tick++) {
     const { actions, ...move } = botStep(tick, 1, session.slot)

@@ -10,6 +10,9 @@ import {
   FOLIAGE_HEIGHT,
   FOLIAGE_RADIUS,
   FOLIAGE_SIDES,
+  HERB_LIFT,
+  HERB_RADIUS,
+  HERB_SQUASH,
   ROCK_RADIUS,
   TRUNK_BOTTOM_RADIUS,
   TRUNK_HEIGHT,
@@ -21,8 +24,8 @@ import {
 } from '../sim/props'
 
 // Las geometrías son por familia (abedul y pino oscuro tienen la forma del árbol y las menas la de la roca) y los
-// materiales por tipo. sim/aim.ts construye las hitboxes de cada familia con las mismas caras (salvo las bayas y los
-// cristales de las menas, que son adorno): una geometría nueva tiene que llevarse también allí.
+// materiales por tipo. sim/aim.ts construye las hitboxes de cada familia con las mismas caras (salvo las bayas, la flor
+// de la hierba y los cristales de las menas, que son adorno): una geometría nueva tiene que llevarse también allí.
 const trunkGeometry = new THREE.CylinderGeometry(TRUNK_TOP_RADIUS, TRUNK_BOTTOM_RADIUS, TRUNK_HEIGHT, TRUNK_SIDES).translate(0, TRUNK_HEIGHT / 2, 0)
 const foliageGeometry = new THREE.ConeGeometry(FOLIAGE_RADIUS, FOLIAGE_HEIGHT, FOLIAGE_SIDES).translate(0, FOLIAGE_BASE + FOLIAGE_HEIGHT / 2, 0)
 const rockGeometry = new THREE.IcosahedronGeometry(ROCK_RADIUS, 0)
@@ -38,6 +41,15 @@ const berryGeometries = [
   [0.05, 1.0, 0.1],
 ].map(([x, y, z]) => new THREE.IcosahedronGeometry(0.09, 0).translate(x, y, z))
 if (berryGeometries.length !== BERRIES_PER_BUSH) throw new Error('Una posición por baya')
+
+const herbGeometry = new THREE.IcosahedronGeometry(HERB_RADIUS, 0).scale(1, HERB_SQUASH, 1).translate(0, HERB_LIFT, 0)
+const flowerGeometry = mergeGeometries(
+  [
+    [0, 0.37, 0],
+    [0.11, 0.3, 0.05],
+    [-0.09, 0.31, -0.07],
+  ].map(([x, y, z]) => new THREE.IcosahedronGeometry(0.075, 0).translate(x, y, z)),
+)
 
 const BIRCH_ROWS = 12
 /**
@@ -103,7 +115,7 @@ interface Part {
   material: THREE.Material
 }
 
-/** Piezas de cada tipo: un InstancedMesh por pieza y tipo. En el arbusto, de la segunda en adelante son las bayas. */
+/** Piezas de cada tipo: un InstancedMesh por pieza y tipo. */
 const PARTS: Record<PropKind, Part[]> = {
   tree: [
     { geometry: trunkGeometry, material: material('#7a5230') },
@@ -127,7 +139,11 @@ const PARTS: Record<PropKind, Part[]> = {
     { geometry: crystals, material: material('#4fb3f0', { metalness: 0.4, roughness: 0.4, emissive: '#123c5c' }) },
   ],
   bush: [{ geometry: bushGeometry, material: material('#3d7d35') }, ...berryGeometries.map((geometry) => ({ geometry, material: berryMaterial }))],
+  healing_herb: [{ geometry: herbGeometry, material: material('#57a85a') }, { geometry: flowerGeometry, material: material('#f2a6d8', { emissive: '#5c2450' }) }],
 }
+
+/** Desde qué pieza es lo que se recoge (se oculta al recogerlo): las bayas del arbusto y la flor de la hierba. */
+const FIRST_FRUIT: Partial<Record<PropKind, number>> = { bush: 1, healing_herb: 1 }
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
 const WOBBLE_AMOUNT = 0.12
@@ -136,7 +152,7 @@ export interface PropInstance {
   mesh: THREE.InstancedMesh
   index: number
   base: THREE.Matrix4
-  /** Solo en arbustos: número de baya. Se ve mientras sea menor que las bayas que le quedan al arbusto. */
+  /** Solo en lo que se recoge: número de baya. Se ve mientras sea menor que las bayas que le quedan. */
   berry?: number
 }
 
@@ -183,7 +199,6 @@ export class PropView {
     this.byKind = meshesOf
     this.meshes = { trunks: meshesOf.tree[0], foliage: meshesOf.tree[1], rocks: meshesOf.rock[0], bushes, berries }
     this.allMeshes = kinds.flatMap((kind) => meshesOf[kind])
-    const berryMeshes: THREE.InstancedMesh[] = berries
 
     const dummy = new THREE.Object3D()
     const next = Object.fromEntries(kinds.map((kind) => [kind, 0])) as Record<PropKind, number>
@@ -193,13 +208,13 @@ export class PropView {
       dummy.scale.set(p.scaleX, p.scaleY, p.scaleZ)
       dummy.updateMatrix()
       const index = next[p.kind]++
-      this.instances[p.id] = meshesOf[p.kind].map((mesh): PropInstance => {
+      const firstFruit = FIRST_FRUIT[p.kind]
+      this.instances[p.id] = meshesOf[p.kind].map((mesh, part): PropInstance => {
         mesh.setMatrixAt(index, dummy.matrix)
         // La base se lee de vuelta (Float32) para que restaurarla tras un wobble sea exacto.
         const base = new THREE.Matrix4()
         mesh.getMatrixAt(index, base)
-        const berry = berryMeshes.indexOf(mesh)
-        return berry < 0 ? { mesh, index, base } : { mesh, index, base, berry }
+        return firstFruit === undefined || part < firstFruit ? { mesh, index, base } : { mesh, index, base, berry: part - firstFruit }
       })
     }
 
@@ -279,7 +294,7 @@ export class PropView {
     this.reset()
     for (const { id, kind, hp, alive } of props) {
       if (!alive) this.destroy(id)
-      else if (PROP_DEFS[kind].family === 'bush' && hp !== this.berries[id]) this.setBerries(id, hp)
+      else if (PROP_DEFS[kind].harvest && hp !== this.berries[id]) this.setBerries(id, hp)
     }
   }
 
@@ -306,7 +321,7 @@ export class PropView {
     }
   }
 
-  /** Deja `count` bayas visibles en el arbusto; solo toca las que cambian. */
+  /** Deja `count` bayas visibles; solo toca las que cambian. */
   private setBerries(id: number, count: number) {
     const before = this.berries[id]
     this.berries[id] = count

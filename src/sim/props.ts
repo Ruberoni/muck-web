@@ -1,7 +1,7 @@
-import { BERRY_REGROW, PROP_DEFS } from './constants'
+import { PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import type { Emit } from './events'
-import { createBirchRng, createBushRng, createDarkpineRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
+import { createBirchRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
 import { biomeAt, BIOME_FLORA } from './world/biomes'
 import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WORLD_SIZE } from './world/terrain'
 
@@ -12,6 +12,7 @@ export const BIRCH_COUNT = 40
 export const IRON_ORE_COUNT = 40
 export const DARKPINE_COUNT = 20
 export const MITHRIL_ORE_COUNT = 16
+export const HERB_COUNT = 30
 /** Las rocas llegan hasta la arena; el resto de lo que crece en el suelo, solo hasta la hierba. */
 const ROCK_MIN_HEIGHT = 0.4
 /** Franjas de altura del terreno (en el centro) de algunos tipos: las de las menas no se solapan entre sí. */
@@ -42,6 +43,10 @@ export const FOLIAGE_HEIGHT = 3.4
 export const FOLIAGE_SIDES = 7
 /** Las rocas son un icosaedro de radio 1 escalado. */
 export const ROCK_RADIUS = 1
+/** La hierba curativa es una mata como los arbustos, mucho más pequeña; la flor de encima es adorno. */
+export const HERB_RADIUS = 0.3
+export const HERB_SQUASH = 0.7
+export const HERB_LIFT = 0.18
 /** Los arbustos son un icosaedro de este radio, achatado en Y y subido sobre su base. */
 export const BUSH_RADIUS = 0.75
 export const BUSH_SQUASH = 0.75
@@ -198,6 +203,14 @@ export function buildPropPlacements(): PropPlacement[] {
     return { kind: 'mithril_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
+  const herbRng = createHerbRng()
+  scatter(herbRng, HERB_COUNT, (x, z, y) => {
+    const scale = 0.9 + herbRng() * 0.4
+    const rotation = herbRng() * Math.PI * 2
+    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || slopeAt(x, z) > MAX_SLOPE) return null
+    return { kind: 'healing_herb', x, y: y - 0.02, z, radius: HERB_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
+  })
+
   return placements
 }
 
@@ -258,7 +271,7 @@ export function resetProp(prop: PropData) {
   prop.regrowLeft = 0
 }
 
-/** Paso fijo del rebrote: a cada arbusto incompleto le vuelve a crecer una baya cada BERRY_REGROW segundos. */
+/** Paso fijo del rebrote: a lo que se recoge poco a poco le vuelve una unidad (una baya) cada `harvest.regrow` segundos. */
 export function growBerries(props: readonly PropData[], dt: number, emit: Emit) {
   for (const bush of props) {
     if (bush.regrowLeft <= 0) continue
@@ -267,12 +280,14 @@ export function growBerries(props: readonly PropData[], dt: number, emit: Emit) 
       continue
     }
     bush.hp++
-    bush.regrowLeft = bush.hp < bush.maxHp ? BERRY_REGROW : 0
+    bush.regrowLeft = bush.hp < bush.maxHp ? regrowOf(bush) : 0
     emit({ type: 'berryGrew', id: bush.id, hp: bush.hp })
   }
 }
 
 /** Empieza a contar el rebrote de un arbusto al quitarle una baya; si ya contaba, sigue su ritmo. */
 export function startRegrow(bush: PropData) {
-  if (bush.regrowLeft <= 0) bush.regrowLeft = BERRY_REGROW
+  if (bush.regrowLeft <= 0) bush.regrowLeft = regrowOf(bush)
 }
+
+const regrowOf = ({ kind }: PropData) => PROP_DEFS[kind].harvest?.regrow ?? 0

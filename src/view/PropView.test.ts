@@ -33,7 +33,7 @@ describe('PropView', () => {
 
   it('cada tipo tiene sus propios meshes, con una instancia por prop', () => {
     const view = new PropView(placements)
-    const kinds = ['tree', 'birch', 'darkpine', 'rock', 'iron_ore', 'mithril_ore'] as const
+    const kinds = ['tree', 'birch', 'darkpine', 'rock', 'iron_ore', 'mithril_ore', 'healing_herb'] as const
     const meshes = kinds.flatMap((kind) => view.byKind[kind])
     expect(new Set(meshes).size).toBe(meshes.length)
     for (const kind of kinds) {

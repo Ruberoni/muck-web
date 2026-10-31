@@ -52,6 +52,7 @@ export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
   raw_meat: { food: 8 },
   cooked_meat: { food: 45, heal: 15 },
   berry_infusion: { food: 0, regen: { perSec: 2, seconds: 20 } },
+  healing_herb: { food: 0, heal: 25 },
 }
 
 export const MOUSE_SENSITIVITY = 0.002
@@ -68,7 +69,7 @@ export const HIT_COOLDOWN = 0.4
 export const WOBBLE_DURATION = 0.15
 
 /** Familia de un prop: decide su forma, su hitbox, de dónde cae lo que suelta y cómo suena. */
-export type PropFamily = 'tree' | 'rock' | 'bush'
+export type PropFamily = 'tree' | 'rock' | 'bush' | 'herb'
 /** Familia de una herramienta: el hacha tala árboles y el pico rompe rocas. */
 export type ToolFamily = 'axe' | 'pickaxe'
 
@@ -82,8 +83,11 @@ export interface PropDef {
   tier: number
   hp: number
   drop: { item: ItemId; amount: number }
-  /** Se recoge poco a poco: cada golpe quita 1 de vida y da el drop; a 0 no se destruye y se rellena solo. */
-  harvest?: boolean
+  /**
+   * Se recoge poco a poco: cada golpe quita 1 de vida y da el drop; a 0 no se destruye y se rellena solo. `regrow`
+   * son los segundos que tarda en volver cada unidad, y `empty`, lo que dice el HUD cuando no queda nada.
+   */
+  harvest?: { regrow: number; empty: string }
 }
 
 // Cada baya es un punto de vida del arbusto. Las que faltan vuelven de una en una: vacío se llena en 90 s.
@@ -91,7 +95,7 @@ export const BERRIES_PER_BUSH = 6
 export const BERRY_REGROW = 15
 
 // Las claves son los tipos de prop: `PropKind` (props.ts) se saca de aquí, así que un tipo nuevo solo se añade aquí.
-export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush', PropDef> = {
+export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb', PropDef> = {
   tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 3, drop: { item: 'wood', amount: 4 } },
   birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 12, drop: { item: 'birch_wood', amount: 4 } },
   darkpine: { name: 'Pino oscuro', verb: 'talar', family: 'tree', tool: 'axe', tier: 3, hp: 18, drop: { item: 'dark_wood', amount: 4 } },
@@ -106,7 +110,17 @@ export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_or
     tier: 0,
     hp: BERRIES_PER_BUSH,
     drop: { item: 'berry', amount: 1 },
-    harvest: true,
+    harvest: { regrow: BERRY_REGROW, empty: 'sin bayas' },
+  },
+  healing_herb: {
+    name: 'Hierba curativa',
+    verb: 'recoger',
+    family: 'herb',
+    tool: null,
+    tier: 0,
+    hp: 1,
+    drop: { item: 'healing_herb', amount: 1 },
+    harvest: { regrow: 90, empty: 'ya recogida' },
   },
 }
 
