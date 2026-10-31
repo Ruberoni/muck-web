@@ -186,9 +186,9 @@ export interface EnemyDef {
   windup: number
   /** Velocidad a la que lo empuja un golpe. */
   knockback: number
-  /** Segundos que un golpe lo deja aturdido. */
+  /** Segundos que un golpe lo deja aturdido, sin moverse ni atacar; 0: nunca se aturde. */
   stagger: number
-  /** Segundos tras un aturdimiento en los que no se le puede volver a aturdir. */
+  /** Aguante: segundos tras un aturdimiento en los que los golpes no lo aturden, no lo empujan ni le retrasan el ataque. */
   staggerGap: number
   /** Solo sale de noche. */
   nocturnal: boolean
@@ -257,6 +257,8 @@ export const CAMPFIRE_LIGHT_DISTANCE = 22
 // Muerte en una sala (§9 del plan): el muerto mira a los demás y reaparece; con un jugador se reinicia como siempre.
 /** Quien muere de día reaparece a los tantos segundos; de noche, al amanecer. */
 export const RESPAWN_DAY_DELAY = 30
+/** Segundos tras reaparecer sin recibir daño ni ser objetivo: los enemigos ya no se van al amanecer. */
+export const RESPAWN_SHIELD = 3
 /** Con todos muertos, segundos de "Game over" antes de reiniciar la isla. */
 export const GAME_OVER_DELAY = 6
 /** Los montones del inventario de un muerto salen desde esta altura sobre sus pies. */

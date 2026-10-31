@@ -49,14 +49,32 @@ describe('EnemyView', () => {
     expect(view.group.children).toHaveLength(0)
   })
 
-  it('al amanecer se desvanecen todos', () => {
+  it('de día siguen ahí', () => {
     const { enemies, view, frame } = setup()
     enemies.spawnAt(10, 20)
     enemies.spawnAt(-10, 20)
     frame()
     enemies.step(STEP, [{ id: 0, pos: { x: 0, z: 0 }, alive: true }], DAY_FRACTION / 2, 1)
     frame(0.5)
-    expect(view.group.children).toHaveLength(0)
+    expect(view.group.children).toHaveLength(2)
+  })
+
+  it('un golpe que aguanta (sin empujón) no le corta el paso', () => {
+    const { enemies, view, frame, model } = setup()
+    const e = enemies.spawnAt(10, 20)
+    frame()
+    view.present([{ type: 'enemyHit', id: e.id, hp: 4, kx: 0, kz: 0, by: 0 }])
+    // Se mueve: bota al andar, porque no se ha aturdido.
+    let highest = 0
+    for (let i = 1; i <= 12; i++) {
+      e.prev.x = e.pos.x
+      e.pos.x += 0.1
+      frame()
+      highest = Math.max(highest, model().position.y)
+    }
+    expect(highest).toBeGreaterThan(model().position.y - 0.2)
+    view.present([{ type: 'enemyHit', id: e.id, hp: 3, kx: 1, kz: 0, by: 0 }])
+    expect(model()).toBeDefined()
   })
 
   it('un golpe lo pone rojo un momento', () => {

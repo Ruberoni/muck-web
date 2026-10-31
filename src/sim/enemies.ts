@@ -45,13 +45,15 @@ export interface EnemyData {
   /** Tras un golpe retrocede con `knock` y no persigue ni ataca durante este tiempo. */
   stagger: number
   knock: { x: number; z: number }
+  /** Segundos hasta que otro golpe pueda volver a aturdirlo (`stagger` + `staggerGap` de su tipo). */
+  staggerGuard: number
   /** A quién persigue (null: a nadie todavía). */
   target: PlayerId | null
   /** Segundos hasta volver a elegir a quién persigue. */
   retarget: number
 }
 
-/** Lo que los enemigos ven de un jugador que está en el mundo. Los muertos no son objetivo, pero cuentan para N. */
+/** Lo que los enemigos ven de un jugador que está en el mundo. Los muertos y quien acaba de reaparecer no son objetivo, pero cuentan para N. */
 export interface EnemyPrey {
   id: PlayerId
   pos: { x: number; z: number }
@@ -87,9 +89,9 @@ export const spawnIntervalFor = (players: number) => ENEMY_SPAWN_INTERVAL / Math
 /** No se mueve a agua profunda: si el jugador nada lejos de la orilla, lo esperan en ella. */
 const walkable = (x: number, z: number) => heightAt(x, z) >= WATER_LEVEL - WADE_DEPTH
 
-/** Enemigos nocturnos: aparición, persecución, ataque y golpes recibidos. */
+/** Enemigos: aparecen de noche y siguen hasta que los matan. Aparición, persecución, ataque y golpes recibidos. */
 export class Enemies {
-  /** Enemigos vivos: al morir o al amanecer salen de la lista. */
+  /** Enemigos vivos: al morir salen de la lista. */
   readonly list: EnemyData[] = []
   private spawnTimer = 0
   private nextId = 0
@@ -120,10 +122,8 @@ export class Enemies {
         this.spawnTimer = spawnIntervalFor(players.length)
       }
     } else {
-      // Al amanecer se desvanecen sin soltar nada.
+      // De día no sale ninguno; los que quedan siguen, y cuentan para el tope de la noche siguiente.
       this.spawnTimer = 0
-      if (this.list.length) this.emit({ type: 'enemiesDespawn' })
-      while (this.list.length) this.kill(this.list[0])
     }
 
     const damage: EnemyDamage[] = []
@@ -161,10 +161,12 @@ export class Enemies {
   /** Mueve un enemigo hacia `prey` (o lo deja quieto si no hay nadie) y devuelve si ataca en este paso. */
   private chase(e: EnemyData, prey: EnemyPrey | null, dt: number): boolean {
     const def = ENEMY_DEFS[e.type]
+    e.staggerGuard = Math.max(0, e.staggerGuard - dt)
     if (e.stagger > 0) {
       const k = e.stagger / def.stagger
       this.move(e, e.knock.x * k * dt, e.knock.z * k * dt)
       e.stagger = Math.max(0, e.stagger - dt)
+      e.attackCooldown = Math.max(0, e.attackCooldown - dt)
       return false
     }
     if (!prey) {
@@ -182,7 +184,8 @@ export class Enemies {
       this.move(e, (dx / dist) * step, (dz / dist) * step)
     }
     if (dist > contact + def.reach) {
-      e.attackCooldown = Math.max(e.attackCooldown - dt, def.windup)
+      // Al llegar de lejos espera `windup`; el empujón de un golpe no cuenta como irse.
+      e.attackCooldown = Math.max(e.attackCooldown - dt, e.staggerGuard > 0 ? 0 : def.windup)
       return false
     }
     e.attackCooldown -= dt
@@ -274,6 +277,7 @@ export class Enemies {
       attackCooldown: def.windup,
       stagger: 0,
       knock: { x: 0, z: 0 },
+      staggerGuard: 0,
       target: null,
       retarget: 0,
     }
@@ -292,12 +296,18 @@ export class Enemies {
       return true
     }
     const def = ENEMY_DEFS[e.type]
+    // Lo aguanta: si cada golpe lo aturdiera, golpeando sin parar nunca llegaría a atacar.
+    if (def.stagger <= 0 || e.staggerGuard > 1e-9) {
+      this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: 0, kz: 0, by })
+      return false
+    }
     const dx = e.pos.x - from.x
     const dz = e.pos.z - from.z
     const d = Math.hypot(dx, dz) || 1
     e.knock.x = (dx / d) * def.knockback
     e.knock.z = (dz / d) * def.knockback
     e.stagger = def.stagger
+    e.staggerGuard = def.stagger + def.staggerGap
     e.attackCooldown = Math.max(e.attackCooldown, def.windup)
     this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by })
     return false

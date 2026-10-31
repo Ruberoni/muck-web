@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PlayerCommands } from './commands'
-import { GAME_OVER_DELAY, HEALTH_MAX, RESPAWN_DAY_DELAY, STEP } from './constants'
+import { GAME_OVER_DELAY, HEALTH_MAX, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, STEP } from './constants'
 import type { PlayerId, SimEvent } from './events'
 import { generatePropPlacements } from './props'
 import { Simulation } from './Simulation'
@@ -73,6 +73,36 @@ describe('muerte en una sala', () => {
     expect(slot.player).toMatchObject({ health: HEALTH_MAX, pos: expect.objectContaining({ x: slot.spawn.x, z: slot.spawn.z }) })
     // Sigue mirando a donde miraba: la orientación es del ratón del cliente.
     expect(slot.player.yaw).toBe(1.2)
+  })
+
+  it('al reaparecer pasa 3 s sin recibir daño ni ser objetivo, aunque tenga un enemigo encima', () => {
+    const sim = withPlayers(2)
+    sim.teleport(0, sim.spawnCenter.x + 40, sim.spawnCenter.z, 0, 0)
+    kill(sim, 1)
+    const slot = sim.slot(1)
+    until(sim, 'playerRespawn', DAY_TICKS + 1, () => sim.enemies.reset())
+    expect(slot.shieldUntil).toBe(sim.tick + Math.round(RESPAWN_SHIELD / STEP))
+    const { x, z } = slot.player.pos
+    const enemy = sim.enemies.spawnAt(x + 1.3, z)
+
+    for (let i = 0; i < Math.round(RESPAWN_SHIELD / STEP) - 1; i++) {
+      expect(idle(sim).filter((e) => e.type === 'playerHurt')).toEqual([])
+      expect(enemy.target).not.toBe(1)
+    }
+    const copy = Simulation.fromJSON(JSON.parse(JSON.stringify(sim.toJSON())), placements)
+    expect(copy.slot(1).shieldUntil).toBe(slot.shieldUntil)
+    // Se había ido a por el otro: tiene que volver.
+    const hurt: SimEvent[] = []
+    for (let i = 0; i < 360; i++) hurt.push(...idle(sim))
+    expect(enemy.target).toBe(1)
+    expect(hurt.filter((e) => e.type === 'playerHurt')).toContainEqual(expect.objectContaining({ id: 1 }))
+  })
+
+  it('reiniciar quita la protección', () => {
+    const sim = withPlayers(1)
+    sim.slot(0).shieldUntil = 1000
+    sim.reset()
+    expect(sim.slot(0).shieldUntil).toBe(0)
   })
 
   it('de noche reaparece al amanecer', () => {

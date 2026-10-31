@@ -109,7 +109,7 @@ describe('eventos de la simulación', () => {
     expect(ctx.events).toEqual(ids.map((id) => ({ type: 'pickupCollected', id, by: 0 })))
   })
 
-  it('enemigos: aparecen, atacan, reciben golpes, mueren y se desvanecen al amanecer', () => {
+  it('enemigos: aparecen, atacan, reciben golpes, mueren, y de día siguen sin eventos propios', () => {
     const ctx = setup()
     const player = { ...spot }
     const run = (seconds: number, phase = NIGHT) => {
@@ -134,10 +134,10 @@ describe('eventos de la simulación', () => {
     expect(ctx.events).toEqual([{ type: 'enemyDied', id: e.id, by: 3 }])
 
     ctx.events.length = 0
+    const others = ctx.enemies.list.map((other) => other.id)
     run(STEP, DAY)
-    expect(ctx.events).toEqual([{ type: 'enemiesDespawn' }])
-    run(1, DAY)
-    expect(types(ctx.events)).toEqual(['enemiesDespawn'])
+    expect(ctx.events).toEqual([])
+    expect(ctx.enemies.list.map((other) => other.id)).toEqual(others)
   })
 
   it('el registro sella cada evento con el tick en curso y se vacía al leerlo', () => {
@@ -145,10 +145,10 @@ describe('eventos de la simulación', () => {
     log.tick = 5
     log.emit({ type: 'playerAte', id: 0, item: 'berry' })
     log.tick = 6
-    log.emit({ type: 'enemiesDespawn' })
+    log.emit({ type: 'clockSet', worldStartTick: 2 })
     expect(log.drain()).toEqual([
       { type: 'playerAte', id: 0, item: 'berry', tick: 5 },
-      { type: 'enemiesDespawn', tick: 6 },
+      { type: 'clockSet', worldStartTick: 2, tick: 6 },
     ])
     expect(log.drain()).toEqual([])
   })

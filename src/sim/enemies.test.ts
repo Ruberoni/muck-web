@@ -13,6 +13,7 @@ import {
   WADE_DEPTH,
 } from './constants'
 import { Enemies, enemyAimHeight, enemyCap, type EnemyData } from './enemies'
+import type { SimEventData } from './events'
 import { createCombat, Interaction, type Fighter } from './interaction'
 import { attackDamage } from './tiers'
 import { Inventory, type ItemId } from './inventory'
@@ -119,13 +120,89 @@ describe('enemigos nocturnos', () => {
     expect(dist(e, player)).toBeGreaterThan(CONTACT + GOBLIN.reach)
   })
 
-  it('al amanecer desaparecen', () => {
+  it('de día no sale ninguno nuevo y los que había siguen persiguiendo y pegando', () => {
     run(30)
-    expect(enemies.list.length).toBeGreaterThan(0)
+    const count = enemies.list.length
+    expect(count).toBeGreaterThan(0)
     const e = enemies.list[0]
-    run(STEP, DAY)
+    const damage = run(30, DAY)
+    expect(enemies.list).toHaveLength(count)
+    expect(e.alive).toBe(true)
+    expect(damage).toBeGreaterThan(0)
+  })
+
+  it('los supervivientes cuentan para el tope de la noche siguiente; reiniciar los quita', () => {
+    for (let i = 0; i < enemyCap(2); i++) enemies.spawnAt(spot.x + i, spot.z + 20)
+    run(20, NIGHT, 2)
+    expect(enemies.list).toHaveLength(enemyCap(2))
+    enemies.reset()
     expect(enemies.list).toHaveLength(0)
-    expect(e.alive).toBe(false)
+  })
+
+  it('golpeado sin parar sigue atacando: tras aturdirse aguanta un rato', () => {
+    const e = enemies.spawnAt(player.x + CONTACT + GOBLIN.gap, player.z)
+    let lastAttack = 0
+    let longest = 0
+    let attacks = 0
+    for (let tick = 1; tick <= 600; tick++) {
+      if (tick % 15 === 0) enemies.hit(e, 0, player, 0)
+      const hits = enemies.step(STEP, [{ id: 0, pos: player, alive: true }], NIGHT, 1)
+      if (!hits.length) continue
+      attacks++
+      longest = Math.max(longest, tick - lastAttack)
+      lastAttack = tick
+    }
+    expect(attacks).toBeGreaterThan(5)
+    // Lo peor es un golpe justo antes de que ataque: su intervalo (1,2 s) más el aturdimiento y volver a su alcance.
+    expect(longest * STEP).toBeLessThanOrEqual(1.65)
+  })
+
+  it.each([0.25, 0.3, 0.4, 0.5, 0.6, 1])('golpeado cada %s s nunca tarda más de 1,65 s en atacar', (every) => {
+    const e = enemies.spawnAt(player.x + CONTACT + GOBLIN.gap, player.z)
+    const period = Math.round(every / STEP)
+    let lastAttack = 0
+    let longest = 0
+    for (let tick = 1; tick <= 1800; tick++) {
+      if (tick % period === 0) enemies.hit(e, 0, player, 0)
+      if (!enemies.step(STEP, [{ id: 0, pos: player, alive: true }], NIGHT, 1).length) continue
+      if (lastAttack) longest = Math.max(longest, tick - lastAttack)
+      lastAttack = tick
+    }
+    expect(longest * STEP).toBeLessThanOrEqual(1.65)
+  })
+
+  it('mientras aguanta, un golpe quita vida pero no lo aturde, no lo empuja ni le retrasa el ataque', () => {
+    const e = enemies.spawnAt(player.x + 1.5, player.z)
+    enemies.hit(e, 1, player, 0)
+    expect(e.stagger).toBe(GOBLIN.stagger)
+    expect(e.staggerGuard).toBe(GOBLIN.stagger + GOBLIN.staggerGap)
+    run(GOBLIN.stagger + 0.1)
+    expect(e.stagger).toBe(0)
+    const { attackCooldown } = e
+    const hp = e.hp
+    const events: SimEventData[] = []
+    const watched = new Enemies([world.grid], mulberry32(7), (event) => events.push(event))
+    watched.load(enemies.save())
+    const same = watched.list[0]
+    watched.hit(same, 5, player, 0)
+    expect(same.hp).toBe(hp - 5)
+    expect(same.stagger).toBe(0)
+    expect(same.attackCooldown).toBe(attackCooldown)
+    expect(events).toEqual([{ type: 'enemyHit', id: same.id, hp: same.hp, kx: 0, kz: 0, by: 0 }])
+    // Pasado el aguante, otro golpe vuelve a aturdirlo.
+    run(GOBLIN.staggerGap)
+    enemies.hit(e, 1, player, 0)
+    expect(e.stagger).toBe(GOBLIN.stagger)
+  })
+
+  it('con `stagger` a 0 nunca se aturde', () => {
+    const { stagger } = GOBLIN
+    GOBLIN.stagger = 0
+    const e = enemies.spawnAt(player.x + 1.5, player.z)
+    enemies.hit(e, 1, player, 0)
+    GOBLIN.stagger = stagger
+    expect(e.stagger).toBe(0)
+    expect(e.knock).toEqual({ x: 0, z: 0 })
   })
 
   it('un golpe los empuja hacia atrás y les quita vida; al llegar a 0 mueren', () => {

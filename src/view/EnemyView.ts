@@ -74,14 +74,14 @@ interface EnemyModel {
   lunge: number
   /** Retroceso tras un golpe: no bota mientras dura. */
   stagger: number
-  /** Mientras se desvanece (muerto o al amanecer); null si sigue vivo. */
+  /** Mientras se desvanece al morir; null si sigue vivo. */
   dying: number | null
 }
 
 /**
  * Los enemigos dibujados. Sigue la lista de la simulación en cada frame: crea el modelo de los que
- * aparecen y desvanece los que salen de ella (muertos o al amanecer). Las animaciones de golpe y
- * embestida salen de los eventos; el bote, de si se mueve.
+ * aparecen y desvanece los que salen de ella al morir. Las animaciones de golpe y embestida salen de
+ * los eventos; el bote, de si se mueve.
  */
 export class EnemyView {
   readonly group = new THREE.Group()
@@ -96,7 +96,8 @@ export class EnemyView {
           const model = this.models.get(e.id)
           if (model) {
             model.hurt = HURT_FLASH
-            model.stagger = ENEMY_DEFS[model.type].stagger
+            // Si lo ha aguantado (sin empujón), sigue andando.
+            if (e.kx !== 0 || e.kz !== 0) model.stagger = ENEMY_DEFS[model.type].stagger
           }
           break
         }

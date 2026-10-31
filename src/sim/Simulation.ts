@@ -1,7 +1,7 @@
 import type { PlayerCommands } from './commands'
 import { resolveCircle } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
-import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, STATION_RANGE, STEP } from './constants'
+import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
@@ -36,6 +36,8 @@ export interface PlayerSlot extends Actor {
   spawn: { x: number; z: number }
   /** Muerto en una sala: tick en que reaparece. null si está vivo (o con un jugador, donde no se reaparece). */
   respawnAt: number | null
+  /** Recién reaparecido: hasta este tick ni recibe daño ni es objetivo. */
+  shieldUntil: number
 }
 
 /** Un PlayerSlot como datos (el objetivo no se guarda: se recalcula en cada paso). */
@@ -50,6 +52,7 @@ export interface PlayerSlotState {
   appliedSeq: number
   spawn: { x: number; z: number }
   respawnAt: number | null
+  shieldUntil: number
 }
 
 /** Todo lo que cambia durante la partida, como datos (ver Simulation.toJSON). */
@@ -170,6 +173,7 @@ export class Simulation {
       appliedSeq: 0,
       spawn,
       respawnAt: null,
+      shieldUntil: 0,
     }
     this.players.set(id, slot)
     return slot
@@ -214,7 +218,7 @@ export class Simulation {
     }
 
     this.syncClock()
-    const prey = present.map(({ id, player, alive }) => ({ id, pos: player.pos, alive }))
+    const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
     for (const { playerId, damage } of this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)) {
       hurt(this.slot(playerId).player, damage)
       this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
@@ -278,6 +282,7 @@ export class Simulation {
       slot.inventoryFull = false
       slot.alive = true
       slot.respawnAt = null
+      slot.shieldUntil = 0
       Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
     }
     this.gameOverAt = null
@@ -334,6 +339,7 @@ export class Simulation {
           appliedSeq: slot.appliedSeq,
           spawn: { ...slot.spawn },
           respawnAt: slot.respawnAt,
+          shieldUntil: slot.shieldUntil,
         })),
       nextPlayerId: this.nextPlayerId,
       gameOverAt: this.gameOverAt,
@@ -368,6 +374,7 @@ export class Simulation {
       slot.appliedSeq = saved.appliedSeq
       slot.spawn = { ...saved.spawn }
       slot.respawnAt = saved.respawnAt
+      slot.shieldUntil = saved.shieldUntil
     }
     this.nextPlayerId = state.nextPlayerId
     this.gameOverAt = state.gameOverAt
@@ -395,6 +402,7 @@ export class Simulation {
     Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z, yaw), { pitch })
     slot.alive = true
     slot.respawnAt = null
+    slot.shieldUntil = this.tick + Math.round(RESPAWN_SHIELD / STEP)
     this.events.emit({ type: 'playerRespawn', id: slot.id, x: slot.player.pos.x, z: slot.player.pos.z })
   }
 

@@ -576,6 +576,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     attackCooldown: 0,
     stagger: 0,
     knock: { x: 0, z: 0 },
+    staggerGuard: 0,
     target: null,
     retarget: 0,
   }

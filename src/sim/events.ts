@@ -24,10 +24,10 @@ export type SimEventData =
   | { type: 'pickupCollected'; id: number; by: PlayerId }
   | { type: 'structurePlaced'; id: number; kind: StructureKind; x: number; y: number; z: number; rotY: number; by: PlayerId }
   | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
+  /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId }
   | { type: 'enemyAttack'; id: number; target: PlayerId }
   | { type: 'enemyDied'; id: number; by: PlayerId }
-  | { type: 'enemiesDespawn' }
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
