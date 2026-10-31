@@ -28,9 +28,28 @@ const eyeGeometry = mergeGeometries([
   new THREE.OctahedronGeometry(0.08, 0).translate(0.16, 1.02, 0.4),
   new THREE.OctahedronGeometry(0.08, 0).translate(-0.16, 1.02, 0.4),
 ])
-// Un poco de emisivo para que la silueta se lea de noche.
-const BODY_GLOW = new THREE.Color('#2b1240')
-const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#9558bd', emissive: BODY_GLOW, flatShading: true })
+// Hombros y puños de roca, y pies, del gólem.
+const golemDetailGeometry = mergeGeometries([
+  new THREE.IcosahedronGeometry(0.27, 0).translate(0.5, 1.02, 0),
+  new THREE.IcosahedronGeometry(0.27, 0).translate(-0.5, 1.02, 0),
+  new THREE.IcosahedronGeometry(0.2, 0).translate(0.58, 0.5, 0.12),
+  new THREE.IcosahedronGeometry(0.2, 0).translate(-0.58, 0.5, 0.12),
+  new THREE.BoxGeometry(0.24, 0.16, 0.32).translate(0.22, 0.08, 0.04).toNonIndexed(),
+  new THREE.BoxGeometry(0.24, 0.16, 0.32).translate(-0.22, 0.08, 0.04).toNonIndexed(),
+])
+// Ramas y raíces del espíritu.
+const spiritBranchGeometry = mergeGeometries([
+  new THREE.ConeGeometry(0.06, 0.55, 4).rotateZ(-0.7).translate(0.38, 1.42, 0),
+  new THREE.ConeGeometry(0.06, 0.5, 4).rotateZ(0.8).translate(-0.38, 1.38, 0),
+  new THREE.ConeGeometry(0.05, 0.42, 4).translate(0.02, 1.62, -0.04),
+  new THREE.ConeGeometry(0.07, 0.3, 4).rotateZ(2.6).translate(0.24, 0.12, 0.04),
+  new THREE.ConeGeometry(0.07, 0.3, 4).rotateZ(-2.6).translate(-0.24, 0.12, 0.04),
+])
+const spiritLeafGeometry = mergeGeometries([
+  new THREE.IcosahedronGeometry(0.15, 0).translate(0.58, 1.62, 0),
+  new THREE.IcosahedronGeometry(0.13, 0).translate(-0.56, 1.56, 0),
+  new THREE.IcosahedronGeometry(0.12, 0).translate(0.02, 1.84, -0.04),
+])
 // El destello de un golpe, según lo que le haya hecho: rojo normal, amarillo si es débil a esa arma y gris si la resiste.
 const FLASH_COLORS: Record<HitEfficacy, string> = { normal: '#ff3b2f', effective: '#ffc21f', resisted: '#8e8e8e' }
 
@@ -43,9 +62,9 @@ function flashesOf(material: THREE.MeshStandardMaterial) {
   }
   return { normal: flash(FLASH_COLORS.normal), effective: flash(FLASH_COLORS.effective), resisted: flash(FLASH_COLORS.resisted) }
 }
-const detailMaterial = new THREE.MeshStandardMaterial({ color: '#3a2348', flatShading: true })
+const standard = (color: string) => new THREE.MeshStandardMaterial({ color, flatShading: true })
 // Sin iluminación: los ojos se ven de noche.
-const eyeMaterial = new THREE.MeshBasicMaterial({ color: '#ffe066' })
+const eyes = (color: string) => ({ geometry: eyeGeometry, material: new THREE.MeshBasicMaterial({ color }), castShadow: false })
 
 /** El aspecto de un tipo de enemigo: el cuerpo (también la hitbox) con su destello, y los detalles sin hitbox. */
 interface EnemyLook {
@@ -55,16 +74,20 @@ interface EnemyLook {
   details: { geometry: THREE.BufferGeometry; material: THREE.Material; castShadow: boolean }[]
 }
 
+/** `glow`: un poco de emisivo para que la silueta se lea de noche. */
+function look(color: string, glow: string, details: EnemyLook['details']): EnemyLook {
+  const material = new THREE.MeshStandardMaterial({ color, emissive: glow, flatShading: true })
+  return { body: bodyGeometry, material, flashes: flashesOf(material), details }
+}
+
 const LOOKS: Record<EnemyType, EnemyLook> = {
-  goblin: {
-    body: bodyGeometry,
-    material: bodyMaterial,
-    flashes: flashesOf(bodyMaterial),
-    details: [
-      { geometry: detailGeometry, material: detailMaterial, castShadow: true },
-      { geometry: eyeGeometry, material: eyeMaterial, castShadow: false },
-    ],
-  },
+  goblin: look('#9558bd', '#2b1240', [{ geometry: detailGeometry, material: standard('#3a2348'), castShadow: true }, eyes('#ffe066')]),
+  golem: look('#8a877c', '#1c1b18', [{ geometry: golemDetailGeometry, material: standard('#66635a'), castShadow: true }, eyes('#ffb13b')]),
+  spirit: look('#6e4c2f', '#1e140b', [
+    { geometry: spiritBranchGeometry, material: standard('#4a3220'), castShadow: true },
+    { geometry: spiritLeafGeometry, material: standard('#4f9a3f'), castShadow: true },
+    eyes('#b6ff6a'),
+  ]),
 }
 
 /** Modelo de un enemigo y sus animaciones, que solo existen en la vista. */

@@ -96,9 +96,17 @@ El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya dev
 
 ## Enemigos
 
-Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic), y tienen 70 de vida: 7 golpes a mano; con hacha o pico, 4 de madera, 3 de piedra y 2 de hierro o mithril; con espada, 5, 3, 2 y 2, pero mucho más seguidos. Cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo. Al amanecer dejan de salir nuevos, pero los que quedan siguen ahí hasta que los mates, y cuentan para el tope de la noche siguiente. Tras un golpe que los empuja y los aturde 0,3 s aguantan 0,6 s más: durante ese rato los golpes les quitan vida, pero no los empujan ni les retrasan el ataque, así que golpear sin parar no evita que te peguen.
+Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic), y tienen 70 de vida: 7 golpes a mano; con hacha o pico, 4 de madera, 3 de piedra y 2 de hierro o mithril; con espada, 5, 3, 2 y 2, pero mucho más seguidos. Cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo. Al amanecer dejan de salir nuevos, pero los que quedan siguen ahí hasta que los mates, y cuentan para el tope de la noche siguiente. Desde la noche 2 algunos dejan paso a otros dos enemigos, cada noche más hasta la 4:
 
-Cada tipo de enemigo es una entrada de `ENEMY_DEFS` (`src/sim/constants.ts`): vida, velocidad, tamaño, daño, ritmo de ataque, botín, debilidades… Por ahora solo está el trasgo. Un enemigo puede ser débil o resistente a una clase de arma (`weakness`): el golpe multiplica su daño, y tanto el destello (amarillo si es eficaz, gris si lo resiste) como el sonido lo dejan ver.
+| Enemigo | Vida | Velocidad | Daño | Pico | Hacha | Espada | Mano | Sale sobre todo en | Suelta |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Trasgo | 70 | 5 | 10 | ×1 | ×1 | ×1 | ×1 | cualquier sitio | carne cruda |
+| Gólem de piedra | 170 | 3,5 | 15 | ×2 | ×0,5 | ×1 | ×0,5 | montaña | 3 piedra + 1 mineral de hierro |
+| Espíritu del bosque | 130 | 6 | 8 | ×0,5 | ×2 | ×1 | ×0,5 | bosque | 4 madera + 1 madera de abedul |
+
+El gólem no se aturde ni retrocede. Al trasgo y al espíritu, tras un golpe que los empuja y los aturde 0,3 s les quedan 0,6 s de aguante: durante ese rato los golpes les quitan vida, pero no los empujan ni les retrasan el ataque, así que golpear sin parar no evita que te peguen.
+
+Cada tipo de enemigo es una entrada de `ENEMY_DEFS` (`src/sim/constants.ts`): vida, velocidad, tamaño, daño, ritmo de ataque, botín, debilidades… Un enemigo puede ser débil o resistente a una clase de arma (`weakness`): el golpe multiplica su daño, y tanto el destello (amarillo si es eficaz, gris si lo resiste) como el sonido lo dejan ver.
 
 ## Sonido y ajustes
 

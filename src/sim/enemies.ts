@@ -1,3 +1,4 @@
+import { biomeAt, type Biome } from './world/biomes'
 import { isNight } from './world/daycycle'
 import { heightAt, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
@@ -14,6 +15,7 @@ import {
   ENEMY_SPAWN_INTERVAL,
   ENEMY_SPAWN_MAX,
   ENEMY_SPAWN_MIN,
+  ENEMY_TYPES,
   PLAYER_RADIUS,
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
@@ -23,6 +25,8 @@ import {
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
 const SPAWN_ATTEMPTS = 12
+/** Noches que tarda un tipo nuevo en llegar a toda su probabilidad, desde la primera en que sale. */
+const SPAWN_RAMP = 3
 /** Altura del centro del cuerpo de un tipo de enemigo: a donde apunta aimAtEnemy. */
 export const enemyAimHeight = (type: EnemyType) => 0.8 * ENEMY_DEFS[type].scale
 /** Distancia entre centros a la que un enemigo de este tipo toca a un jugador. */
@@ -87,6 +91,22 @@ export const enemyCapFor = (day: number, players: number) =>
 /** Segundos entre apariciones: con más jugadores salen antes. */
 export const spawnIntervalFor = (players: number) => ENEMY_SPAWN_INTERVAL / Math.sqrt(Math.max(1, players))
 
+/** Probabilidad de que una aparición de la noche `day` en `biome` sea de tipo `type` en vez de un trasgo. */
+export function spawnChance(type: EnemyType, day: number, biome: Biome): number {
+  const { spawn } = ENEMY_DEFS[type]
+  if (!spawn || day < spawn.fromNight) return 0
+  return spawn.biomes[biome] * Math.min(1, (day - spawn.fromNight + 1) / SPAWN_RAMP)
+}
+
+/** El tipo que aparece con la tirada `roll` (de 0 a 1): lo que sobra de las probabilidades son trasgos. */
+export function spawnType(roll: number, day: number, biome: Biome): EnemyType {
+  for (const type of ENEMY_TYPES) {
+    roll -= spawnChance(type, day, biome)
+    if (roll < 0) return type
+  }
+  return 'goblin'
+}
+
 /** No se mueve a agua profunda: si el jugador nada lejos de la orilla, lo esperan en ella. */
 const walkable = (x: number, z: number) => heightAt(x, z) >= WATER_LEVEL - WADE_DEPTH
 
@@ -118,7 +138,7 @@ export class Enemies {
         if (prey.length && this.list.length < enemyCapFor(day, players.length)) {
           // Por turnos: cada aparición elige a un jugador vivo distinto.
           const around = prey[this.spawnTurn++ % prey.length]
-          this.trySpawn(around, prey)
+          this.trySpawn(around, prey, day)
         }
         this.spawnTimer = spawnIntervalFor(players.length)
       }
@@ -247,7 +267,7 @@ export class Enemies {
   }
 
   /** Alrededor de `around` y a ENEMY_SPAWN_MIN como poco de todos los jugadores vivos. */
-  private trySpawn(around: EnemyPrey, prey: readonly EnemyPrey[], type: EnemyType = 'goblin') {
+  private trySpawn(around: EnemyPrey, prey: readonly EnemyPrey[], day: number) {
     for (let i = 0; i < SPAWN_ATTEMPTS; i++) {
       const angle = this.rng() * Math.PI * 2
       const r = ENEMY_SPAWN_MIN + this.rng() * (ENEMY_SPAWN_MAX - ENEMY_SPAWN_MIN)
@@ -255,6 +275,7 @@ export class Enemies {
       const z = around.pos.z + Math.sin(angle) * r
       if (Math.hypot(x, z) > BOUND || heightAt(x, z) < WATER_LEVEL + 0.2) continue
       if (prey.some((p) => p !== around && Math.hypot(p.pos.x - x, p.pos.z - z) < ENEMY_SPAWN_MIN)) continue
+      const type = spawnType(this.rng(), day, biomeAt(x, z))
       const pos = { x, z }
       if (this.grids.some((grid) => resolveCircle(pos, ENEMY_DEFS[type].radius, grid))) continue
       return this.spawnAt(x, z, type)

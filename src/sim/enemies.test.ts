@@ -6,13 +6,14 @@ import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from './world/terrain'
 import {
   ENEMY_DEFS,
   ENEMY_SPAWN_MAX,
+  type EnemyType,
   ENEMY_SPAWN_MIN,
   EYE_HEIGHT,
   PLAYER_RADIUS,
   STEP,
   WADE_DEPTH,
 } from './constants'
-import { Enemies, enemyAimHeight, enemyCap, type EnemyData } from './enemies'
+import { Enemies, enemyAimHeight, enemyCap, spawnChance, spawnType, type EnemyData } from './enemies'
 import type { SimEventData } from './events'
 import { createCombat, Interaction, type Fighter } from './interaction'
 import { attackDamage, hitEfficacy } from './tiers'
@@ -118,6 +119,48 @@ describe('enemigos nocturnos', () => {
     // Llegó hasta la orilla, pero no hasta el jugador.
     expect(dist(e, player)).toBeLessThan(6)
     expect(dist(e, player)).toBeGreaterThan(CONTACT + GOBLIN.reach)
+  })
+
+  it('la primera noche solo hay trasgos; desde la segunda, también gólems y espíritus', () => {
+    enemies = new Enemies([world.grid], mulberry32(7))
+    run(60, NIGHT, 1)
+    expect(new Set(enemies.list.map((e) => e.type))).toEqual(new Set(['goblin']))
+
+    enemies = new Enemies([world.grid], mulberry32(7))
+    const seen = new Set<string>()
+    for (let i = 0; i < 40; i++) {
+      run(5, NIGHT, 5)
+      for (const e of enemies.list) seen.add(e.type)
+      enemies.reset()
+    }
+    expect(seen).toEqual(new Set(['goblin', 'golem', 'spirit']))
+  })
+
+  it('el gólem sale sobre todo en la montaña y el espíritu en el bosque, y cada noche más hasta su máximo', () => {
+    expect(spawnChance('golem', 1, 'mountain')).toBe(0)
+    expect(spawnChance('golem', 3, 'mountain')).toBeGreaterThan(spawnChance('golem', 2, 'mountain'))
+    expect(spawnChance('golem', 4, 'mountain')).toBe(spawnChance('golem', 40, 'mountain'))
+    expect(spawnChance('golem', 9, 'mountain')).toBeGreaterThan(spawnChance('golem', 9, 'forest'))
+    expect(spawnChance('spirit', 9, 'forest')).toBeGreaterThan(spawnChance('spirit', 9, 'mountain'))
+    expect(spawnChance('goblin', 9, 'forest')).toBe(0)
+    // Siempre hay sitio para los trasgos.
+    for (const biome of ['beach', 'meadow', 'forest', 'mountain'] as const) {
+      expect(spawnChance('golem', 9, biome) + spawnChance('spirit', 9, biome)).toBeLessThan(1)
+      expect(spawnType(0.999, 9, biome)).toBe('goblin')
+    }
+    expect(spawnType(0, 9, 'mountain')).toBe('golem')
+    expect(spawnType(0.62, 9, 'mountain')).toBe('spirit')
+    expect(spawnType(0, 1, 'mountain')).toBe('goblin')
+  })
+
+  it('el gólem nunca se aturde ni retrocede, y el espíritu sí', () => {
+    const golem = enemies.spawnAt(player.x + 3, player.z, 'golem')
+    enemies.hit(golem, 10, player, 0)
+    expect(golem.hp).toBe(ENEMY_DEFS.golem.hp - 10)
+    expect(golem).toMatchObject({ stagger: 0, knock: { x: 0, z: 0 } })
+    const spirit = enemies.spawnAt(player.x - 3, player.z, 'spirit')
+    enemies.hit(spirit, 10, player, 0)
+    expect(spirit.stagger).toBe(ENEMY_DEFS.spirit.stagger)
   })
 
   it('de día no sale ninguno nuevo y los que había siguen persiguiendo y pegando', () => {
@@ -227,14 +270,14 @@ describe('enemigos nocturnos', () => {
 })
 
 describe('combate', () => {
-  const setup = () => {
+  const setup = (type: EnemyType = 'goblin') => {
     const inventory = new Inventory()
     const enemies = new Enemies([world.grid], mulberry32(7))
     const pickups = new Pickups([world.grid], mulberry32(3))
     const interaction = new Interaction(world, pickups, enemies)
-    const enemy = enemies.spawnAt(spot.x + 1.5, spot.z)
+    const enemy = enemies.spawnAt(spot.x + 1.5, spot.z, type)
     const eyeY = heightAt(spot.x, spot.z) + EYE_HEIGHT
-    const aimY = heightAt(enemy.pos.x, enemy.pos.z) + enemyAimHeight('goblin')
+    const aimY = heightAt(enemy.pos.x, enemy.pos.z) + enemyAimHeight(type)
     // forward = (-sin(yaw), -cos(yaw)): yaw = -π/2 mira hacia +X.
     const viewer = { pos: { x: spot.x, y: eyeY - EYE_HEIGHT, z: spot.z }, yaw: -Math.PI / 2, pitch: Math.atan2(aimY - eyeY, 1.5) }
     const fighter: Fighter = { id: 0, player: viewer, inventory, combat: createCombat(), target: null }
@@ -287,6 +330,31 @@ describe('combate', () => {
     hold(0.4 * 6 + STEP)
     expect(enemy.hp).toBe(0)
     expect(meat()).toHaveLength(1)
+  })
+
+  it.each([
+    ['golem', ['iron_ore', 'stone', 'stone', 'stone']],
+    ['spirit', ['birch_wood', 'wood', 'wood', 'wood', 'wood']],
+  ] as const)('el %s suelta lo suyo al morir', (type, loot) => {
+    const { enemy, hold, equip, pickups } = setup(type)
+    equip('wood_sword')
+    enemy.hp = 1
+    hold(STEP)
+    expect(pickups.list.map((p) => p.item).sort()).toEqual(loot)
+  })
+
+  it('el gólem se rompe con el pico y el espíritu se tala con el hacha, y el golpe dice si fue eficaz', () => {
+    expect(attackDamage('stone_pickaxe', 'golem')).toBe(60)
+    expect(attackDamage('stone_axe', 'golem')).toBe(15)
+    expect(attackDamage('stone_sword', 'golem')).toBe(25)
+    expect(attackDamage(null, 'golem')).toBe(5)
+    expect(attackDamage('stone_axe', 'spirit')).toBe(60)
+    expect(attackDamage('stone_pickaxe', 'spirit')).toBe(15)
+    expect(attackDamage('stone_sword', 'spirit')).toBe(25)
+    expect(attackDamage(null, 'spirit')).toBe(5)
+    expect(hitEfficacy('stone_pickaxe', 'golem')).toBe('effective')
+    expect(hitEfficacy('stone_axe', 'golem')).toBe('resisted')
+    expect(hitEfficacy('stone_sword', 'golem')).toBe('normal')
   })
 
   it('al morir suelta todo su botín', () => {

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { aimRay, createPropHitboxes, pickTarget, type AimRay } from '../sim/aim'
 import { SpatialGrid } from '../sim/collision'
-import { EYE_HEIGHT, PROP_DEFS, REACH } from '../sim/constants'
+import { ENEMY_TYPES, EYE_HEIGHT, PROP_DEFS, REACH } from '../sim/constants'
 import { createPropWorld, type PropData, type PropKind } from '../sim/props'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
@@ -121,7 +121,7 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
     expect(result.meshOnly / result.touched).toBeLessThan(0.05)
   })
 
-  it('enemigo: el cuerpo sin bote ni embestida; solo faltan cuernos, pies y ojos', () => {
+  it.each(ENEMY_TYPES)('%s: el cuerpo sin bote ni embestida; solo faltan los detalles', (type) => {
     const enemies = new Enemies([])
     const enemyView = new EnemyView()
     const rng = mulberry32(5)
@@ -131,7 +131,7 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
     for (let i = 0; i < 1000; i++) {
       enemies.reset()
       enemyView.reset()
-      const enemy = enemies.spawnAt(ex, ez)
+      const enemy = enemies.spawnAt(ex, ez, type)
       enemy.yaw = rng() * Math.PI * 2
       enemyView.update(0, enemies.list, 1)
       const angle = rng() * Math.PI * 2
@@ -148,6 +148,6 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
     const result = compare(samples)
     expect(result.touched).toBeGreaterThan(300)
     expect(result.boxOnly).toBe(0)
-    expect(result.meshOnly / result.touched).toBeLessThan(0.1)
+    expect(result.meshOnly / result.touched).toBeLessThan(0.25)
   })
 })

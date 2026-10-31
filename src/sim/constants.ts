@@ -1,4 +1,5 @@
 import type { ItemId } from './inventory'
+import type { Biome } from './world/biomes'
 
 export const STEP = 1 / 60
 export const MAX_FRAME_DT = 0.1
@@ -212,9 +213,11 @@ export interface EnemyDef {
   loot: { item: ItemId; amount: number }[]
   /** Puntos que gasta al salir, para el futuro director de apariciones (docs/diseno-del-juego.md §4). */
   cost: number
+  /** Desde qué noche sustituye a veces a un trasgo y con qué probabilidad en cada bioma (ver `spawnChance`). */
+  spawn?: { fromNight: number; biomes: Record<Biome, number> }
 }
 
-export const ENEMY_DEFS: Record<'goblin', EnemyDef> = {
+export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit', EnemyDef> = {
   // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
@@ -238,6 +241,52 @@ export const ENEMY_DEFS: Record<'goblin', EnemyDef> = {
     weakness: {},
     loot: [{ item: 'raw_meat', amount: 1 }],
     cost: 1,
+  },
+  // Lento, duro y sin aturdirse: se rompe con el pico, y el hacha apenas le hace nada.
+  golem: {
+    name: 'Gólem de piedra',
+    verb: 'atacar',
+    hp: 170,
+    speed: 3.5,
+    radius: 0.8,
+    scale: 1.7,
+    damage: 15,
+    gap: 0.35,
+    reach: 0.8,
+    attackInterval: 1.6,
+    windup: 0.7,
+    knockback: 0,
+    stagger: 0,
+    staggerGap: 0,
+    nocturnal: true,
+    ai: 'chase',
+    weakness: { pickaxe: 2, axe: 0.5, hand: 0.5 },
+    loot: [{ item: 'stone', amount: 3 }, { item: 'iron_ore', amount: 1 }],
+    cost: 3,
+    spawn: { fromNight: 2, biomes: { beach: 0.1, meadow: 0.1, forest: 0.1, mountain: 0.6 } },
+  },
+  // Rápido como quien anda y de golpe flojo: se tala con el hacha.
+  spirit: {
+    name: 'Espíritu del bosque',
+    verb: 'atacar',
+    hp: 130,
+    speed: 6,
+    radius: 0.5,
+    scale: 1.15,
+    damage: 8,
+    gap: 0.35,
+    reach: 0.7,
+    attackInterval: 1,
+    windup: 0.4,
+    knockback: 6,
+    stagger: 0.3,
+    staggerGap: 0.6,
+    nocturnal: true,
+    ai: 'chase',
+    weakness: { axe: 2, pickaxe: 0.5, hand: 0.5 },
+    loot: [{ item: 'wood', amount: 4 }, { item: 'birch_wood', amount: 1 }],
+    cost: 2,
+    spawn: { fromNight: 2, biomes: { beach: 0.05, meadow: 0.15, forest: 0.6, mountain: 0.05 } },
   },
 }
 export type EnemyType = keyof typeof ENEMY_DEFS

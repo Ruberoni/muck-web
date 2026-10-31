@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { Enemies } from '../sim/enemies'
 import { DAY_FRACTION } from '../sim/world/daycycle'
-import { ENEMY_DEFS, STEP } from '../sim/constants'
+import { ENEMY_DEFS, ENEMY_TYPES, STEP } from '../sim/constants'
 import { EnemyView } from './EnemyView'
 
 const HURT = new THREE.Color('#ff3b2f')
@@ -75,6 +75,29 @@ describe('EnemyView', () => {
     expect(highest).toBeGreaterThan(model().position.y - 0.2)
     view.present([{ type: 'enemyHit', id: e.id, hp: 3, kx: 1, kz: 0, by: 0, efficacy: 'normal' }])
     expect(model()).toBeDefined()
+  })
+
+  it('cada tipo tiene su modelo, su escala y su color', () => {
+    const { enemies, view, frame } = setup()
+    for (const [i, type] of ENEMY_TYPES.entries()) enemies.spawnAt(i * 5, 0, type)
+    frame()
+    const models = view.group.children as THREE.Group[]
+    ENEMY_TYPES.forEach((type, i) => expect(models[i].scale.y).toBeCloseTo(ENEMY_DEFS[type].scale))
+    const colors = models.map((m) => (m.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>).material.color.getHexString())
+    expect(new Set(colors).size).toBe(ENEMY_TYPES.length)
+  })
+
+  it('el destello dice si el golpe fue eficaz o resistido', () => {
+    const { enemies, view, frame, body } = setup()
+    const e = enemies.spawnAt(10, 20)
+    frame()
+    const flash = (efficacy: 'effective' | 'resisted') => {
+      view.present([{ type: 'enemyHit', id: e.id, hp: 4, kx: 0, kz: 0, by: 0, efficacy }])
+      frame(0)
+      return body().material.emissive.getHexString()
+    }
+    expect(flash('effective')).toBe('ffc21f')
+    expect(flash('resisted')).toBe('8e8e8e')
   })
 
   it('un golpe lo pone rojo un momento', () => {

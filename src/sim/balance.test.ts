@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ENEMY_DEFS, HIT_COOLDOWN, PROP_DEFS, SWEEP_TARGETS, type EnemyType } from './constants'
+import { ENEMY_DEFS, ENEMY_TYPES, HIT_COOLDOWN, PROP_DEFS, SWEEP_TARGETS, type EnemyType } from './constants'
 import { recipeById, type RecipeId } from './crafting'
+import { enemyCapFor, spawnChance } from './enemies'
 import type { ItemId } from './inventory'
 import { generatePropPlacements, type PropKind } from './props'
 import { attackDamage, swingCooldown } from './tiers'
@@ -106,8 +107,57 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
     expect(timeToKill(sword, 'goblin')).toBeLessThanOrEqual(oneByOne / 2)
   })
 
-  it('la mano siempre es lo peor', () => {
-    const hand = timeToKill(null, 'goblin')
-    for (const level of LEVELS) for (const item of level) expect(timeToKill(item, 'goblin')).toBeLessThan(hand)
+  // Herramienta buena y herramienta mala contra cada enemigo.
+  const MATCHUPS = [
+    ['golem', 'pickaxe', 'axe'],
+    ['spirit', 'axe', 'pickaxe'],
+  ] as const
+  const MATERIALS = ['wood', 'stone', 'iron', 'mithril'] as const
+
+  it.each(MATCHUPS)('contra el %s, la herramienta adecuada gana a la espada, pero como mucho por el doble', (type, right) => {
+    for (const material of MATERIALS) {
+      const good = timeToKill(`${material}_${right}`, type)
+      const sword = timeToKill(`${material}_sword`, type)
+      expect(good, material).toBeLessThan(sword)
+      expect(sword, material).toBeLessThanOrEqual(good * 2)
+    }
+  })
+
+  it.each(MATCHUPS)('contra el %s, la espada es al menos el doble de rápida que la herramienta equivocada', (type, _right, wrong) => {
+    for (const material of MATERIALS) {
+      expect(timeToKill(`${material}_${wrong}`, type), material).toBeGreaterThanOrEqual(timeToKill(`${material}_sword`, type) * 2)
+    }
+  })
+
+  it('ejemplo: el gólem con equipo de piedra', () => {
+    expect(timeToKill('stone_pickaxe', 'golem')).toBeCloseTo(0.8, 6)
+    expect(timeToKill('stone_sword', 'golem')).toBeCloseTo(1.5, 6)
+    expect(timeToKill('stone_axe', 'golem')).toBeCloseTo(4.4, 6)
+  })
+
+  it('la mano siempre es lo peor, contra todos', () => {
+    for (const type of ENEMY_TYPES) {
+      const hand = timeToKill(null, type)
+      for (const material of MATERIALS) {
+        for (const family of ['axe', 'pickaxe', 'sword'] as const) expect(timeToKill(`${material}_${family}`, type), `${material} ${family} ${type}`).toBeLessThan(hand)
+      }
+    }
+  })
+})
+
+describe('equilibrio: lo que sueltan los enemigos', () => {
+  /** Mineral de hierro que dan por jugador los gólems hasta la noche `last`, si salen todos en la montaña y se matan todos. */
+  function ironFromGolems(last: number, players: number) {
+    let total = 0
+    for (let night = 2; night <= last; night++) total += enemyCapFor(night, players) * spawnChance('golem', night, 'mountain')
+    const { amount } = ENEMY_DEFS.golem.loot.find((l) => l.item === 'iron_ore')!
+    return (total * amount) / players
+  }
+
+  it.each([1, 2, 4, 8])('con %i jugadores el hierro de los gólems no sustituye a picar menas antes de la noche 4', (players) => {
+    const need: Amounts = {}
+    for (const r of PER_PLAYER) rawCost(r, need)
+    // Ni en el mejor caso llega a la mitad de lo que pide el juego de hierro.
+    expect(ironFromGolems(3, players)).toBeLessThan(need.iron_ore! * 0.5)
   })
 })
