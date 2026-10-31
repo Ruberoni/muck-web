@@ -259,6 +259,9 @@ export function installDebug(game: Game) {
         const target = slot().target
         return { id, type, x: pos.x, z: pos.z, hp, targeted: target?.kind === 'enemy' && target.id === id }
       }),
+    /** Lanza una roca desde (x, z) hacia el jugador. */
+    throwRock: (x: number, z: number) => dev({ op: 'throwRock', x, z }, () => sim().throwRock(x, z, slot().id)),
+    projectiles: () => sim().projectiles.list.map(({ id, kind, pos }) => ({ id, kind, x: pos.x, y: pos.y, z: pos.z })),
     /** Con un jugador devuelve su id; en red aparece en el siguiente `snap`. */
     spawnEnemy: (x: number, z: number, enemy: EnemyType = 'goblin') => dev({ op: 'spawnEnemy', x, z, enemy }, () => sim().enemies.spawnAt(x, z, enemy).id),
     /** Gira la cámara hacia el enemigo sin mover al jugador; devuelve si queda apuntado (en red, en una promesa). */

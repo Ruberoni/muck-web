@@ -296,6 +296,8 @@ export class NetClient {
     this.shownPlayers = this.players.sample(tick)
     this.syncEnemies(sim, this.enemies.sample(tick))
     this.syncPickups(sim, tick)
+    // En el momento de la predicción, no en el pasado del render: se ven donde van a llegar, para poder esquivarlos.
+    sim.projectiles.follow(this.predictor?.tick ?? tick)
     return { own, remote: this.presentation.take(tick) }
   }
 
@@ -514,6 +516,7 @@ export class NetClient {
     for (const prop of sim.world.props) resetProp(prop)
     for (const { id, hp, alive, regrowLeft } of state.props) Object.assign(sim.world.props[id], { hp, alive, regrowLeft })
     sim.structures.load(state.structures)
+    sim.projectiles.load(state.projectiles)
     this.worldStartTick = state.worldStartTick
     this.pickups.clear()
     for (const p of state.pickups.list) {
@@ -549,12 +552,19 @@ export class NetClient {
         if (mirror) mirror.goneAt = e.tick
         break
       }
+      case 'projectileThrown':
+        sim.projectiles.add({ id: e.id, kind: e.kind, from: { x: e.x, y: e.y, z: e.z }, vel: { x: e.vx, y: e.vy, z: e.vz }, tick: e.tick, damage: 0 })
+        break
+      case 'projectileHit':
+        sim.projectiles.remove(e.id)
+        break
       case 'clockSet':
         this.worldStartTick = e.worldStartTick
         break
       case 'worldReset':
         for (const prop of sim.world.props) resetProp(prop)
         sim.structures.clear()
+        sim.projectiles.clear()
         this.pickups.clear()
         this.worldStartTick = e.worldStartTick
         break

@@ -337,6 +337,9 @@ export const BOSS_EVERY = 3
 export const BOSS_DELAY = 20
 export const BOSS_SPAWN_MIN = 30
 export const BOSS_SPAWN_MAX = 40
+/** Las rocas que se lanzan: velocidad horizontal y daño. */
+export const ROCK_SPEED = 14
+export const ROCK_DAMAGE = 15
 /** Vida y botín de un jefe: un 50 % más por cada jugador a partir del segundo. */
 export const BOSS_PER_PLAYER = 0.5
 export const ENEMY_SPAWN_MIN = 26

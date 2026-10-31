@@ -14,7 +14,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 25
+export const PROTOCOL_VERSION = 26
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -111,6 +111,8 @@ export type DevOp =
   | { op: 'placeStructure'; kind: StructureKind; x?: number; z?: number; yaw?: number }
   | { op: 'setPhase'; phase: number }
   | { op: 'setDay'; day: number }
+  /** Una roca desde (x, z) hacia quien lo pide. */
+  | { op: 'throwRock'; x: number; z: number }
 
 export type Dev = { type: 'dev' } & DevOp
 
@@ -169,7 +171,7 @@ export interface PickupSnap {
 }
 
 /** El mundo entero, sin el azar ni los inventarios de los demás: lo que necesita un cliente para empezar. */
-export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | 'props' | 'enemies' | 'pickups' | 'structures'> {
+export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | 'props' | 'enemies' | 'pickups' | 'projectiles' | 'structures'> {
   /** Los demás jugadores en el mundo. */
   players: (PlayerSnap & { name: string })[]
 }
@@ -532,6 +534,8 @@ function parseDev(raw: Obj): Dev | null {
       return nums('phase') ? { type: 'dev', op: 'setPhase', phase: raw.phase as number } : null
     case 'setDay':
       return isInt(raw.day, 1, MAX_DAY) ? { type: 'dev', op: 'setDay', day: raw.day } : null
+    case 'throwRock':
+      return nums('x', 'z') ? { type: 'dev', op: 'throwRock', x: raw.x as number, z: raw.z as number } : null
     default:
       return null
   }

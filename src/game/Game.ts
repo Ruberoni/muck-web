@@ -5,6 +5,7 @@ import { createScene, updateSky, type Sky } from '../scene'
 import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
+import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
@@ -85,6 +86,7 @@ export class Game {
   readonly input: Input
   readonly enemyView = new EnemyView()
   readonly pickupView = new PickupView()
+  readonly projectileView = new ProjectileView()
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView()
   readonly settings: Settings = loadSettings()
@@ -158,7 +160,7 @@ export class Game {
     this.water = water
     this.propView = this.buildPropView(null)
     this.structureView = new StructureView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group, this.remotePlayers.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
@@ -709,6 +711,7 @@ export class Game {
     this.propView.reset()
     this.enemyView.reset()
     this.pickupView.reset()
+    this.projectileView.reset()
     this.structureView.reset()
     this.remotePlayers.reset()
     this.audio.reset()
@@ -756,6 +759,7 @@ export class Game {
     else this.placeCamera(this.renderPos)
     this.enemyView.update(dt, enemies.list, alpha)
     this.pickupView.update(sim.pickups.list, alpha)
+    this.projectileView.update(dt, sim.projectiles.list, alpha)
     this.propView.update(dt)
     this.remotePlayers.update(dt, net ? net.client.shownPlayers : [])
 

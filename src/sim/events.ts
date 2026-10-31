@@ -2,6 +2,7 @@ import type { EnemyType, HitEfficacy } from './constants'
 import type { RecipeId } from './crafting'
 import type { ChargeState } from './enemies'
 import type { ItemId } from './inventory'
+import type { ProjectileEnd, ProjectileKind } from './projectiles'
 import type { StructureKind } from './structures'
 
 /** Identificador de jugador. Con un jugador siempre es LOCAL_PLAYER. */
@@ -31,6 +32,9 @@ export type SimEventData =
   /** Embestida: se agacha (`crouch`), carga (`rush`) y acaba (`idle`). */
   | { type: 'enemyCharge'; id: number; state: ChargeState }
   | { type: 'enemyDied'; id: number; by: PlayerId }
+  /** Sale un proyectil: con esto el cliente sigue su trayectoria (ver `Projectiles`). */
+  | { type: 'projectileThrown'; id: number; kind: ProjectileKind; x: number; y: number; z: number; vx: number; vy: number; vz: number }
+  | { type: 'projectileHit'; id: number; x: number; y: number; z: number; end: ProjectileEnd }
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }

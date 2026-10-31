@@ -370,6 +370,30 @@ describe('el espejo de NetClient', () => {
     }
   })
 
+  it('los proyectiles: se siguen hasta su `projectileHit`, y quien entra a mitad también los ve', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const { pos } = sim.slot(client.id).player
+    // Hacia arriba, lejos de todo: tarda en caer.
+    sim.projectiles.launch(sim.tick, 'rock', { x: pos.x + 20, y: pos.y + 10, z: pos.z }, { x: 0, y: 20, z: 0 }, 1)
+    run(time, 500, [[client, idle]])
+    const mirror = client.sim!.projectiles.list
+    expect(mirror).toHaveLength(1)
+    const real = sim.projectiles.list[0]
+    // Va por delante del render: en el tick de la predicción, algo adelantado respecto al servidor.
+    expect(Math.abs(mirror[0].pos.y - real.pos.y)).toBeLessThan(5)
+
+    const { client: late } = connect('b')
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(late.sim!.projectiles.list.map((p) => p.id)).toEqual([real.id])
+    run(time, 5000, [[client, idle], [late, idle]])
+    expect(sim.projectiles.list).toEqual([])
+    expect(client.sim!.projectiles.list).toEqual([])
+    expect(late.sim!.projectiles.list).toEqual([])
+  })
+
   it('cada Move lleva aim; con él se tala el árbol que se ve, y el espejo lo sabe', () => {
     const { room, time, connect } = setup()
     const { client, sent } = connect('a', 'create')

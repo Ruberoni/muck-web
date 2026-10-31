@@ -1,13 +1,14 @@
 import type { PlayerCommands } from './commands'
 import { resolveCircle } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
-import { DEATH_DROP_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, STATION_RANGE, STEP } from './constants'
+import { DEATH_DROP_HEIGHT, EYE_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_DAMAGE, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, type InventoryState, type ItemId } from './inventory'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
+import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
@@ -21,6 +22,8 @@ const SPAWN_RING = 2.5
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 /** Altura sobre los pies desde la que sale lo que tira un jugador. */
 const TOSS_HEIGHT = 1.2
+/** Altura sobre el suelo desde la que sale una roca lanzada. */
+const THROW_HEIGHT = 1.5
 
 /**
  * Conexión de un jugador. `present` y `absent` (conectado pero sin mandar comandos) están en el mundo;
@@ -64,6 +67,7 @@ export interface SimState {
   props: { id: number; hp: number; alive: boolean; regrowLeft: number }[]
   enemies: EnemiesState
   pickups: PickupsState
+  projectiles: ProjectilesState
   structures: StructuresState
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
@@ -92,6 +96,7 @@ export class Simulation {
   readonly structures: Structures
   readonly enemies: Enemies
   readonly pickups: Pickups
+  readonly projectiles: Projectiles
   readonly interaction: Interaction
   /** Todos los jugadores con hueco en la isla, también los `gone`. Se añaden con `addPlayer`. */
   readonly players = new Map<PlayerId, PlayerSlot>()
@@ -123,6 +128,7 @@ export class Simulation {
     this.structures = new Structures(emit)
     this.enemies = new Enemies([world.grid, this.structures.grid], this.rng, emit)
     this.pickups = new Pickups([world.grid, this.structures.grid], this.rng, emit)
+    this.projectiles = new Projectiles([world.grid, this.structures.grid], emit)
     this.interaction = new Interaction(world, this.pickups, this.enemies, emit)
     this.env = {
       heightAt,
@@ -219,7 +225,9 @@ export class Simulation {
 
     this.syncClock()
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
-    for (const { playerId, damage } of this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)) {
+    const hits = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
+    hits.push(...this.projectiles.step(this.tick, prey))
+    for (const { playerId, damage } of hits) {
       hurt(this.slot(playerId).player, damage)
       this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
     }
@@ -274,6 +282,7 @@ export class Simulation {
     this.interaction.reset()
     this.enemies.reset()
     this.pickups.clear()
+    this.projectiles.clear()
     this.structures.clear()
     for (const slot of this.players.values()) {
       slot.inventory.clear()
@@ -308,6 +317,13 @@ export class Simulation {
     this.events.emit({ type: 'clockSet', worldStartTick: this.worldStartTick })
   }
 
+  /** Lanza una roca desde (x, z), a la altura del pecho, hacia el jugador `id`. */
+  throwRock(x: number, z: number, id: PlayerId) {
+    const { pos } = this.slot(id).player
+    const from = { x, y: heightAt(x, z) + THROW_HEIGHT, z }
+    this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, ROCK_SPEED), ROCK_DAMAGE)
+  }
+
   teleport(id: PlayerId, x: number, z: number, yaw: number, pitch: number) {
     const { player } = this.slot(id)
     teleportPlayer(player, this.env, x, z, yaw)
@@ -325,6 +341,7 @@ export class Simulation {
         .map(({ id, hp, alive, regrowLeft }) => ({ id, hp, alive, regrowLeft })),
       enemies: this.enemies.save(),
       pickups: this.pickups.save(),
+      projectiles: this.projectiles.save(),
       structures: this.structures.save(),
       players: [...this.players.values()]
         .sort((a, b) => a.id - b.id)
@@ -361,6 +378,7 @@ export class Simulation {
     for (const { id, hp, alive, regrowLeft } of state.props) Object.assign(this.world.props[id], { hp, alive, regrowLeft })
     this.enemies.load(state.enemies)
     this.pickups.load(state.pickups)
+    this.projectiles.load(state.projectiles)
     this.structures.load(state.structures)
     this.players.clear()
     for (const saved of state.players) {

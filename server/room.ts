@@ -381,6 +381,9 @@ export class Room {
       case 'setDay':
         sim.setDay(msg.day)
         break
+      case 'throwRock':
+        sim.throwRock(msg.x, msg.z, seat.id)
+        break
     }
   }
 
@@ -613,12 +616,12 @@ export class Room {
 
   private worldState(me: PlayerId): WorldState {
     const sim = this.sim!
-    const { tick, worldStartTick, props, enemies, pickups, structures } = sim.toJSON()
+    const { tick, worldStartTick, props, enemies, pickups, projectiles, structures } = sim.toJSON()
     const names = new Map([...this.seats.values()].map((s) => [s.id, s.name]))
     const players = this.playerSnaps()
       .filter((p) => p.id !== me)
       .map((p) => ({ ...p, name: names.get(p.id) ?? '' }))
-    return { tick, worldStartTick, props, enemies, pickups, structures, players }
+    return { tick, worldStartTick, props, enemies, pickups, projectiles, structures, players }
   }
 
   private fullState(seat: Seat) {
