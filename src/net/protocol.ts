@@ -14,7 +14,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 24
+export const PROTOCOL_VERSION = 25
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -158,6 +158,7 @@ export interface EnemySnap {
   pos: { x: number; z: number }
   yaw: number
   hp: number
+  maxHp: number
 }
 
 /** Un objeto del suelo que se ha movido desde el último `snap` (cayendo o atraído por el imán). */
@@ -269,8 +270,8 @@ export interface SnapWire extends Omit<Snap, 'you' | 'players' | 'enemies' | 'mo
 
 /** `[id, x, y, z, yaw, pitch, item, health, vivo (1/0), ausente (1/0), ping]`: solo van los que están en el mundo. */
 export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number]
-/** `[id, x, z, yaw, hp, tipo]`, con `tipo` el índice en ENEMY_TYPES. */
-export type EnemyTuple = [number, number, number, number, number, number]
+/** `[id, x, z, yaw, hp, tipo, maxHp]`, con `tipo` el índice en ENEMY_TYPES. `maxHp` solo va si no es la de su tipo (los jefes). */
+export type EnemyTuple = [number, number, number, number, number, number, number?]
 /** `[id, x, y, z, en el suelo (1/0)]` */
 export type PickupTuple = [number, number, number, number, 0 | 1]
 
@@ -287,7 +288,11 @@ export const playerTuple = (p: PlayerSnap): PlayerTuple => [
   p.connection === 'absent' ? 1 : 0,
   p.ping,
 ]
-export const enemyTuple = (e: EnemySnap): EnemyTuple => [e.id, e.pos.x, e.pos.z, e.yaw, e.hp, ENEMY_TYPES.indexOf(e.type)]
+export function enemyTuple(e: EnemySnap): EnemyTuple {
+  const tuple: EnemyTuple = [e.id, e.pos.x, e.pos.z, e.yaw, e.hp, ENEMY_TYPES.indexOf(e.type)]
+  if (e.maxHp !== ENEMY_DEFS[e.type].hp) tuple.push(e.maxHp)
+  return tuple
+}
 export const pickupTuple = (p: PickupSnap): PickupTuple => [p.id, p.pos.x, p.pos.y, p.pos.z, p.grounded ? 1 : 0]
 
 /**
@@ -322,7 +327,10 @@ export class ServerDecoder {
             connection: absent === 1 ? 'absent' : 'present',
             ping,
           })),
-          enemies: msg.enemies.map(([id, x, z, yaw, hp, type]) => ({ id, type: ENEMY_TYPES[type], pos: { x, z }, yaw, hp })),
+          enemies: msg.enemies.map(([id, x, z, yaw, hp, index, maxHp]) => {
+            const type = ENEMY_TYPES[index]
+            return { id, type, pos: { x, z }, yaw, hp, maxHp: maxHp ?? ENEMY_DEFS[type].hp }
+          }),
           movingPickups: msg.movingPickups.map(([id, x, y, z, grounded]) => ({ id, pos: { x, y, z }, grounded: grounded === 1 })),
         }
       }

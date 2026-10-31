@@ -1,5 +1,6 @@
 import type { EnemyType, HitEfficacy } from './constants'
 import type { RecipeId } from './crafting'
+import type { ChargeState } from './enemies'
 import type { ItemId } from './inventory'
 import type { StructureKind } from './structures'
 
@@ -27,6 +28,8 @@ export type SimEventData =
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId; efficacy: HitEfficacy }
   | { type: 'enemyAttack'; id: number; target: PlayerId }
+  /** Embestida: se agacha (`crouch`), carga (`rush`) y acaba (`idle`). */
+  | { type: 'enemyCharge'; id: number; state: ChargeState }
   | { type: 'enemyDied'; id: number; by: PlayerId }
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }

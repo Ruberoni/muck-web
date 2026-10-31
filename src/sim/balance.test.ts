@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ENEMY_DEFS, ENEMY_TYPES, HIT_COOLDOWN, PROP_DEFS, SWEEP_TARGETS, type EnemyType } from './constants'
 import { recipeById, type RecipeId } from './crafting'
-import { enemyCapFor, spawnChance } from './enemies'
+import { bossScale, enemyCapFor, spawnChance } from './enemies'
 import type { ItemId } from './inventory'
 import { generatePropPlacements, type PropKind } from './props'
 import { attackDamage, swingCooldown } from './tiers'
@@ -95,8 +95,12 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
     expect(LEVELS.map(([, sword]) => timeToKill(sword, 'goblin'))).toEqual([1, 0.5, 0.25, 0.25])
   })
 
-  it.each(LEVELS)('contra un trasgo, %s mata más despacio que %s', (tool, sword) => {
+  it.each(LEVELS)('contra un trasgo y los jefes, %s mata más despacio que %s', (tool, sword) => {
     expect(timeToKill(sword, 'goblin')).toBeLessThan(timeToKill(tool, 'goblin'))
+    for (const players of [1, 2, 4, 8]) {
+      const hp = ENEMY_DEFS.giant.hp * bossScale(players)
+      expect(timeToKill(sword, 'giant', hp)).toBeLessThan(timeToKill(tool, 'giant', hp))
+    }
   })
 
   it.each(LEVELS)('contra 3 trasgos juntos, %s tarda al menos el doble que %s', (tool, sword) => {

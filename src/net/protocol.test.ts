@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_PITCH } from '../sim/constants'
+import { ENEMY_DEFS, MAX_PITCH } from '../sim/constants'
 import { RECIPE_IDS } from '../sim/crafting'
 import { INVENTORY_SIZE, SLOT_COUNT, type InventoryState } from '../sim/inventory'
 import {
@@ -189,7 +189,7 @@ describe('protocolo', () => {
 
 describe('snap en el cable', () => {
   const player: PlayerSnap = { id: 2, pos: { x: 1.25, y: 5.5, z: -3 }, yaw: 1.5, pitch: -0.2, item: 'wood', health: 80, alive: true, connection: 'absent', ping: 87 }
-  const enemy: EnemySnap = { id: 9, type: 'goblin', pos: { x: -10.5, z: 4.25 }, yaw: 3.1, hp: 4 }
+  const enemy: EnemySnap = { id: 9, type: 'goblin', pos: { x: -10.5, z: 4.25 }, yaw: 3.1, hp: 4, maxHp: ENEMY_DEFS.goblin.hp }
   const pickup: PickupSnap = { id: 4, pos: { x: 1, y: 2, z: 3 }, grounded: true }
   const inventory: InventoryState = { slots: ['wood', ...Array<null>(INVENTORY_SIZE - 1).fill(null)], counts: { wood: 3 }, selected: 0 }
   const you = (withInventory: boolean): SnapWire['you'] => ({
@@ -213,6 +213,14 @@ describe('snap en el cable', () => {
     players: [playerTuple(player)],
     enemies: [enemyTuple(enemy)],
     movingPickups: [pickupTuple(pickup)],
+  })
+
+  it('un enemigo con la vida de su tipo no la manda; un jefe con más vida, sí', () => {
+    expect(enemyTuple(enemy)).toHaveLength(6)
+    const boss: EnemySnap = { ...enemy, type: 'giant', hp: 300, maxHp: 600 }
+    expect(enemyTuple(boss)).toHaveLength(7)
+    const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), enemies: [enemyTuple(enemy), enemyTuple(boss)] }))
+    expect(snap).toMatchObject({ enemies: [enemy, boss] })
   })
 
   it('las tuplas se leen como los objetos de los que salen', () => {

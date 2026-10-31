@@ -78,6 +78,48 @@
   font-weight: 700;
 }
 
+.tonight {
+  position: absolute;
+  left: 16px;
+  top: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffb13b;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  transform: translateX(-50%);
+  font-size: 30px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: #ffb13b;
+  text-shadow: 0 2px 4px rgb(0 0 0 / 0.7);
+  opacity: 0;
+}
+
+.banner.active { animation: banner 4s ease-out; }
+
+@keyframes banner {
+  8%, 75% { opacity: 1; }
+}
+
+.boss {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  width: min(420px, 50vw);
+  text-align: center;
+}
+
+.boss[hidden] { display: none; }
+.boss .name { font-size: 14px; font-weight: 700; margin-bottom: 4px; text-shadow: 0 1px 2px rgb(0 0 0 / 0.6); }
+.boss .fill { background: #c9402f; }
+
 .biome-notice {
   position: absolute;
   left: 50%;

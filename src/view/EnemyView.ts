@@ -3,12 +3,14 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { heightAt } from '../sim/world/terrain'
 import { ENEMY_BODY_LIFT, ENEMY_BODY_RADIUS, ENEMY_BODY_SCALE } from '../sim/aim'
 import { ENEMY_DEFS, type EnemyType, type HitEfficacy } from '../sim/constants'
-import type { EnemyData } from '../sim/enemies'
+import type { ChargeState, EnemyData } from '../sim/enemies'
 import type { SimEventData } from '../sim/events'
 
 const HURT_FLASH = 0.15
 const LUNGE_TIME = 0.2
 const DEATH_TIME = 0.35
+const CROUCH_SQUASH = new THREE.Vector3(1.15, 0.7, 1.15)
+const RUSH_LEAN = 0.4
 // Por debajo de esta fracción de su velocidad no se considera que ande (los empujones entre ellos no lo hacen botar).
 const WALK_MIN_SPEED = 0.1
 
@@ -83,6 +85,7 @@ function look(color: string, glow: string, details: EnemyLook['details']): Enemy
 const LOOKS: Record<EnemyType, EnemyLook> = {
   goblin: look('#9558bd', '#2b1240', [{ geometry: detailGeometry, material: standard('#3a2348'), castShadow: true }, eyes('#ffe066')]),
   golem: look('#8a877c', '#1c1b18', [{ geometry: golemDetailGeometry, material: standard('#66635a'), castShadow: true }, eyes('#ffb13b')]),
+  giant: look('#b0423a', '#2e0f0c', [{ geometry: detailGeometry, material: standard('#4a1f1c'), castShadow: true }, eyes('#ffe066')]),
   spirit: look('#6e4c2f', '#1e140b', [
     { geometry: spiritBranchGeometry, material: standard('#4a3220'), castShadow: true },
     { geometry: spiritLeafGeometry, material: standard('#4f9a3f'), castShadow: true },
@@ -105,6 +108,8 @@ interface EnemyModel {
   /** El destello que toca mientras dura `hurt`. */
   efficacy: HitEfficacy
   lunge: number
+  /** Por dónde va su embestida: agachado avisa, y cargando va inclinado. */
+  charge: ChargeState
   /** Retroceso tras un golpe: no bota mientras dura. */
   stagger: number
   /** Mientras se desvanece al morir; null si sigue vivo. */
@@ -138,6 +143,11 @@ export class EnemyView {
         case 'enemyDied': {
           const model = this.models.get(e.id)
           if (model) model.hurt = HURT_FLASH
+          break
+        }
+        case 'enemyCharge': {
+          const model = this.models.get(e.id)
+          if (model) model.charge = e.state
           break
         }
         case 'enemyAttack': {
@@ -202,7 +212,7 @@ export class EnemyView {
     // Para reconocerlo en un raycast contra la vista (test de paridad con sim/aim.ts).
     for (const mesh of object.children) mesh.userData.enemy = id
     this.group.add(object)
-    const model: EnemyModel = { type, object, body, x, z, yaw: 0, walk: 0, hurt: 0, efficacy: 'normal', lunge: 0, stagger: 0, dying: null }
+    const model: EnemyModel = { type, object, body, x, z, yaw: 0, walk: 0, hurt: 0, efficacy: 'normal', lunge: 0, charge: 'idle', stagger: 0, dying: null }
     this.models.set(id, model)
     return model
   }
@@ -223,7 +233,11 @@ export class EnemyView {
     // Muere encogiéndose y hundiéndose.
     const s = model.dying === null ? 1 : Math.max(0, model.dying / DEATH_TIME)
     o.scale.set(1 + (1 - s) * 0.3, s, 1 + (1 - s) * 0.3).multiplyScalar(ENEMY_DEFS[model.type].scale)
+    // Antes de embestir se agacha y brilla; embistiendo va inclinado hacia delante.
+    const crouching = model.charge === 'crouch'
+    if (crouching) o.scale.multiply(CROUCH_SQUASH)
+    o.rotation.x = model.charge === 'rush' ? RUSH_LEAN : 0
     const look = LOOKS[model.type]
-    model.body.material = model.hurt > 0 ? look.flashes[model.efficacy] : look.material
+    model.body.material = crouching ? look.flashes.normal : model.hurt > 0 ? look.flashes[model.efficacy] : look.material
   }
 }

@@ -181,6 +181,17 @@ export type HitEfficacy = 'effective' | 'normal' | 'resisted'
 /** Cómo se comporta un enemigo. */
 export type EnemyAI = 'chase' | 'charge' | 'ranged' | 'guard'
 
+/** Embestida: a `min`–`max` metros se agacha `windup` segundos y carga en línea recta `time` segundos a `speed`. */
+export interface ChargeDef {
+  min: number
+  max: number
+  windup: number
+  speed: number
+  time: number
+  /** Segundos hasta poder volver a embestir. */
+  cooldown: number
+}
+
 export interface EnemyDef {
   name: string
   verb: string
@@ -215,9 +226,12 @@ export interface EnemyDef {
   cost: number
   /** Desde qué noche sustituye a veces a un trasgo y con qué probabilidad en cada bioma (ver `spawnChance`). */
   spawn?: { fromNight: number; biomes: Record<Biome, number> }
+  /** Jefe: sale solo en su noche (`bossOfNight`), con vida y botín según los jugadores, y no cuenta para el tope. */
+  boss?: boolean
+  charge?: ChargeDef
 }
 
-export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit', EnemyDef> = {
+export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant', EnemyDef> = {
   // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
@@ -288,12 +302,43 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit', EnemyDef> = {
     cost: 2,
     spawn: { fromNight: 2, biomes: { beach: 0.05, meadow: 0.15, forest: 0.6, mountain: 0.05 } },
   },
+  // Mini-boss: más rápido que andar, y embiste. 1,8 veces el trasgo.
+  giant: {
+    name: 'Trasgo gigante',
+    verb: 'atacar',
+    hp: 400,
+    speed: 6.5,
+    radius: 0.95,
+    scale: 2.25,
+    damage: 25,
+    gap: 0.35,
+    reach: 0.9,
+    attackInterval: 1.4,
+    windup: 0.5,
+    knockback: 0,
+    stagger: 0,
+    staggerGap: 0,
+    nocturnal: true,
+    ai: 'charge',
+    weakness: {},
+    loot: [{ item: 'raw_meat', amount: 3 }, { item: 'iron_bar', amount: 2 }],
+    cost: 8,
+    boss: true,
+    charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 4 },
+  },
 }
 export type EnemyType = keyof typeof ENEMY_DEFS
 /** Los tipos en orden fijo: un `snap` lleva el índice en vez del nombre. */
 export const ENEMY_TYPES = Object.keys(ENEMY_DEFS) as EnemyType[]
 
 export const ENEMY_SPAWN_INTERVAL = 5
+/** Un jefe cada tantas noches, unos segundos después de anochecer y algo más lejos que el resto. */
+export const BOSS_EVERY = 3
+export const BOSS_DELAY = 20
+export const BOSS_SPAWN_MIN = 30
+export const BOSS_SPAWN_MAX = 40
+/** Vida y botín de un jefe: un 50 % más por cada jugador a partir del segundo. */
+export const BOSS_PER_PLAYER = 0.5
 export const ENEMY_SPAWN_MIN = 26
 export const ENEMY_SPAWN_MAX = 40
 /** Enemigos a la vez la primera noche; cada noche se suman ENEMY_PER_NIGHT, hasta ENEMY_MAX. */

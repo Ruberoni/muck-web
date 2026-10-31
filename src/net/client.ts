@@ -1,7 +1,7 @@
 import type { Clock } from '../../server/room'
 import type { ActionData, Move } from '../sim/commands'
 import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType } from '../sim/constants'
-import type { EnemyData } from '../sim/enemies'
+import { NO_CHARGE, type EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
 import type { Pickup } from '../sim/pickups'
@@ -65,6 +65,7 @@ export interface RemotePlayer {
 export interface RemoteEnemy {
   type: EnemyType
   hp: number
+  maxHp: number
 }
 
 /** Un objeto del suelo del espejo: se dibuja con sus muestras de `movingPickups` (quieto, en la última). */
@@ -452,7 +453,7 @@ export class NetClient {
     )
     this.enemies.push(
       tick,
-      enemies.map(({ id, type, pos, yaw, hp }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { type, hp } })),
+      enemies.map(({ id, type, pos, yaw, hp, maxHp }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { type, hp, maxHp } })),
     )
   }
 
@@ -476,6 +477,7 @@ export class NetClient {
       enemy.pos.z = enemy.prev.z = pose.z
       enemy.yaw = pose.yaw
       enemy.hp = data.hp
+      enemy.maxHp = data.maxHp
       list.push(enemy)
     }
     if (this.mirrorEnemies.size > list.length) {
@@ -577,6 +579,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     stagger: 0,
     knock: { x: 0, z: 0 },
     staggerGuard: 0,
+    charge: { ...NO_CHARGE },
     target: null,
     retarget: 0,
   }

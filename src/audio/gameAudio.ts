@@ -124,6 +124,9 @@ export class GameAudio {
         case 'enemyHit':
           if (e.by === me && e.efficacy !== 'normal') s.play(e.efficacy === 'effective' ? 'hitEffective' : 'hitResisted')
           break
+        case 'enemyCharge':
+          if (e.state === 'crouch') s.play('roar')
+          break
         // Las bayas van directas al inventario; lo demás suena al recogerlo del suelo.
         case 'berryTaken':
           if (e.by === me) this.pickup()
@@ -180,6 +183,9 @@ export class GameAudio {
           break
         case 'enemyDied':
           at(e, REMOTE_HEARING.hit, 'enemyDeath')
+          break
+        case 'enemyCharge':
+          if (e.state === 'crouch') this.sound.play('roar')
           break
         case 'structurePlaced':
           at(e, REMOTE_HEARING.place, 'place')

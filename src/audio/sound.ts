@@ -19,6 +19,8 @@ export type SoundName =
   | 'hitResisted'
   | 'enemyDeath'
   | 'growl'
+  /** Un jefe se agacha para embestir: se oye esté donde esté. */
+  | 'roar'
   | 'step'
   | 'stepWater'
   | 'jump'
@@ -393,6 +395,11 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
       lowpass: 420,
       vibrato: { rate: 22, depth: 14 },
     }),
+  roar: (s) =>
+    Math.max(
+      s.tone(70, 0.9, { type: 'sawtooth', to: 130, gain: 0.45, attack: 0.08, lowpass: 650, vibrato: { rate: 26, depth: 20 } }),
+      s.noise(0.7, { filter: 'lowpass', freq: 380, gain: 0.3, attack: 0.1 }),
+    ),
   step: (s) => s.noise(0.08, { filter: 'lowpass', freq: 450 + s.random() * 250, gain: 1, attack: 0.004 }),
   stepWater: (s) =>
     Math.max(

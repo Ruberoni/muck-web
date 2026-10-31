@@ -104,6 +104,10 @@ Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 
 | Gólem de piedra | 170 | 3,5 | 15 | ×2 | ×0,5 | ×1 | ×0,5 | montaña | 3 piedra + 1 mineral de hierro |
 | Espíritu del bosque | 130 | 6 | 8 | ×0,5 | ×2 | ×1 | ×0,5 | bosque | 4 madera + 1 madera de abedul |
 
+Cada 3 noches sale además un **mini-boss**, unos 20 s después de anochecer. Al amanecer de ese día se anuncia con un cartel, y hasta que llega se ve "Esta noche: …" bajo el día; mientras vive, arriba sale su barra de vida. No cuenta para el tope de enemigos y, como el resto, no se va al amanecer: si sigue vivo, no sale otro. Su vida y su botín crecen un 50 % por cada jugador a partir del segundo.
+
+- **Trasgo gigante** (noches 3, 9, 15…): 400 de vida, 25 de daño y más rápido que andar. No se aturde. A 5–9 m se agacha 0,8 s, brillando y rugiendo, y carga en línea recta hacia donde estabas: se esquiva apartándose, y se para al chocar con algo. Suelta 3 carnes crudas y 2 lingotes de hierro.
+
 El gólem no se aturde ni retrocede. Al trasgo y al espíritu, tras un golpe que los empuja y los aturde 0,3 s les quedan 0,6 s de aguante: durante ese rato los golpes les quitan vida, pero no los empujan ni les retrasan el ataque, así que golpear sin parar no evita que te peguen.
 
 Cada tipo de enemigo es una entrada de `ENEMY_DEFS` (`src/sim/constants.ts`): vida, velocidad, tamaño, daño, ritmo de ataque, botín, debilidades… Un enemigo puede ser débil o resistente a una clase de arma (`weakness`): el golpe multiplica su daño, y tanto el destello (amarillo si es eficaz, gris si lo resiste) como el sonido lo dejan ver.

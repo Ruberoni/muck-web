@@ -9,6 +9,7 @@ import { StructureView } from '../view/StructureView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { BiomeNotice } from '../ui/biomeNotice'
+import { BossWatch } from '../ui/bossWatch'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
@@ -16,7 +17,7 @@ import { euclideanModulo } from '../sim/world/daycycle'
 import { biomeAt, BIOME_NAMES } from '../sim/world/biomes'
 import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
-import { EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
+import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { clientCraftWorld, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
@@ -121,6 +122,7 @@ export class Game {
   /** Acciones de `__debug` y de la pantalla de inventario (select, move, craft) para el siguiente paso. */
   private queued: ActionData[] = []
   private biomeNotice = new BiomeNotice()
+  private bossWatch = new BossWatch()
   /** Las estaciones al fabricar, como las ve el cliente (con margen): para el filtro de envío y la pantalla. */
   private craftWorld = clientCraftWorld(() => this.sim.structures.list)
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
@@ -786,6 +788,11 @@ export class Game {
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
     this.hud.setDay(sim.clock.day)
+    const boss = enemies.list.find((e) => ENEMY_DEFS[e.type].boss)
+    const { banner, tonight } = this.bossWatch.update(sim.clock.day, boss?.type ?? null)
+    if (banner) this.hud.showBanner(banner)
+    this.hud.setTonight(tonight)
+    this.hud.setBoss(boss ? { name: ENEMY_DEFS[boss.type].name, hp: boss.hp, maxHp: boss.maxHp } : null)
     if (this.state === 'playing') {
       const entered = this.biomeNotice.update(biomeAt(p.pos.x, p.pos.z), dt)
       if (entered) this.hud.showBiome(BIOME_NAMES[entered])

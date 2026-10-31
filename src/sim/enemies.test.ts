@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DAY_FRACTION } from './world/daycycle'
+import { SpatialGrid, type Collider } from './collision'
 import { createPropWorld } from './props'
 import { mulberry32 } from './random'
+import { DAY_LENGTH } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from './world/terrain'
 import {
   ENEMY_DEFS,
@@ -13,7 +15,7 @@ import {
   STEP,
   WADE_DEPTH,
 } from './constants'
-import { Enemies, enemyAimHeight, enemyCap, spawnChance, spawnType, type EnemyData } from './enemies'
+import { bossOfNight, bossScale, Enemies, enemyAimHeight, enemyCap, spawnChance, spawnType, type EnemyData } from './enemies'
 import type { SimEventData } from './events'
 import { createCombat, Interaction, type Fighter } from './interaction'
 import { attackDamage, hitEfficacy } from './tiers'
@@ -269,6 +271,130 @@ describe('enemigos nocturnos', () => {
   })
 })
 
+describe('jefes', () => {
+  const GIANT = ENEMY_DEFS.giant
+  const BOSS_PHASE = DAY_FRACTION + 21 / DAY_LENGTH
+  const DUSK = DAY_FRACTION + 1 / DAY_LENGTH
+  let enemies: Enemies
+  let player: { x: number; z: number }
+  beforeEach(() => {
+    enemies = new Enemies([world.grid], mulberry32(7))
+    player = { ...spot }
+  })
+  const prey = () => [{ id: 0, pos: player, alive: true }]
+  const step = (phase: number, day: number) => enemies.step(STEP, prey(), phase, day)
+  const bosses = () => enemies.list.filter((e) => ENEMY_DEFS[e.type].boss)
+
+  it('el trasgo gigante toca en las noches 3, 9 y 15; la 6 y la 12 aún no tienen jefe', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 15].map(bossOfNight)).toEqual([null, null, 'giant', null, null, null, null, null, 'giant', null, 'giant'])
+  })
+
+  it('sale una vez, a los 20 s de anochecer y a 30–40 m, sin contar para el tope', () => {
+    step(DUSK, 3)
+    expect(bosses()).toHaveLength(0)
+    for (let i = 0; i < 60; i++) step(BOSS_PHASE, 3)
+    expect(bosses()).toHaveLength(1)
+    const [boss] = bosses()
+    expect(Math.hypot(boss.prev.x - player.x, boss.prev.z - player.z)).toBeGreaterThanOrEqual(29)
+    expect(enemies.list.filter((e) => e.type === 'goblin').length).toBeGreaterThan(0)
+    // Muerto no vuelve a salir esa noche, ni al recargar la partida.
+    enemies.hit(boss, boss.hp, player, 0)
+    const reloaded = new Enemies([world.grid], mulberry32(7))
+    reloaded.load(enemies.save())
+    for (let i = 0; i < 30; i++) reloaded.step(STEP, prey(), BOSS_PHASE, 3)
+    expect(reloaded.list.filter((e) => ENEMY_DEFS[e.type].boss)).toHaveLength(0)
+  })
+
+  it('no cuenta para el tope de enemigos', () => {
+    // Falta uno para el tope, sin contar al jefe: tiene que salir.
+    for (let i = 0; i < enemyCap(2) - 1; i++) enemies.spawnAt(spot.x + 30 + i, spot.z)
+    enemies.spawnAt(spot.x, spot.z + 30, 'giant')
+    for (let i = 0; i < 600; i++) step(BOSS_PHASE, 2)
+    expect(enemies.list.filter((e) => !ENEMY_DEFS[e.type].boss)).toHaveLength(enemyCap(2))
+  })
+
+  it('no desaparece al amanecer, y si sigue vivo no sale otro', () => {
+    for (let i = 0; i < 2; i++) step(BOSS_PHASE, 3)
+    const [boss] = bosses()
+    for (let i = 0; i < 60; i++) step(0.3, 4)
+    expect(bosses()).toEqual([boss])
+    for (let i = 0; i < 60; i++) step(BOSS_PHASE, 9)
+    expect(bosses()).toEqual([boss])
+  })
+
+  it('vida y botín crecen con los jugadores', () => {
+    expect(bossScale(1)).toBe(1)
+    expect(bossScale(3)).toBe(2)
+    expect(enemies.spawnAt(0, 0, 'giant').maxHp).toBe(GIANT.hp)
+    const crowd = enemies.spawnAt(5, 0, 'giant', 3)
+    expect(crowd).toMatchObject({ hp: GIANT.hp * 2, maxHp: GIANT.hp * 2 })
+    expect(enemies.spawnAt(9, 0, 'goblin', 3).maxHp).toBe(GOBLIN.hp)
+  })
+
+  describe('embestida', () => {
+    /** Un gigante quieto a `distance` metros de un jugador que se mantiene donde está. */
+    const facing = (distance: number) => {
+      const boss = enemies.spawnAt(player.x + distance, player.z, 'giant')
+      const charge = () => {
+        let damage = 0
+        for (let i = 0; i < 120; i++) for (const hit of step(0.3, 3)) damage += hit.damage
+        return damage
+      }
+      return { boss, charge }
+    }
+
+    it('a su distancia se agacha, carga en línea recta y pega', () => {
+      const { boss, charge } = facing(7)
+      step(0.3, 3)
+      expect(boss.charge.state).toBe('crouch')
+      const x = boss.pos.x
+      for (let i = 0; i < 30; i++) step(0.3, 3)
+      // Agachado no se mueve.
+      expect(boss.pos.x).toBe(x)
+      expect(charge()).toBeGreaterThanOrEqual(GIANT.damage)
+      expect(dist(boss, player)).toBeLessThan(3)
+    })
+
+    it('apartándose se esquiva: la dirección se fija al salir', () => {
+      const { boss } = facing(7)
+      const CHARGE = GIANT.charge!
+      for (let i = 0; i < Math.round(CHARGE.windup / STEP) + 1; i++) step(0.3, 3)
+      expect(boss.charge.state).toBe('rush')
+      player.z += 4
+      let damage = 0
+      for (let i = 0; i < Math.round(CHARGE.time / STEP); i++) for (const hit of step(0.3, 3)) damage += hit.damage
+      expect(damage).toBe(0)
+      expect(boss.charge).toMatchObject({ state: 'idle', cooldown: expect.any(Number) })
+    })
+
+    it('muy cerca o muy lejos no embiste, y tras embestir espera', () => {
+      expect(facing(3).boss.charge.state).toBe('idle')
+      const near = facing(3).boss
+      step(0.3, 3)
+      expect(near.charge.state).toBe('idle')
+      enemies.reset()
+      const far = enemies.spawnAt(player.x + 20, player.z, 'giant')
+      step(0.3, 3)
+      expect(far.charge.state).toBe('idle')
+    })
+
+    it('se para al chocar con un prop', () => {
+      const grid = new SpatialGrid<Collider>()
+      const rock = { x: spot.x + 3, z: spot.z, radius: 1.5, alive: true }
+      grid.insert(rock)
+      enemies = new Enemies([grid], mulberry32(7))
+      const boss = enemies.spawnAt(spot.x + 8, spot.z, 'giant')
+      for (let i = 0; i < 90 && boss.charge.state !== 'rush'; i++) step(0.3, 3)
+      expect(boss.charge.state).toBe('rush')
+      let damage = 0
+      for (let i = 0; i < 30; i++) for (const hit of step(0.3, 3)) damage += hit.damage
+      expect(boss.charge.state).toBe('idle')
+      expect(boss.pos.x).toBeGreaterThan(rock.x + rock.radius)
+      expect(damage).toBe(0)
+    })
+  })
+})
+
 describe('combate', () => {
   const setup = (type: EnemyType = 'goblin') => {
     const inventory = new Inventory()
@@ -355,6 +481,17 @@ describe('combate', () => {
     expect(hitEfficacy('stone_pickaxe', 'golem')).toBe('effective')
     expect(hitEfficacy('stone_axe', 'golem')).toBe('resisted')
     expect(hitEfficacy('stone_sword', 'golem')).toBe('normal')
+  })
+
+  it('el botín de un jefe crece con su vida', () => {
+    const { enemies, enemy, hold, equip, pickups } = setup()
+    enemies.reset()
+    const boss = enemies.spawnAt(enemy.pos.x, enemy.pos.z, 'giant', 3)
+    equip('wood_sword')
+    boss.hp = 1
+    hold(STEP)
+    expect(pickups.list.filter((p) => p.item === 'raw_meat')).toHaveLength(6)
+    expect(pickups.list.filter((p) => p.item === 'iron_bar')).toHaveLength(4)
   })
 
   it('al morir suelta todo su botín', () => {

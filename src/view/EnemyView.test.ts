@@ -100,6 +100,24 @@ describe('EnemyView', () => {
     expect(flash('resisted')).toBe('8e8e8e')
   })
 
+  it('antes de embestir se agacha y brilla, y embistiendo se inclina', () => {
+    const { enemies, view, frame, model, body } = setup()
+    const e = enemies.spawnAt(10, 20, 'giant')
+    frame()
+    const scale = model().scale.y
+    view.present([{ type: 'enemyCharge', id: e.id, state: 'crouch' }])
+    frame(0)
+    expect(model().scale.y).toBeLessThan(scale)
+    expect(body().material.emissive.getHexString()).toBe('ff3b2f')
+    view.present([{ type: 'enemyCharge', id: e.id, state: 'rush' }])
+    frame(0)
+    expect(model().rotation.x).toBeGreaterThan(0)
+    view.present([{ type: 'enemyCharge', id: e.id, state: 'idle' }])
+    frame(0)
+    expect(model().rotation.x).toBe(0)
+    expect(model().scale.y).toBeCloseTo(scale)
+  })
+
   it('un golpe lo pone rojo un momento', () => {
     const { enemies, view, frame, body } = setup()
     const e = enemies.spawnAt(10, 20)

@@ -69,6 +69,11 @@ export class Hud {
   private prompt: HTMLElement
   private day: HTMLElement
   private biome: HTMLElement
+  private tonight: HTMLElement
+  private banner: HTMLElement
+  private boss: HTMLElement
+  private bossName: HTMLElement
+  private bossFill: HTMLElement
   private slots: { root: HTMLElement; icon: HTMLElement; count: HTMLElement }[] = []
   private held: HTMLElement
   private hurt: HTMLElement
@@ -77,7 +82,7 @@ export class Hud {
   private overlayTitle: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
   readonly panel: HTMLElement
-  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', day: 0 }
+  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', day: 0, tonight: '', boss: '' }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
@@ -86,6 +91,12 @@ export class Hud {
     this.prompt = el('div', 'prompt', root)
     this.day = el('div', 'day', root)
     this.biome = el('div', 'biome-notice', root)
+    this.tonight = el('div', 'tonight', root)
+    this.banner = el('div', 'banner', root)
+    this.boss = el('div', 'boss', root)
+    this.boss.hidden = true
+    this.bossName = el('div', 'name', this.boss)
+    this.bossFill = el('div', 'fill', el('div', 'bar', this.boss))
     this.minimap = new Minimap(root)
     this.net = new MultiplayerHud(root)
 
@@ -220,11 +231,38 @@ export class Hud {
 
   /** Aviso discreto del bioma en el que se acaba de entrar. */
   showBiome(name: string) {
-    this.biome.textContent = name
-    this.biome.classList.remove('active')
+    this.flashText(this.biome, name)
+  }
+
+  /** Cartel grande en el centro: un jefe que viene o que llega. */
+  showBanner(text: string) {
+    this.flashText(this.banner, text)
+  }
+
+  /** Bajo el día, lo que viene esta noche; null lo quita. */
+  setTonight(text: string | null) {
+    if ((text ?? '') === this.last.tonight) return
+    this.last.tonight = text ?? ''
+    this.tonight.textContent = text ?? ''
+  }
+
+  /** Arriba, la barra del jefe que haya vivo; null la quita. */
+  setBoss(boss: { name: string; hp: number; maxHp: number } | null) {
+    const key = boss ? `${boss.name}|${boss.hp}|${boss.maxHp}` : ''
+    if (key === this.last.boss) return
+    this.last.boss = key
+    this.boss.hidden = !boss
+    if (!boss) return
+    this.bossName.textContent = boss.name
+    this.bossFill.style.transform = `scaleX(${boss.hp / boss.maxHp})`
+  }
+
+  private flashText(element: HTMLElement, text: string) {
+    element.textContent = text
+    element.classList.remove('active')
     // Forzar reflow para que la animación vuelva a empezar aunque siga activa.
-    void this.biome.offsetWidth
-    this.biome.classList.add('active')
+    void element.offsetWidth
+    element.classList.add('active')
   }
 
   /** Destello rojo en los bordes al recibir daño. */

@@ -163,7 +163,10 @@ export class Interaction {
     if (!this.enemies?.hit(enemy, attackDamage(item, enemy.type), pos, fighter.id, hitEfficacy(item, enemy.type))) return false
     if (fighter.target === enemy) fighter.target = null
     const { x, z } = enemy.pos
-    for (const { item, amount } of ENEMY_DEFS[enemy.type].loot) this.pickups.drop(item, amount, x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
+    const def = ENEMY_DEFS[enemy.type]
+    // Un jefe sale con más vida cuantos más jugadores haya, y suelta en proporción.
+    const scale = enemy.maxHp / def.hp
+    for (const { item, amount } of def.loot) this.pickups.drop(item, Math.round(amount * scale), x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
     return true
   }
 
