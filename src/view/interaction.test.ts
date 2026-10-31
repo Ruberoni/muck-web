@@ -382,7 +382,7 @@ describe('herramientas', () => {
     expect(ctx.onGround('birch_wood')).toBe(4)
   })
 
-  it('la mena de mithril pide pico de hierro (3 golpes) y da 4 minerales; el pico de mithril la pica en 2', () => {
+  it('la mena de mithril pide pico de hierro (3 golpes) y da 5 minerales; el pico de mithril la pica en 2', () => {
     const ore = firstOf('mithril_ore')
     equip('stone_pickaxe')
     ctx.aimAt(ore)
@@ -394,7 +394,7 @@ describe('herramientas', () => {
     ctx.aimAt(ore)
     ctx.hold(STEP + HIT_COOLDOWN * 2)
     expect(ore.alive).toBe(false)
-    expect(ctx.onGround('mithril_ore')).toBe(4)
+    expect(ctx.onGround('mithril_ore')).toBe(5)
     ctx.reset()
     const other = ctx.world.props.find((p) => p.kind === 'mithril_ore' && p.alive)!
     equip('mithril_pickaxe')

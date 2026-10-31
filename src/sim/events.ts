@@ -1,4 +1,4 @@
-import type { EnemyType } from './constants'
+import type { EnemyType, HitEfficacy } from './constants'
 import type { RecipeId } from './crafting'
 import type { ItemId } from './inventory'
 import type { StructureKind } from './structures'
@@ -25,7 +25,7 @@ export type SimEventData =
   | { type: 'structurePlaced'; id: number; kind: StructureKind; x: number; y: number; z: number; rotY: number; by: PlayerId }
   | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
-  | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId }
+  | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId; efficacy: HitEfficacy }
   | { type: 'enemyAttack'; id: number; target: PlayerId }
   | { type: 'enemyDied'; id: number; by: PlayerId }
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }

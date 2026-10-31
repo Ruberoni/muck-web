@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { heightAt } from '../sim/world/terrain'
 import { ENEMY_BODY_LIFT, ENEMY_BODY_RADIUS, ENEMY_BODY_SCALE } from '../sim/aim'
-import { ENEMY_DEFS, type EnemyType } from '../sim/constants'
+import { ENEMY_DEFS, type EnemyType, type HitEfficacy } from '../sim/constants'
 import type { EnemyData } from '../sim/enemies'
 import type { SimEventData } from '../sim/events'
 
@@ -31,10 +31,18 @@ const eyeGeometry = mergeGeometries([
 // Un poco de emisivo para que la silueta se lea de noche.
 const BODY_GLOW = new THREE.Color('#2b1240')
 const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#9558bd', emissive: BODY_GLOW, flatShading: true })
-const HURT_COLOR = new THREE.Color('#ff3b2f')
-// Compartidos por todos (hasta 24 a la vez): el destello de un golpe cambia de material en vez de clonar uno por enemigo.
-const hurtMaterial = bodyMaterial.clone()
-hurtMaterial.emissive.copy(HURT_COLOR)
+// El destello de un golpe, según lo que le haya hecho: rojo normal, amarillo si es débil a esa arma y gris si la resiste.
+const FLASH_COLORS: Record<HitEfficacy, string> = { normal: '#ff3b2f', effective: '#ffc21f', resisted: '#8e8e8e' }
+
+/** Compartidos por todos (hasta 24 a la vez): el destello cambia de material en vez de clonar uno por enemigo. */
+function flashesOf(material: THREE.MeshStandardMaterial) {
+  const flash = (color: string) => {
+    const clone = material.clone()
+    clone.emissive.set(color)
+    return clone
+  }
+  return { normal: flash(FLASH_COLORS.normal), effective: flash(FLASH_COLORS.effective), resisted: flash(FLASH_COLORS.resisted) }
+}
 const detailMaterial = new THREE.MeshStandardMaterial({ color: '#3a2348', flatShading: true })
 // Sin iluminación: los ojos se ven de noche.
 const eyeMaterial = new THREE.MeshBasicMaterial({ color: '#ffe066' })
@@ -43,7 +51,7 @@ const eyeMaterial = new THREE.MeshBasicMaterial({ color: '#ffe066' })
 interface EnemyLook {
   body: THREE.BufferGeometry
   material: THREE.Material
-  hurtMaterial: THREE.Material
+  flashes: Record<HitEfficacy, THREE.Material>
   details: { geometry: THREE.BufferGeometry; material: THREE.Material; castShadow: boolean }[]
 }
 
@@ -51,7 +59,7 @@ const LOOKS: Record<EnemyType, EnemyLook> = {
   goblin: {
     body: bodyGeometry,
     material: bodyMaterial,
-    hurtMaterial,
+    flashes: flashesOf(bodyMaterial),
     details: [
       { geometry: detailGeometry, material: detailMaterial, castShadow: true },
       { geometry: eyeGeometry, material: eyeMaterial, castShadow: false },
@@ -71,6 +79,8 @@ interface EnemyModel {
   /** Segundos andando: fase del bote. */
   walk: number
   hurt: number
+  /** El destello que toca mientras dura `hurt`. */
+  efficacy: HitEfficacy
   lunge: number
   /** Retroceso tras un golpe: no bota mientras dura. */
   stagger: number
@@ -96,6 +106,7 @@ export class EnemyView {
           const model = this.models.get(e.id)
           if (model) {
             model.hurt = HURT_FLASH
+            model.efficacy = e.efficacy
             // Si lo ha aguantado (sin empujón), sigue andando.
             if (e.kx !== 0 || e.kz !== 0) model.stagger = ENEMY_DEFS[model.type].stagger
           }
@@ -168,7 +179,7 @@ export class EnemyView {
     // Para reconocerlo en un raycast contra la vista (test de paridad con sim/aim.ts).
     for (const mesh of object.children) mesh.userData.enemy = id
     this.group.add(object)
-    const model: EnemyModel = { type, object, body, x, z, yaw: 0, walk: 0, hurt: 0, lunge: 0, stagger: 0, dying: null }
+    const model: EnemyModel = { type, object, body, x, z, yaw: 0, walk: 0, hurt: 0, efficacy: 'normal', lunge: 0, stagger: 0, dying: null }
     this.models.set(id, model)
     return model
   }
@@ -190,6 +201,6 @@ export class EnemyView {
     const s = model.dying === null ? 1 : Math.max(0, model.dying / DEATH_TIME)
     o.scale.set(1 + (1 - s) * 0.3, s, 1 + (1 - s) * 0.3).multiplyScalar(ENEMY_DEFS[model.type].scale)
     const look = LOOKS[model.type]
-    model.body.material = model.hurt > 0 ? look.hurtMaterial : look.material
+    model.body.material = model.hurt > 0 ? look.flashes[model.efficacy] : look.material
   }
 }

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { PROP_DEFS } from './constants'
+import { ENEMY_DEFS, HIT_COOLDOWN, PROP_DEFS, SWEEP_TARGETS, type EnemyType } from './constants'
 import { recipeById, type RecipeId } from './crafting'
 import type { ItemId } from './inventory'
 import { generatePropPlacements, type PropKind } from './props'
+import { attackDamage, swingCooldown } from './tiers'
 
 /** Jugadores de una sala llena (MAX_PLAYERS en src/net/protocol.ts, que src/sim no importa). */
 const MAX_PLAYERS = 8
 
-/** Lo que fabrica cada jugador para llegar al final: todas las herramientas y una fogata. */
+/** Lo que fabrica cada jugador para llegar al final: todas las herramientas y espadas y una fogata. */
 const PER_PLAYER: readonly RecipeId[] = [
   'wood_axe',
   'wood_pickaxe',
@@ -18,6 +19,10 @@ const PER_PLAYER: readonly RecipeId[] = [
   'iron_pickaxe',
   'mithril_axe',
   'mithril_pickaxe',
+  'wood_sword',
+  'stone_sword',
+  'iron_sword',
+  'mithril_sword',
 ]
 /** Las estaciones son compartidas: una de cada para todos. */
 const SHARED: readonly RecipeId[] = ['workbench', 'furnace', 'anvil']
@@ -48,17 +53,17 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     const need: Amounts = {}
     for (const r of PER_PLAYER) rawCost(r, need, MAX_PLAYERS)
     for (const r of SHARED) rawCost(r, need)
-    expect(need).toEqual({ wood: 338, stone: 122, iron_ore: 52, birch_wood: 32, mithril_ore: 48, dark_wood: 32 })
+    expect(need).toEqual({ wood: 458, stone: 138, iron_ore: 76, birch_wood: 48, mithril_ore: 64, dark_wood: 48 })
     const have = supply()
-    expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 64, dark_wood: 80 })
-    // Lo más justo es el mithril: sobra un tercio (16 lingotes), por si alguien se hace más de un juego.
+    expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 80, dark_wood: 80 })
+    // Lo más justo es el mithril: sobra un cuarto (16 lingotes), por si alguien se hace más de un juego.
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })
 
-  it('un jugador solo rompe unos 15 árboles, 11 rocas, 4 menas de hierro, 2 de mithril, un abedul y un pino oscuro', () => {
+  it('un jugador solo rompe unos 19 árboles, 11 rocas, 5 menas de hierro, 2 de mithril, 2 abedules y 2 pinos oscuros', () => {
     const need: Amounts = {}
     for (const r of [...PER_PLAYER, ...SHARED]) rawCost(r, need)
-    expect(need).toEqual({ wood: 58, stone: 31, iron_ore: 10, birch_wood: 4, mithril_ore: 6, dark_wood: 4 })
+    expect(need).toEqual({ wood: 73, stone: 33, iron_ore: 13, birch_wood: 6, mithril_ore: 8, dark_wood: 6 })
     const kinds = Object.keys(PROP_DEFS) as PropKind[]
     const props = Object.fromEntries(
       (Object.keys(need) as ItemId[]).map((item) => {
@@ -66,6 +71,43 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
         return [kind, Math.ceil(need[item]! / PROP_DEFS[kind].drop.amount)]
       }),
     )
-    expect(props).toEqual({ tree: 15, rock: 11, iron_ore: 4, birch: 1, mithril_ore: 2, darkpine: 1 })
+    expect(props).toEqual({ tree: 19, rock: 11, iron_ore: 5, birch: 2, mithril_ore: 2, darkpine: 2 })
+  })
+})
+
+/** Tiempo para matar: en golpes enteros, con el primero en t = 0. */
+function timeToKill(item: ItemId | null, type: EnemyType, hp = ENEMY_DEFS[type].hp) {
+  return (Math.ceil(hp / attackDamage(item, type)) - 1) * swingCooldown(item)
+}
+
+const LEVELS = [
+  ['wood_axe', 'wood_sword'],
+  ['stone_axe', 'stone_sword'],
+  ['iron_axe', 'iron_sword'],
+  ['mithril_axe', 'mithril_sword'],
+] as const
+
+describe('equilibrio del combate: la espada, el arma más versátil', () => {
+  it('la tabla de tiempos para matar a un trasgo', () => {
+    expect(timeToKill(null, 'goblin')).toBeCloseTo(6 * HIT_COOLDOWN, 6)
+    expect(LEVELS.map(([tool]) => timeToKill(tool, 'goblin'))).toEqual([1.2000000000000002, 0.8, 0.4, 0.4])
+    expect(LEVELS.map(([, sword]) => timeToKill(sword, 'goblin'))).toEqual([1, 0.5, 0.25, 0.25])
+  })
+
+  it.each(LEVELS)('contra un trasgo, %s mata más despacio que %s', (tool, sword) => {
+    expect(timeToKill(sword, 'goblin')).toBeLessThan(timeToKill(tool, 'goblin'))
+  })
+
+  it.each(LEVELS)('contra 3 trasgos juntos, %s tarda al menos el doble que %s', (tool, sword) => {
+    // La espada los alcanza a los 3 con cada golpe; la herramienta va uno por uno, sin pausa entre ellos.
+    expect(SWEEP_TARGETS).toBeGreaterThanOrEqual(3)
+    const hits = Math.ceil(ENEMY_DEFS.goblin.hp / attackDamage(tool, 'goblin'))
+    const oneByOne = (hits * 3 - 1) * swingCooldown(tool)
+    expect(timeToKill(sword, 'goblin')).toBeLessThanOrEqual(oneByOne / 2)
+  })
+
+  it('la mano siempre es lo peor', () => {
+    const hand = timeToKill(null, 'goblin')
+    for (const level of LEVELS) for (const item of level) expect(timeToKill(item, 'goblin')).toBeLessThan(hand)
   })
 })

@@ -63,7 +63,7 @@ describe('EnemyView', () => {
     const { enemies, view, frame, model } = setup()
     const e = enemies.spawnAt(10, 20)
     frame()
-    view.present([{ type: 'enemyHit', id: e.id, hp: 4, kx: 0, kz: 0, by: 0 }])
+    view.present([{ type: 'enemyHit', id: e.id, hp: 4, kx: 0, kz: 0, by: 0, efficacy: 'normal' }])
     // Se mueve: bota al andar, porque no se ha aturdido.
     let highest = 0
     for (let i = 1; i <= 12; i++) {
@@ -73,7 +73,7 @@ describe('EnemyView', () => {
       highest = Math.max(highest, model().position.y)
     }
     expect(highest).toBeGreaterThan(model().position.y - 0.2)
-    view.present([{ type: 'enemyHit', id: e.id, hp: 3, kx: 1, kz: 0, by: 0 }])
+    view.present([{ type: 'enemyHit', id: e.id, hp: 3, kx: 1, kz: 0, by: 0, efficacy: 'normal' }])
     expect(model()).toBeDefined()
   })
 
@@ -81,7 +81,7 @@ describe('EnemyView', () => {
     const { enemies, view, frame, body } = setup()
     const e = enemies.spawnAt(10, 20)
     frame()
-    view.present([{ type: 'enemyHit', id: e.id, hp: 4, kx: 1, kz: 0, by: 0 }])
+    view.present([{ type: 'enemyHit', id: e.id, hp: 4, kx: 1, kz: 0, by: 0, efficacy: 'normal' }])
     frame(0.05)
     expect(body().material.emissive.equals(HURT)).toBe(true)
     frame(0.2)
@@ -94,7 +94,7 @@ describe('EnemyView', () => {
     enemies.spawnAt(-10, 20)
     const c = enemies.spawnAt(0, 30)
     frame()
-    view.present([{ type: 'enemyHit', id: a.id, hp: 4, kx: 1, kz: 0, by: 0 }, { type: 'enemyHit', id: c.id, hp: 4, kx: 1, kz: 0, by: 0 }])
+    view.present([{ type: 'enemyHit', id: a.id, hp: 4, kx: 1, kz: 0, by: 0, efficacy: 'normal' }, { type: 'enemyHit', id: c.id, hp: 4, kx: 1, kz: 0, by: 0, efficacy: 'normal' }])
     frame(0.05)
     const materials = view.group.children.map((m) => ((m as THREE.Group).children[0] as THREE.Mesh).material)
     expect(materials[0]).toBe(materials[2])

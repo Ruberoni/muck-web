@@ -116,7 +116,7 @@ export function movePlayer(actor: Actor, command: PlayerCommands | undefined, en
 export function useHands(actor: Actor, intent: Intent): { swing: boolean; place: boolean } {
   const placing = placeableOf(actor.inventory.selectedItem) !== null
   if (placing) actor.combat.pendingSwing = false
-  const swing = startSwing(actor.combat, STEP, !placing && intent.attack, !placing && intent.swing)
+  const swing = startSwing(actor.combat, STEP, !placing && intent.attack, !placing && intent.swing, actor.inventory.selectedItem)
   return { swing, place: placing && intent.place }
 }
 

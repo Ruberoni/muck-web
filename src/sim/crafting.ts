@@ -28,6 +28,10 @@ export type RecipeId =
   | 'mithril_pickaxe'
   | 'cooked_meat'
   | 'berry_infusion'
+  | 'wood_sword'
+  | 'stone_sword'
+  | 'iron_sword'
+  | 'mithril_sword'
 
 export interface Recipe {
   id: RecipeId
@@ -43,8 +47,10 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'wood_pickaxe', result: 'wood_pickaxe', cost: [{ item: 'wood', amount: 5 }], station: null },
   { id: 'campfire', result: 'campfire', cost: [{ item: 'wood', amount: 6 }, { item: 'stone', amount: 3 }], station: null },
   { id: 'workbench', result: 'workbench', cost: [{ item: 'wood', amount: 10 }], station: null },
+  { id: 'wood_sword', result: 'wood_sword', cost: [{ item: 'wood', amount: 5 }], station: 'workbench' },
   { id: 'stone_axe', result: 'stone_axe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
   { id: 'stone_pickaxe', result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
+  { id: 'stone_sword', result: 'stone_sword', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 2 }], station: 'workbench' },
   { id: 'furnace', result: 'furnace', cost: [{ item: 'stone', amount: 12 }, { item: 'wood', amount: 4 }], station: 'workbench' },
   { id: 'anvil', result: 'anvil', cost: [{ item: 'iron_bar', amount: 4 }, { item: 'stone', amount: 6 }], station: 'workbench' },
   // Fundir es instantáneo: una receta más, junto al horno.
@@ -52,8 +58,10 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'mithril_bar', result: 'mithril_bar', cost: [{ item: 'mithril_ore', amount: 1 }, { item: 'wood', amount: 2 }], station: 'furnace' },
   { id: 'iron_axe', result: 'iron_axe', cost: [{ item: 'iron_bar', amount: 3 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
   { id: 'iron_pickaxe', result: 'iron_pickaxe', cost: [{ item: 'iron_bar', amount: 3 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
+  { id: 'iron_sword', result: 'iron_sword', cost: [{ item: 'iron_bar', amount: 3 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_axe', result: 'mithril_axe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_pickaxe', result: 'mithril_pickaxe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
+  { id: 'mithril_sword', result: 'mithril_sword', cost: [{ item: 'mithril_bar', amount: 2 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   // Cocinar es instantáneo, como fundir: junto a una fogata.
   { id: 'cooked_meat', result: 'cooked_meat', cost: [{ item: 'raw_meat', amount: 1 }], station: 'campfire' },
   { id: 'berry_infusion', result: 'berry_infusion', cost: [{ item: 'berry', amount: 4 }], station: 'campfire' },

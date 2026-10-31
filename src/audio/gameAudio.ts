@@ -121,6 +121,9 @@ export class GameAudio {
         case 'enemyDied':
           s.play('enemyDeath')
           break
+        case 'enemyHit':
+          if (e.by === me && e.efficacy !== 'normal') s.play(e.efficacy === 'effective' ? 'hitEffective' : 'hitResisted')
+          break
         // Las bayas van directas al inventario; lo demás suena al recogerlo del suelo.
         case 'berryTaken':
           if (e.by === me) this.pickup()

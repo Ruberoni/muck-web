@@ -14,6 +14,9 @@ export type SoundName =
   | 'place'
   | 'hurt'
   | 'enemyHit'
+  /** Encima del golpe, si el enemigo es débil a esa arma o si la resiste. */
+  | 'hitEffective'
+  | 'hitResisted'
   | 'enemyDeath'
   | 'growl'
   | 'step'
@@ -374,6 +377,8 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
       s.tone(520 + s.random() * 80, 0.12, { type: 'square', to: 320, gain: 0.12, lowpass: 2000 }),
       s.tone(120, 0.1, { type: 'triangle', to: 80, gain: 0.45 }),
     ),
+  hitEffective: (s) => s.tone(760, 0.12, { type: 'triangle', to: 1240, gain: 0.3 }),
+  hitResisted: (s) => s.tone(210, 0.12, { type: 'square', to: 150, gain: 0.12, lowpass: 900 }),
   enemyDeath: (s) =>
     Math.max(
       s.tone(620, 0.45, { type: 'sawtooth', to: 140, gain: 0.25, lowpass: 1800, vibrato: { rate: 18, depth: 30 } }),

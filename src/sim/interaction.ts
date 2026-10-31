@@ -2,12 +2,12 @@ import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes 
 import { resetProp, startRegrow, type PropData, type PropWorld } from './props'
 import { heightAt } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId, type TargetRef } from './events'
-import { ENEMY_DEFS, HIT_COOLDOWN, PROP_DEFS, REACH, type PropFamily } from './constants'
+import { ENEMY_DEFS, PROP_DEFS, REACH, SWEEP_TARGETS, type PropFamily } from './constants'
 import { enemyAimHeight, type Enemies, type EnemyData } from './enemies'
-import type { Inventory } from './inventory'
+import type { Inventory, ItemId } from './inventory'
 import type { Player } from './player'
 import type { Pickups } from './pickups'
-import { attackDamage, propDamage } from './tiers'
+import { attackDamage, hitEfficacy, isSword, propDamage, swingCooldown } from './tiers'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
 export type Target = PropData | EnemyData
@@ -80,18 +80,25 @@ export class Interaction {
   private checkAim(fighter: Fighter, aim: TargetRef): Target | null {
     const target = aim.kind === 'prop' ? this.world.props[aim.id] : this.enemies?.list.find((e) => e.id === aim.id)
     if (!target?.alive) return null
-    const enemy = target.kind === 'enemy'
-    const { x, z } = enemy ? target.pos : target
-    const y = enemy ? heightAt(x, z) + enemyAimHeight(target.type) : aimHeight(target)
-    const radius = enemy ? ENEMY_DEFS[target.type].radius + AIM_SLACK_ENEMY : target.radius + AIM_SLACK_PROP
+    if (target.kind === 'enemy') return this.enemyInReach(fighter, target, AIM_SLACK_ENEMY) ? target : null
+    return this.inReach(fighter, target.x, aimHeight(target), target.z, target.radius + AIM_SLACK_PROP) ? target : null
+  }
+
+  private enemyInReach(fighter: Fighter, enemy: EnemyData, slack: number) {
+    const { x, z } = enemy.pos
+    return this.inReach(fighter, x, heightAt(x, z) + enemyAimHeight(enemy.type), z, ENEMY_DEFS[enemy.type].radius + slack)
+  }
+
+  /** Si (x, y, z) está a como mucho REACH + `radius` de los ojos y a menos de 60° de la mirada. */
+  private inReach(fighter: Fighter, x: number, y: number, z: number, radius: number): boolean {
     const ray = aimRay(fighter.player, this.ray)
     const dx = x - ray.ox
     const dy = y - ray.oy
     const dz = z - ray.oz
     const distance = Math.hypot(dx, dy, dz)
-    if (distance > REACH + radius) return null
+    if (distance > REACH + radius) return false
     // Pegado al objetivo cualquier dirección vale.
-    return distance < 1e-6 || (dx * ray.dx + dy * ray.dy + dz * ray.dz) / distance >= AIM_MIN_COS ? target : null
+    return distance < 1e-6 || (dx * ray.dx + dy * ray.dy + dz * ray.dz) / distance >= AIM_MIN_COS
   }
 
   /**
@@ -102,7 +109,7 @@ export class Interaction {
    * si soltó algo (lo rompió, lo mató o cogió una baya).
    */
   step(fighter: Fighter, dt: number, attackHeld: boolean, swing = false): { target: Target | null; dropped: boolean } | null {
-    return startSwing(fighter.combat, dt, attackHeld, swing) ? this.strike(fighter) : null
+    return startSwing(fighter.combat, dt, attackHeld, swing, fighter.inventory.selectedItem) ? this.strike(fighter) : null
   }
 
   /** El golpe que empieza (ya decidido por `startSwing`) contra el objetivo del jugador, o al aire. */
@@ -114,7 +121,23 @@ export class Interaction {
       item: fighter.inventory.selectedItem,
       target: target && { kind: target.kind === 'enemy' ? 'enemy' : 'prop', id: target.id },
     })
-    return { target, dropped: target ? this.hit(fighter, target) : false }
+    const hit = target ? this.hit(fighter, target) : false
+    const swept = isSword(fighter.inventory.selectedItem) && this.sweep(fighter, target)
+    return { target, dropped: hit || swept }
+  }
+
+  /**
+   * El arco de la espada: además del apuntado, alcanza a los enemigos más cercanos de delante, hasta SWEEP_TARGETS,
+   * aunque el golpe vaya al aire. Solo enemigos, nunca props. Lo decide el servidor: la predicción no sabe qué acierta.
+   */
+  private sweep(fighter: Fighter, target: Target | null): boolean {
+    if (!this.enemies) return false
+    const { pos } = fighter.player
+    const distance = (e: EnemyData) => Math.hypot(e.pos.x - pos.x, e.pos.z - pos.z)
+    const near = this.enemies.list.filter((e) => e !== target && this.enemyInReach(fighter, e, 0)).sort((a, b) => distance(a) - distance(b) || a.id - b.id)
+    let dropped = false
+    for (const enemy of near.slice(0, SWEEP_TARGETS - (target?.kind === 'enemy' ? 1 : 0))) dropped = this.hitEnemy(fighter, enemy) || dropped
+    return dropped
   }
 
   /** Devuelve si el golpe suelta algo. */
@@ -136,7 +159,8 @@ export class Interaction {
   private hitEnemy(fighter: Fighter, enemy: EnemyData): boolean {
     // El retroceso es en sentido contrario al atacante.
     const { pos } = fighter.player
-    if (!this.enemies?.hit(enemy, attackDamage(fighter.inventory.selectedItem), pos, fighter.id)) return false
+    const item = fighter.inventory.selectedItem
+    if (!this.enemies?.hit(enemy, attackDamage(item, enemy.type), pos, fighter.id, hitEfficacy(item, enemy.type))) return false
     if (fighter.target === enemy) fighter.target = null
     const { x, z } = enemy.pos
     for (const { item, amount } of ENEMY_DEFS[enemy.type].loot) this.pickups.drop(item, amount, x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
@@ -172,14 +196,14 @@ export class Interaction {
 
 /**
  * La espera entre golpes de un paso: baja el cooldown y dice si empieza un golpe (ataque mantenido o `swing`
- * pendiente con el cooldown acabado). Sin mundo: la predicción del cliente la usa tal cual.
+ * pendiente con el cooldown acabado), con la cadencia de `item`. Sin mundo: la predicción del cliente la usa tal cual.
  */
-export function startSwing(combat: Combat, dt: number, attackHeld: boolean, swing: boolean): boolean {
+export function startSwing(combat: Combat, dt: number, attackHeld: boolean, swing: boolean, item: ItemId | null): boolean {
   combat.cooldown = Math.max(0, combat.cooldown - dt)
   if (swing) combat.pendingSwing = true
   if (!(attackHeld || combat.pendingSwing) || combat.cooldown > 1e-9) return false
   combat.pendingSwing = false
-  combat.cooldown = HIT_COOLDOWN
+  combat.cooldown = swingCooldown(item)
   return true
 }
 

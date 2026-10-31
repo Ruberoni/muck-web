@@ -42,7 +42,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Clic izquierdo** con la fogata o una estación (mesa de trabajo, horno o yunque) en la mano | colocarla |
 | **Esc** | pausa |
 
-Los árboles se talan con 3 golpes a mano (+4 madera). Las rocas no se pueden picar a mano: hace falta un pico de madera (2 golpes) o cualquiera mejor (1 golpe), y dan +3 piedra. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Las hachas talan más rápido (2 golpes con la de madera, 1 con cualquiera mejor). Sobre todo en el bosque, entre 3 y 6 m de altura, crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +4 madera de abedul, y en la montaña (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +3 mineral de hierro. Entre 6 y 9 m crecen también 20 pinos oscuros, más grandes y de copa casi negra, que piden un hacha de hierro (3 golpes; 2 con la de mithril) y dan +4 madera oscura, y en las cimas (desde 8,5 m) hay 16 menas de mithril, pequeñas y con cristales azules, que piden un pico de hierro (3 golpes; 2 con el de mithril) y dan +4 mineral de mithril. Los minerales se funden en el horno; la madera de abedul sirve para las herramientas de hierro y la oscura para las de mithril (ver [Crafteo](#crafteo)). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Sobre todo en el bosque crecen 30 hierbas curativas, matas pequeñas con flores rosas: un clic recoge la flor (+1 hierba curativa) y vuelve a salir a los 90 s. Los árboles y las rocas (también abedules, pinos oscuros y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo. Para hacer sitio, **Q** tira uno de la mano y **Ctrl + Q** la pila entera: sale hacia delante como un montón en el suelo, que quien lo tiró no puede recoger durante 2 s (los demás, sí).
+Los árboles se talan con 3 golpes a mano (+4 madera). Las rocas no se pueden picar a mano: hace falta un pico de madera (2 golpes) o cualquiera mejor (1 golpe), y dan +3 piedra. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Las hachas talan más rápido (2 golpes con la de madera, 1 con cualquiera mejor). Sobre todo en el bosque, entre 3 y 6 m de altura, crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +4 madera de abedul, y en la montaña (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +3 mineral de hierro. Entre 6 y 9 m crecen también 20 pinos oscuros, más grandes y de copa casi negra, que piden un hacha de hierro (3 golpes; 2 con la de mithril) y dan +4 madera oscura, y en las cimas (desde 8,5 m) hay 16 menas de mithril, pequeñas y con cristales azules, que piden un pico de hierro (3 golpes; 2 con el de mithril) y dan +5 mineral de mithril. Los minerales se funden en el horno; la madera de abedul sirve para las herramientas de hierro y la oscura para las de mithril (ver [Crafteo](#crafteo)). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Sobre todo en el bosque crecen 30 hierbas curativas, matas pequeñas con flores rosas: un clic recoge la flor (+1 hierba curativa) y vuelve a salir a los 90 s. Los árboles y las rocas (también abedules, pinos oscuros y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo. Para hacer sitio, **Q** tira uno de la mano y **Ctrl + Q** la pila entera: sale hacia delante como un montón en el suelo, que quien lo tiró no puede recoger durante 2 s (los demás, sí).
 
 El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata o una estación también se animan.
 
@@ -57,17 +57,30 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | — | mesa de trabajo | 10 madera |
 | fogata | carne asada | 1 carne cruda |
 | fogata | infusión de bayas | 4 bayas |
+| mesa de trabajo | espada de madera | 5 madera |
 | mesa de trabajo | hacha o pico de piedra | 3 madera + 5 piedra |
+| mesa de trabajo | espada de piedra | 3 madera + 2 piedra |
 | mesa de trabajo | horno | 12 piedra + 4 madera |
 | mesa de trabajo | yunque | 4 lingotes de hierro + 6 piedra |
 | horno | lingote de hierro | 1 mineral de hierro + 1 madera |
 | horno | lingote de mithril | 1 mineral de mithril + 2 madera |
-| yunque | hacha o pico de hierro | 3 lingotes de hierro + 2 madera de abedul |
+| yunque | hacha, pico o espada de hierro | 3 lingotes de hierro + 2 madera de abedul |
 | yunque | hacha o pico de mithril | 3 lingotes de mithril + 2 madera oscura |
+| yunque | espada de mithril | 2 lingotes de mithril + 2 madera oscura |
 
 Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un horno cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas. Fundir y cocinar son instantáneos: cada clic junto al horno convierte un mineral en un lingote, y junto a una fogata, una carne cruda en una asada.
 
-Las herramientas de hierro hacen 6 de daño a lo de su familia y 4 a los trasgos, y son las que abren el pino oscuro y la mena de mithril. Las de mithril, las mejores, hacen 12 y 6: nada pide mithril, pero tumban abedules, menas de hierro y trasgos de un golpe, y pinos oscuros y menas de mithril de dos.
+Las herramientas de hierro hacen 6 de daño a lo de su familia y son las que abren el pino oscuro y la mena de mithril. Las de mithril, las mejores, hacen 12: nada pide mithril, pero tumban abedules y menas de hierro de un golpe, y pinos oscuros y menas de mithril de dos.
+
+Las espadas son las armas para pelear: no talan ni pican, golpean cada 0,25 s (las herramientas, cada 0,4 s), y cada golpe alcanza además a los enemigos de delante, hasta 4, aunque vaya al aire. Por golpe hacen algo menos que una herramienta de su nivel:
+
+| Nivel | Herramienta | Espada |
+| --- | --- | --- |
+| mano | 10 | — |
+| madera | 20 | 16 |
+| piedra | 30 | 25 |
+| hierro | 40 | 35 |
+| mithril | 60 | 50 |
 
 ## Estaciones
 
@@ -83,9 +96,9 @@ El hambre (barra naranja) baja sola y se vacía en unos 4 minutos; cada baya dev
 
 ## Enemigos
 
-Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic): 6 golpes a mano, 3 con un hacha o pico de madera, 2 con uno de piedra o de hierro y 1 con uno de mithril; cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo. Al amanecer dejan de salir nuevos, pero los que quedan siguen ahí hasta que los mates, y cuentan para el tope de la noche siguiente. Tras un golpe que los empuja y los aturde 0,3 s aguantan 0,6 s más: durante ese rato los golpes les quitan vida, pero no los empujan ni les retrasan el ataque, así que golpear sin parar no evita que te peguen.
+Al anochecer empiezan a aparecer trasgos a 26–40 m del jugador, uno cada 5 s: 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda, rodean árboles y rocas y no entran en agua profunda. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic), y tienen 70 de vida: 7 golpes a mano; con hacha o pico, 4 de madera, 3 de piedra y 2 de hierro o mithril; con espada, 5, 3, 2 y 2, pero mucho más seguidos. Cada golpe los hace retroceder. Al morir dejan carne cruda en el suelo. Al amanecer dejan de salir nuevos, pero los que quedan siguen ahí hasta que los mates, y cuentan para el tope de la noche siguiente. Tras un golpe que los empuja y los aturde 0,3 s aguantan 0,6 s más: durante ese rato los golpes les quitan vida, pero no los empujan ni les retrasan el ataque, así que golpear sin parar no evita que te peguen.
 
-Cada tipo de enemigo es una entrada de `ENEMY_DEFS` (`src/sim/constants.ts`): vida, velocidad, tamaño, daño, ritmo de ataque, botín, debilidades… Por ahora solo está el trasgo. Vida y daño contra enemigos van en una escala ×10 respecto a los golpes (el trasgo tiene 60 de vida y la mano hace 10), para poder ajustar armas y debilidades sin decimales.
+Cada tipo de enemigo es una entrada de `ENEMY_DEFS` (`src/sim/constants.ts`): vida, velocidad, tamaño, daño, ritmo de ataque, botín, debilidades… Por ahora solo está el trasgo. Un enemigo puede ser débil o resistente a una clase de arma (`weakness`): el golpe multiplica su daño, y tanto el destello (amarillo si es eficaz, gris si lo resiste) como el sonido lo dejan ver.
 
 ## Sonido y ajustes
 

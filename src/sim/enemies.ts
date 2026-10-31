@@ -18,6 +18,7 @@ import {
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
   type EnemyType,
+  type HitEfficacy,
 } from './constants'
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
@@ -287,7 +288,7 @@ export class Enemies {
   }
 
   /** Golpe de `by` desde `from` (la posición del atacante). Devuelve true si lo mata. */
-  hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId): boolean {
+  hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId, efficacy: HitEfficacy = 'normal'): boolean {
     if (!e.alive) return false
     e.hp = Math.max(0, e.hp - damage)
     if (e.hp <= 0) {
@@ -298,7 +299,7 @@ export class Enemies {
     const def = ENEMY_DEFS[e.type]
     // Lo aguanta: si cada golpe lo aturdiera, golpeando sin parar nunca llegaría a atacar.
     if (def.stagger <= 0 || e.staggerGuard > 1e-9) {
-      this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: 0, kz: 0, by })
+      this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: 0, kz: 0, by, efficacy })
       return false
     }
     const dx = e.pos.x - from.x
@@ -309,7 +310,7 @@ export class Enemies {
     e.stagger = def.stagger
     e.staggerGuard = def.stagger + def.staggerGap
     e.attackCooldown = Math.max(e.attackCooldown, def.windup)
-    this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by })
+    this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by, efficacy })
     return false
   }
 

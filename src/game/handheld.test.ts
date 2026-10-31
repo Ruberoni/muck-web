@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { ACTION_DURATION, actionPose, Handheld, type HandAction } from './handheld'
+import { ACTION_DURATION, actionPose, Handheld, swingDuration, type HandAction } from './handheld'
 import { ITEM_NAMES, type ItemId } from '../sim/inventory'
+import { swingCooldown } from '../sim/tiers'
+
+describe('golpe según el arma', () => {
+  it('la espada golpea más rápido que su cadencia y deja una estela; las herramientas, no', () => {
+    expect(swingDuration('wood_sword')).toBeLessThan(swingCooldown('wood_sword'))
+    expect(swingDuration('wood_axe')).toBe(ACTION_DURATION.swing)
+    expect(swingDuration(null)).toBe(ACTION_DURATION.swing)
+
+    const hand = new Handheld(1)
+    hand.setItem('wood_sword')
+    hand.play('swing')
+    hand.update(swingDuration('wood_sword') * 0.4, 0, true)
+    expect(hand.trail.visible).toBe(true)
+    expect(hand.trail.material.opacity).toBeGreaterThan(0)
+    hand.update(swingDuration('wood_sword'), 0, true)
+    expect(hand.action).toBeNull()
+    expect(hand.trail.visible).toBe(false)
+
+    hand.setItem('wood_axe')
+    hand.play('swing')
+    hand.update(ACTION_DURATION.swing * 0.4, 0, true)
+    expect(hand.trail.visible).toBe(false)
+  })
+})
 
 describe('objeto en la mano', () => {
   it('hay modelo para cada objeto', () => {

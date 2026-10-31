@@ -24,6 +24,10 @@ export type ItemId =
   | 'cooked_meat'
   | 'berry_infusion'
   | 'healing_herb'
+  | 'wood_sword'
+  | 'stone_sword'
+  | 'iron_sword'
+  | 'mithril_sword'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -51,6 +55,10 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   cooked_meat: 'Carne asada',
   berry_infusion: 'Infusión de bayas',
   healing_herb: 'Hierba curativa',
+  wood_sword: 'Espada de madera',
+  stone_sword: 'Espada de piedra',
+  iron_sword: 'Espada de hierro',
+  mithril_sword: 'Espada de mithril',
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

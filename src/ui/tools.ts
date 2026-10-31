@@ -3,7 +3,7 @@ import { ITEM_NAMES, type ItemId } from '../sim/inventory'
 import type { PropKind } from '../sim/props'
 import { canDamage, requiredTool, type ToolRequirement } from '../sim/tiers'
 
-const FAMILY_NAMES: Record<ToolDef['family'], string> = { axe: 'hacha', pickaxe: 'pico' }
+const FAMILY_NAMES: Record<ToolDef['family'], string> = { axe: 'hacha', pickaxe: 'pico', sword: 'espada' }
 
 /** Nombres ya calculados, por `familia:nivel`: el HUD lo pide en cada frame mientras se apunta. */
 const names = new Map<string, string>()

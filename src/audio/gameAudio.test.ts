@@ -119,7 +119,7 @@ describe('sonido', () => {
     step(swing({ kind: 'prop', id: 1 }, 'wood_pickaxe'), { tick: 1, type: 'propDestroyed', id: 1, by: 0 })
     step(swing({ kind: 'prop', id: 2 }), { tick: 1, type: 'berryTaken', id: 2, hp: 1, by: 0 })
     step(swing({ kind: 'prop', id: 2 }))
-    step(swing({ kind: 'enemy', id: 0 }), { tick: 1, type: 'enemyHit', id: 0, hp: 3, kx: 1, kz: 0, by: 0 })
+    step(swing({ kind: 'enemy', id: 0 }), { tick: 1, type: 'enemyHit', id: 0, hp: 3, kx: 1, kz: 0, by: 0, efficacy: 'normal' })
     step(swing({ kind: 'enemy', id: 0 }), { tick: 1, type: 'enemyDied', id: 0, by: 0 })
     expect(names()).toEqual(['swing', 'hitWood', 'breakWood', 'hitStone', 'breakStone', 'hitBush', 'pickup', 'hitBush', 'enemyHit', 'enemyDeath'])
   })

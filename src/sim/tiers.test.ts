@@ -40,6 +40,11 @@ describe('niveles: daño contra props', () => {
     ['stone_pickaxe', 1, 0, 0, 4, 4, 0, 1],
     ['iron_pickaxe', 1, 0, 0, 6, 6, 6, 1],
     ['mithril_pickaxe', 1, 0, 0, 12, 12, 12, 1],
+    // Las espadas no talan ni pican: como la mano.
+    ['wood_sword', 1, 0, 0, 0, 0, 0, 1],
+    ['stone_sword', 1, 0, 0, 0, 0, 0, 1],
+    ['iron_sword', 1, 0, 0, 0, 0, 0, 1],
+    ['mithril_sword', 1, 0, 0, 0, 0, 0, 1],
   ]
   it.each(TABLE)(
     '%s: árbol %i, abedul %i, pino oscuro %i, roca %i, mena de hierro %i, mena de mithril %i, arbusto %i',
@@ -110,7 +115,7 @@ describe('niveles: daño contra props', () => {
     for (const [, a] of tools) {
       for (const [, b] of tools) {
         if (a!.family === b!.family && a!.tier > b!.tier) {
-          expect(a!.damage).toBeGreaterThan(b!.damage)
+          if (a!.family !== 'sword') expect(a!.damage).toBeGreaterThan(b!.damage)
           expect(a!.attack).toBeGreaterThanOrEqual(b!.attack)
         }
       }
@@ -137,15 +142,15 @@ describe('niveles: daño contra props', () => {
   })
 
   it('contra enemigos cuenta el ataque, sea cual sea la familia', () => {
-    expect(attackDamage(null)).toBe(10)
-    expect(attackDamage('stone')).toBe(10)
-    expect(attackDamage('wood_axe')).toBe(20)
-    expect(attackDamage('wood_pickaxe')).toBe(20)
-    expect(attackDamage('stone_axe')).toBe(30)
-    expect(attackDamage('stone_pickaxe')).toBe(30)
-    expect(attackDamage('iron_axe')).toBe(40)
-    expect(attackDamage('iron_pickaxe')).toBe(40)
-    expect(attackDamage('mithril_axe')).toBe(60)
-    expect(attackDamage('mithril_pickaxe')).toBe(60)
+    expect(attackDamage(null, 'goblin')).toBe(10)
+    expect(attackDamage('stone', 'goblin')).toBe(10)
+    expect(attackDamage('wood_axe', 'goblin')).toBe(20)
+    expect(attackDamage('wood_pickaxe', 'goblin')).toBe(20)
+    expect(attackDamage('stone_axe', 'goblin')).toBe(30)
+    expect(attackDamage('stone_pickaxe', 'goblin')).toBe(30)
+    expect(attackDamage('iron_axe', 'goblin')).toBe(40)
+    expect(attackDamage('iron_pickaxe', 'goblin')).toBe(40)
+    expect(attackDamage('mithril_axe', 'goblin')).toBe(60)
+    expect(attackDamage('mithril_pickaxe', 'goblin')).toBe(60)
   })
 })

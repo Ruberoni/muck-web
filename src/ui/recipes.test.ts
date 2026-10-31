@@ -27,9 +27,9 @@ describe('recetas en la pantalla de inventario', () => {
     expect(RECIPE_GROUPS.map((g) => g.recipes.map((r) => r.id))).toEqual([
       ['wood_axe', 'wood_pickaxe', 'campfire', 'workbench'],
       ['cooked_meat', 'berry_infusion'],
-      ['stone_axe', 'stone_pickaxe', 'furnace', 'anvil'],
+      ['wood_sword', 'stone_axe', 'stone_pickaxe', 'stone_sword', 'furnace', 'anvil'],
       ['iron_bar', 'mithril_bar'],
-      ['iron_axe', 'iron_pickaxe', 'mithril_axe', 'mithril_pickaxe'],
+      ['iron_axe', 'iron_pickaxe', 'iron_sword', 'mithril_axe', 'mithril_pickaxe', 'mithril_sword'],
     ])
   })
 

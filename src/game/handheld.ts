@@ -2,12 +2,15 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Sky } from '../scene'
 import type { ItemId } from '../sim/inventory'
+import { isSword, swingCooldown } from '../sim/tiers'
 
 /** Animaciones del objeto en la mano. */
 export type HandAction = 'swing' | 'eat' | 'place'
 
-// Más corto que HIT_COOLDOWN: manteniendo el clic queda una pausa entre golpe y golpe.
+// El golpe, más corto que la cadencia más lenta: manteniendo el clic queda una pausa entre golpe y golpe.
 export const ACTION_DURATION: Record<HandAction, number> = { swing: 0.32, eat: 0.45, place: 0.3 }
+/** Cuánto dura el golpe de `item`: con más cadencia, más corto, para que no se empalme con el siguiente. */
+export const swingDuration = (item: ItemId | null) => Math.min(ACTION_DURATION.swing, swingCooldown(item) * 0.8)
 const SWAP_DURATION = 0.18
 const SWAP_DROP = 0.45
 // FOV propio: el objeto no se deforma aunque cambie el de la cámara del mundo.
@@ -21,6 +24,11 @@ const BOB_AMOUNT = 0.018
 const BOB_RATE = 1.6
 // La mano se ve aunque sea de noche cerrada.
 const MIN_AMBIENT = 0.35
+// La estela del golpe de espada: un arco delante de la cámara que aparece al golpear y se apaga enseguida.
+const TRAIL_START = 0.2
+const TRAIL_PEAK = 0.4
+const TRAIL_END = 0.75
+const TRAIL_OPACITY = 0.4
 
 export interface HandPose {
   rx: number
@@ -100,6 +108,14 @@ const herbLeaf = mat('#57a85a')
 const herbFlower = mat('#f2a6d8')
 
 const part = (geometry: THREE.BufferGeometry, material: THREE.Material) => new THREE.Mesh(geometry, material)
+
+function sword(blade: THREE.Material) {
+  const g = new THREE.Group()
+  g.add(part(new THREE.BoxGeometry(0.04, 0.16, 0.04).translate(0, 0.02, 0), handle))
+  g.add(part(new THREE.BoxGeometry(0.17, 0.03, 0.05).translate(0, 0.11, 0), darkIron))
+  g.add(part(new THREE.BoxGeometry(0.065, 0.5, 0.02).translate(0, 0.37, 0), blade))
+  return g
+}
 
 function axe(head: THREE.Material) {
   const g = new THREE.Group()
@@ -256,6 +272,14 @@ export function itemModel(item: ItemId): THREE.Group {
       return pickaxe(ironHead)
     case 'mithril_pickaxe':
       return pickaxe(mithrilHead)
+    case 'wood_sword':
+      return sword(woodHead)
+    case 'stone_sword':
+      return sword(stoneHead)
+    case 'iron_sword':
+      return sword(ironHead)
+    case 'mithril_sword':
+      return sword(mithrilHead)
     case 'wood':
       return log(bark)
     case 'dark_wood':
@@ -318,7 +342,10 @@ export class Handheld {
   /** Objeto en la mano (null = mano vacía). */
   item: ItemId | null = null
   action: HandAction | null = null
+  /** La estela del golpe de espada. */
+  readonly trail: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>
   private actionTime = 0
+  private actionLength = 0
   private swap = 1
   private bob = 0
   private bobWeight = 0
@@ -339,7 +366,14 @@ export class Handheld {
     this.holder.position.copy(FIST)
     this.holder.rotation.set(-0.35, 0, 0.15)
     this.holder.scale.setScalar(0.75)
-    this.scene.add(this.hemi, this.ambient, this.light, this.root)
+    this.trail = new THREE.Mesh(
+      new THREE.RingGeometry(0.47, 0.55, 20, 1, -0.2, 1.9),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }),
+    )
+    this.trail.position.set(0.1, -0.22, -0.85)
+    this.trail.rotation.set(-0.5, 0, 0.1)
+    this.trail.visible = false
+    this.scene.add(this.hemi, this.ambient, this.light, this.root, this.trail)
   }
 
   setAspect(aspect: number) {
@@ -363,6 +397,16 @@ export class Handheld {
     this.action = action
     this.actionTime = 0
     if (item !== undefined) this.show(item)
+    this.actionLength = action === 'swing' ? swingDuration(this.item) : ACTION_DURATION[action]
+  }
+
+  private updateTrail() {
+    const p = this.action === 'swing' && isSword(this.item) ? this.actionTime / this.actionLength : 0
+    const visible = p > TRAIL_START && p < TRAIL_END
+    this.trail.visible = visible
+    if (!visible) return
+    const k = p < TRAIL_PEAK ? (p - TRAIL_START) / (TRAIL_PEAK - TRAIL_START) : (TRAIL_END - p) / (TRAIL_END - TRAIL_PEAK)
+    this.trail.material.opacity = TRAIL_OPACITY * k
   }
 
   private show(item: ItemId | null) {
@@ -382,9 +426,10 @@ export class Handheld {
   update(dt: number, speed: number, grounded: boolean, sky?: Pick<Sky, 'hemi' | 'sun'>) {
     if (this.action) {
       this.actionTime += dt
-      if (this.actionTime >= ACTION_DURATION[this.action]) this.action = null
+      if (this.actionTime >= this.actionLength) this.action = null
     }
     this.swap = Math.min(1, this.swap + dt / SWAP_DURATION)
+    this.updateTrail()
 
     // Balanceo al andar, que se desvanece al pararse o en el aire.
     const moving = grounded && speed > 0.5
@@ -392,7 +437,7 @@ export class Handheld {
     this.bob += dt * speed * BOB_RATE
 
     const pose = this.pose
-    if (this.action) actionPose(this.action, this.actionTime / ACTION_DURATION[this.action], pose)
+    if (this.action) actionPose(this.action, this.actionTime / this.actionLength, pose)
     else pose.rx = pose.rz = pose.x = pose.y = pose.z = 0
     const bobX = Math.sin(this.bob) * BOB_AMOUNT * this.bobWeight
     const bobY = -Math.abs(Math.cos(this.bob)) * BOB_AMOUNT * this.bobWeight

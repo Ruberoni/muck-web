@@ -65,13 +65,17 @@ export const WHEEL_LINE_PX = 40
 export const WHEEL_GESTURE_GAP_MS = 150
 
 export const REACH = 3.5
+/** Segundos entre golpes, salvo que el arma diga otra cosa (ToolDef.cooldown). */
 export const HIT_COOLDOWN = 0.4
+const SWORD_COOLDOWN = 0.25
+/** Enemigos a los que alcanza un golpe de espada como mucho, contando al apuntado (Interaction). */
+export const SWEEP_TARGETS = 4
 export const WOBBLE_DURATION = 0.15
 
 /** Familia de un prop: decide su forma, su hitbox, de dónde cae lo que suelta y cómo suena. */
 export type PropFamily = 'tree' | 'rock' | 'bush' | 'herb'
-/** Familia de una herramienta: el hacha tala árboles y el pico rompe rocas. */
-export type ToolFamily = 'axe' | 'pickaxe'
+/** Familia de una herramienta: el hacha tala árboles, el pico rompe rocas y la espada solo sirve para pelear. */
+export type ToolFamily = 'axe' | 'pickaxe' | 'sword'
 
 export interface PropDef {
   name: string
@@ -101,7 +105,7 @@ export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_or
   darkpine: { name: 'Pino oscuro', verb: 'talar', family: 'tree', tool: 'axe', tier: 3, hp: 18, drop: { item: 'dark_wood', amount: 4 } },
   rock: { name: 'Roca', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 4, drop: { item: 'stone', amount: 3 } },
   iron_ore: { name: 'Mena de hierro', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 2, hp: 12, drop: { item: 'iron_ore', amount: 3 } },
-  mithril_ore: { name: 'Mena de mithril', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 18, drop: { item: 'mithril_ore', amount: 4 } },
+  mithril_ore: { name: 'Mena de mithril', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 18, drop: { item: 'mithril_ore', amount: 5 } },
   bush: {
     name: 'Arbusto de bayas',
     verb: 'recoger',
@@ -148,6 +152,8 @@ export interface ToolDef {
   damage: number
   /** Daño contra enemigos, sea cual sea la familia de la herramienta. */
   attack: number
+  /** Segundos entre golpes; sin él, HIT_COOLDOWN. */
+  cooldown?: number
 }
 
 export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
@@ -160,10 +166,17 @@ export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 30 },
   iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 40 },
   mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 12, attack: 60 },
+  // Algo menos de daño que una herramienta de su nivel, pero más cadencia y golpe en arco: las armas para pelear.
+  wood_sword: { family: 'sword', tier: 1, damage: 1, attack: 16, cooldown: SWORD_COOLDOWN },
+  stone_sword: { family: 'sword', tier: 2, damage: 1, attack: 25, cooldown: SWORD_COOLDOWN },
+  iron_sword: { family: 'sword', tier: 3, damage: 1, attack: 35, cooldown: SWORD_COOLDOWN },
+  mithril_sword: { family: 'sword', tier: 4, damage: 1, attack: 50, cooldown: SWORD_COOLDOWN },
 }
 
 /** Con qué se golpea a un enemigo: una familia de herramienta o, con cualquier otra cosa, la mano. */
 export type WeaponClass = ToolFamily | 'hand'
+/** Cuánto le ha hecho un golpe a un enemigo, por su debilidad al arma: la vista y el sonido lo distinguen. */
+export type HitEfficacy = 'effective' | 'normal' | 'resisted'
 /** Cómo se comporta un enemigo. */
 export type EnemyAI = 'chase' | 'charge' | 'ranged' | 'guard'
 
@@ -202,11 +215,11 @@ export interface EnemyDef {
 }
 
 export const ENEMY_DEFS: Record<'goblin', EnemyDef> = {
-  // 6 golpes a mano, 3 con herramienta de madera, 2 con una de piedra o de hierro y 1 con una de mithril.
+  // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
     verb: 'atacar',
-    hp: 60,
+    hp: 70,
     // Algo más lento que andar: se le puede dejar atrás, pero no mientras se tala o se pica.
     speed: 5,
     radius: 0.55,

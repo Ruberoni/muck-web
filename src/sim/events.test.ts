@@ -127,7 +127,7 @@ describe('eventos de la simulación', () => {
 
     ctx.events.length = 0
     ctx.enemies.hit(e, 2, player, 3)
-    expect(ctx.events).toEqual([{ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by: 3 }])
+    expect(ctx.events).toEqual([{ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by: 3, efficacy: 'normal' }])
     expect(e.knock.x).toBeGreaterThan(0)
     ctx.events.length = 0
     ctx.enemies.hit(e, 100, player, 3)

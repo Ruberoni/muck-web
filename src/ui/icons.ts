@@ -5,6 +5,8 @@ const axe = (head: string, edge: string) =>
   `<svg viewBox="0 0 32 32">${HANDLE}<polygon points="16,7 22,3 29,9 27,15 21,11" fill="${head}"/><polygon points="22,3 29,9 27,15" fill="${edge}"/></svg>`
 const pickaxe = (head: string, edge: string) =>
   `<svg viewBox="0 0 32 32">${HANDLE}<polygon points="5,12 11,6 20,3 29,5 30,9 21,7 12,9" fill="${head}"/><polygon points="5,12 11,6 12,9" fill="${edge}"/><polygon points="29,5 30,9 25,7.5" fill="${edge}"/></svg>`
+const sword = (blade: string, edge: string) =>
+  `<svg viewBox="0 0 32 32"><polygon points="5,24 8,27 12,23 9,20" fill="#8a5a32"/><polygon points="6,16 16,26 18,24 8,14" fill="#6b4426"/><polygon points="11,18.5 13.5,21 29,6 29,3 26,3" fill="${blade}"/><polygon points="13.5,21 29,6 29,3" fill="${edge}"/></svg>`
 
 /** Iconos SVG de cada objeto, para la hotbar, la pantalla de inventario y las recetas. */
 export const ICONS: Record<ItemId, string> = {
@@ -19,6 +21,10 @@ export const ICONS: Record<ItemId, string> = {
   iron_pickaxe: pickaxe('#dfe3e8', '#9aa3ad'),
   mithril_axe: axe('#8fd0f2', '#4f9cc8'),
   mithril_pickaxe: pickaxe('#8fd0f2', '#4f9cc8'),
+  wood_sword: sword('#d9a86a', '#b07b45'),
+  stone_sword: sword('#b8b5a8', '#7c796e'),
+  iron_sword: sword('#dfe3e8', '#9aa3ad'),
+  mithril_sword: sword('#8fd0f2', '#4f9cc8'),
   raw_meat: `<svg viewBox="0 0 32 32"><rect x="20" y="17" width="9" height="4" rx="2" transform="rotate(35 24 19)" fill="#efe6d2"/><path d="M5 15 Q6 6 15 6 Q24 7 23 15 Q22 24 13 25 Q4 24 5 15" fill="#d9566a"/><path d="M9 14 Q11 9 16 10" stroke="#f2a0ad" stroke-width="2" fill="none"/><circle cx="14" cy="17" r="2.5" fill="#f4e2c8"/></svg>`,
   cooked_meat: `<svg viewBox="0 0 32 32"><rect x="20" y="17" width="9" height="4" rx="2" transform="rotate(35 24 19)" fill="#efe6d2"/><path d="M5 15 Q6 6 15 6 Q24 7 23 15 Q22 24 13 25 Q4 24 5 15" fill="#9c5a2e"/><path d="M9 14 Q11 9 16 10" stroke="#c98a52" stroke-width="2" fill="none"/><path d="M9 20 L13 16 M13 22 L17 18 M16 17 L19 14" stroke="#6b3a1c" stroke-width="1.6" fill="none"/></svg>`,
   berry_infusion: `<svg viewBox="0 0 32 32"><path d="M21 14 H25 Q28 14 28 18 Q28 22 25 22 H20" fill="none" stroke="#bfb29a" stroke-width="2.5"/><path d="M6 11 H22 L20 27 Q19.5 28 18 28 H10 Q8.5 28 8 27 Z" fill="#d9cdb8"/><ellipse cx="14" cy="11.5" rx="8" ry="2.5" fill="#c2304a"/><path d="M11 7 Q9 5 11 3 M16 7 Q14 5 16 3" stroke="#e8e2d4" stroke-width="1.5" fill="none"/></svg>`,

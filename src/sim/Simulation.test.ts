@@ -211,6 +211,77 @@ describe('Simulation', () => {
     expect(herb.regrowLeft).toBe(0)
   })
 
+  it('la espada golpea más seguido que una herramienta', () => {
+    const swings = (item: 'wood_sword' | 'wood_axe') => {
+      const sim = solo(1)
+      sim.slot(0).inventory.add(item, 1)
+      let count = 0
+      for (let i = 0; i < 120; i++) count += step(sim, { buttons: Btn.Attack }).filter((e) => e.type === 'playerSwing').length
+      return count
+    }
+    expect(swings('wood_sword')).toBe(8)
+    expect(swings('wood_axe')).toBe(5)
+  })
+
+  describe('golpe en arco', () => {
+    /** Un jugador mirando a -Z (yaw 0) con `item`, con enemigos a (dx, dz) de él. */
+    function arc(item: 'iron_sword' | 'iron_axe' | null, spots: [number, number][]) {
+      const sim = solo(1)
+      const slot = sim.slot(0)
+      if (item) slot.inventory.add(item, 1)
+      const { x, z } = slot.player.pos
+      const enemies = spots.map(([dx, dz]) => sim.enemies.spawnAt(x + dx, z + dz))
+      return { sim, enemies, swing: () => step(sim, { actions: [{ kind: 'swing' }] }) }
+    }
+
+    it('la espada daña a todos los que tiene delante, aunque el golpe vaya al aire', () => {
+      const { enemies, swing } = arc('iron_sword', [[0, -2], [1.2, -2], [-1.2, -2]])
+      const events = swing()
+      for (const e of enemies) expect(e.hp).toBe(e.maxHp - 35)
+      expect(events.filter((e) => e.type === 'enemyHit')).toHaveLength(3)
+    })
+
+    it('hasta 4 enemigos, los más cercanos', () => {
+      const { enemies, swing } = arc('iron_sword', [[0, -3], [-0.5, -1.5], [0.5, -1.5], [-1, -2.2], [1, -2.2]])
+      swing()
+      expect(enemies.map((e) => e.hp < e.maxHp)).toEqual([false, true, true, true, true])
+    })
+
+    it('no alcanza a quien está detrás, de lado o demasiado lejos', () => {
+      const { enemies, swing } = arc('iron_sword', [[0, 2], [3, 0.5], [0, -6]])
+      swing()
+      for (const e of enemies) expect(e.hp).toBe(e.maxHp)
+    })
+
+    it('las herramientas y la mano solo golpean a lo que apuntan', () => {
+      for (const item of ['iron_axe', null] as const) {
+        const { enemies, swing } = arc(item, [[0.6, -2], [-0.6, -2]])
+        swing()
+        for (const e of enemies) expect(e.hp).toBe(e.maxHp)
+      }
+    })
+
+    it('nunca toca los props', () => {
+      const sim = solo(1)
+      sim.slot(0).inventory.add('iron_sword', 1)
+      const tree = firstTree(sim)
+      const look = aimAt(sim, tree)
+      const hp = tree.hp
+      sim.enemies.spawnAt(sim.slot(0).player.pos.x, sim.slot(0).player.pos.z + 40)
+      step(sim, { ...look, actions: [{ kind: 'swing' }] })
+      // Como a mano: un golpe de 1.
+      expect(tree.hp).toBe(hp - 1)
+    })
+
+    it('lo que mata suelta su botín', () => {
+      const { sim, enemies, swing } = arc('iron_sword', [[0, -2], [1, -2]])
+      for (const e of enemies) e.hp = 1
+      swing()
+      expect(enemies.every((e) => !e.alive)).toBe(true)
+      expect(sim.pickups.list.filter((p) => p.item === 'raw_meat')).toHaveLength(2)
+    })
+  })
+
   it('un enemigo que pega pausa la regeneración natural', () => {
     const sim = solo(1)
     const { player } = sim.slot(0)

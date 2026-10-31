@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { ACTION_DURATION, actionPose, itemModel, type HandAction, type HandPose } from '../game/handheld'
+import { ACTION_DURATION, actionPose, itemModel, swingDuration, type HandAction, type HandPose } from '../game/handheld'
 import { EYE_HEIGHT } from '../sim/constants'
 import type { PlayerId, SimEventData } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
@@ -37,6 +37,7 @@ interface Model {
   item: ItemId | null
   action: HandAction | null
   actionTime: number
+  actionLength: number
 }
 
 /**
@@ -60,6 +61,7 @@ export class RemotePlayerView {
       if (!model) continue
       model.action = action
       model.actionTime = 0
+      model.actionLength = e.type === 'playerSwing' ? swingDuration(e.item) : ACTION_DURATION[action]
     }
   }
 
@@ -95,7 +97,7 @@ export class RemotePlayerView {
     object.add(body, head, arm)
     object.traverse((o) => (o.castShadow = true))
     this.group.add(object)
-    const model: Model = { object, head, arm, material, held: null, item: null, action: null, actionTime: 0 }
+    const model: Model = { object, head, arm, material, held: null, item: null, action: null, actionTime: 0, actionLength: 0 }
     this.models.set(id, model)
     return model
   }
@@ -132,8 +134,8 @@ export class RemotePlayerView {
     pose.rx = pose.rz = pose.x = pose.y = pose.z = 0
     if (model.action) {
       model.actionTime += dt
-      if (model.actionTime >= ACTION_DURATION[model.action]) model.action = null
-      else actionPose(model.action, model.actionTime / ACTION_DURATION[model.action], pose)
+      if (model.actionTime >= model.actionLength) model.action = null
+      else actionPose(model.action, model.actionTime / model.actionLength, pose)
     }
     arm.rotation.set(pitch * 0.5 - 0.6 + pose.rx * 1.5, 0, pose.rz)
     arm.position.set(SHOULDER.x + pose.x, SHOULDER.y + pose.y, SHOULDER.z + pose.z)
