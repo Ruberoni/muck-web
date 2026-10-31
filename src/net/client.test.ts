@@ -5,6 +5,7 @@ import { EYE_HEIGHT, MAX_PITCH } from '../sim/constants'
 import { RECIPE_IDS } from '../sim/crafting'
 import { aimPose } from '../sim/interaction'
 import { mulberry32 } from '../sim/random'
+import type { Simulation } from '../sim/Simulation'
 import { heightAt } from '../sim/world/terrain'
 import { clientCraftWorld, CLIENT_STATION_RANGE, sendableActions } from '../ui/recipes'
 import { botMove, botStep, driveClient } from './bot'
@@ -392,6 +393,45 @@ describe('el espejo de NetClient', () => {
     expect(sim.projectiles.list).toEqual([])
     expect(client.sim!.projectiles.list).toEqual([])
     expect(late.sim!.projectiles.list).toEqual([])
+  })
+
+  it('el meteorito: el espejo lo sigue, choca con su roca y quien entra a mitad también lo ve', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const { pos } = sim.slot(client.id).player
+    const [x, z] = [pos.x + 12, pos.z]
+    sim.meteor(x, z)
+    run(time, 500, [[client, idle]])
+    const mirror = client.sim!
+    expect(mirror.worldEvents.meteor).toEqual(sim.worldEvents.meteor)
+    const blocked = (game: Simulation) => game.env.collide!({ x, y: 0, z })
+    expect(blocked(mirror)).toBe(false)
+
+    run(time, 6000, [[client, idle]])
+    expect(mirror.worldEvents.meteor).toMatchObject({ landed: true, coolDay: sim.clock.day })
+    // La predicción choca con la roca como el servidor.
+    expect(blocked(mirror)).toBe(true)
+
+    const { client: late } = connect('b')
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(late.sim!.worldEvents.meteor).toEqual(sim.worldEvents.meteor)
+    expect(blocked(late.sim!)).toBe(true)
+
+    sim.setDay(sim.clock.day + 1)
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(mirror.worldEvents.meteor).toBeNull()
+    expect(late.sim!.worldEvents.meteor).toBeNull()
+    expect(blocked(mirror)).toBe(false)
+
+    sim.meteor(x, z)
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(mirror.worldEvents.meteor).not.toBeNull()
+    sim.reset()
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(mirror.worldEvents.meteor).toBeNull()
+    expect(late.sim!.worldEvents.meteor).toBeNull()
   })
 
   it('cada Move lleva aim; con él se tala el árbol que se ve, y el espejo lo sabe', () => {

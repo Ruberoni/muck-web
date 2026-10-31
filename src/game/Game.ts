@@ -5,12 +5,14 @@ import { createScene, updateSky, type Sky } from '../scene'
 import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
+import { MeteorView } from '../view/MeteorView'
 import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
+import { compassName } from '../ui/minimap'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
@@ -24,6 +26,7 @@ import { clientCraftWorld, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
 import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
+import { CameraShake } from './shake'
 import { Input } from './input'
 import { stepActions, type InventoryFocus } from './actions'
 import { acceptsKeys, afterLockChange, inGame, showsCrosshair, type GameState } from './states'
@@ -87,6 +90,7 @@ export class Game {
   readonly enemyView = new EnemyView()
   readonly pickupView = new PickupView()
   readonly projectileView = new ProjectileView()
+  readonly meteorView = new MeteorView()
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView()
   readonly settings: Settings = loadSettings()
@@ -125,6 +129,7 @@ export class Game {
   private queued: ActionData[] = []
   private biomeNotice = new BiomeNotice()
   private bossWatch = new BossWatch()
+  private shake = new CameraShake()
   /** Las estaciones al fabricar, como las ve el cliente (con margen): para el filtro de envío y la pantalla. */
   private craftWorld = clientCraftWorld(() => this.sim.structures.list)
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
@@ -160,7 +165,7 @@ export class Game {
     this.water = water
     this.propView = this.buildPropView(null)
     this.structureView = new StructureView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.remotePlayers.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
@@ -562,6 +567,14 @@ export class Game {
           // En una sala el muerto pasa a espectador cuando lo dice su `you` (ver frame).
           if (e.id === slot.id && !this.net) this.die()
           break
+        case 'meteorIncoming':
+          this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
+          this.audio.meteorIncoming()
+          break
+        case 'meteorLanded':
+          this.shake.start(Math.hypot(e.x - this.renderPos.x, e.z - this.renderPos.z))
+          this.audio.meteorLanded(e.x, e.z, this.listener())
+          break
         case 'gameOver':
           this.gameOverDay = e.day
           break
@@ -714,6 +727,7 @@ export class Game {
     this.enemyView.reset()
     this.pickupView.reset()
     this.projectileView.reset()
+    this.meteorView.reset()
     this.structureView.reset()
     this.remotePlayers.reset()
     this.audio.reset()
@@ -759,9 +773,13 @@ export class Game {
     }
     if (watched) this.placeSpectatorCamera(watched.pose, dt)
     else this.placeCamera(this.renderPos)
+    const shake = this.shake.update(dt)
+    this.camera.position.x += shake.x
+    this.camera.position.y += shake.y
     this.enemyView.update(dt, enemies.list, alpha)
     this.pickupView.update(sim.pickups.list, alpha)
     this.projectileView.update(dt, sim.projectiles.list, alpha)
+    this.meteorView.update(dt, sim.worldEvents.meteor, net ? net.client.renderTick() : sim.tick)
     this.propView.update(dt)
     this.remotePlayers.update(dt, net ? net.client.shownPlayers : [])
 
@@ -776,7 +794,7 @@ export class Game {
     updateSky(this.sky, sim.clock.phase, this.shadowCenter)
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
-    const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, [sim.world.grid, structures.grid], this.spot) : null
+    const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot) : null
     this.structureView.setGhost(placing && spot && { kind: placing.kind, spot, yaw: look.yaw })
 
     this.hud.setHealth(p.health, HEALTH_MAX, p.regenLeft)
@@ -809,6 +827,7 @@ export class Game {
       yaw: look.yaw,
       structures: structures.list,
       enemies: enemies.list,
+      meteor: sim.worldEvents.meteor,
       players: net?.client.shownPlayers.map(({ id, pose, data }) => ({ x: pose.x, z: pose.z, yaw: pose.yaw, color: playerCss(id), alive: data.alive })),
     })
     if (net) this.renderNet(net)

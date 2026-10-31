@@ -262,6 +262,10 @@ export function installDebug(game: Game) {
     /** Lanza una roca desde (x, z) hacia el jugador. */
     throwRock: (x: number, z: number) => dev({ op: 'throwRock', x, z }, () => sim().throwRock(x, z, slot().id)),
     projectiles: () => sim().projectiles.list.map(({ id, kind, pos }) => ({ id, kind, x: pos.x, y: pos.y, z: pos.z })),
+    /** Hace caer un meteorito: en (x, z) o, sin ellos, donde toque. Con un jugador lo avanza `advance`. */
+    meteor: (x?: number, z?: number) => dev({ op: 'meteor', x, z }, () => sim().meteor(x, z)),
+    /** El meteorito que haya, cayendo o en el suelo. */
+    meteorState: () => sim().worldEvents.meteor,
     /** Con un jugador devuelve su id; en red aparece en el siguiente `snap`. */
     spawnEnemy: (x: number, z: number, enemy: EnemyType = 'goblin') => dev({ op: 'spawnEnemy', x, z, enemy }, () => sim().enemies.spawnAt(x, z, enemy).id),
     /** Gira la cámara hacia el enemigo sin mover al jugador; devuelve si queda apuntado (en red, en una promesa). */

@@ -233,6 +233,19 @@ describe('sonido de los demás', () => {
     expect(played[0].options!.pan).toBeGreaterThan(0.5)
   })
 
+  it('un meteorito silba en toda la isla, y su impacto llega de su lado, sin dejar de oírse de lejos', () => {
+    const { audio, played } = setup()
+    audio.meteorIncoming()
+    expect(played[0].name).toBe('meteorWhistle')
+    audio.meteorLanded(10, 0, listener)
+    audio.meteorLanded(500, 0, listener)
+    const [near, far] = played.slice(1)
+    expect([near.name, far.name]).toEqual(['meteorImpact', 'meteorImpact'])
+    expect(near.options!.pan).toBeGreaterThan(0.5)
+    expect(near.options!.gain).toBeGreaterThan(far.options!.gain!)
+    expect(far.options!.gain).toBeGreaterThan(0)
+  })
+
   it('el golpe de otro que no hace nada también suena a clank, en su sitio', () => {
     const { audio, played } = setup()
     audio.remote(

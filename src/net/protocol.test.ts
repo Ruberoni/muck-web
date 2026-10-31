@@ -152,6 +152,8 @@ describe('protocolo', () => {
     expect(dev({ op: 'setPhase', phase: 0.5 }).ok).toBe(true)
     expect(dev({ op: 'setDay', day: 6 })).toEqual({ ok: true, msg: { type: 'dev', op: 'setDay', day: 6 } })
     expect(dev({ op: 'throwRock', x: 1, z: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'throwRock', x: 1, z: 2 } })
+    expect(dev({ op: 'meteor' })).toEqual({ ok: true, msg: { type: 'dev', op: 'meteor' } })
+    expect(dev({ op: 'meteor', x: 1, z: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'meteor', x: 1, z: 2 } })
     const bad = [
       { op: 'give', item: 'diamante', amount: 1 },
       { op: 'give', item: 'wood', amount: 0 },
@@ -175,6 +177,8 @@ describe('protocolo', () => {
       { op: 'setDay', day: 2.5 },
       { op: 'setDay' },
       { op: 'throwRock', x: 1 },
+      { op: 'meteor', x: 1 },
+      { op: 'meteor', x: 'a', z: 1 },
       { op: 'fly' },
     ]
     for (const extra of bad) expect(dev(extra).ok, JSON.stringify(extra)).toBe(false)

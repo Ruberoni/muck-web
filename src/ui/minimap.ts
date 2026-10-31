@@ -20,6 +20,17 @@ export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; n
   anvil: { shape: 'square', near: '#7f9cc4', far: '#b3c6e2' },
 }
 
+/** Cómo se marca el meteorito: como las estructuras, de cerca y de lejos. */
+const METEOR_MARK = { near: '#ff7a1f', far: '#ffb347' }
+
+const COMPASS = ['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste']
+
+/** Hacia dónde queda (dx, dz) como en el minimapa: el norte es -Z y el este, +X. */
+export function compassName(dx: number, dz: number) {
+  const eighth = Math.round(Math.atan2(dx, -dz) / (Math.PI / 4))
+  return COMPASS[(eighth + 8) % 8]
+}
+
 /** Un compañero en el minimapa. */
 export interface MinimapPlayer {
   x: number
@@ -36,6 +47,8 @@ export interface MinimapView {
   yaw: number
   structures: readonly { kind: StructureKind; x: number; z: number }[]
   enemies: readonly { type: EnemyType; pos: { x: number; z: number } }[]
+  /** El meteorito que haya, cayendo o en el suelo. */
+  meteor: { x: number; z: number } | null
   /** Los demás jugadores (solo en red). */
   players?: readonly MinimapPlayer[]
 }
@@ -172,6 +185,14 @@ export class Minimap {
       else this.square(c + p.x * scale, c + p.y * scale, r)
     }
 
+    // El meteorito: lejos, como las estructuras, en el borde.
+    if (view.meteor) {
+      toMinimap(view.meteor.x - view.x, view.meteor.z - view.z, view.yaw, p)
+      const far = clampToRim(p, rim)
+      ctx.fillStyle = far ? METEOR_MARK.far : METEOR_MARK.near
+      this.diamond(c + p.x * scale, c + p.y * scale, far ? 5 : 6.5)
+    }
+
     // Compañeros: flechas de su color; los lejanos, en el borde apuntando hacia ellos.
     for (const other of view.players ?? []) {
       const mark = teammateMark(other.x - view.x, other.z - view.z, other.yaw, view.yaw, rim)
@@ -217,6 +238,21 @@ export class Minimap {
       ctx.stroke()
     }
     ctx.restore()
+  }
+
+  /** Un rombo de radio r (el meteorito), con el mismo borde que los puntos. */
+  private diamond(x: number, y: number, r: number) {
+    const { ctx } = this
+    ctx.beginPath()
+    ctx.moveTo(x, y - r)
+    ctx.lineTo(x + r, y)
+    ctx.lineTo(x, y + r)
+    ctx.lineTo(x - r, y)
+    ctx.closePath()
+    ctx.lineWidth = 1
+    ctx.strokeStyle = 'rgb(0 0 0 / 0.6)'
+    ctx.stroke()
+    ctx.fill()
   }
 
   /** Un cuadrado de lado 2r (las estaciones), con el mismo borde que los puntos. */

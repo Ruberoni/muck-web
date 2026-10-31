@@ -21,6 +21,9 @@ export type SoundName =
   | 'growl'
   /** Un jefe se agacha para embestir: se oye esté donde esté. */
   | 'roar'
+  /** Un meteorito que baja: suena `METEOR_WARNING` segundos, y se oye en toda la isla. */
+  | 'meteorWhistle'
+  | 'meteorImpact'
   | 'step'
   | 'stepWater'
   | 'jump'
@@ -399,6 +402,19 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
     Math.max(
       s.tone(70, 0.9, { type: 'sawtooth', to: 130, gain: 0.45, attack: 0.08, lowpass: 650, vibrato: { rate: 26, depth: 20 } }),
       s.noise(0.7, { filter: 'lowpass', freq: 380, gain: 0.3, attack: 0.1 }),
+    ),
+  // Baja de tono y crece hasta el impacto; cada tramo sigue donde acaba el anterior, porque la envolvente solo sube una vez.
+  meteorWhistle: (s) =>
+    Math.max(
+      s.tone(2600, 3.4, { to: 1300, gain: 0.05, attack: 1.4 }),
+      s.tone(1300, 3.1, { to: 320, gain: 0.12, attack: 2.8, delay: 2.9 }),
+      s.noise(3.2, { filter: 'lowpass', freq: 500, gain: 0.3, attack: 3, delay: 2.8 }),
+    ),
+  meteorImpact: (s) =>
+    Math.max(
+      s.tone(62, 1.7, { type: 'triangle', to: 26, gain: 0.9 }),
+      s.noise(1.3, { filter: 'lowpass', freq: 520, gain: 0.9, attack: 0.01 }),
+      s.noise(0.5, { filter: 'bandpass', freq: 1500, q: 0.7, gain: 0.5, delay: 0.05 }),
     ),
   step: (s) => s.noise(0.08, { filter: 'lowpass', freq: 450 + s.random() * 250, gain: 1, attack: 0.004 }),
   stepWater: (s) =>

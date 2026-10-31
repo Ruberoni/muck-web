@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampToRim, teammateMark, toMinimap } from './minimap'
+import { clampToRim, compassName, teammateMark, toMinimap } from './minimap'
 import { ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
 import { terrainColor } from '../world/ground'
 
@@ -25,6 +25,20 @@ describe('toMinimap', () => {
   it('con yaw 0 el norte (-Z) queda arriba y el este (+X) a la derecha', () => {
     expect(toMinimap(0, -5, 0)).toEqual({ x: 0, y: -5 })
     expect(toMinimap(5, 0, 0)).toEqual({ x: 5, y: 0 })
+  })
+})
+
+describe('compassName', () => {
+  it('nombra hacia dónde queda algo, como en el minimapa: el norte es -Z', () => {
+    const names = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]].map(([dx, dz]) => compassName(dx * 40, dz * 40))
+    expect(names).toEqual(['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste'])
+  })
+
+  it('redondea al más cercano, también a ambos lados del sur', () => {
+    expect(compassName(10, -40)).toBe('norte')
+    expect(compassName(30, -40)).toBe('noreste')
+    expect(compassName(-1, 40)).toBe('sur')
+    expect(compassName(1, 40)).toBe('sur')
   })
 })
 

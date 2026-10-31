@@ -650,7 +650,8 @@ describe('Room', () => {
     late.hello('join')
     time.advance(0)
     expect(late.msgs).toEqual([{ type: 'reject', reason: 'not-found' }])
-  })
+    // Simula 10 minutos de partida: con la máquina ocupada pasa de los 5 s por defecto.
+  }, 30_000)
 
   it('responde al ping sin contarlo como actividad', () => {
     const { room, time } = setup()
@@ -702,10 +703,12 @@ describe('Room', () => {
     expect(sim.clock.phase).toBeCloseTo(0.8, 3)
     a.send({ type: 'dev', op: 'setDay', day: 3 })
     a.send({ type: 'dev', op: 'throwRock', x: x + 6, z })
+    a.send({ type: 'dev', op: 'meteor', x: x + 30, z })
     time.advance(0)
     expect(sim.clock.day).toBe(3)
     expect(sim.clock.phase).toBeCloseTo(0.8, 3)
     expect(sim.projectiles.list).toHaveLength(1)
+    expect(sim.worldEvents.meteor).toMatchObject({ x: x + 30, z })
     expect(sim.enemies.list).toHaveLength(1)
     play(time, LOOP_MS * 2, [[a]])
     const types = a.events.map((e) => e.type)

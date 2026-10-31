@@ -517,6 +517,7 @@ export class NetClient {
     for (const { id, hp, alive, regrowLeft } of state.props) Object.assign(sim.world.props[id], { hp, alive, regrowLeft })
     sim.structures.load(state.structures)
     sim.projectiles.load(state.projectiles)
+    sim.worldEvents.load(state.worldEvents)
     this.worldStartTick = state.worldStartTick
     this.pickups.clear()
     for (const p of state.pickups.list) {
@@ -558,6 +559,18 @@ export class NetClient {
       case 'projectileHit':
         sim.projectiles.remove(e.id)
         break
+      case 'meteorIncoming':
+        sim.worldEvents.add(e)
+        break
+      case 'meteorLanded':
+        sim.worldEvents.settle()
+        break
+      case 'meteorCooled':
+        sim.worldEvents.setCooled(e.day)
+        break
+      case 'meteorGone':
+        sim.worldEvents.remove()
+        break
       case 'clockSet':
         this.worldStartTick = e.worldStartTick
         break
@@ -565,6 +578,7 @@ export class NetClient {
         for (const prop of sim.world.props) resetProp(prop)
         sim.structures.clear()
         sim.projectiles.clear()
+        sim.worldEvents.reset()
         this.pickups.clear()
         this.worldStartTick = e.worldStartTick
         break

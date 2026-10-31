@@ -375,6 +375,20 @@ export const BOSS_SPAWN_MIN = 30
 export const BOSS_SPAWN_MAX = 40
 /** Velocidad horizontal de las rocas que se lanzan. */
 export const ROCK_SPEED = 14
+/** Meteoritos: desde este día, uno al día a una hora al azar entre estas dos fases. */
+export const METEOR_FROM_DAY = 2
+export const METEOR_PHASE_MIN = 0.15
+export const METEOR_PHASE_MAX = 0.4
+/** Segundos desde que se anuncia hasta que cae. */
+export const METEOR_WARNING = 6
+/** A cuántos metros de un jugador vivo cae. */
+export const METEOR_SPAWN_MIN = 40
+export const METEOR_SPAWN_MAX = 70
+/** Radio de la roca: bloquea el paso. */
+export const METEOR_RADIUS = 1.6
+/** Quien esté a menos de METEOR_BLAST metros al caer recibe este daño; también es el radio libre de props. */
+export const METEOR_DAMAGE = 20
+export const METEOR_BLAST = 4
 /** Vida y botín de un jefe: un 50 % más por cada jugador a partir del segundo. */
 export const BOSS_PER_PLAYER = 0.5
 export const ENEMY_SPAWN_MIN = 26

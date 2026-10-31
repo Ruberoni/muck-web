@@ -371,7 +371,7 @@ export class Room {
       case 'placeStructure': {
         const { pos, yaw } = slot.player
         const from = msg.x !== undefined && msg.z !== undefined ? { x: msg.x, z: msg.z } : pos
-        const spot = structureSpot(from, msg.yaw ?? yaw, STRUCTURE_DEFS[msg.kind].radius, [sim.world.grid, sim.structures.grid])
+        const spot = structureSpot(from, msg.yaw ?? yaw, STRUCTURE_DEFS[msg.kind].radius, sim.obstacles)
         sim.structures.place(spot, msg.kind, seat.id, msg.yaw ?? yaw)
         break
       }
@@ -383,6 +383,9 @@ export class Room {
         break
       case 'throwRock':
         sim.throwRock(msg.x, msg.z, seat.id)
+        break
+      case 'meteor':
+        sim.meteor(msg.x, msg.z)
         break
     }
   }
@@ -616,12 +619,12 @@ export class Room {
 
   private worldState(me: PlayerId): WorldState {
     const sim = this.sim!
-    const { tick, worldStartTick, props, enemies, pickups, projectiles, structures } = sim.toJSON()
+    const { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents } = sim.toJSON()
     const names = new Map([...this.seats.values()].map((s) => [s.id, s.name]))
     const players = this.playerSnaps()
       .filter((p) => p.id !== me)
       .map((p) => ({ ...p, name: names.get(p.id) ?? '' }))
-    return { tick, worldStartTick, props, enemies, pickups, projectiles, structures, players }
+    return { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents, players }
   }
 
   private fullState(seat: Seat) {

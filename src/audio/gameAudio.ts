@@ -32,6 +32,10 @@ const ROCK_HIT_GAIN = 0.4
 /** Una roca suena al chocar con el mundo; al dar a un jugador ya suena su daño. */
 const rockLands = (end: ProjectileEnd) => end === 'ground' || end === 'obstacle'
 
+/** El impacto de un meteorito se oye en toda la isla: de lejos, más bajo pero nunca menos que esto. */
+const METEOR_HEARING = 180
+const METEOR_MIN_GAIN = 0.3
+
 /** Quién escucha: la cámara del jugador local. */
 export interface Listener {
   x: number
@@ -173,6 +177,17 @@ export class GameAudio {
           break
       }
     }
+  }
+
+  /** Un meteorito se anuncia: el silbido viene de todas partes. */
+  meteorIncoming() {
+    this.sound.play('meteorWhistle')
+  }
+
+  /** Cae en (x, z), y de ahí viene el golpe. */
+  meteorLanded(x: number, z: number, listener: Listener) {
+    const { gain, pan } = spatialize(x - listener.x, z - listener.z, listener.yaw, METEOR_HEARING)
+    this.sound.play('meteorImpact', { gain: Math.max(gain, METEOR_MIN_GAIN), pan })
   }
 
   /**

@@ -49,6 +49,11 @@ export type SimEventData =
   | { type: 'gameOver'; day: number }
   /** Durante la cuenta atrás del game over ha entrado o vuelto alguien vivo: la isla no se reinicia. */
   | { type: 'gameOverCancelled' }
+  /** Un meteorito: se anuncia (`landTick`: cuándo cae), cae, se enfría y desaparece. Ver `WorldEvents`. */
+  | { type: 'meteorIncoming'; x: number; y: number; z: number; landTick: number }
+  | { type: 'meteorLanded'; x: number; y: number; z: number }
+  | { type: 'meteorCooled'; day: number }
+  | { type: 'meteorGone' }
   | { type: 'clockSet'; worldStartTick: number }
   | { type: 'worldReset'; worldStartTick: number }
 

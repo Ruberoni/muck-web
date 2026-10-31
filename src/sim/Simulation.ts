@@ -1,5 +1,5 @@
 import type { PlayerCommands } from './commands'
-import { resolveCircle } from './collision'
+import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
 import { DEATH_DROP_HEIGHT, ENEMY_DEFS, EYE_HEIGHT, GAME_OVER_DELAY, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
@@ -16,6 +16,7 @@ import { placeableOf, stationNear, Structures, structureSpot, type StructuresSta
 import { hurt, isDead } from './survival'
 import { DAY_LENGTH, DayClock, euclideanModulo, isNight, START_PHASE } from './world/daycycle'
 import { heightAt } from './world/terrain'
+import { WorldEvents, type WorldEventsState } from './worldEvents'
 
 /** Los jugadores que no son el primero aparecen en un anillo a esta distancia del punto de aparición. */
 const SPAWN_RING = 2.5
@@ -69,6 +70,7 @@ export interface SimState {
   pickups: PickupsState
   projectiles: ProjectilesState
   structures: StructuresState
+  worldEvents: WorldEventsState
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
   nextPlayerId: number
@@ -97,6 +99,9 @@ export class Simulation {
   readonly enemies: Enemies
   readonly pickups: Pickups
   readonly projectiles: Projectiles
+  readonly worldEvents: WorldEvents
+  /** Lo que ocupa sitio en la isla: props, estructuras y la roca del meteorito. */
+  readonly obstacles: SpatialGrid<Collider>[]
   readonly interaction: Interaction
   /** Todos los jugadores con hueco en la isla, también los `gone`. Se añaden con `addPlayer`. */
   readonly players = new Map<PlayerId, PlayerSlot>()
@@ -126,16 +131,15 @@ export class Simulation {
     this.world = world
     const { emit } = this.events
     this.structures = new Structures(emit)
-    this.enemies = new Enemies([world.grid, this.structures.grid], this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage))
-    this.pickups = new Pickups([world.grid, this.structures.grid], this.rng, emit)
-    this.projectiles = new Projectiles([world.grid, this.structures.grid], emit)
+    this.worldEvents = new WorldEvents([world.grid, this.structures.grid], this.rng, emit)
+    this.obstacles = [world.grid, this.structures.grid, this.worldEvents.grid]
+    this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage))
+    this.pickups = new Pickups(this.obstacles, this.rng, emit)
+    this.projectiles = new Projectiles(this.obstacles, emit)
     this.interaction = new Interaction(world, this.pickups, this.enemies, emit)
     this.env = {
       heightAt,
-      collide: (pos) => {
-        const props = resolveCircle(pos, PLAYER_RADIUS, world.grid)
-        return resolveCircle(pos, PLAYER_RADIUS, this.structures.grid) || props
-      },
+      collide: (pos) => this.obstacles.reduce((touched, grid) => resolveCircle(pos, PLAYER_RADIUS, grid) || touched, false),
     }
     this.spawnCenter = findSpawn(world.grid)
   }
@@ -227,6 +231,7 @@ export class Simulation {
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
     const hits = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
+    hits.push(...this.worldEvents.step(this.tick, prey, this.clock.phase, this.clock.day))
     for (const { playerId, damage } of hits) {
       hurt(this.slot(playerId).player, damage)
       this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
@@ -284,6 +289,7 @@ export class Simulation {
     this.pickups.clear()
     this.projectiles.clear()
     this.structures.clear()
+    this.worldEvents.reset()
     for (const slot of this.players.values()) {
       slot.inventory.clear()
       Object.assign(slot.combat, createCombat())
@@ -328,6 +334,12 @@ export class Simulation {
     this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, ROCK_SPEED), damage)
   }
 
+  /** Hace caer un meteorito ya (para probarlo): en (x, z) o, sin ellos, donde toque. */
+  meteor(x?: number, z?: number) {
+    const spot = x !== undefined && z !== undefined ? { x, z } : this.worldEvents.findSpot(this.inWorld().map(({ id, player, alive }) => ({ id, pos: player.pos, alive })))
+    if (spot) this.worldEvents.fall(this.tick, spot.x, spot.z)
+  }
+
   teleport(id: PlayerId, x: number, z: number, yaw: number, pitch: number) {
     const { player } = this.slot(id)
     teleportPlayer(player, this.env, x, z, yaw)
@@ -347,6 +359,7 @@ export class Simulation {
       pickups: this.pickups.save(),
       projectiles: this.projectiles.save(),
       structures: this.structures.save(),
+      worldEvents: this.worldEvents.save(),
       players: [...this.players.values()]
         .sort((a, b) => a.id - b.id)
         .map((slot) => ({
@@ -384,6 +397,7 @@ export class Simulation {
     this.pickups.load(state.pickups)
     this.projectiles.load(state.projectiles)
     this.structures.load(state.structures)
+    this.worldEvents.load(state.worldEvents)
     this.players.clear()
     for (const saved of state.players) {
       const slot = this.addPlayer(saved.id)
@@ -445,7 +459,7 @@ export class Simulation {
     const item = slot.inventory.selectedItem
     const def = placeableOf(item)
     if (!item || !def) return
-    const spot = structureSpot(slot.player.pos, slot.player.yaw, def.radius, [this.world.grid, this.structures.grid], this.spot)
+    const spot = structureSpot(slot.player.pos, slot.player.yaw, def.radius, this.obstacles, this.spot)
     if (!this.structures.place(spot, def.kind, slot.id, slot.player.yaw)) return
     this.events.emit({ type: 'playerPlaced', id: slot.id, item })
     slot.inventory.remove(item, 1)
