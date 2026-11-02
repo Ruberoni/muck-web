@@ -1,5 +1,6 @@
 import type { Game } from '../game/Game'
 import { inGame } from '../game/states'
+import { DIFFICULTIES, DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
 import { failureMessage, NetError, NetSession } from '../net/netSession'
 import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
 import { onVersionReject, reloadFor } from '../net/reload'
@@ -60,11 +61,24 @@ const div = (parent: HTMLElement, className: string) => {
   return d
 }
 
+/** Un desplegable de dificultad con su etiqueta. */
+function difficultyField(parent: HTMLElement) {
+  const row = document.createElement('label')
+  row.className = 'field'
+  row.append('Dificultad')
+  const select = document.createElement('select')
+  for (const difficulty of DIFFICULTIES) select.add(new Option(DIFFICULTY_DEFS[difficulty].name, difficulty, false, difficulty === 'normal'))
+  row.appendChild(select)
+  parent.appendChild(row)
+  return { row, select, value: () => select.value as Difficulty }
+}
+
 /**
  * El lobby, dentro del panel del menú y la pausa (§8 del plan). Fuera de una sala: nombre (guardado como
  * `muck-web:name`), "Jugar solo", "Crear partida" y "Unirse" con un código; con `?room=` en la URL, el botón
- * principal es "Unirse a K7QX2". Dentro de una sala: su código, copiar el enlace y salir. Los clics no llegan al
- * overlay (que solo reanuda) y las teclas no llegan al juego.
+ * principal es "Unirse a K7QX2". Dentro de una sala: su código, copiar el enlace, salir y, en la sala de espera, quién
+ * está y, para el anfitrión, la dificultad y empezar. En partida, en la pausa: rendirse. Los clics no llegan al overlay
+ * (que solo reanuda) y las teclas no llegan al juego.
  */
 export function installLobby(game: Game) {
   const root = document.createElement('div')
@@ -88,6 +102,7 @@ export function installLobby(game: Game) {
   nameRow.appendChild(nameInput)
   offline.appendChild(nameRow)
 
+  const soloDifficulty = difficultyField(offline)
   const actions = div(offline, 'buttons')
   const joinUrl = button(actions, '', 'primary')
   const solo = button(actions, 'Jugar solo')
@@ -108,9 +123,23 @@ export function installLobby(game: Game) {
   roomLine.append('Sala ')
   const roomCode = document.createElement('code')
   roomLine.appendChild(roomCode)
+  const waitingRoom = div(online, 'lobby-room')
+  const playerList = document.createElement('ul')
+  playerList.className = 'players'
+  waitingRoom.appendChild(playerList)
+  const roomDifficulty = difficultyField(waitingRoom)
+  const startButton = button(waitingRoom, 'Empezar partida', 'primary')
+  const waitingHost = div(waitingRoom, 'waiting')
+  waitingHost.textContent = 'Esperando a que el anfitrión empiece la partida…'
   const onlineButtons = div(online, 'buttons')
   const copy = button(onlineButtons, 'Copiar enlace')
   const leave = button(onlineButtons, 'Salir de la sala')
+
+  // --- En partida ---
+  const inMatch = div(root, 'buttons')
+  const surrender = button(inMatch, 'Rendirse')
+  /** Ya se ha votado en esta partida. */
+  let voted = false
 
   const status = document.createElement('p')
   status.className = 'status'
@@ -131,10 +160,26 @@ export function installLobby(game: Game) {
   function update() {
     const net = game.net
     const inRoom = net !== null
-    // Solo en el menú se elige cómo jugar; en la pausa de un jugador solo están los ajustes.
-    root.hidden = !inRoom && game.state !== 'menu'
-    offline.hidden = inRoom
+    const match = net?.client.match ?? null
+    const paused = game.state === 'paused'
+    // Solo en el menú se elige cómo jugar; en la pausa de un jugador, rendirse y los ajustes.
+    root.hidden = !inRoom && game.state !== 'menu' && !paused
+    offline.hidden = inRoom || game.state !== 'menu'
     online.hidden = !inRoom
+    const lobby = match?.phase === 'lobby'
+    waitingRoom.hidden = !lobby
+    if (lobby) {
+      voted = false
+      const isHost = match.host === net!.me
+      playerList.replaceChildren(
+        ...match.players.map(({ id, name: who }) => Object.assign(document.createElement('li'), { textContent: id === match.host ? `${who} (anfitrión)` : who })),
+      )
+      roomDifficulty.row.hidden = startButton.hidden = !isHost
+      waitingHost.hidden = isHost
+    }
+    inMatch.hidden = !paused || (inRoom && match?.phase !== 'playing')
+    surrender.disabled = voted
+    surrender.textContent = !inRoom ? 'Rendirse' : voted ? `Has votado rendirse (${match?.votes ?? 0}/${match?.players.length ?? 0})` : `Votar rendirse (${match?.votes ?? 0}/${match?.players.length ?? 0})`
     const fromUrl = urlRoom()
     joinUrl.hidden = !fromUrl
     joinUrl.textContent = fromUrl ? `Unirse a ${fromUrl} como ${name()}` : ''
@@ -174,9 +219,11 @@ export function installLobby(game: Game) {
       oldServerSince = null
       game.setSession(session)
       setRoomInUrl(session.room)
+      session.client.onmatch = update
       busy = false
       update()
-      await game.play()
+      // En la sala de espera se está en el menú hasta que empiece la partida.
+      if (session.client.match?.phase === 'playing') await game.play()
     } catch (e) {
       busy = false
       if (!waitForVersion(e, open, room)) error = await failureMessage(e, room)
@@ -238,7 +285,17 @@ export function installLobby(game: Game) {
     error = ''
     setRoomInUrl(null)
     update()
+    void game.playSolo(soloDifficulty.value())
+  })
+  startButton.addEventListener('click', () => {
+    game.net?.client.start(roomDifficulty.value())
+    // El clic es el gesto que permite capturar el ratón: a los demás les toca el suyo.
     void game.play()
+  })
+  surrender.addEventListener('click', () => {
+    voted = game.net !== null
+    game.surrender()
+    update()
   })
   create.addEventListener('click', () => void enter(() => NetSession.create(name()), ''))
   joinUrl.addEventListener('click', () => {

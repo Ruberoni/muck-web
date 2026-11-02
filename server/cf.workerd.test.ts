@@ -149,12 +149,16 @@ describe('Durable Object', () => {
     const welcome = await ana.next('welcome')
     expect(welcome.id).toBe(0)
     expect(welcome.placements.length).toBeGreaterThan(200)
-    await ana.next('snap')
 
     const bea = await Client.open(code)
     bea.hello('join', { name: 'Bea', tab: 'b' })
     expect((await bea.next('welcome')).id).toBe(1)
     await ana.until(() => ana.last('join')?.name === 'Bea', 'join')
+
+    // La partida la empieza el anfitrión.
+    ana.send({ type: 'start', difficulty: 'normal' })
+    await bea.until(() => bea.last('match')?.match.phase === 'playing', 'partida')
+    await ana.next('snap')
 
     ana.send('ping')
     await ana.until(() => ana.raw.includes('pong'), 'pong')
@@ -178,6 +182,7 @@ describe('Durable Object', () => {
     const ana = await Client.open(code)
     ana.hello('create')
     const { token } = await ana.next('welcome')
+    ana.send({ type: 'start', difficulty: 'normal' })
     const snap = await ana.next('snap')
     ana.cmds(snap.tick + 5)
     await sleep(200)
@@ -202,6 +207,7 @@ describe('Durable Object', () => {
     const ana = await Client.open(code)
     ana.hello('create')
     await ana.next('welcome')
+    ana.send({ type: 'start', difficulty: 'normal' })
     await ana.next('snap')
     // Sin cmds pasa a ausente, el bucle se para y la isla se guarda: la DO ya puede hibernar.
     await sleep(ABSENT_MS + 300)

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PlayerCommands } from './commands'
 import { GAME_OVER_DELAY, HEALTH_MAX, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, STEP } from './constants'
 import type { PlayerId, SimEvent } from './events'
+import { DIFFICULTIES, DIFFICULTY_DEFS, type Difficulty } from './match'
 import { generatePropPlacements } from './props'
 import { Simulation } from './Simulation'
 import { DAY_FRACTION, DAY_LENGTH } from './world/daycycle'
@@ -11,10 +12,10 @@ const NIGHT = DAY_FRACTION + 0.05
 const DAY_TICKS = Math.round(RESPAWN_DAY_DELAY / STEP)
 const GAME_OVER_TICKS = Math.round(GAME_OVER_DELAY / STEP)
 
-/** Una sala (o, con `coop` false, una partida de un jugador) con `n` jugadores. */
-function withPlayers(n: number, coop = true) {
+/** Una partida de `n` jugadores. */
+function withPlayers(n: number, difficulty: Difficulty = 'normal') {
   const sim = new Simulation(3, placements)
-  sim.coop = coop
+  sim.rules = { players: n, difficulty }
   for (let i = 0; i < n; i++) sim.addPlayer()
   return sim
 }
@@ -135,7 +136,7 @@ describe('muerte en una sala', () => {
     expect(sim.tick).toBeGreaterThan(died + DAY_TICKS)
   })
 
-  it('con todos muertos, game over y a los pocos segundos la isla se reinicia', () => {
+  it('con todos muertos, game over y a los pocos segundos acaba la partida; empezar otra restaura la isla', () => {
     const sim = withPlayers(2)
     sim.slot(0).inventory.add('wood', 2)
     kill(sim, 0)
@@ -145,13 +146,18 @@ describe('muerte en una sala', () => {
     expect(over).toMatchObject({ day: 1 })
 
     // Mientras dura, nadie reaparece aunque le toque.
-    const reset = until(sim, 'worldReset', GAME_OVER_TICKS + 1)
+    const ended = until(sim, 'matchEnded', GAME_OVER_TICKS + 1)
     expect(sim.tick).toBe(over!.tick + GAME_OVER_TICKS)
-    expect(reset[0]).toMatchObject({ type: 'worldReset', worldStartTick: sim.tick })
-    expect(reset.some((e) => e.type === 'playerRespawn')).toBe(false)
-    expect(sim.inWorld().map((s) => [s.alive, s.respawnAt])).toEqual([[true, null], [true, null]])
+    expect(ended[0]).toMatchObject({ type: 'matchEnded', result: { end: 'lost', day: 1, players: [{ id: 0, deaths: 1 }, { id: 1, deaths: 1 }] } })
+    expect(ended.some((e) => e.type === 'playerRespawn')).toBe(false)
+
+    sim.startMatch({ players: 2, difficulty: 'hard' })
+    expect(idle(sim)[0]).toMatchObject({ type: 'worldReset' })
+    expect(sim.inWorld().map((s) => [s.alive, s.respawnAt, s.deaths])).toEqual([[true, null, 0], [true, null, 0]])
     expect(sim.pickups.list).toHaveLength(0)
     expect(sim.clock.day).toBe(1)
+    expect(sim.result).toBeNull()
+    expect(sim.rules.difficulty).toBe('hard')
   })
 
   it('los que no están en el mundo no cuentan: si el único vivo se va, game over', () => {
@@ -172,9 +178,9 @@ describe('muerte en una sala', () => {
     sim.setConnection(1, 'present')
     const events = idle(sim)
     expect(events.map((e) => e.type)).toContain('gameOverCancelled')
-    // El muerto sigue esperando su reaparición y la isla no se reinicia.
+    // El muerto sigue esperando su reaparición y la partida no acaba.
     const respawn = until(sim, 'playerRespawn', DAY_TICKS + 1)
-    expect(respawn.some((e) => e.type === 'worldReset')).toBe(false)
+    expect(respawn.some((e) => e.type === 'matchEnded')).toBe(false)
     expect(sim.slot(0).alive).toBe(true)
 
     // Un jugador nuevo también lo cancela.
@@ -182,7 +188,7 @@ describe('muerte en una sala', () => {
     kill(sim, 1)
     sim.addPlayer()
     expect(idle(sim).map((e) => e.type)).toContain('gameOverCancelled')
-    for (let i = 0; i < GAME_OVER_TICKS + 1; i++) expect(idle(sim).some((e) => e.type === 'worldReset')).toBe(false)
+    for (let i = 0; i < GAME_OVER_TICKS + 1; i++) expect(idle(sim).some((e) => e.type === 'matchEnded')).toBe(false)
   })
 
   it('respawnAt y el game over pendiente sobreviven a toJSON/fromJSON', () => {
@@ -190,21 +196,49 @@ describe('muerte en una sala', () => {
     kill(sim, 0)
     kill(sim, 1)
     const copy = Simulation.fromJSON(JSON.parse(JSON.stringify(sim.toJSON())), placements)
-    copy.coop = true
     expect(copy.slot(0).respawnAt).toBe(sim.slot(0).respawnAt)
     for (let i = 0; i < GAME_OVER_TICKS; i++) expect(JSON.stringify(idle(copy))).toBe(JSON.stringify(idle(sim)))
     expect(copy.toJSON()).toEqual(sim.toJSON())
   })
 })
 
-describe('muerte con un jugador', () => {
-  it('como siempre: se queda muerto con su inventario y sin game over (el cliente reinicia la isla)', () => {
-    const sim = withPlayers(1, false)
+describe('partida en solitario', () => {
+  it('3 vidas en fácil, 2 en normal y 1 en difícil o ultrahard', () => {
+    expect(DIFFICULTIES.map((d) => DIFFICULTY_DEFS[d].lives)).toEqual([3, 2, 1, 1])
+  })
+
+  it('con vidas de sobra suelta el inventario y reaparece', () => {
+    const sim = withPlayers(1, 'easy')
     sim.slot(0).inventory.add('wood', 4)
-    const events = kill(sim, 0)
-    expect(events.map((e) => e.type)).toEqual(['playerDied'])
-    for (let i = 0; i < DAY_TICKS + GAME_OVER_TICKS; i++) expect(idle(sim)).toEqual([])
-    expect(sim.slot(0)).toMatchObject({ alive: false, respawnAt: null })
-    expect(sim.slot(0).inventory.toJSON()).toEqual({ wood: 4 })
+    expect(kill(sim, 0).map((e) => e.type)).toContain('playerDied')
+    expect(sim.slot(0).inventory.toJSON()).toEqual({})
+    expect(sim.pickups.list.map((p) => [p.item, p.amount])).toEqual([['wood', 4]])
+    const events = until(sim, 'playerRespawn', DAY_TICKS + 1)
+    expect(events.some((e) => e.type === 'gameOver')).toBe(false)
+    expect(sim.slot(0)).toMatchObject({ alive: true, deaths: 1 })
+  })
+
+  it('al gastar la última se acaba la partida, sin reaparecer', () => {
+    const sim = withPlayers(1, 'normal')
+    kill(sim, 0)
+    until(sim, 'playerRespawn', DAY_TICKS + 1)
+    expect(kill(sim, 0).some((e) => e.type === 'gameOver')).toBe(true)
+    const ended = until(sim, 'matchEnded', GAME_OVER_TICKS + 1)
+    expect(ended.find((e) => e.type === 'matchEnded')).toMatchObject({ result: { end: 'lost', players: [{ id: 0, deaths: 2 }] } })
+    expect(ended.some((e) => e.type === 'playerRespawn')).toBe(false)
+    expect(sim.slot(0).alive).toBe(false)
+  })
+
+  it('en difícil la primera muerte acaba la partida', () => {
+    const sim = withPlayers(1, 'hard')
+    expect(kill(sim, 0).some((e) => e.type === 'gameOver')).toBe(true)
+  })
+
+  it('rendirse acaba la partida una vez', () => {
+    const sim = withPlayers(1)
+    sim.finish('surrendered')
+    sim.finish('lost')
+    expect(idle(sim).filter((e) => e.type === 'matchEnded')).toMatchObject([{ result: { end: 'surrendered' } }])
+    expect(sim.result?.end).toBe('surrendered')
   })
 })

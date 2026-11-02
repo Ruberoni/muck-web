@@ -7,7 +7,7 @@ import { generatePropPlacements, type PropKind } from './props'
 import { attackDamage, swingCooldown } from './tiers'
 
 /** Jugadores de una sala llena (MAX_PLAYERS en src/net/protocol.ts, que src/sim no importa). */
-const MAX_PLAYERS = 8
+const MAX_PLAYERS = 5
 
 /** Lo que fabrica cada jugador para llegar al final: todas las herramientas y espadas y una fogata. */
 const PER_PLAYER: readonly RecipeId[] = [
@@ -54,10 +54,10 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     const need: Amounts = {}
     for (const r of PER_PLAYER) rawCost(r, need, MAX_PLAYERS)
     for (const r of SHARED) rawCost(r, need)
-    expect(need).toEqual({ wood: 458, stone: 138, iron_ore: 76, birch_wood: 48, mithril_ore: 64, dark_wood: 48 })
+    expect(need).toEqual({ wood: 293, stone: 93, iron_ore: 49, birch_wood: 30, mithril_ore: 40, dark_wood: 30 })
     const have = supply()
     expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 80, dark_wood: 80 })
-    // Lo más justo es el mithril: sobra un cuarto (16 lingotes), por si alguien se hace más de un juego.
+    // Sobra de todo: el faro, el tótem y el avión también tiran de lo mismo.
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })
 

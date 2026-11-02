@@ -4,6 +4,7 @@ import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType } from '../sim/constant
 import { NO_CHARGE, type EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
+import type { Difficulty } from '../sim/match'
 import type { Pickup } from '../sim/pickups'
 import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
@@ -26,6 +27,7 @@ import {
   type DevOp,
   type EnemySnap,
   type Hello,
+  type MatchInfo,
   type MoveMsg,
   type PickupSnap,
   type PlayerSnap,
@@ -102,6 +104,7 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
     case 'worldReset':
     case 'gameOver':
     case 'gameOverCancelled':
+    case 'matchEnded':
       return true
     default:
       return false
@@ -172,6 +175,8 @@ export class NetClient {
   closeCode: number | null = null
   sim: Simulation | null = null
   predictor: Predictor | null = null
+  /** Por dónde va la sala: lobby o partida, con quién y cómo acabó la última. */
+  match: MatchInfo | null = null
   readonly clock = new TickClock()
   readonly players = new Interpolator<RemotePlayer>()
   readonly enemies = new Interpolator<RemoteEnemy>()
@@ -192,6 +197,8 @@ export class NetClient {
   lastEcho = -Infinity
   /** Tras `welcome`, `reject` o el cierre. */
   onchange: (() => void) | null = null
+  /** Al cambiar `match`. */
+  onmatch: (() => void) | null = null
   private ackTick = 0
   private ackSeq = 0
   private lastSentAt = -Infinity
@@ -224,6 +231,16 @@ export class NetClient {
   connect() {
     const { intent, room, name, token, tab } = this.hello
     this.send({ type: 'hello', v: PROTOCOL_VERSION, t: this.time.now(), intent, room, name, tab, ...(token ? { token } : {}) })
+  }
+
+  /** Empieza la partida (solo vale del anfitrión). */
+  start(difficulty: Difficulty) {
+    this.send({ type: 'start', difficulty })
+  }
+
+  /** Vota rendirse, o retira el voto. */
+  surrender(yes: boolean) {
+    this.send({ type: 'surrender', yes })
   }
 
   /** Predice y envía con normalidad. */
@@ -367,7 +384,9 @@ export class NetClient {
         this.token = msg.token
         const sim = new Simulation(0, msg.placements)
         const slot = sim.addPlayer(msg.id)
+        sim.rules = msg.match.rules
         this.sim = sim
+        this.match = msg.match
         this.applyWorld(msg.state)
         this.predictor = new Predictor(slot, {
           env: sim.env,
@@ -429,6 +448,11 @@ export class NetClient {
         break
       case 'chat':
         this.notices.push({ type: 'chat', id: msg.id, name: msg.name, text: msg.text })
+        break
+      case 'match':
+        this.match = msg.match
+        if (this.sim) this.sim.rules = msg.match.rules
+        this.onmatch?.()
         break
     }
   }

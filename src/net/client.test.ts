@@ -18,10 +18,10 @@ const CODE = 'K7QX2'
 const FRAME_MS = 16
 
 /** Sala con reloj manual y un cliente en red con 100 ms ± 30 de latencia en cada sentido. */
-function setup() {
+function setup(quickStart = true) {
   const time = new ManualTime(1_000_000)
   let tokens = 0
-  const room = new Room(CODE, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev: true })
+  const room = new Room(CODE, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev: true, quickStart })
   let seeds = 0
   const connect = (tab: string, intent: 'create' | 'join' = 'join', lag: Lag = { latency: 100, jitter: 30, rng: mulberry32(++seeds) }, token?: string) => {
     const transport = new LaggyTransport(room, time, lag)
@@ -393,6 +393,31 @@ describe('el espejo de NetClient', () => {
     expect(sim.projectiles.list).toEqual([])
     expect(client.sim!.projectiles.list).toEqual([])
     expect(late.sim!.projectiles.list).toEqual([])
+  })
+
+  it('el lobby: se espera sin predecir, y al empezar el espejo recibe las reglas', () => {
+    const { room, time, connect } = setup(false)
+    const { client: a } = connect('a', 'create')
+    const { client: b } = connect('b')
+    time.advance(500)
+    expect(a.match).toMatchObject({ phase: 'lobby', host: a.id })
+    expect(a.match!.players.map((p) => p.name)).toEqual(['a', 'b'])
+
+    let changes = 0
+    b.onmatch = () => changes++
+    a.start('hard')
+    time.advance(500)
+    expect(b.match).toMatchObject({ phase: 'playing', rules: { players: 2, difficulty: 'hard' } })
+    expect(changes).toBe(1)
+    expect(b.sim!.rules).toEqual(room.sim!.rules)
+    run(time, 1000, [[a, idle], [b, idle]])
+    expect(room.sim!.tick).toBeGreaterThan(0)
+    expect(a.predictor!.stats.corrections).toBe(0)
+
+    a.surrender(true)
+    b.surrender(true)
+    run(time, 500, [[a, idle], [b, idle]])
+    expect(b.match).toMatchObject({ phase: 'lobby', result: { end: 'surrendered' } })
   })
 
   it('el meteorito: el espejo lo sigue, choca con su roca y quien entra a mitad también lo ve', () => {

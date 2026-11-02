@@ -8,6 +8,7 @@ import { heightAt, WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH, type EnemyType } from './sim/constants'
 import type { PropKind } from './sim/props'
 import { enemyAimHeight } from './sim/enemies'
+import type { Difficulty } from './sim/match'
 import { STRUCTURE_DEFS, STRUCTURE_KINDS, structureSpot, type StructureKind } from './sim/structures'
 import { isRecipeId, RECIPE_IDS, type RecipeId } from './sim/crafting'
 import type { DevOp } from './net/protocol'
@@ -63,6 +64,11 @@ export function installDebug(game: Game) {
     async join(code: string, name = 'Jugador') {
       return enter(await NetSession.open('join', code.toUpperCase(), name))
     },
+    /** El anfitrión empieza la partida. */
+    start(difficulty: Difficulty = 'normal') {
+      game.net?.client.start(difficulty)
+    },
+    match: () => game.net?.client.match ?? null,
     /** Sale de la sala y vuelve a jugar solo. */
     leave() {
       for (const bot of bots.splice(0)) bot.stop()
@@ -134,6 +140,14 @@ export function installDebug(game: Game) {
       game.setState('playing')
     },
     advance: (seconds: number) => game.advance(seconds),
+    /** Mueve el juego a mano durante `ms`, en frames de 16 ms: con la ventana tapada el navegador deja de pedirlos. */
+    async frames(ms: number) {
+      const end = performance.now() + ms
+      while (performance.now() < end) {
+        game.frame(performance.now())
+        await new Promise((resolve) => setTimeout(resolve, 16))
+      }
+    },
     setKeys(keys: Partial<PlayerInput> | null) {
       game.inputOverride = keys
     },
@@ -146,6 +160,16 @@ export function installDebug(game: Game) {
     scroll: (steps: number) => game.input.scroll(steps),
     setVitals: (vitals: { health?: number; hunger?: number }) => dev({ op: 'setVitals', ...vitals }, () => void Object.assign(player(), vitals)),
     state: () => game.state,
+    /** Partida en solitario con esta dificultad, sin capturar el ratón. */
+    solo(difficulty: Difficulty) {
+      localOnly('la partida en solitario')
+      ;(game.session as LocalSession).start({ players: 1, difficulty })
+      game.setState('playing')
+    },
+    surrender: () => game.surrender(),
+    rules: () => sim().rules,
+    deaths: () => slot().deaths,
+    result: () => sim().result,
     restart() {
       localOnly('restart')
       game.restart()

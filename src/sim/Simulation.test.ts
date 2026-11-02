@@ -321,7 +321,7 @@ describe('Simulation', () => {
     const events = step(sim, { actions: [{ kind: 'eat' }] }).map((e) => e.type)
     expect(events).not.toContain('playerAte')
     expect(events).toContain('playerDied')
-    expect(slot.inventory.count('berry')).toBe(1)
+    expect(sim.pickups.list.map((p) => p.item)).toEqual(['berry'])
   })
 
   it('tirar saca una unidad (o la pila) de la casilla y la deja en el suelo delante, con quién la tiró', () => {

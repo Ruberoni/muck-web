@@ -2,6 +2,7 @@ import type { EnemyType, HitEfficacy } from './constants'
 import type { RecipeId } from './crafting'
 import type { ChargeState } from './enemies'
 import type { ItemId } from './inventory'
+import type { MatchResult } from './match'
 import type { ProjectileEnd, ProjectileKind } from './projectiles'
 import type { StructureKind } from './structures'
 
@@ -45,10 +46,11 @@ export type SimEventData =
   | { type: 'playerHurt'; id: PlayerId; dmg: number }
   | { type: 'playerDied'; id: PlayerId }
   | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }
-  /** En una sala, todos muertos: la isla se reinicia a los pocos segundos (`worldReset`). */
+  /** Todos muertos (o, en solitario, sin vidas): a los pocos segundos se acaba la partida (`matchEnded`). */
   | { type: 'gameOver'; day: number }
-  /** Durante la cuenta atrás del game over ha entrado o vuelto alguien vivo: la isla no se reinicia. */
+  /** Durante la cuenta atrás del game over ha vuelto alguien vivo: la partida sigue. */
   | { type: 'gameOverCancelled' }
+  | { type: 'matchEnded'; result: MatchResult }
   /** Un meteorito: se anuncia (`landTick`: cuándo cae), cae, se enfría y desaparece. Ver `WorldEvents`. */
   | { type: 'meteorIncoming'; x: number; y: number; z: number; landTick: number }
   | { type: 'meteorLanded'; x: number; y: number; z: number }

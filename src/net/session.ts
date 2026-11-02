@@ -1,5 +1,6 @@
 import type { ActionData, Move } from '../sim/commands'
 import { LOCAL_PLAYER, type PlayerId, type SimEvent } from '../sim/events'
+import type { MatchRules } from '../sim/match'
 import { Simulation, type PlayerSlot } from '../sim/Simulation'
 
 /** Lo que el cliente manda en cada tick; la sesión le pone el número de tick. */
@@ -19,6 +20,8 @@ export interface Session {
   readonly slot: PlayerSlot
   step(move: MoveInput, actions: readonly ActionData[]): SimEvent[]
   reset(): void
+  /** Rendirse. Con un jugador acaba ya (devuelve los eventos); en una sala es un voto. */
+  surrender(): SimEvent[]
 }
 
 /** Semilla nueva para cada partida: la isla es fija, pero enemigos y objetos que caen varían. */
@@ -46,5 +49,15 @@ export class LocalSession implements Session {
 
   reset() {
     this.sim.reset()
+  }
+
+  /** Partida nueva con estas reglas. */
+  start(rules: MatchRules) {
+    this.sim.startMatch(rules)
+  }
+
+  surrender(): SimEvent[] {
+    this.sim.finish('surrendered')
+    return this.sim.step(new Map())
   }
 }

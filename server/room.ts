@@ -13,6 +13,7 @@ import {
   pickupTuple,
   playerTuple,
   type Hello,
+  type MatchInfo,
   type PlayerSnap,
   type RejectReason,
   type ServerMessage,
@@ -24,6 +25,7 @@ import { missingMove, MOVE_REPEAT, type Action, type Move, type PlayerCommands }
 import { STRUCTURE_DEFS, structureSpot } from '../src/sim/structures'
 import { STEP } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
+import { DEFAULT_RULES, type Difficulty, type MatchResult, type MatchRules } from '../src/sim/match'
 import { generatePropPlacements, type PropPlacement } from '../src/sim/props'
 import { Simulation, type PlayerSlot, type SimState } from '../src/sim/Simulation'
 
@@ -72,6 +74,8 @@ export interface RoomDeps {
   random: Random
   /** Acepta los trucos de `__debug` (`dev`): solo en desarrollo (`npm run dev:server`) y en los tests. */
   dev?: boolean
+  /** Sin lobby: se juega desde el primer `hello` y se puede entrar a mitad. Para los tests que prueban la red, no la sala. */
+  quickStart?: boolean
 }
 
 export class MemoryStorage implements Storage {
@@ -148,12 +152,17 @@ interface RoomBlob {
   seats: { token: string; id: PlayerId; name: string; lastSeen: number }[]
   /** Desde cuándo no hay nadie conectado (null: hay alguien). */
   emptySince: number | null
+  phase: MatchInfo['phase']
+  host: PlayerId
+  result: MatchResult | null
 }
 
 /**
  * Una sala: una isla y sus jugadores. Agnóstica de plataforma: la DO (server/cf.ts) le pasa los sockets y los mensajes,
  * y ella habla solo a través de Conn, Storage, Clock, Scheduler y Random.
  *
+ * - Va por partidas. En el lobby la isla no avanza y se puede entrar; el anfitrión (el primero, o quien quede) la
+ *   empieza con `start`: las reglas se fijan ahí, y ya solo vuelve quien tenga su token. Al acabar, otra vez al lobby.
  * - `hello` → `welcome` (o `reject` y cierre). `cmds` llena el buffer por tick de cada jugador; el bucle aplica
  *   en cada tick su `Move` (o repite el último, §4.1) y las acciones que tocan, y manda `ev` antes que `snap`.
  * - Sin `cmds` durante 2 s un jugador pasa a `absent`; con todos ausentes el bucle se para y la isla se guarda.
@@ -176,6 +185,11 @@ export class Room {
   private baseTick = 0
   private baseTime = 0
   private emptySince: number | null = null
+  private phase: MatchInfo['phase']
+  private host: PlayerId = 0
+  private result: MatchResult | null = null
+  /** Quiénes han votado rendirse en esta partida. */
+  private votes = new Set<PlayerId>()
   /** La isla guardada era de otra versión y se descartó: avisar a quien vuelva. */
   private discardedOldIsland = false
   /** Pickups que se movieron en esta vuelta del bucle (los quietos no se repiten en `snap`). */
@@ -186,6 +200,7 @@ export class Room {
     private deps: RoomDeps,
   ) {
     this.placements = generatePropPlacements()
+    this.phase = deps.quickStart ? 'playing' : 'lobby'
     this.restore()
   }
 
@@ -217,6 +232,10 @@ export class Room {
       this.cmds(seat, msg)
     } else if (msg.type === 'say') {
       this.say(seat, msg.text)
+    } else if (msg.type === 'start') {
+      this.start(seat, msg.difficulty)
+    } else if (msg.type === 'surrender') {
+      this.vote(seat, msg.yes)
     } else if (msg.type === 'dev') {
       if (this.deps.dev) this.dev(seat, msg)
       else this.kick(conn)
@@ -266,6 +285,7 @@ export class Room {
       // Si se descartó una isla de otra versión, quien vuelve con el enlace empieza una nueva con el mismo código.
       if (msg.intent === 'join' && !this.discardedOldIsland) return this.reject(conn, 'not-found', CloseCode.Normal)
       this.sim = this.newSimulation()
+      this.host = 0
     } else if (msg.intent === 'create') {
       return this.reject(conn, 'exists', CloseCode.Normal)
     }
@@ -282,12 +302,14 @@ export class Room {
       seat.conn = null
     } else if (sim.inWorld().length >= MAX_PLAYERS) {
       return this.reject(conn, 'full', CloseCode.RoomFull)
+    } else if (!seat && this.phase === 'playing' && !this.deps.quickStart) {
+      return this.reject(conn, 'started', CloseCode.Normal)
     }
     // Volvía con un token de la isla descartada: avisarle de que es una isla nueva.
     const islandReset = this.discardedOldIsland && msg.token !== undefined && !seat
     if (!seat) seat = this.newSeat()
     seat.name = msg.name || `Jugador ${seat.id + 1}`
-    if (!this.loop) this.resume()
+    if (!this.loop && this.phase === 'playing') this.resume()
     this.attach(seat, conn, msg.tab, 'present')
     seat.lastT = msg.t
     const own = you(this.slotOf(seat))
@@ -303,15 +325,82 @@ export class Room {
       placements: this.placements,
       state: this.worldState(seat.id),
       you: own,
+      match: this.matchInfo(),
       ...(islandReset ? { islandReset: true as const } : {}),
     })
     if (!reconnecting) this.broadcast({ type: 'join', id: seat.id, name: seat.name }, seat)
+    if (this.phase === 'lobby') this.announceMatch(seat)
     this.scheduleAlarm()
+  }
+
+  /** El anfitrión empieza la partida con quienes haya conectados: los que se fueron del lobby pierden su hueco. */
+  private start(seat: Seat, difficulty: Difficulty) {
+    if (this.phase !== 'lobby' || seat.id !== this.host) return
+    const sim = this.sim!
+    for (const other of [...this.seats.values()]) {
+      if (other.conn) continue
+      this.seats.delete(other.token)
+      sim.removePlayer(other.id)
+    }
+    sim.startMatch({ players: this.connected().length, difficulty })
+    // En el lobby no llegan `cmds`: la cuenta de ausentes empieza ahora.
+    const now = this.deps.clock.now()
+    for (const other of this.connected()) {
+      other.lastCmdsAt = now
+      sim.setConnection(other.id, 'present')
+    }
+    this.phase = 'playing'
+    this.result = null
+    this.votes.clear()
+    this.announceMatch()
+    this.resume()
+    this.scheduleAlarm()
+  }
+
+  /** Con más de la mitad de los conectados a favor, la partida acaba en el siguiente tick. */
+  private vote(seat: Seat, yes: boolean) {
+    if (this.phase !== 'playing') return
+    if (yes) this.votes.add(seat.id)
+    else this.votes.delete(seat.id)
+    this.announceMatch()
+    if (this.votes.size * 2 > this.connected().length) this.sim!.finish('surrendered')
+  }
+
+  /** Acabó la partida: al lobby, con el resultado a la vista. La isla se queda como está hasta la siguiente. */
+  private endMatch(result: MatchResult) {
+    this.phase = 'lobby'
+    this.result = result
+    this.votes.clear()
+    this.electHost()
+    this.announceMatch()
+    if (this.loop) this.stop()
+  }
+
+  /** El anfitrión se ha ido: pasa al primero que quede. */
+  private electHost() {
+    const connected = this.connected()
+    if (connected.length && !connected.some((s) => s.id === this.host)) this.host = connected[0].id
+  }
+
+  private matchInfo(): MatchInfo {
+    return {
+      phase: this.phase,
+      host: this.host,
+      rules: this.sim?.rules ?? DEFAULT_RULES,
+      players: this.connected().map(({ id, name }) => ({ id, name })),
+      votes: this.votes.size,
+      result: this.result,
+    }
+  }
+
+  private announceMatch(except?: Seat) {
+    this.broadcast({ type: 'match', match: this.matchInfo() }, except)
   }
 
   private cmds(seat: Seat, msg: Cmds) {
     const sim = this.sim!
     const now = this.deps.clock.now()
+    if (this.phase !== 'playing') return
     seat.lastCmdsAt = now
     seat.lastT = msg.t
     if (msg.rtt !== undefined) seat.ping = msg.rtt
@@ -461,6 +550,8 @@ export class Room {
       }
       seat.conn!.send(JSON.stringify(snap))
     }
+    const ended = events.find((e) => e.type === 'matchEnded')
+    if (ended) this.endMatch(ended.result)
   }
 
   /** Un tick: el `Move` de cada jugador en el mundo para ese tick (o el repetido) y sus acciones que tocan. */
@@ -529,7 +620,10 @@ export class Room {
     seat.moves.clear()
     seat.actions = []
     sim.setConnection(seat.id, 'gone')
+    this.votes.delete(seat.id)
     this.broadcast({ type: 'leave', id: seat.id, name: seat.name })
+    this.electHost()
+    if (this.phase === 'lobby') this.announceMatch()
     if (this.connected().length === 0) {
       this.emptySince = now
       if (this.loop) this.stop()
@@ -555,6 +649,9 @@ export class Room {
       sim: this.sim.toJSON(),
       seats: [...this.seats.values()].map(({ token, id, name, lastSeen }) => ({ token, id, name, lastSeen })),
       emptySince: this.emptySince,
+      phase: this.phase,
+      host: this.host,
+      result: this.result,
     }
     this.deps.storage.save(JSON.stringify(blob))
   }
@@ -567,7 +664,6 @@ export class Room {
       const blob = JSON.parse(raw) as RoomBlob
       if (blob?.schema !== PROTOCOL_VERSION) throw new Error('isla de otra versión')
       const sim = Simulation.fromJSON(blob.sim, this.placements)
-      sim.coop = true
       // Nadie está conectado hasta que vuelva (con `hello`) o la plataforma devuelva su socket (`adopt`).
       for (const slot of sim.players.values()) sim.setConnection(slot.id, 'gone')
       for (const { token, id, name, lastSeen } of blob.seats) {
@@ -577,6 +673,9 @@ export class Room {
       }
       this.sim = sim
       this.emptySince = blob.emptySince ?? this.deps.clock.now()
+      this.phase = blob.phase
+      this.host = blob.host
+      this.result = blob.result
     } catch {
       // De otra versión o ilegible: sin migraciones, se empieza una isla nueva con el mismo código.
       this.seats.clear()
@@ -587,10 +686,10 @@ export class Room {
     this.scheduleAlarm()
   }
 
-  /** Una isla nueva, con las reglas de una sala: los muertos reaparecen y con todos muertos se reinicia. */
+  /** Una isla nueva, a la espera de que empiece la partida (con `quickStart`, ya en marcha). */
   private newSimulation() {
     const sim = new Simulation(this.deps.random.seed(), this.placements)
-    sim.coop = true
+    if (this.deps.quickStart) sim.rules = QUICK_RULES
     return sim
   }
 
@@ -598,6 +697,9 @@ export class Room {
     this.sim = null
     this.seats.clear()
     this.emptySince = null
+    this.phase = this.deps.quickStart ? 'playing' : 'lobby'
+    this.result = null
+    this.votes.clear()
     this.deps.storage.clear()
   }
 
@@ -712,6 +814,9 @@ export class Room {
     return true
   }
 }
+
+/** Las reglas de una sala con `quickStart`: las de un grupo, sin vidas. */
+const QUICK_RULES: MatchRules = { players: 2, difficulty: 'normal' }
 
 function blankSeat(token: string, id: PlayerId, name: string, slot: PlayerSlot): Seat {
   const { yaw, pitch } = slot.player

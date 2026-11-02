@@ -10,9 +10,11 @@ import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
+import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
 import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
+import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
@@ -36,6 +38,7 @@ import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import { LocalSession, type Session } from '../net/session'
 import type { NetSession } from '../net/netSession'
 import type { Notice, RemotePlayer } from '../net/client'
+import type { MatchInfo } from '../net/protocol'
 import type { Shown } from '../net/interp'
 import { pickNameTags, type PlayerRow } from '../ui/multiplayerHud'
 import { playerCss } from '../ui/playerColor'
@@ -143,8 +146,10 @@ export class Game {
   private spectated: number | null = null
   private spectatorYaw = 0
   private snapSpectator = true
-  /** Todos muertos en la sala: el día al que se llegó, hasta que se reinicia la isla. */
+  /** Todos muertos en la sala: el día al que se llegó, hasta que acaba la partida. */
   private gameOverDay: number | null = null
+  /** La fase de la sala que ya refleja el estado de Game. */
+  private matchPhase: MatchInfo['phase'] | null = null
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -249,6 +254,8 @@ export class Game {
     this.hud.setCrosshair(showsCrosshair(this.state))
     this.netGeneration = this.net?.generation ?? 0
     this.gameOverDay = null
+    this.matchPhase = this.net?.client.match?.phase ?? null
+    this.hud.setResults(null)
     this.lookFromPlayer()
     this.acc = 0
     this.snapPlayer = true
@@ -300,11 +307,30 @@ export class Game {
   restart() {
     if (this.net) return
     this.session.reset()
+    this.afterReset()
+  }
+
+  /** Partida nueva en solitario, con su dificultad, y a jugar. */
+  async playSolo(difficulty: Difficulty) {
+    const session = this.session as LocalSession
+    session.start({ players: 1, difficulty })
+    this.afterReset()
+    await this.play()
+  }
+
+  /** La isla acaba de volver a empezar: la vista la sigue. */
+  private afterReset() {
     this.resetViews()
+    this.hud.setResults(null)
     this.lookFromPlayer()
     this.acc = 0
     this.placeCamera(this.slot.player.pos)
     if (this.state === 'dead') this.setState('menu')
+  }
+
+  /** Rendirse: con un jugador se acaba aquí; en una sala es un voto. */
+  surrender() {
+    this.present(this.session.surrender())
   }
 
   /**
@@ -380,6 +406,7 @@ export class Game {
     const steps = Math.round(seconds / STEP)
     for (let i = 0; i < steps && this.state !== 'dead'; i++) this.step()
     this.acc = 0
+    this.followLives()
     this.render(1, seconds, performance.now())
   }
 
@@ -394,7 +421,8 @@ export class Game {
     await this.play()
   }
 
-  private frame(time: number) {
+  /** Un frame: lo llama el navegador; con la ventana tapada no lo hace, y las pruebas lo mueven a mano (`__debug.frames`). */
+  frame(time: number) {
     const dt = this.lastTime === null ? 0 : Math.min((time - this.lastTime) / 1000, MAX_FRAME_DT)
     this.lastTime = time
 
@@ -417,6 +445,7 @@ export class Game {
       this.present(own)
       this.present(remote, false)
       this.presentRemote(net, remote)
+      this.followMatch(net)
       for (const notice of net.client.takeNotices()) {
         if (notice.type === 'chat') this.hud.net.chat(notice.id, notice.name, notice.text)
         else this.hud.net.notice(noticeText(notice))
@@ -442,8 +471,36 @@ export class Game {
       }
       if (steps === MAX_STEPS_PER_FRAME) this.acc = Math.min(this.acc, STEP)
     }
+    this.followLives()
 
     this.render(inGame(this.state) && !this.manualClock ? this.acc / STEP : 1, dt, time)
+  }
+
+  /** En solitario, mientras queden vidas, muerto se espera a reaparecer. */
+  private followLives() {
+    if (this.state === 'playing' && !this.slot.alive) this.setState('spectating')
+    else if (this.state === 'spectating' && this.slot.alive) this.setState('playing')
+  }
+
+  /**
+   * La sala ha cambiado de fase. Al empezar, solo quien pulsó el botón puede capturar el ratón ya: los demás, con su
+   * clic. Al acabar se vuelve al lobby, con el resultado a la vista.
+   */
+  private followMatch(net: NetSession) {
+    const match = net.client.match
+    if (!match || match.phase === this.matchPhase) return
+    this.matchPhase = match.phase
+    if (match.phase === 'playing') {
+      this.hud.setResults(null)
+      if (this.state !== 'menu') return
+      this.setState('paused')
+      this.hud.showOverlay('ready', true)
+      return
+    }
+    if (match.result) this.hud.setResults(resultLines(match.result, (id) => this.nameOf(net, id)))
+    if (this.state === 'menu') return
+    this.setState('menu')
+    if (this.input.locked) document.exitPointerLock()
   }
 
   /** Un paso fijo: manda el movimiento y las acciones a la sesión y presenta lo que ha pasado. */
@@ -489,7 +546,8 @@ export class Game {
     this.chatKey(presses)
     if (presses.has('Tab')) this.spectateNext()
     const { yaw, pitch } = this.look
-    this.session.step({ buttons: 0, yaw, pitch }, [])
+    // En solitario lo que pasa en el mundo llega aquí (en una sala, con `render`).
+    this.present(this.session.step({ buttons: 0, yaw, pitch }, []))
   }
 
   /** En una sala, Enter abre el chat: lo que se teclee no llega al juego hasta cerrarlo (Enter o Esc). */
@@ -563,9 +621,11 @@ export class Game {
           // Se come aunque se tenga otra cosa en la mano: la animación se hace con lo que se come.
           if (e.id === slot.id) this.handheld.play('eat', e.item)
           break
-        case 'playerDied':
-          // En una sala el muerto pasa a espectador cuando lo dice su `you` (ver frame).
-          if (e.id === slot.id && !this.net) this.die()
+        case 'matchEnded':
+          // En una sala se vuelve al lobby con el `match` que viene detrás (ver followMatch).
+          if (this.net) break
+          this.hud.setResults(resultLines(e.result, () => 'Tú'))
+          this.die()
           break
         case 'meteorIncoming':
           this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
@@ -684,9 +744,17 @@ export class Game {
     )
   }
 
+  /** Muerto en solitario: lo que falta para reaparecer y las vidas que quedan. */
+  private waitingToRespawn(): string {
+    const { respawnAt, deaths } = this.slot
+    const lives = DIFFICULTY_DEFS[this.sim.rules.difficulty].lives - deaths
+    if (lives <= 0 || respawnAt === null) return 'Sin vidas'
+    return `Has muerto — vuelves en ${Math.max(0, Math.ceil((respawnAt - this.sim.tick) * STEP))} s · Vidas: ${lives}`
+  }
+
   /** "Has muerto" con la cuenta atrás y a quién se mira, o "Game over" con todos muertos. */
   private banner(net: NetSession): { title: string; detail: string } | null {
-    if (this.gameOverDay !== null) return { title: 'Game over', detail: `Habéis llegado al día ${this.gameOverDay}. La isla se reinicia…` }
+    if (this.gameOverDay !== null) return { title: 'Game over', detail: `Habéis llegado al día ${this.gameOverDay}.` }
     if (this.state !== 'spectating') return null
     const { respawnAt } = this.slot
     const left = respawnAt === null ? 0 : Math.max(0, Math.ceil((respawnAt - net.client.clock.serverTick(performance.now())) * STEP))
@@ -805,6 +873,7 @@ export class Game {
     const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
+    else if (this.state === 'spectating' && !net) this.hud.setPrompt(this.waitingToRespawn())
     else if (this.state === 'spectating' || this.state === 'inventory') this.hud.setPrompt('')
     else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
     else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)

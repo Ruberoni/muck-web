@@ -4,6 +4,7 @@ import { isRecipeId } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { Combat } from '../sim/interaction'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type InventoryState, type ItemId } from '../sim/inventory'
+import { isDifficulty, type Difficulty, type MatchResult, type MatchRules } from '../sim/match'
 import type { Player, Vec3 } from '../sim/player'
 import type { PropPlacement } from '../sim/props'
 import { STRUCTURE_KINDS, type StructureKind } from '../sim/structures'
@@ -14,7 +15,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 29
+export const PROTOCOL_VERSION = 30
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -23,7 +24,7 @@ const ROOM_CODE = new RegExp(`^[${ROOM_ALPHABET}]{${ROOM_CODE_LENGTH}}$`)
 export const isRoomCode = (code: unknown): code is string => typeof code === 'string' && ROOM_CODE.test(code)
 
 /** Jugadores en el mundo (no `gone`) a la vez. */
-export const MAX_PLAYERS = 8
+export const MAX_PLAYERS = 5
 /** Huecos que guarda una isla (con los `gone`): con más se descarta el `gone` más antiguo. */
 export const MAX_SEATS = 16
 /** Tamaño máximo de un mensaje del cliente, medido con `string.length` (cota superior en UTF-16). */
@@ -97,6 +98,18 @@ export interface Say {
   text: string
 }
 
+/** El anfitrión empieza la partida. */
+export interface Start {
+  type: 'start'
+  difficulty: Difficulty
+}
+
+/** Su voto para rendirse: con más de la mitad de los conectados, la partida se acaba. */
+export interface Surrender {
+  type: 'surrender'
+  yes: boolean
+}
+
 /**
  * Los trucos de `__debug` en red (solo en desarrollo: la sala de producción cierra el socket con 4005).
  * Se aplican al llegar, fuera del bucle; lo que emiten sale en el siguiente `ev`.
@@ -118,7 +131,7 @@ export type DevOp =
 
 export type Dev = { type: 'dev' } & DevOp
 
-export type ClientMessage = Hello | Cmds | Resync | Say | Dev
+export type ClientMessage = Hello | Cmds | Resync | Say | Start | Surrender | Dev
 
 // --- Servidor → cliente ---
 
@@ -178,6 +191,21 @@ export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | '
   players: (PlayerSnap & { name: string })[]
 }
 
+/** Por dónde va la sala: esperando en el lobby (también tras acabar una partida) o jugando. */
+export interface MatchInfo {
+  phase: 'lobby' | 'playing'
+  /** Quien puede empezar la partida. */
+  host: PlayerId
+  /** Las reglas de la partida en marcha o de la última. */
+  rules: MatchRules
+  /** Conectados ahora. */
+  players: { id: PlayerId; name: string }[]
+  /** Votos para rendirse. */
+  votes: number
+  /** Cómo acabó la última partida. */
+  result: MatchResult | null
+}
+
 export interface Welcome {
   type: 'welcome'
   id: PlayerId
@@ -191,11 +219,12 @@ export interface Welcome {
   placements: readonly PropPlacement[]
   state: WorldState
   you: You
+  match: MatchInfo
   /** La isla guardada era de otra versión y se ha empezado una nueva con el mismo código. */
   islandReset?: true
 }
 
-export type RejectReason = 'version' | 'full' | 'not-found' | 'exists' | 'invalid'
+export type RejectReason = 'version' | 'full' | 'not-found' | 'exists' | 'invalid' | 'started'
 
 export interface Reject {
   type: 'reject'
@@ -255,8 +284,14 @@ export interface Chat {
   text: string
 }
 
+/** La sala ha cambiado: alguien ha entrado o salido del lobby, ha empezado o acabado la partida o hay un voto. */
+export interface MatchMsg {
+  type: 'match'
+  match: MatchInfo
+}
+
 /** Los mensajes del servidor ya leídos (un `snap` llega en `SnapWire` y lo lee `ServerDecoder`). */
-export type ServerMessage = Welcome | Reject | Snap | Ev | StateMsg | Join | Leave | Chat
+export type ServerMessage = Welcome | Reject | Snap | Ev | StateMsg | Join | Leave | Chat | MatchMsg
 
 // --- `snap` en el cable ---
 
@@ -398,6 +433,10 @@ export function parseClientMessage(data: string): Parsed {
       const text = cleanChat(raw.text)
       return text ? { ok: true, msg: { type: 'say', text } } : INVALID
     }
+    case 'start':
+      return isDifficulty(raw.difficulty) ? { ok: true, msg: { type: 'start', difficulty: raw.difficulty } } : INVALID
+    case 'surrender':
+      return typeof raw.yes === 'boolean' ? { ok: true, msg: { type: 'surrender', yes: raw.yes } } : INVALID
     case 'dev': {
       const msg = parseDev(raw)
       return msg ? { ok: true, msg } : INVALID

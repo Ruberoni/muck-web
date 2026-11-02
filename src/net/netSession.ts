@@ -204,8 +204,13 @@ export class NetSession implements Session {
     return this.client.render()
   }
 
-  /** La isla es del servidor: no se reinicia desde aquí (con todos muertos lo hace él). */
+  /** La isla es del servidor: no se reinicia desde aquí (la siguiente partida la empieza el anfitrión). */
   reset() {}
+
+  surrender(): SimEvent[] {
+    this.client.surrender(true)
+    return []
+  }
 
   suspend() {
     this.suspended = true

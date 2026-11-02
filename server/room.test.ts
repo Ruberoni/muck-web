@@ -28,10 +28,10 @@ import { ABSENT_MS, CHAT_MS, FORGOTTEN_MS, ISLAND_TTL_MS, LOOP_MS, MAX_AHEAD, Me
 const CODE = 'K7QX2'
 
 /** Una sala con reloj manual, almacenamiento en memoria y tokens y semillas previsibles. */
-function setup(storage = new MemoryStorage(), dev = false) {
+function setup(storage = new MemoryStorage(), dev = false, quickStart = true) {
   const time = new ManualTime(1_000_000)
   let tokens = 0
-  const room = new Room(CODE, { storage, clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev })
+  const room = new Room(CODE, { storage, clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev, quickStart })
   return { room, time, storage }
 }
 
@@ -133,6 +133,128 @@ function spySteps(sim: Simulation) {
   const spy = vi.spyOn(sim, 'step')
   return () => spy.mock.calls.map(([commands]) => commands as ReadonlyMap<PlayerId, PlayerCommands>)
 }
+
+describe('Room por partidas', () => {
+  const lobby = () => {
+    const { room, time, storage } = setup(new MemoryStorage(), true, false)
+    const a = new Client(room, time, 'a')
+    const b = new Client(room, time, 'b')
+    join(a, b)
+    return { room, time, storage, a, b }
+  }
+  const match = (c: Client) => c.of('match').at(-1)!.match
+
+  it('en el lobby la isla no avanza, el primero es el anfitrión y todos ven quién hay', () => {
+    const { room, time, a, b } = lobby()
+    expect(a.welcome.match).toMatchObject({ phase: 'lobby', host: a.id, players: [{ id: a.id, name: 'Ana' }] })
+    expect(match(a).players.map((p) => p.id)).toEqual([a.id, b.id])
+    const { tick } = room.sim!
+    a.cmds([{ tick: tick + 1, buttons: 0, yaw: 0, pitch: 0 }])
+    time.advance(2000)
+    expect(room.sim!.tick).toBe(tick)
+    expect(a.of('snap')).toEqual([])
+  })
+
+  it('solo empieza el anfitrión, con las reglas de quienes haya', () => {
+    const { room, time, a, b } = lobby()
+    b.send({ type: 'start', difficulty: 'hard' })
+    time.advance(0)
+    expect(b.of('match')).toEqual([])
+    a.send({ type: 'start', difficulty: 'hard' })
+    time.advance(0)
+    expect(match(b)).toMatchObject({ phase: 'playing', rules: { players: 2, difficulty: 'hard' }, result: null })
+    expect(room.sim!.rules).toEqual({ players: 2, difficulty: 'hard' })
+    expect(b.of('state').length).toBeGreaterThan(0)
+    const { tick } = room.sim!
+    play(time, 500, [[a], [b]])
+    expect(room.sim!.tick).toBeGreaterThan(tick)
+    expect(b.snap).toBeDefined()
+  })
+
+  it('los que salieron del lobby pierden el hueco y no cuentan para las reglas', () => {
+    const { room, time, a, b } = lobby()
+    b.transport.close()
+    time.advance(0)
+    expect(match(a).players.map((p) => p.id)).toEqual([a.id])
+    a.send({ type: 'start', difficulty: 'normal' })
+    time.advance(0)
+    expect(room.sim!.rules.players).toBe(1)
+    expect(room.sim!.inWorld().map((s) => s.id)).toEqual([a.id])
+  })
+
+  it('con la partida en marcha nadie nuevo entra, pero quien estaba vuelve con su token', () => {
+    const { room, time, a, b } = lobby()
+    a.send({ type: 'start', difficulty: 'normal' })
+    time.advance(0)
+    const c = new Client(room, time, 'c')
+    c.hello('join')
+    time.advance(0)
+    expect(c.msgs).toEqual([{ type: 'reject', reason: 'started' }])
+    expect(c.closed).toBe(CloseCode.Normal)
+
+    b.transport.close()
+    play(time, 500, [[a]])
+    const back = new Client(room, time, 'b')
+    back.token = b.token
+    back.hello('join')
+    time.advance(0)
+    expect(back.welcome).toMatchObject({ id: b.id, match: { phase: 'playing' } })
+    // Las reglas no cambian: se empezó con dos.
+    expect(room.sim!.rules.players).toBe(2)
+  })
+
+  it('si se va el anfitrión del lobby pasa al siguiente', () => {
+    const { time, a, b } = lobby()
+    a.transport.close()
+    time.advance(0)
+    expect(match(b).host).toBe(b.id)
+  })
+
+  it('rendirse necesita a más de la mitad, y al acabar se vuelve al lobby con el resultado', () => {
+    const { room, time, a, b } = lobby()
+    a.send({ type: 'start', difficulty: 'normal' })
+    time.advance(0)
+    play(time, 200, [[a], [b]])
+    a.send({ type: 'surrender', yes: true })
+    time.advance(0)
+    expect(match(b)).toMatchObject({ phase: 'playing', votes: 1 })
+    a.send({ type: 'surrender', yes: false })
+    time.advance(0)
+    expect(match(b).votes).toBe(0)
+    a.send({ type: 'surrender', yes: true })
+    b.send({ type: 'surrender', yes: true })
+    play(time, 200, [[a], [b]])
+    expect(match(b)).toMatchObject({ phase: 'lobby', votes: 0, result: { end: 'surrendered' } })
+    const { tick } = room.sim!
+    time.advance(1000)
+    expect(room.sim!.tick).toBe(tick)
+
+    // Y se puede jugar otra, con quien entre mientras.
+    const c = new Client(room, time, 'c')
+    c.hello('join')
+    time.advance(0)
+    expect(c.welcome.match.phase).toBe('lobby')
+    a.send({ type: 'start', difficulty: 'easy' })
+    time.advance(0)
+    expect(match(c)).toMatchObject({ phase: 'playing', rules: { players: 3, difficulty: 'easy' }, result: null })
+    expect(room.sim!.result).toBeNull()
+  })
+
+  it('la fase sobrevive a guardar la sala', () => {
+    const { time, storage, a, b } = lobby()
+    a.send({ type: 'start', difficulty: 'normal' })
+    time.advance(0)
+    play(time, 200, [[a], [b]])
+    a.transport.close()
+    b.transport.close()
+    time.advance(0)
+    const restored = new Room(CODE, { storage, clock: time, scheduler: time, random: { token: () => 'x', seed: () => 7 } })
+    const c = new Client(restored, time, 'c')
+    c.hello('join')
+    time.advance(0)
+    expect(c.msgs).toEqual([{ type: 'reject', reason: 'started' }])
+  })
+})
 
 describe('Room', () => {
   it('dos clientes ven caer el mismo árbol', () => {
@@ -735,12 +857,11 @@ describe('Room', () => {
     expect(room.sim!.slot(a.id).inventory.count('wood')).toBe(0)
   })
 
-  it('con las reglas de una sala: el muerto reaparece y, con todos muertos, la isla se reinicia', () => {
+  it('el muerto reaparece y, con todos muertos, se acaba la partida y se vuelve al lobby', () => {
     const { room, time } = setup(new MemoryStorage(), true)
     const a = new Client(room, time, 'a')
     const b = new Client(room, time, 'b')
     join(a, b)
-    expect(room.sim!.coop).toBe(true)
     a.send({ type: 'dev', op: 'give', item: 'wood', amount: 3 })
     a.send({ type: 'dev', op: 'setVitals', health: 0, hunger: 0 })
     play(time, 200, [[a], [b]])
@@ -759,8 +880,8 @@ describe('Room', () => {
     b.send({ type: 'dev', op: 'setVitals', health: 0, hunger: 0 })
     play(time, 10_000, [[a], [b]])
     expect(a.events.filter((e) => e.type === 'gameOver')).toHaveLength(1)
-    expect(b.events.filter((e) => e.type === 'worldReset')).toHaveLength(1)
-    expect(b.snap.you.alive).toBe(true)
+    expect(b.events.filter((e) => e.type === 'matchEnded')).toHaveLength(1)
+    expect(b.of('match').at(-1)!.match).toMatchObject({ phase: 'lobby', result: { end: 'lost' } })
   })
 
   it('si el único vivo se corta y vuelve antes de los 6 s, el game over se cancela', () => {
@@ -778,7 +899,7 @@ describe('Room', () => {
     back.hello('join')
     play(time, 10_000, [[back], [b]])
     expect(b.events.filter((e) => e.type === 'gameOverCancelled')).toHaveLength(1)
-    expect(b.events.some((e) => e.type === 'worldReset')).toBe(false)
+    expect(b.events.some((e) => e.type === 'matchEnded')).toBe(false)
     expect(b.snap.you.alive).toBe(false)
   })
 

@@ -9,18 +9,19 @@ import { MultiplayerHud } from './multiplayerHud'
 import { CRAFT_MANY } from './recipes'
 import { missingTool } from './tools'
 
-export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | null
+export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | 'ready' | null
 
 const OVERLAY_TEXT: Record<Exclude<OverlayKind, null>, string> = {
   menu: 'Haz clic para jugar',
   paused: 'Pausa — haz clic para continuar',
   retry: 'No se pudo capturar el ratón. Haz clic de nuevo',
-  dead: 'Has muerto — haz clic para empezar de nuevo',
+  dead: 'Haz clic para volver al menú',
+  ready: 'La partida ha empezado — haz clic para entrar',
 }
 
 /** En una sala la partida no se para: la pausa es solo tuya y morir no reinicia la isla. */
 const ONLINE_TEXT: Partial<Record<Exclude<OverlayKind, null>, string>> = {
-  menu: 'Haz clic para entrar en la partida',
+  menu: 'Sala de espera',
   paused: 'Pausa (la partida sigue) — haz clic para continuar',
   dead: 'Has muerto',
 }
@@ -80,6 +81,7 @@ export class Hud {
   private crosshair: HTMLElement
   private overlay: HTMLElement
   private overlayTitle: HTMLElement
+  private results: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
   readonly panel: HTMLElement
   private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', day: 0, tonight: '', boss: '' }
@@ -126,6 +128,8 @@ export class Hud {
     const panel = (this.panel = el('div', 'panel', this.overlay))
     el('h1', 'title', panel).textContent = 'muck-web'
     this.overlayTitle = el('p', 'action', panel)
+    this.results = el('div', 'results', panel)
+    this.results.hidden = true
     panel.insertAdjacentHTML('beforeend', CONTROLS)
     if (!matchMedia('(any-pointer: fine)').matches) {
       el('p', 'warning', panel).textContent = 'Necesitas teclado y ratón para jugar.'
@@ -142,6 +146,12 @@ export class Hud {
     if (!kind) return
     const text = (online && ONLINE_TEXT[kind]) || (kind === 'menu' && this.menuText) || OVERLAY_TEXT[kind]
     this.overlayTitle.textContent = text
+  }
+
+  /** La pantalla final, sobre el menú; null la quita. */
+  setResults(lines: readonly string[] | null) {
+    this.results.hidden = !lines
+    this.results.replaceChildren(...(lines ?? []).map((line) => Object.assign(document.createElement('p'), { textContent: line })))
   }
 
   /** `regenLeft`: segundos de curación poco a poco que quedan (la barra late en verde y los muestra). */

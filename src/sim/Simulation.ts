@@ -6,6 +6,7 @@ import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, type InventoryState, type ItemId } from './inventory'
+import { DEFAULT_RULES, DIFFICULTY_DEFS, type MatchEnd, type MatchResult, type MatchRules } from './match'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
 import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
@@ -42,6 +43,8 @@ export interface PlayerSlot extends Actor {
   respawnAt: number | null
   /** Recién reaparecido: hasta este tick ni recibe daño ni es objetivo. */
   shieldUntil: number
+  /** Veces que ha muerto en esta partida. */
+  deaths: number
 }
 
 /** Un PlayerSlot como datos (el objetivo no se guarda: se recalcula en cada paso). */
@@ -57,6 +60,7 @@ export interface PlayerSlotState {
   spawn: { x: number; z: number }
   respawnAt: number | null
   shieldUntil: number
+  deaths: number
 }
 
 /** Todo lo que cambia durante la partida, como datos (ver Simulation.toJSON). */
@@ -74,8 +78,11 @@ export interface SimState {
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
   nextPlayerId: number
-  /** Todos muertos en una sala: tick en que se reinicia la isla. */
+  /** Todos muertos: tick en que se acaba la partida. */
   gameOverAt: number | null
+  rules: MatchRules
+  /** Cómo acabó; null mientras se juega. */
+  result: MatchResult | null
 }
 
 const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ...p.prev }, vel: { ...p.vel } })
@@ -86,10 +93,10 @@ const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ..
  * solo leen su estado y sus eventos. Determinista para una misma semilla y unos mismos comandos.
  * Los jugadores se recorren siempre por id, así el resultado no depende del orden en que llegan los comandos.
  *
- * Morir depende de `coop`. Con un jugador (false) el muerto se queda muerto y el cliente reinicia la isla.
- * En una sala (true, lo pone la sala) el inventario cae al suelo en un montón por objeto, el muerto mira a los
- * demás y reaparece en su punto de aparición a los 30 s o, si murió de noche, al amanecer; si mueren todos los
- * que están en el mundo, `gameOver` y a los pocos segundos la isla se reinicia (`worldReset`).
+ * Al morir el inventario cae al suelo en un montón por objeto y se reaparece en el punto de aparición a los 30 s o,
+ * si fue de noche, al amanecer. La partida se pierde si mueren a la vez todos los que están en el mundo o, en
+ * solitario (`rules.players` 1), al gastar sus vidas: `gameOver` y a los pocos segundos `matchEnded`. La sala y Game
+ * deciden qué hacer entonces; volver a jugar es `startMatch`.
  */
 export class Simulation {
   readonly world: PropWorld
@@ -108,8 +115,10 @@ export class Simulation {
   readonly env: PlayerEnv
   /** Punto de aparición: el primer jugador aparece aquí y los demás en un anillo alrededor. */
   readonly spawnCenter: { x: number; z: number }
-  /** Reglas de una sala: reaparecer y reiniciar la isla con todos muertos (ver la clase). */
-  coop = false
+  /** Con quién y a qué dificultad se juega: las fija `startMatch`. */
+  rules: MatchRules = DEFAULT_RULES
+  /** Cómo acabó la partida; null mientras se juega. */
+  result: MatchResult | null = null
   /** Azar de la simulación (enemigos, objetos que caen). */
   private rng: Rng
   /** Lo que pasa en cada paso, sellado con su tick. Lo emitido fuera de un paso sale con el siguiente. */
@@ -117,7 +126,7 @@ export class Simulation {
   /** Tick en el que empezó el día 1: el reloj sale de `tick - worldStartTick`. */
   private worldStartTick = 0
   private nextPlayerId = 0
-  /** Todos muertos: tick en que se reinicia la isla. */
+  /** Todos muertos: tick en que se acaba la partida. */
   private gameOverAt: number | null = null
   private spot: StructureSpot = { x: 0, y: 0, z: 0, valid: false }
   /** Las estaciones para fabricar son las estructuras colocadas. */
@@ -188,6 +197,7 @@ export class Simulation {
       spawn,
       respawnAt: null,
       shieldUntil: 0,
+      deaths: 0,
     }
     this.players.set(id, slot)
     return slot
@@ -210,8 +220,10 @@ export class Simulation {
    */
   step(commands: ReadonlyMap<PlayerId, PlayerCommands>): SimEvent[] {
     this.events.tick++
-    // Lo que quedara por presentar de antes (trucos de debug) es de la partida que acaba.
-    if (this.gameOverAt !== null && this.tick >= this.gameOverAt) this.reset()
+    if (this.gameOverAt !== null && this.tick >= this.gameOverAt) {
+      this.gameOverAt = null
+      this.finish('lost')
+    }
     const present = this.inWorld()
     // Alguien vivo ha entrado (o ha vuelto) durante la cuenta atrás: ya no están todos muertos.
     if (this.gameOverAt !== null && present.some((s) => s.alive)) {
@@ -263,7 +275,7 @@ export class Simulation {
       finishPlayerTick(slot, intents.get(slot)!, this.events.emit)
       if (isDead(slot.player)) this.die(slot)
     }
-    if (this.coop && this.gameOverAt === null && present.length > 0 && present.every((s) => !s.alive)) {
+    if (this.gameOverAt === null && this.result === null && present.length > 0 && present.every((s) => !s.alive && this.outOfLives(s))) {
       this.gameOverAt = this.tick + Math.round(GAME_OVER_DELAY / STEP)
       this.events.emit({ type: 'gameOver', day: this.clock.day })
     }
@@ -279,6 +291,20 @@ export class Simulation {
   nextDawnTick(): number {
     const cycles = START_PHASE + this.clock.elapsed / DAY_LENGTH
     return this.worldStartTick + Math.round(((Math.floor(cycles) + 1 - START_PHASE) * DAY_LENGTH) / STEP)
+  }
+
+  /** Empieza una partida con estas reglas, sobre la isla recién restaurada. */
+  startMatch(rules: MatchRules) {
+    this.rules = rules
+    this.reset()
+  }
+
+  /** Acaba la partida (una vez). `escaped`: quiénes se han salvado. */
+  finish(end: MatchEnd, escaped: readonly PlayerId[] = []) {
+    if (this.result) return
+    const players = [...this.players.values()].sort((a, b) => a.id - b.id).map(({ id, deaths }) => ({ id, deaths, escaped: escaped.includes(id) }))
+    this.result = { end, day: this.clock.day, seconds: Math.round((this.tick - this.worldStartTick) * STEP), players }
+    this.events.emit({ type: 'matchEnded', result: this.result })
   }
 
   /**
@@ -302,9 +328,11 @@ export class Simulation {
       slot.alive = true
       slot.respawnAt = null
       slot.shieldUntil = 0
+      slot.deaths = 0
       Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
     }
     this.gameOverAt = null
+    this.result = null
     this.worldStartTick = this.tick
     this.syncClock()
     this.events.emit({ type: 'worldReset', worldStartTick: this.worldStartTick })
@@ -378,9 +406,12 @@ export class Simulation {
           spawn: { ...slot.spawn },
           respawnAt: slot.respawnAt,
           shieldUntil: slot.shieldUntil,
+          deaths: slot.deaths,
         })),
       nextPlayerId: this.nextPlayerId,
       gameOverAt: this.gameOverAt,
+      rules: this.rules,
+      result: this.result,
     }
   }
 
@@ -415,16 +446,24 @@ export class Simulation {
       slot.spawn = { ...saved.spawn }
       slot.respawnAt = saved.respawnAt
       slot.shieldUntil = saved.shieldUntil
+      slot.deaths = saved.deaths
     }
     this.nextPlayerId = state.nextPlayerId
     this.gameOverAt = state.gameOverAt
+    this.rules = state.rules
+    this.result = state.result
   }
 
-  /** Muere: con un jugador, nada más; en una sala suelta su inventario y espera para reaparecer. */
+  /** En solitario la partida sigue mientras queden vidas; en grupo, cualquiera en pie basta. */
+  private outOfLives(slot: PlayerSlot) {
+    return this.rules.players > 1 || slot.deaths >= DIFFICULTY_DEFS[this.rules.difficulty].lives
+  }
+
+  /** Muere: suelta su inventario y espera para reaparecer. */
   private die(slot: PlayerSlot) {
     slot.alive = false
+    slot.deaths++
     this.events.emit({ type: 'playerDied', id: slot.id })
-    if (!this.coop) return
     const { pos } = slot.player
     for (const item of slot.inventory.slots) {
       if (item) this.pickups.dropPile(item, slot.inventory.count(item), pos.x, pos.y + DEATH_DROP_HEIGHT, pos.z)

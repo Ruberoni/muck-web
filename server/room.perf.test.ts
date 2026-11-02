@@ -18,7 +18,7 @@ import { LOOP_MS, MemoryStorage, Room, type Conn } from './room'
 function busyRoom({ base = false } = {}) {
   const time = new ManualTime(1_000_000)
   let tokens = 0
-  const room = new Room('BENCH', { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `t${++tokens}`, seed: () => 7 } })
+  const room = new Room('BENCH', { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `t${++tokens}`, seed: () => 7 }, quickStart: true })
   let bytes = 0
   /** Lo último que recibe el primer jugador, para medir cuánto ocupa comprimido. */
   const sample: string[] = []

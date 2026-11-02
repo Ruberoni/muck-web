@@ -23,6 +23,8 @@ export function closeMessage(reject: Reject | null, code: number | null, room = 
       return room ? `No existe la sala ${room}.` : 'No existe esa sala.'
     case 'exists':
       return 'Ya existe una sala con ese código.'
+    case 'started':
+      return 'Esa partida ya ha empezado: solo pueden volver quienes estaban.'
     case 'invalid':
       return 'El servidor ha rechazado la conexión.'
   }

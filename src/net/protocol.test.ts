@@ -31,8 +31,8 @@ const parse = (msg: unknown) => parseClientMessage(JSON.stringify(msg))
 const valid = (msg: unknown) => parse(msg).ok
 
 describe('protocolo', () => {
-  it('salas de 8 jugadores, como da por hecho src/sim/balance.test.ts (que no puede importar MAX_PLAYERS)', () => {
-    expect(MAX_PLAYERS).toBe(8)
+  it('salas de 5 jugadores, como da por hecho src/sim/balance.test.ts (que no puede importar MAX_PLAYERS)', () => {
+    expect(MAX_PLAYERS).toBe(5)
   })
 
   it('códigos de sala', () => {
@@ -153,6 +153,10 @@ describe('protocolo', () => {
     expect(dev({ op: 'setDay', day: 6 })).toEqual({ ok: true, msg: { type: 'dev', op: 'setDay', day: 6 } })
     expect(dev({ op: 'throwRock', x: 1, z: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'throwRock', x: 1, z: 2 } })
     expect(dev({ op: 'meteor' })).toEqual({ ok: true, msg: { type: 'dev', op: 'meteor' } })
+    expect(parseClientMessage(JSON.stringify({ type: 'start', difficulty: 'hard' }))).toEqual({ ok: true, msg: { type: 'start', difficulty: 'hard' } })
+    expect(parseClientMessage(JSON.stringify({ type: 'surrender', yes: true }))).toEqual({ ok: true, msg: { type: 'surrender', yes: true } })
+    expect(parseClientMessage(JSON.stringify({ type: 'start', difficulty: 'imposible' })).ok).toBe(false)
+    expect(parseClientMessage(JSON.stringify({ type: 'surrender' })).ok).toBe(false)
     expect(dev({ op: 'meteor', x: 1, z: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'meteor', x: 1, z: 2 } })
     const bad = [
       { op: 'give', item: 'diamante', amount: 1 },
