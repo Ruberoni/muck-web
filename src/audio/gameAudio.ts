@@ -140,6 +140,10 @@ export class GameAudio {
           if (e.state === 'crouch') s.play('roar')
           if (e.state === 'aim') s.play('growl')
           break
+        case 'eternalNight':
+        case 'bell':
+          s.play('bell')
+          break
         // Como un golpe al aire.
         case 'projectileThrown':
           s.play('swing', { gain: ROCK_THROW_GAIN })
@@ -218,6 +222,10 @@ export class GameAudio {
         case 'enemyCharge':
           if (e.state === 'crouch') this.sound.play('roar')
           if (e.state === 'aim') this.sound.play('growl')
+          break
+        case 'eternalNight':
+        case 'bell':
+          this.sound.play('bell')
           break
         case 'projectileThrown':
           at(e, REMOTE_HEARING.hit, 'swing')

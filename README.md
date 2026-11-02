@@ -129,9 +129,21 @@ El mundo se genera de forma determinista a partir de `WORLD_SEED` (`src/sim/rand
 
 La lógica que no depende de three.js ni del DOM (jugador, supervivencia, colisiones, inventario, fabricación, constantes, generador aleatorio, altura del terreno y reloj del día) vive en `src/sim/`, para que la pueda ejecutar también un servidor. `npm run typecheck:sim` la compila sin la librería del DOM y un test comprueba que no importa three ni nada de fuera de `src/sim/`.
 
+## La Noche Eterna
+
+La partida va contra el reloj, y el reloj depende de cuántos empezaron: con más jugadores, menos tiempo. La noche dura 2,1 minutos para todos; lo que cambia es la luz de cada día. Cuando cae la noche 6, ya no vuelve a amanecer: la niebla se cierra a unos 40 m y un contador sigue las noches. Cada una acaba con una campana que se oye en toda la isla, y en ese momento pasa lo que antes pasaba al amanecer: vuelven los muertos que estaban esperando, cae el meteorito y sale el jefe que toque.
+
+| Jugadores | Luz por día | Cae la Noche Eterna | Campana |
+| --- | --- | --- | --- |
+| 1 | 6 min | minuto 45 | cada 6 min |
+| 2 | 5 min | minuto 40 | cada 5,5 min |
+| 3 | 4 min | minuto 34 | cada 5 min |
+| 4 | 3,5 min | minuto 31 | cada 4,5 min |
+| 5 | 3 min | minuto 28 | cada 4 min |
+
 ## Meteoritos
 
-Desde el día 2 cae un meteorito al día, a media mañana o a mediodía, a la hora que toque en cada partida. Se anuncia 6 s antes con una bola de fuego en el cielo, un silbido, el aviso "¡Cae un meteorito al norte!" (según dónde estés) y una marca roja en el suelo. Cae en hierba libre, entre 40 y 70 m de un jugador vivo, y quien esté a menos de 4 m recibe 20 de daño. Deja un cráter y una roca que no se puede atravesar, con su rombo en el minimapa, y junto a ella aparece su guardián. Mientras viva, la roca sigue al rojo y no cae otro; al morir, la roca se enfría y desaparece al amanecer siguiente. Los decide `src/sim/worldEvents.ts`, y en red el cliente sigue sus eventos.
+Desde el día 2 cae un meteorito al día, a media mañana o a mediodía, a la hora que toque en cada partida; en la Noche Eterna, con cada campana. Se anuncia 6 s antes con una bola de fuego en el cielo, un silbido, el aviso "¡Cae un meteorito al norte!" (según dónde estés) y una marca roja en el suelo. Cae en hierba libre, entre 40 y 70 m de un jugador vivo, y quien esté a menos de 4 m recibe 20 de daño. Deja un cráter y una roca que no se puede atravesar, con su rombo en el minimapa, y junto a ella aparece su guardián. Mientras viva, la roca sigue al rojo y no cae otro; al morir, la roca se enfría y desaparece al amanecer siguiente. Los decide `src/sim/worldEvents.ts`, y en red el cliente sigue sus eventos.
 
 El **Guardián del meteorito** tiene 500 de vida por cada jugador en el mundo, hace 15 de daño, es más lento que andar y no se aturde. El pico le hace ×1,5. Se queda quieto junto al cráter hasta que un jugador vivo se acerca a 15 m; entonces lo persigue mientras no se aleje más de 25 m de su sitio, y si se aleja vuelve a él sin curarse. Sigue ahí de día y de noche hasta que lo matan, y suelta 3 fragmentos de meteorito por jugador. Con 3 fragmentos y 2 de madera oscura, en el yunque, se hace la espada de meteorito: 65 de ataque y un golpe cada 0,22 s, la mejor espada del juego.
 

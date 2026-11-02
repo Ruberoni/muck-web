@@ -86,8 +86,12 @@ export class WorldEvents {
     private guardians: MeteorGuardian = NO_GUARDIAN,
   ) {}
 
-  /** Paso fijo al tick `tick`. `players`: los que están en el mundo. Devuelve el daño a cada jugador en este paso. */
-  step(tick: number, players: readonly WorldEventTarget[], phase: number, day: number): WorldEventDamage[] {
+  /**
+   * Paso fijo al tick `tick`. `players`: los que están en el mundo. Devuelve el daño a cada jugador en este paso.
+   * En la Noche Eterna `eternal`: ya no hay día, y el de cada noche cae con su campana. Sin esto no habría fragmentos
+   * para el tótem si no se consiguieron antes, y la partida no se podría ganar.
+   */
+  step(tick: number, players: readonly WorldEventTarget[], phase: number, day: number, eternal = false): WorldEventDamage[] {
     if (this.meteor && this.meteor.coolDay !== null && day > this.meteor.coolDay) this.clearMeteor()
     if (day !== this.day) {
       this.day = day
@@ -102,7 +106,7 @@ export class WorldEvents {
       }
       return []
     }
-    if (this.fallPhase !== null && phase >= this.fallPhase && !isNight(phase)) {
+    if (this.fallPhase !== null && phase >= this.fallPhase && (eternal || !isNight(phase))) {
       const spot = this.findSpot(players)
       if (spot) this.fall(tick, spot.x, spot.z)
     }

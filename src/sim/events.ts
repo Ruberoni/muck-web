@@ -56,6 +56,10 @@ export type SimEventData =
   | { type: 'meteorLanded'; x: number; y: number; z: number }
   | { type: 'meteorCooled'; day: number }
   | { type: 'meteorGone' }
+  /** Cae la Noche Eterna: ya no vuelve a amanecer. */
+  | { type: 'eternalNight' }
+  /** Acaba una noche de la Noche Eterna: lo que antes pasaba al amanecer pasa ahora. */
+  | { type: 'bell'; night: number }
   | { type: 'clockSet'; worldStartTick: number }
   | { type: 'worldReset'; worldStartTick: number }
 

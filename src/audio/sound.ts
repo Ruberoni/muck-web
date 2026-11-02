@@ -21,6 +21,8 @@ export type SoundName =
   | 'growl'
   /** Un jefe se agacha para embestir: se oye esté donde esté. */
   | 'roar'
+  /** La campana de la Noche Eterna: se oye en toda la isla. */
+  | 'bell'
   /** Un meteorito que baja: suena `METEOR_WARNING` segundos, y se oye en toda la isla. */
   | 'meteorWhistle'
   | 'meteorImpact'
@@ -402,6 +404,13 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
     Math.max(
       s.tone(70, 0.9, { type: 'sawtooth', to: 130, gain: 0.45, attack: 0.08, lowpass: 650, vibrato: { rate: 26, depth: 20 } }),
       s.noise(0.7, { filter: 'lowpass', freq: 380, gain: 0.3, attack: 0.1 }),
+    ),
+  bell: (s) =>
+    Math.max(
+      s.tone(392, 2.6, { gain: 0.5, attack: 0.01 }),
+      s.tone(784, 1.8, { gain: 0.22, attack: 0.01 }),
+      s.tone(1180, 1.1, { type: 'triangle', gain: 0.12, attack: 0.01 }),
+      s.tone(196, 3.2, { gain: 0.25, attack: 0.02 }),
     ),
   // Baja de tono y crece hasta el impacto; cada tramo sigue donde acaba el anterior, porque la envolvente solo sube una vez.
   meteorWhistle: (s) =>

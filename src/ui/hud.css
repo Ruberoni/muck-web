@@ -78,10 +78,11 @@
   font-weight: 700;
 }
 
+.day { white-space: pre-line; }
 .tonight {
   position: absolute;
   left: 16px;
-  top: 44px;
+  top: 70px;
   font-size: 14px;
   font-weight: 600;
   color: #ffb13b;

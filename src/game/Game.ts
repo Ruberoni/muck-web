@@ -14,6 +14,7 @@ import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
 import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
+import { clockTexts } from '../ui/clockText'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
@@ -44,6 +45,9 @@ import { pickNameTags, type PlayerRow } from '../ui/multiplayerHud'
 import { playerCss } from '../ui/playerColor'
 
 export type { GameState } from './states'
+
+/** Segundos que tarda en cerrarse la niebla de la Noche Eterna. */
+const ETERNAL_FOG_TIME = 12
 
 const overlayFor = (state: GameState): OverlayKind => (inGame(state) ? null : state)
 
@@ -627,6 +631,12 @@ export class Game {
           this.hud.setResults(resultLines(e.result, () => 'Tú'))
           this.die()
           break
+        case 'eternalNight':
+          this.hud.showBanner('Cae la Noche Eterna')
+          break
+        case 'bell':
+          this.hud.showBanner(`Campana · Noche ${e.night}`)
+          break
         case 'meteorIncoming':
           this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
           this.audio.meteorIncoming()
@@ -859,7 +869,7 @@ export class Game {
       this.renderPos.y,
       this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
     )
-    updateSky(this.sky, sim.clock.phase, this.shadowCenter)
+    updateSky(this.sky, sim.clock.phase, this.shadowCenter, THREE.MathUtils.clamp((sim.clock.elapsed - sim.clock.eternalAt) / ETERNAL_FOG_TIME, 0, 1))
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot) : null
@@ -880,7 +890,7 @@ export class Game {
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
-    this.hud.setDay(sim.clock.day)
+    this.hud.setClock(clockTexts(sim.clock))
     const boss = enemies.list.find((e) => ENEMY_DEFS[e.type].boss)
     const { banner, tonight } = this.bossWatch.update(sim.clock.day, boss?.type ?? null)
     if (banner) this.hud.showBanner(banner)

@@ -84,7 +84,7 @@ export class Hud {
   private results: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
   readonly panel: HTMLElement
-  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', day: 0, tonight: '', boss: '' }
+  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', clock: '', tonight: '', boss: '' }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
@@ -297,9 +297,11 @@ export class Hud {
     this.setFood(nextFood(inventory))
     this.inventory.setInventory(inventory)
   }
-  setDay(day: number) {
-    if (day === this.last.day) return
-    this.last.day = day
-    this.day.textContent = `Día ${day}`
+  /** El día y, debajo, lo que falta. Con cada segundo cambia el texto: solo se toca el DOM entonces. */
+  setClock({ title, countdown }: { title: string; countdown: string }) {
+    const text = countdown ? `${title}\n${countdown}` : title
+    if (text === this.last.clock) return
+    this.last.clock = text
+    this.day.textContent = text
   }
 }

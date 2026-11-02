@@ -6,7 +6,7 @@ import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, type InventoryState, type ItemId } from './inventory'
-import { DEFAULT_RULES, DIFFICULTY_DEFS, type MatchEnd, type MatchResult, type MatchRules } from './match'
+import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, type MatchEnd, type MatchResult, type MatchRules } from './match'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
 import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
@@ -15,7 +15,7 @@ import { createPropWorld, findSpawn, generatePropPlacements, growBerries, type P
 import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
 import { hurt, isDead } from './survival'
-import { DAY_LENGTH, DayClock, euclideanModulo, isNight, START_PHASE } from './world/daycycle'
+import { DayClock, isNight } from './world/daycycle'
 import { heightAt } from './world/terrain'
 import { WorldEvents, type WorldEventsState } from './worldEvents'
 
@@ -80,7 +80,7 @@ export interface SimState {
   nextPlayerId: number
   /** Todos muertos: tick en que se acaba la partida. */
   gameOverAt: number | null
-  rules: MatchRules
+  rules: MatchRules | null
   /** Cómo acabó; null mientras se juega. */
   result: MatchResult | null
 }
@@ -115,12 +115,12 @@ export class Simulation {
   readonly env: PlayerEnv
   /** Punto de aparición: el primer jugador aparece aquí y los demás en un anillo alrededor. */
   readonly spawnCenter: { x: number; z: number }
-  /** Con quién y a qué dificultad se juega: las fija `startMatch`. */
-  rules: MatchRules = DEFAULT_RULES
   /** Cómo acabó la partida; null mientras se juega. */
   result: MatchResult | null = null
   /** Azar de la simulación (enemigos, objetos que caen). */
   private rng: Rng
+  /** null: nadie ha fijado reglas (pruebas): ciclo de referencia, sin Noche Eterna. */
+  private matchRules: MatchRules | null = null
   /** Lo que pasa en cada paso, sellado con su tick. Lo emitido fuera de un paso sale con el siguiente. */
   private events = new EventLog()
   /** Tick en el que empezó el día 1: el reloj sale de `tick - worldStartTick`. */
@@ -155,6 +155,18 @@ export class Simulation {
       collide: (pos) => this.obstacles.reduce((touched, grid) => resolveCircle(pos, PLAYER_RADIUS, grid) || touched, false),
     }
     this.spawnCenter = findSpawn(world.grid)
+  }
+
+  /** Con quién y a qué dificultad se juega: las fija `startMatch`. */
+  get rules(): MatchRules {
+    return this.matchRules ?? DEFAULT_RULES
+  }
+
+  /** Las reglas mandan en el reloj. */
+  set rules(rules: MatchRules) {
+    this.matchRules = rules
+    this.clock.configure(clockOf(rules.players))
+    this.syncClock()
   }
 
   /** Último tick simulado. */
@@ -243,11 +255,14 @@ export class Simulation {
       movePlayer(slot, command, this.env)
     }
 
+    const { day, eternal } = this.clock
     this.syncClock()
+    if (this.clock.eternal && !eternal) this.events.emit({ type: 'eternalNight' })
+    else if (this.clock.eternal && this.clock.day !== day) this.events.emit({ type: 'bell', night: this.clock.day })
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
     const hits = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
-    hits.push(...this.worldEvents.step(this.tick, prey, this.clock.phase, this.clock.day))
+    hits.push(...this.worldEvents.step(this.tick, prey, this.clock.phase, this.clock.day, this.clock.eternal))
     for (const { playerId, damage } of hits) {
       hurt(this.slot(playerId).player, damage)
       this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
@@ -287,10 +302,9 @@ export class Simulation {
     return craftRecipe(this.slot(id), recipe, this.craftWorld, this.events.emit)
   }
 
-  /** Tick del próximo amanecer. */
+  /** Tick del próximo amanecer o, en la Noche Eterna, de la próxima campana. */
   nextDawnTick(): number {
-    const cycles = START_PHASE + this.clock.elapsed / DAY_LENGTH
-    return this.worldStartTick + Math.round(((Math.floor(cycles) + 1 - START_PHASE) * DAY_LENGTH) / STEP)
+    return this.worldStartTick + Math.round(this.clock.nextMorning / STEP)
   }
 
   /** Empieza una partida con estas reglas, sobre la isla recién restaurada. */
@@ -340,17 +354,14 @@ export class Simulation {
 
   /** Salta a una hora del día actual (0 = amanecer), redondeada al tick. */
   setPhase(phase: number) {
-    const cycles = START_PHASE + this.clock.elapsed / DAY_LENGTH
-    const elapsed = (Math.floor(cycles) + euclideanModulo(phase, 1) - START_PHASE) * DAY_LENGTH
-    this.worldStartTick = this.tick - Math.round(elapsed / STEP)
+    this.worldStartTick = this.tick - Math.round(this.clock.elapsedAt(this.clock.day, phase) / STEP)
     this.syncClock()
     this.events.emit({ type: 'clockSet', worldStartTick: this.worldStartTick })
   }
 
   /** Salta al día `day` (desde 1) a la misma hora, redondeada al tick (para probar las noches de un día concreto). */
   setDay(day: number) {
-    const elapsed = (Math.max(1, Math.floor(day)) - 1 + this.clock.phase - START_PHASE) * DAY_LENGTH
-    this.worldStartTick = this.tick - Math.round(elapsed / STEP)
+    this.worldStartTick = this.tick - Math.round(this.clock.elapsedAt(Math.max(1, Math.floor(day)), this.clock.phase) / STEP)
     this.syncClock()
     this.events.emit({ type: 'clockSet', worldStartTick: this.worldStartTick })
   }
@@ -410,7 +421,7 @@ export class Simulation {
         })),
       nextPlayerId: this.nextPlayerId,
       gameOverAt: this.gameOverAt,
-      rules: this.rules,
+      rules: this.matchRules,
       result: this.result,
     }
   }
@@ -425,6 +436,7 @@ export class Simulation {
   private load(state: SimState) {
     this.events.tick = state.tick
     this.worldStartTick = state.worldStartTick
+    if (state.rules) this.rules = state.rules
     this.syncClock()
     this.rng.state = state.rng
     for (const { id, hp, alive, regrowLeft } of state.props) Object.assign(this.world.props[id], { hp, alive, regrowLeft })
@@ -450,7 +462,6 @@ export class Simulation {
     }
     this.nextPlayerId = state.nextPlayerId
     this.gameOverAt = state.gameOverAt
-    this.rules = state.rules
     this.result = state.result
   }
 

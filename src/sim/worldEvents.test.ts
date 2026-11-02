@@ -111,6 +111,19 @@ describe('meteoritos', () => {
     expect(found).toBeGreaterThan(250)
   })
 
+  it('en la Noche Eterna cae con la campana: sin esto no habría fragmentos para el tótem', () => {
+    const midnight = 0.825
+    worldEvents.step(++tick, players, midnight, 6, true)
+    expect(count('meteorIncoming')).toBe(1)
+    for (let i = 0; i < WARNING; i++) step(midnight, 6)
+    worldEvents.step(++tick, players, midnight, 6, true)
+    expect(worldEvents.meteor?.coolDay).toBe(6)
+    // Enfriado, se va con la siguiente campana y cae otro.
+    worldEvents.step(++tick, players, midnight, 7, true)
+    expect(count('meteorGone')).toBe(1)
+    expect(count('meteorIncoming')).toBe(2)
+  })
+
   it('sin nadie vivo espera, y de noche no cae', () => {
     const nobody = [player(home.x, home.z, false)]
     for (let phase = 0; phase < 0.5; phase += 0.001) step(phase, 2, nobody)

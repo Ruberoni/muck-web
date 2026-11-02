@@ -202,6 +202,44 @@ describe('muerte en una sala', () => {
   })
 })
 
+describe('Noche Eterna', () => {
+  /** Una partida a punto de que caiga la Noche Eterna. */
+  function nearEternal() {
+    const sim = withPlayers(3)
+    sim.setDay(5)
+    sim.setPhase(0.99)
+    sim.setDay(6)
+    sim.setPhase(DAY_FRACTION - 0.0001)
+    return sim
+  }
+
+  it('avisa al caer y en cada campana, y lo que dependía del amanecer pasa con ella', () => {
+    const sim = nearEternal()
+    const fallen = until(sim, 'eternalNight', 120)
+    expect(sim.clock.eternal).toBe(true)
+    expect(fallen.some((e) => e.type === 'bell')).toBe(false)
+
+    // Muerto en la Noche Eterna se espera a la siguiente campana.
+    kill(sim, 0)
+    const { respawnAt } = sim.slot(0)
+    expect(respawnAt).toBe(sim.nextDawnTick())
+    const ring = until(sim, 'bell', 60 * 60 * 6)
+    expect(ring.find((e) => e.type === 'bell')).toMatchObject({ night: 7 })
+    expect(sim.tick).toBe(respawnAt)
+    expect(sim.slot(0).alive).toBe(true)
+  })
+
+  it('guardar en plena Noche Eterna no cambia nada', () => {
+    const sim = nearEternal()
+    until(sim, 'eternalNight', 120)
+    const copy = Simulation.fromJSON(JSON.parse(JSON.stringify(sim.toJSON())), placements)
+    expect(copy.clock.eternal).toBe(true)
+    expect(copy.clock.day).toBe(sim.clock.day)
+    expect(copy.clock.phase).toBe(sim.clock.phase)
+    expect(copy.nextDawnTick()).toBe(sim.nextDawnTick())
+  })
+})
+
 describe('partida en solitario', () => {
   it('3 vidas en fácil, 2 en normal y 1 en difícil o ultrahard', () => {
     expect(DIFFICULTIES.map((d) => DIFFICULTY_DEFS[d].lives)).toEqual([3, 2, 1, 1])

@@ -1,4 +1,5 @@
 import type { PlayerId } from './events'
+import type { ClockRules } from './world/daycycle'
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'ultra'
 
@@ -30,6 +31,18 @@ export interface MatchRules {
 }
 
 export const DEFAULT_RULES: MatchRules = { players: 1, difficulty: 'normal' }
+
+/** La Noche Eterna cae en la noche 6 para todos. */
+const ETERNAL_DAY = 6
+/** Con más jugadores, menos tiempo: minutos de luz por día y entre campanas, de 1 a 5 jugadores. */
+const DAYLIGHT_MINUTES = [6, 5, 4, 3.5, 3]
+const BELL_MINUTES = [6, 5.5, 5, 4.5, 4]
+
+/** El reloj de una partida de `players` jugadores. */
+export function clockOf(players: number): ClockRules {
+  const i = Math.min(Math.max(players, 1), DAYLIGHT_MINUTES.length) - 1
+  return { daylight: DAYLIGHT_MINUTES[i] * 60, eternalDay: ETERNAL_DAY, bell: BELL_MINUTES[i] * 60 }
+}
 
 /** Cómo acaba una partida. */
 export type MatchEnd = 'lost' | 'surrendered' | 'escaped'

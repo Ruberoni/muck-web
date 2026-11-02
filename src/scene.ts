@@ -14,6 +14,10 @@ const origin = new THREE.Vector3()
 const up = new THREE.Object3D().up
 const snapped = new THREE.Vector3()
 const state = createSkyState()
+// Oscura, no gris, y cerrada: los enemigos salen de ella.
+const ETERNAL_FOG = new THREE.Color('#06070c')
+const ETERNAL_FOG_NEAR = 10
+const ETERNAL_FOG_FAR = 40
 
 /** Escena con el terreno, el agua y el cielo. Los props los añade Game, con las colocaciones de su sesión. */
 export function createScene() {
@@ -55,14 +59,14 @@ export type Sky = ReturnType<typeof createScene>['sky']
 /**
  * Aplica la hora del día (`phase`, ver DayClock) a cielo, niebla y luces, y centra la cámara
  * de sombras en `center` (normalmente por delante del jugador), ajustada a la rejilla de texels
- * en el espacio de la luz para que las sombras no parpadeen.
+ * en el espacio de la luz para que las sombras no parpadeen. `eternal`: cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1.
  */
-export function updateSky(sky: Sky, phase: number, center: THREE.Vector3) {
+export function updateSky(sky: Sky, phase: number, center: THREE.Vector3, eternal = 0) {
   sampleSky(phase, state)
-  sky.background.copy(state.sky)
-  sky.fog.color.copy(state.sky)
-  sky.fog.near = state.fogNear
-  sky.fog.far = state.fogFar
+  sky.background.copy(state.sky).lerp(ETERNAL_FOG, eternal)
+  sky.fog.color.copy(sky.background)
+  sky.fog.near = THREE.MathUtils.lerp(state.fogNear, ETERNAL_FOG_NEAR, eternal)
+  sky.fog.far = THREE.MathUtils.lerp(state.fogFar, ETERNAL_FOG_FAR, eternal)
   sky.hemi.color.copy(state.hemiSky)
   sky.hemi.groundColor.copy(state.hemiGround)
   sky.hemi.intensity = state.hemiIntensity
