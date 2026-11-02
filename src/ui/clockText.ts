@@ -1,4 +1,4 @@
-import { LIT_SHARE, OIL_MAX } from '../sim/constants'
+import { LIT_SHARE, MOTOR_TIME, OIL_MAX, PLANE_HP } from '../sim/constants'
 import type { Structure } from '../sim/structures'
 import { TRAIT_NAMES, type ThreatState } from '../sim/threat'
 import type { DayClock } from '../sim/world/daycycle'
@@ -10,6 +10,13 @@ const minutes = (seconds: number) => {
 
 /** Nivel de los mobs y próximo rasgo, en la Noche Eterna. */
 export const threatText = ({ eternal, level, next }: ThreatState) => (eternal ? `Mobs nivel ${level} · Próximo: ${TRAIT_NAMES[next]}` : null)
+
+/** Cómo va el motor del avión, si está en marcha. */
+export function planeText(structures: readonly Structure[]): string | null {
+  const plane = structures.find((s) => s.plane?.running)?.plane
+  if (!plane) return null
+  return `Motor: ${Math.floor(Math.min(plane.heat, MOTOR_TIME))}/${MOTOR_TIME} s · Avión ${Math.ceil((plane.hp / PLANE_HP) * 100)} %`
+}
 
 /** Cómo va la noche iluminada, si hay un faro. */
 export function lightText(structures: readonly Structure[], clock: DayClock): string | null {

@@ -112,6 +112,8 @@ describe('estructuras en general', () => {
   it('cada tipo sale de un objeto colocable con su radio, y solo esos objetos se colocan', () => {
     for (const kind of STRUCTURE_KINDS) {
       const { item, radius } = STRUCTURE_DEFS[kind]
+      // El avión no lo coloca nadie.
+      if (item === null) continue
       expect(PLACEABLE_DEFS[item]).toEqual({ kind, radius })
       expect(placeableOf(item)).toEqual({ kind, radius })
     }

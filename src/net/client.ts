@@ -597,6 +597,11 @@ export class NetClient {
       case 'stationDone':
         sim.structures.byId(e.id)?.jobs.shift()
         break
+      case 'planeChanged': {
+        const structure = sim.structures.byId(e.id)
+        if (structure) structure.plane = e.plane
+        break
+      }
       case 'totemActivated': {
         const structure = sim.structures.byId(e.id)
         if (structure) structure.awake = true

@@ -9,8 +9,12 @@ import {
   GAME_OVER_DELAY,
   LIT_SHARE,
   METEOR_RADIUS,
+  MOTOR_TIME,
   OIL_SECONDS,
   OIL_WEAR,
+  PLANE_BOARD,
+  PLANE_HP,
+  PLANE_REPAIR_WOOD,
   TOTEM_HOLD,
   PLAYER_RADIUS,
   RESPAWN_DAY_DELAY,
@@ -20,7 +24,7 @@ import {
   STATION_RANGE,
   STEP,
 } from './constants'
-import { Enemies, type EnemiesState } from './enemies'
+import { Enemies, PLANE_TARGET, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, KEY_ITEMS, type InventoryState, type ItemId } from './inventory'
@@ -45,6 +49,8 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 const TOSS_HEIGHT = 1.2
 /** Altura sobre el suelo desde la que sale lo que termina una estación. */
 const STATION_DROP_HEIGHT = 1.4
+/** Intentos de encontrar dónde cae el avión. */
+const CRASH_ATTEMPTS = 20
 /** Altura sobre el suelo desde la que sale una roca lanzada. */
 const THROW_HEIGHT = 1.5
 
@@ -300,16 +306,23 @@ export class Simulation {
     }
     this.threat.apply(this.clock.day, this.rules.difficulty, this.enemies.scaling)
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
+    const flying = this.structures.flying
+    this.enemies.decoy = flying ? { id: PLANE_TARGET, pos: flying, alive: true, radius: flying.radius } : null
     const hits = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
     hits.push(...this.worldEvents.step(this.tick, prey, this.clock.phase, this.clock.day, this.clock.eternal))
     for (const { playerId, damage } of hits) {
+      if (playerId === PLANE_TARGET) {
+        this.hurtPlane(damage)
+        continue
+      }
       hurt(this.slot(playerId).player, damage)
       this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
     }
 
     growBerries(this.world.props, STEP, this.events.emit)
     this.structures.burn(STEP, this.oilUnit)
+    this.warmPlane(living)
     this.structures.step(STEP, (station, recipe) => {
       const { x, y, z } = station
       this.pickups.drop(recipeById(recipe)!.result, 1, x, y + STATION_DROP_HEIGHT, z)
@@ -539,14 +552,57 @@ export class Simulation {
     if (!pressed) return
     if (target.build && !isBuilt(target)) this.structures.deliver(target, slot.inventory, this.rules)
     else if (target.kind === 'lighthouse') this.tendLighthouse(target, slot)
+    else if (target.kind === 'plane') this.tendPlane(target, slot)
   }
 
-  /** Sin vuelta atrás: los mobs dan el segundo salto. */
+  /** Sin vuelta atrás: los mobs dan el segundo salto y cae el avión, lejos del tótem. */
   private activateTotem(totem: Structure) {
     totem.awake = true
     this.threat.awaken()
     this.events.emit({ type: 'totemActivated', id: totem.id })
     this.events.emit({ type: 'mobsRose', trait: null, threat: this.threat.save() })
+    const around = [{ id: PLANE_TARGET, pos: totem, alive: true }]
+    let spot: { x: number; z: number } | null = null
+    for (let i = 0; i < CRASH_ATTEMPTS && !spot; i++) spot = this.worldEvents.findSpot(around)
+    const { x, z } = spot ?? this.spawnCenter
+    const plane = this.structures.place({ x, y: heightAt(x, z), z, valid: true }, 'plane')!
+    this.events.emit({ type: 'planeCrashed', id: plane.id, x, z })
+  }
+
+  /** Averiado se repara; reparado se arranca. */
+  private tendPlane(structure: Structure, slot: PlayerSlot) {
+    const plane = structure.plane!
+    if (plane.hp <= 0) {
+      if (slot.inventory.remove('wood', PLANE_REPAIR_WOOD)) plane.hp = PLANE_HP
+    } else if (!plane.running) {
+      plane.running = true
+      plane.heat = 0
+    }
+    this.structures.planeChanged(structure)
+  }
+
+  /** Con el motor en marcha todos van a por él; si le quitan toda la vida se apaga, pero no se destruye. */
+  private hurtPlane(damage: number) {
+    const structure = this.structures.flying
+    if (!structure) return
+    const plane = structure.plane!
+    plane.hp = Math.max(0, plane.hp - damage)
+    if (plane.hp <= 0) {
+      plane.running = false
+      plane.heat = 0
+    }
+    this.structures.planeChanged(structure)
+  }
+
+  /** El motor calienta; al acabar despegan quienes estén vivos y a bordo. Si no hay nadie, espera. */
+  private warmPlane(living: readonly PlayerSlot[]) {
+    const structure = this.structures.flying
+    if (!structure) return
+    const plane = structure.plane!
+    plane.heat = Math.min(MOTOR_TIME, plane.heat + STEP)
+    if (plane.heat < MOTOR_TIME) return
+    const aboard = living.filter(({ player }) => Math.hypot(player.pos.x - structure.x, player.pos.z - structure.z) - structure.radius <= PLANE_BOARD)
+    if (aboard.length) this.finish('escaped', aboard.map((s) => s.id))
   }
 
   /** Un faro acabado: primero se carga lo que se lleve; si no, se enciende o se apaga. Antes de la Noche Eterna no enciende. */

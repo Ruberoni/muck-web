@@ -45,6 +45,10 @@ export const BUILD_DEFS: Partial<Record<StructureKind, BuildDef>> = {
       { name: 'Corazón', cost: [{ item: 'meteor_fragment', amount: 3, fixed: 'each' }, { item: 'boss_trophy', amount: 1, fixed: 'one' }] },
     ],
   },
+  plane: {
+    name: 'Avión',
+    phases: [{ name: 'Fuselaje', cost: [{ item: 'wood', amount: 150 }, { item: 'iron_bar', amount: 40 }] }],
+  },
 }
 
 /** Por dónde va una construcción. */

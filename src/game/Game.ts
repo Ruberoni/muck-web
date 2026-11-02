@@ -16,7 +16,7 @@ import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
 import { usableNear } from '../sim/builds'
-import { clockTexts, lightText, threatText } from '../ui/clockText'
+import { clockTexts, lightText, planeText, threatText } from '../ui/clockText'
 import { usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
@@ -66,6 +66,7 @@ const PLACE_PROMPT: Record<StructureKind, string> = {
   lighthouse: 'Clic para colocar el faro',
   distiller: 'Clic para colocar el destilador',
   totem: 'Clic para colocar el tótem',
+  plane: '',
   workbench: 'Clic para colocar la mesa de trabajo',
   furnace: 'Clic para colocar el horno',
   anvil: 'Clic para colocar el yunque',
@@ -657,6 +658,11 @@ export class Game {
           this.hud.showBanner('El tótem ha despertado')
           this.sound.play('roar')
           break
+        case 'planeCrashed':
+          this.hud.showBanner(`El avión ha caído al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}`)
+          this.shake.start(Math.hypot(e.x - this.renderPos.x, e.z - this.renderPos.z))
+          this.audio.meteorLanded(e.x, e.z, this.listener())
+          break
         case 'mobsRose':
           if (e.trait) this.hud.showBanner(`Campana · Los mobs suben: ${TRAIT_NAMES[e.trait]}`)
           break
@@ -930,7 +936,7 @@ export class Game {
     const { banner, tonight } = this.bossWatch.update(sim.clock.day, boss?.type ?? null)
     if (banner) this.hud.showBanner(banner)
     this.hud.setTonight(tonight ?? threatText(sim.threat.state))
-    this.hud.setLight(lightText(structures.list, sim.clock))
+    this.hud.setLight(planeText(structures.list) ?? lightText(structures.list, sim.clock))
     this.hud.setBoss(boss ? { name: ENEMY_DEFS[boss.type].name, hp: boss.hp, maxHp: boss.maxHp } : null)
     if (this.state === 'playing') {
       const entered = this.biomeNotice.update(biomeAt(p.pos.x, p.pos.z), dt)

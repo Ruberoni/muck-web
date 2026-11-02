@@ -99,7 +99,12 @@ export interface EnemyPrey {
   id: PlayerId
   pos: { x: number; z: number }
   alive: boolean
+  /** Si no es un jugador, lo que ocupa. */
+  radius?: number
 }
+
+/** El "jugador" al que le llega el daño cuando pegan al avión. */
+export const PLANE_TARGET: PlayerId = -1
 
 /** Daño que recibe un jugador en un paso. */
 export interface EnemyDamage {
@@ -179,6 +184,8 @@ export class Enemies {
   private bossDay = 0
   /** Lo que han subido los mobs comunes (ver Threat). */
   scaling: MobScaling = { ...NO_SCALING }
+  /** Lo que atrae a todos los mobs comunes, en vez de los jugadores: el avión con el motor en marcha. */
+  decoy: EnemyPrey | null = null
 
   /** `grids`: obstáculos que rodean (props, estructuras…). `throwRock`: lo que vuela va por los proyectiles de la partida. */
   constructor(
@@ -215,7 +222,7 @@ export class Enemies {
     for (const e of this.list) {
       e.prev.x = e.pos.x
       e.prev.z = e.pos.z
-      const target = this.chooseTarget(e, prey, dt)
+      const target = this.decoy && isCommon(e.type) ? this.decoy : this.chooseTarget(e, prey, dt)
       if (!this.chase(e, target, dt) || !target) continue
       const dealt = isCommon(e.type) ? Math.round(ENEMY_DEFS[e.type].damage * this.scaling.damage) : ENEMY_DEFS[e.type].damage
       const hurt = damage.find((d) => d.playerId === target.id)
@@ -294,7 +301,7 @@ export class Enemies {
       this.ranged(e, def.ranged, prey, dist, dt)
       return false
     }
-    const contact = contactOf(e.type)
+    const contact = contactOf(e.type) + (prey.radius ?? 0)
     if (dist > contact + def.gap) {
       const speed = isCommon(e.type) ? Math.min(def.speed * this.scaling.speed, MOB_MAX_SPEED) : def.speed
       const step = Math.min(speed * dt, dist - contact - def.gap)

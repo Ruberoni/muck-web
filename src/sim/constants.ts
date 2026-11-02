@@ -462,6 +462,11 @@ export const LIT_SHARE = 2 / 3
 export const RESPAWN_LIGHTHOUSE_DELAY = 60
 /** Segundos que hay que mantener la tecla de uso para activar el tótem: no debe hacerse sin querer. */
 export const TOTEM_HOLD = 3
+/** El avión: vida, segundos que tarda en calentar el motor, a cuántos metros se sube y lo que cuesta repararlo. */
+export const PLANE_HP = 600
+export const MOTOR_TIME = 90
+export const PLANE_BOARD = 8
+export const PLANE_REPAIR_WOOD = 10
 /** Trabajos en cola por estación. Rinde lo mismo con 1 o con 5 jugadores, y eso aprieta a los grupos grandes. */
 export const MAX_JOBS = 5
 // Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.

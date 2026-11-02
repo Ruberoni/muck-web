@@ -155,6 +155,8 @@ El aceite se hace en el destilador (se fabrica en la mesa de trabajo) con 1 carn
 
 El tótem se levanta igual, en tres fases: la última pide 3 fragmentos de meteorito por jugador y un trofeo, que sueltan los jefes de noche. Manteniendo <kbd>E</kbd> 3 s se activa, sin vuelta atrás: los mobs dan el segundo salto (vida ×1,5, daño ×1,3, velocidad ×1,1). Se puede activar cuando se quiera, incluso antes de la Noche Eterna. Pronto evita que sigan subiendo mientras se espera, pero pilla con menos equipo.
 
+Al activar el tótem el avión cae en llamas, lejos de él, y se anuncia hacia dónde. Se repara entregando materiales. Después, cualquiera arranca el motor con <kbd>E</kbd>: tarda 90 s en calentar y mientras tanto todos los mobs comunes van a por él. Si le quitan toda la vida el motor se apaga, pero no se destruye: se repara con 10 de madera y se vuelve a arrancar. Al acabar despegan quienes estén vivos y a menos de 8 m; si no hay nadie, espera. Se gana si escapa al menos uno, y la pantalla final dice quién se salvó y quién se quedó.
+
 Lo imprescindible para escapar no se puede perder: si quien lo lleva se va, cae al suelo, y si cae al agua aparece en la orilla.
 
 ## Meteoritos

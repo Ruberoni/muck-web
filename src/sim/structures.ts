@@ -4,18 +4,18 @@ import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from './world/terrain'
 import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { Inventory, ItemId } from './inventory'
-import { MAX_JOBS, OIL_MAX, PLACE_DISTANCE } from './constants'
+import { MAX_JOBS, OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
 import type { Recipe, RecipeId } from './crafting'
 import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
 
 /** Lo que se puede colocar en el mundo. Todas sirven de estación: las recetas dicen cuál hay que tener cerca. */
-export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse' | 'distiller' | 'totem'
+export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse' | 'distiller' | 'totem' | 'plane'
 
 export interface StructureDef {
-  /** El objeto que se gasta al colocarla. */
-  item: ItemId
+  /** El objeto que se gasta al colocarla; null: no la coloca nadie. */
+  item: ItemId | null
   radius: number
   /** Las que no son redondas se colocan de frente a quien las pone; las demás, cada una con su giro. */
   facesPlacer: boolean
@@ -29,13 +29,14 @@ export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   lighthouse: { item: 'lighthouse', radius: 1.8, facesPlacer: false },
   distiller: { item: 'distiller', radius: 0.7, facesPlacer: true },
   totem: { item: 'totem', radius: 1.2, facesPlacer: false },
+  plane: { item: null, radius: 3, facesPlacer: false },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]
 
 /** Qué estructura coloca cada objeto colocable: con uno de estos en la mano, el clic coloca en vez de golpear. */
 export const PLACEABLE_DEFS: Partial<Record<ItemId, { kind: StructureKind; radius: number }>> = Object.fromEntries(
-  STRUCTURE_KINDS.map((kind) => [STRUCTURE_DEFS[kind].item, { kind, radius: STRUCTURE_DEFS[kind].radius }]),
+  STRUCTURE_KINDS.filter((kind) => STRUCTURE_DEFS[kind].item).map((kind) => [STRUCTURE_DEFS[kind].item, { kind, radius: STRUCTURE_DEFS[kind].radius }]),
 )
 
 /** La estructura que coloca `item`, o null si no es colocable. */
@@ -50,6 +51,14 @@ export interface LighthouseFire {
   left: number
   /** Segundos que ha ardido desde la última campana. */
   lit: number
+}
+
+/** El avión ya reparado: se arranca, calienta y, si le quitan toda la vida, se apaga y hay que repararlo. */
+export interface PlaneState {
+  hp: number
+  running: boolean
+  /** Segundos que lleva calentando. */
+  heat: number
 }
 
 /** Un trabajo en la cola de una estación. */
@@ -72,6 +81,7 @@ export interface Structure extends Collider {
   fire?: LighthouseFire
   /** El tótem, ya activado. */
   awake?: boolean
+  plane?: PlaneState
 }
 
 export interface StructureSpot {
@@ -97,6 +107,7 @@ const overlaps = (grid: SpatialGrid<Collider>, x: number, z: number, radius: num
 const buildOf = (kind: StructureKind) => ({
   ...(BUILD_DEFS[kind] ? { build: newBuild() } : {}),
   ...(kind === 'lighthouse' ? { fire: { oil: 0, burning: false, left: 0, lit: 0 } } : {}),
+  ...(kind === 'plane' ? { plane: { hp: PLANE_HP, running: false, heat: 0 } } : {}),
 })
 
 const copyStructure = (s: Structure): Structure => ({
@@ -104,6 +115,7 @@ const copyStructure = (s: Structure): Structure => ({
   jobs: s.jobs.map((job) => ({ ...job })),
   ...(s.build ? { build: copyBuild(s.build) } : {}),
   ...(s.fire ? { fire: { ...s.fire } } : {}),
+  ...(s.plane ? { plane: { ...s.plane } } : {}),
 })
 
 /** Hueco entre el jugador y lo que coloca, si es grande. */
@@ -247,6 +259,15 @@ export class Structures {
     return lit
   }
 
+  /** El avión con el motor en marcha, si lo hay. */
+  get flying(): Structure | undefined {
+    return this.list.find((s) => s.plane?.running)
+  }
+
+  planeChanged(structure: Structure) {
+    this.emit({ type: 'planeChanged', id: structure.id, plane: { ...structure.plane! } })
+  }
+
   /** El primer faro encendido, si hay alguno. */
   get burning(): Structure | undefined {
     return this.list.find((s) => s.fire?.burning)
@@ -273,6 +294,7 @@ export class Structures {
   follow(dt: number) {
     for (const s of this.list) {
       if (s.jobs[0]) s.jobs[0].left = Math.max(0, s.jobs[0].left - dt)
+      if (s.plane?.running) s.plane.heat += dt
       if (!s.fire?.burning) continue
       s.fire.left = Math.max(0, s.fire.left - dt)
       s.fire.lit += dt

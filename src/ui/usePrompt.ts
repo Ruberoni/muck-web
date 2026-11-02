@@ -1,5 +1,5 @@
 import { BUILD_DEFS, isBuilt, phaseCost } from '../sim/builds'
-import { OIL_MAX, TOTEM_HOLD } from '../sim/constants'
+import { MOTOR_TIME, OIL_MAX, PLANE_REPAIR_WOOD, TOTEM_HOLD } from '../sim/constants'
 import { ITEM_NAMES } from '../sim/inventory'
 import type { MatchRules } from '../sim/match'
 import type { Structure } from '../sim/structures'
@@ -11,6 +11,10 @@ export function usePrompt(structure: Structure, rules: MatchRules): string {
   if (!build || isBuilt(structure)) {
     const { fire } = structure
     if (structure.kind === 'totem') return structure.awake ? `${def.name} · Despierto` : `${def.name} — Mantén E ${TOTEM_HOLD} s para activarlo. No se puede deshacer`
+    const { plane } = structure
+    if (plane?.hp === 0) return `${def.name} · Averiado — E para repararlo (${PLANE_REPAIR_WOOD} de madera)`
+    if (plane?.running) return plane.heat >= MOTOR_TIME ? `${def.name} · Listo para despegar` : `${def.name} · Calentando el motor`
+    if (plane) return `${def.name} — E para arrancar el motor`
     if (!fire) return def.name
     return `${def.name} · Aceite ${fire.oil}/${OIL_MAX} — E para cargar aceite o ${fire.burning ? 'apagarlo' : 'encenderlo'}`
   }

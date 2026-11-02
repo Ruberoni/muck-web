@@ -50,6 +50,11 @@ const lighthouseLampMaterial = new THREE.MeshStandardMaterial({ color: '#ffd23f'
 const lighthouseBeamGeometry = new THREE.ConeGeometry(9, 70, 12, 1, true).rotateZ(Math.PI / 2).translate(35, 0, 0)
 const lighthouseBeamMaterial = new THREE.MeshBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide, fog: false })
 const BEAM_TURN = 0.6
+const planeHullGeometry = new THREE.BoxGeometry(1.4, 1.4, 7)
+const planeWingGeometry = new THREE.BoxGeometry(8, 0.18, 1.6)
+const planeTailGeometry = new THREE.BoxGeometry(0.2, 1.4, 1.2)
+const planePropellerGeometry = new THREE.BoxGeometry(2.4, 0.2, 0.1)
+const planeMaterial = new THREE.MeshStandardMaterial({ color: '#7f8c8d', flatShading: true })
 const totemBaseGeometry = new THREE.BoxGeometry(2, 1, 2)
 const totemBodyGeometry = new THREE.BoxGeometry(1.2, 3.2, 1.2)
 const totemHeartGeometry = new THREE.IcosahedronGeometry(0.8, 0)
@@ -173,6 +178,25 @@ function buildTotem(m: MaterialFor, shadows: boolean): StructureModel {
   return { root, flame: null, stages: [base, body, heart] }
 }
 
+/** Avión: el fuselaje caído, con un ala rota y llamas; al repararlo aparece la hélice. */
+function buildPlane(m: MaterialFor, shadows: boolean): StructureModel {
+  const root = new THREE.Group()
+  const hull = new THREE.Group()
+  hull.rotation.z = 0.12
+  root.add(hull)
+  const mesh = piece(hull, m, shadows)
+  mesh(planeHullGeometry, planeMaterial, 0, 1, 0)
+  mesh(planeWingGeometry, planeMaterial, 0, 1.3, 0.3)
+  mesh(planeTailGeometry, planeMaterial, 0, 1.9, -3.3)
+  const propeller = mesh(planePropellerGeometry, ironMaterial, 0, 1, 3.7)
+  const flame = new THREE.Group()
+  flame.add(new THREE.Mesh(outerFlameGeometry, m(outerFlameMaterial)), new THREE.Mesh(innerFlameGeometry, m(innerFlameMaterial)))
+  flame.position.set(1.8, 1.4, 0.3)
+  flame.scale.setScalar(2)
+  hull.add(flame)
+  return { root, flame, stages: [propeller] }
+}
+
 /** Destilador: una caldera de madera con su alambique. */
 function buildDistiller(m: MaterialFor, shadows: boolean): StructureModel {
   const root = new THREE.Group()
@@ -219,6 +243,7 @@ const MODELS: Record<StructureKind, (m: MaterialFor, shadows: boolean) => Struct
   lighthouse: buildLighthouse,
   distiller: buildDistiller,
   totem: buildTotem,
+  plane: buildPlane,
 }
 
 const own: MaterialFor = (material) => material
