@@ -11,6 +11,7 @@ import {
   METEOR_RADIUS,
   OIL_SECONDS,
   OIL_WEAR,
+  TOTEM_HOLD,
   PLAYER_RADIUS,
   RESPAWN_DAY_DELAY,
   RESPAWN_LIGHTHOUSE_DELAY,
@@ -534,9 +535,18 @@ export class Simulation {
     }
     const pressed = slot.useHeld === 0
     slot.useHeld += STEP
+    if (target.kind === 'totem' && isBuilt(target) && !target.awake && slot.useHeld >= TOTEM_HOLD) this.activateTotem(target)
     if (!pressed) return
     if (target.build && !isBuilt(target)) this.structures.deliver(target, slot.inventory, this.rules)
     else if (target.kind === 'lighthouse') this.tendLighthouse(target, slot)
+  }
+
+  /** Sin vuelta atrás: los mobs dan el segundo salto. */
+  private activateTotem(totem: Structure) {
+    totem.awake = true
+    this.threat.awaken()
+    this.events.emit({ type: 'totemActivated', id: totem.id })
+    this.events.emit({ type: 'mobsRose', trait: null, threat: this.threat.save() })
   }
 
   /** Un faro acabado: primero se carga lo que se lleve; si no, se enciende o se apaga. Antes de la Noche Eterna no enciende. */

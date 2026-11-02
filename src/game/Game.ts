@@ -65,6 +65,7 @@ const PLACE_PROMPT: Record<StructureKind, string> = {
   campfire: 'Clic para colocar la fogata',
   lighthouse: 'Clic para colocar el faro',
   distiller: 'Clic para colocar el destilador',
+  totem: 'Clic para colocar el tótem',
   workbench: 'Clic para colocar la mesa de trabajo',
   furnace: 'Clic para colocar el horno',
   anvil: 'Clic para colocar el yunque',
@@ -651,6 +652,10 @@ export class Game {
           break
         case 'nightLit':
           this.hud.showBanner('Campana · La noche quedó iluminada')
+          break
+        case 'totemActivated':
+          this.hud.showBanner('El tótem ha despertado')
+          this.sound.play('roar')
           break
         case 'mobsRose':
           if (e.trait) this.hud.showBanner(`Campana · Los mobs suben: ${TRAIT_NAMES[e.trait]}`)

@@ -50,6 +50,10 @@ const lighthouseLampMaterial = new THREE.MeshStandardMaterial({ color: '#ffd23f'
 const lighthouseBeamGeometry = new THREE.ConeGeometry(9, 70, 12, 1, true).rotateZ(Math.PI / 2).translate(35, 0, 0)
 const lighthouseBeamMaterial = new THREE.MeshBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide, fog: false })
 const BEAM_TURN = 0.6
+const totemBaseGeometry = new THREE.BoxGeometry(2, 1, 2)
+const totemBodyGeometry = new THREE.BoxGeometry(1.2, 3.2, 1.2)
+const totemHeartGeometry = new THREE.IcosahedronGeometry(0.8, 0)
+const totemHeartMaterial = new THREE.MeshStandardMaterial({ color: '#4a403a', emissive: '#ff5a1f', emissiveIntensity: 0.1, flatShading: true })
 
 const logMaterial = new THREE.MeshStandardMaterial({ color: '#6b4426', flatShading: true })
 const stoneMaterial = new THREE.MeshStandardMaterial({ color: '#8a877b', flatShading: true })
@@ -158,6 +162,17 @@ function buildAnvil(m: MaterialFor, shadows: boolean): StructureModel {
   return { root, flame: null }
 }
 
+/** Tótem: estacas y, según avanza la obra, la base, el cuerpo y el corazón, que arde al activarlo. */
+function buildTotem(m: MaterialFor, shadows: boolean): StructureModel {
+  const root = new THREE.Group()
+  const mesh = piece(root, m, shadows)
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) mesh(legGeometry, logMaterial, x, 0.3, z)
+  const base = mesh(totemBaseGeometry, stoneMaterial, 0, 0.5, 0)
+  const body = mesh(totemBodyGeometry, logMaterial, 0, 2.6, 0)
+  const heart = mesh(totemHeartGeometry, totemHeartMaterial, 0, 4.9, 0)
+  return { root, flame: null, stages: [base, body, heart] }
+}
+
 /** Destilador: una caldera de madera con su alambique. */
 function buildDistiller(m: MaterialFor, shadows: boolean): StructureModel {
   const root = new THREE.Group()
@@ -203,6 +218,7 @@ const MODELS: Record<StructureKind, (m: MaterialFor, shadows: boolean) => Struct
   anvil: buildAnvil,
   lighthouse: buildLighthouse,
   distiller: buildDistiller,
+  totem: buildTotem,
 }
 
 const own: MaterialFor = (material) => material
@@ -279,6 +295,7 @@ export class StructureView {
       }
     }
     lighthouseLampMaterial.emissiveIntensity = structures.some((s) => s.fire?.burning) ? 3 : 0.3
+    totemHeartMaterial.emissiveIntensity = structures.some((s) => s.awake) ? 2.5 : 0.1
 
     const d = (f: Structure) => (f.x - viewer.x) ** 2 + (f.z - viewer.z) ** 2
     this.fires.sort((a, b) => d(a) - d(b))

@@ -71,6 +71,8 @@ export type SimEventData =
   | { type: 'bell'; night: number }
   /** El faro ha ardido bastante: los mobs no suben con esta campana. */
   | { type: 'nightLit'; night: number }
+  /** Se ha activado el tótem: ya no se puede deshacer. */
+  | { type: 'totemActivated'; id: number }
   /** Los mobs han subido: un rasgo con la campana o, sin él (`trait` null), uno de los saltos. */
   | { type: 'mobsRose'; trait: MobTrait | null; threat: ThreatState }
   | { type: 'clockSet'; worldStartTick: number }

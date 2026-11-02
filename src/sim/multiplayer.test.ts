@@ -429,6 +429,7 @@ describe('Simulation con varios jugadores', () => {
       'wood_axe',
       'campfire',
       'lighthouse',
+      'totem',
       'wood_sword',
       'stone_sword',
       'distiller',

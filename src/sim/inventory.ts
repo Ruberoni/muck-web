@@ -33,6 +33,8 @@ export type ItemId =
   | 'lighthouse'
   | 'distiller'
   | 'oil'
+  | 'totem'
+  | 'boss_trophy'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -69,10 +71,12 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   lighthouse: 'Faro por construir',
   distiller: 'Destilador',
   oil: 'Aceite',
+  totem: 'Tótem por construir',
+  boss_trophy: 'Trofeo de jefe',
 }
 
 /** Lo que hace falta para escapar: no se puede perder, ni al irse quien lo lleva ni al caer al agua. */
-export const KEY_ITEMS: readonly ItemId[] = ['meteor_fragment']
+export const KEY_ITEMS: readonly ItemId[] = ['meteor_fragment', 'boss_trophy']
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9
 /** Casillas del inventario: 0–8 son la hotbar y 9–26 la mochila. */

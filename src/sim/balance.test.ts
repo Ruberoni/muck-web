@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ENEMY_DEFS, ENEMY_TYPES, HIT_COOLDOWN, PROP_DEFS, SWEEP_TARGETS, type EnemyType } from './constants'
+import { BUILD_DEFS, phaseCost } from './builds'
 import { recipeById, type RecipeId } from './crafting'
 import { bossScale, enemyCapFor, spawnChance } from './enemies'
 import type { ItemId } from './inventory'
+import type { MatchRules } from './match'
 import { generatePropPlacements, type PropKind } from './props'
+import type { StructureKind } from './structures'
 import { attackDamage, swingCooldown } from './tiers'
 
 /** Jugadores de una sala llena (MAX_PLAYERS en src/net/protocol.ts, que src/sim no importa). */
@@ -94,6 +97,35 @@ const LEVELS = [
   ['iron_axe', 'iron_sword'],
   ['mithril_axe', 'mithril_sword'],
 ] as const
+
+/** Lo que cuesta construir `kind` entero, deshaciendo los lingotes en mineral y madera. */
+function buildRaw(kind: StructureKind, rules: MatchRules, into: Amounts = {}) {
+  BUILD_DEFS[kind]!.phases.forEach((_, phase) => {
+    for (const { item, amount } of phaseCost(kind, phase, rules)) {
+      if (recipeById(item as RecipeId)) rawCost(item as RecipeId, into, amount)
+      else into[item] = (into[item] ?? 0) + amount
+    }
+  })
+  return into
+}
+
+describe('equilibrio de las prioridades', () => {
+  it.each([1, 2, 3, 4, 5])('con %i jugadores, lo imprescindible para escapar cabe en la isla', (players) => {
+    const rules: MatchRules = { players, difficulty: 'normal' }
+    const need = buildRaw('totem', rules)
+    const have = supply()
+    for (const item of Object.keys(need) as ItemId[]) {
+      if (item === 'meteor_fragment' || item === 'boss_trophy') continue
+      expect(need[item], item).toBeLessThanOrEqual(have[item]!)
+    }
+  })
+
+  it('el corazón del tótem sale de un guardián y de un jefe de noche', () => {
+    expect(phaseCost('totem', 2, { players: 4, difficulty: 'normal' })).toEqual([{ item: 'meteor_fragment', amount: 12 }, { item: 'boss_trophy', amount: 1 }])
+    expect(ENEMY_DEFS.guardian.loot[0]).toEqual({ item: 'meteor_fragment', amount: 3 })
+    for (const boss of ['giant', 'thrower'] as const) expect(ENEMY_DEFS[boss].loot.map((l) => l.item)).toContain('boss_trophy')
+  })
+})
 
 describe('equilibrio del combate: la espada, el arma más versátil', () => {
   it('la tabla de tiempos para matar a un trasgo', () => {

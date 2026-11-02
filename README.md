@@ -153,6 +153,8 @@ Con el faro acabado, <kbd>E</kbd> carga el aceite que se lleve (guarda hasta 10)
 
 El aceite se hace en el destilador (se fabrica en la mesa de trabajo) con 1 carne cruda y 2 de madera, en 60 s: compite con la comida, y un destilador no basta para una noche.
 
+El tótem se levanta igual, en tres fases: la última pide 3 fragmentos de meteorito por jugador y un trofeo, que sueltan los jefes de noche. Manteniendo <kbd>E</kbd> 3 s se activa, sin vuelta atrás: los mobs dan el segundo salto (vida ×1,5, daño ×1,3, velocidad ×1,1). Se puede activar cuando se quiera, incluso antes de la Noche Eterna. Pronto evita que sigan subiendo mientras se espera, pero pilla con menos equipo.
+
 Lo imprescindible para escapar no se puede perder: si quien lo lleva se va, cae al suelo, y si cae al agua aparece en la orilla.
 
 ## Meteoritos

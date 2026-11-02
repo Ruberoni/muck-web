@@ -40,6 +40,7 @@ export type RecipeId =
   | 'lighthouse'
   | 'distiller'
   | 'oil'
+  | 'totem'
 
 export interface Recipe {
   id: RecipeId
@@ -61,6 +62,7 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'campfire', result: 'campfire', cost: [{ item: 'wood', amount: 6 }, { item: 'stone', amount: 3 }], station: null },
   { id: 'workbench', result: 'workbench', cost: [{ item: 'wood', amount: 10 }], station: null },
   { id: 'lighthouse', result: 'lighthouse', cost: [{ item: 'wood', amount: 5 }], station: null },
+  { id: 'totem', result: 'totem', cost: [{ item: 'wood', amount: 5 }], station: null },
   { id: 'wood_sword', result: 'wood_sword', cost: [{ item: 'wood', amount: 5 }], station: 'workbench' },
   { id: 'stone_axe', result: 'stone_axe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
   { id: 'stone_pickaxe', result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },

@@ -26,6 +26,8 @@ export const ICONS: Record<ItemId, string> = {
   iron_sword: sword('#dfe3e8', '#9aa3ad'),
   mithril_sword: sword('#8fd0f2', '#4f9cc8'),
   meteor_sword: sword('#ff8a3b', '#c8400f'),
+  totem: `<svg viewBox="0 0 32 32"><rect x="10" y="4" width="12" height="9" fill="#6b4426"/><rect x="11" y="13" width="10" height="8" fill="#8a5a32"/><rect x="9" y="21" width="14" height="7" fill="#6b4426"/><rect x="13" y="7" width="2" height="2" fill="#ffd23f"/><rect x="17" y="7" width="2" height="2" fill="#ffd23f"/></svg>`,
+  boss_trophy: `<svg viewBox="0 0 32 32"><path d="M9 5 H23 V12 A7 7 0 0 1 9 12 Z" fill="#ffd23f"/><rect x="14" y="18" width="4" height="5" fill="#d9a632"/><rect x="10" y="23" width="12" height="4" fill="#8a5a32"/></svg>`,
   distiller: `<svg viewBox="0 0 32 32"><rect x="7" y="12" width="14" height="14" rx="4" fill="#b07b45"/><rect x="11" y="6" width="6" height="7" fill="#8a5a32"/><path d="M17 8 H26 V20" stroke="#dfe3e8" stroke-width="2.5" fill="none"/><polygon points="24,20 28,20 26,25" fill="#ffd23f"/></svg>`,
   oil: `<svg viewBox="0 0 32 32"><path d="M16 4 Q25 15 25 20 A9 9 0 0 1 7 20 Q7 15 16 4" fill="#d9a632"/><path d="M12 20 A4 4 0 0 0 16 24" stroke="#ffe9a8" stroke-width="2" fill="none"/></svg>`,
   lighthouse: `<svg viewBox="0 0 32 32"><polygon points="11,28 21,28 19,10 13,10" fill="#dcd8cc"/><polygon points="12,20 20,20 19.4,15 12.6,15" fill="#c2304a"/><rect x="12" y="6" width="8" height="4" fill="#ffd23f"/><polygon points="11,6 21,6 16,2" fill="#6b4426"/></svg>`,

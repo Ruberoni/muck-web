@@ -36,6 +36,15 @@ export const BUILD_DEFS: Partial<Record<StructureKind, BuildDef>> = {
       { name: 'Lámpara', cost: [{ item: 'iron_bar', amount: 20 }, { item: 'mithril_bar', amount: 10 }] },
     ],
   },
+  // Meteoritos y jefes de noche forman parte del objetivo.
+  totem: {
+    name: 'Tótem',
+    phases: [
+      { name: 'Base', cost: [{ item: 'stone', amount: 80 }, { item: 'dark_wood', amount: 40 }] },
+      { name: 'Cuerpo', cost: [{ item: 'iron_bar', amount: 30 }] },
+      { name: 'Corazón', cost: [{ item: 'meteor_fragment', amount: 3, fixed: 'each' }, { item: 'boss_trophy', amount: 1, fixed: 'one' }] },
+    ],
+  },
 }
 
 /** Por dónde va una construcción. */

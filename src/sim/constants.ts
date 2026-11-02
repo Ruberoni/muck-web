@@ -352,7 +352,7 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     nocturnal: true,
     ai: 'charge',
     weakness: {},
-    loot: [{ item: 'raw_meat', amount: 3 }, { item: 'iron_bar', amount: 2 }],
+    loot: [{ item: 'raw_meat', amount: 3 }, { item: 'iron_bar', amount: 2 }, { item: 'boss_trophy', amount: 1 }],
     cost: 8,
     boss: true,
     charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 5, dazed: 2.5 },
@@ -377,7 +377,7 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     nocturnal: true,
     ai: 'ranged',
     weakness: {},
-    loot: [{ item: 'mithril_ore', amount: 2 }, { item: 'stone', amount: 6 }],
+    loot: [{ item: 'mithril_ore', amount: 2 }, { item: 'stone', amount: 6 }, { item: 'boss_trophy', amount: 1 }],
     cost: 7,
     boss: true,
     ranged: { flee: 8, max: 14, range: 20, height: 3 },
@@ -460,6 +460,8 @@ export const OIL_MAX = 10
 export const LIT_SHARE = 2 / 3
 /** Con el faro encendido se reaparece en él a los tantos segundos, también en la Noche Eterna. */
 export const RESPAWN_LIGHTHOUSE_DELAY = 60
+/** Segundos que hay que mantener la tecla de uso para activar el tótem: no debe hacerse sin querer. */
+export const TOTEM_HOLD = 3
 /** Trabajos en cola por estación. Rinde lo mismo con 1 o con 5 jugadores, y eso aprieta a los grupos grandes. */
 export const MAX_JOBS = 5
 // Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.

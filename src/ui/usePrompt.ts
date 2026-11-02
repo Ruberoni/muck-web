@@ -1,5 +1,5 @@
 import { BUILD_DEFS, isBuilt, phaseCost } from '../sim/builds'
-import { OIL_MAX } from '../sim/constants'
+import { OIL_MAX, TOTEM_HOLD } from '../sim/constants'
 import { ITEM_NAMES } from '../sim/inventory'
 import type { MatchRules } from '../sim/match'
 import type { Structure } from '../sim/structures'
@@ -10,6 +10,7 @@ export function usePrompt(structure: Structure, rules: MatchRules): string {
   const { build } = structure
   if (!build || isBuilt(structure)) {
     const { fire } = structure
+    if (structure.kind === 'totem') return structure.awake ? `${def.name} · Despierto` : `${def.name} — Mantén E ${TOTEM_HOLD} s para activarlo. No se puede deshacer`
     if (!fire) return def.name
     return `${def.name} · Aceite ${fire.oil}/${OIL_MAX} — E para cargar aceite o ${fire.burning ? 'apagarlo' : 'encenderlo'}`
   }
