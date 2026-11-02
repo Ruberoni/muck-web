@@ -256,12 +256,13 @@ export class Room {
 
   /**
    * Tras hibernar, la plataforma conserva los sockets pero la sala se ha creado de nuevo desde el blob:
-   * vuelve a unir un socket a su hueco. Queda ausente hasta que mande `cmds`.
+   * vuelve a unir un socket a su hueco. En partida queda ausente hasta que mande `cmds`; en la sala de espera nadie los
+   * manda, así que no cuenta como ausente.
    */
   adopt(conn: Conn, token: string, tab: string): boolean {
     const seat = this.seats.get(token)
     if (!this.sim || !seat || seat.conn) return false
-    this.attach(seat, conn, tab, 'absent')
+    this.attach(seat, conn, tab, this.phase === 'lobby' ? 'present' : 'absent')
     this.scheduleAlarm()
     return true
   }
@@ -332,7 +333,10 @@ export class Room {
       ...(islandReset ? { islandReset: true as const } : {}),
     })
     if (!reconnecting) this.broadcast({ type: 'join', id: seat.id, name: seat.name, skin: seat.skin }, seat)
+    this.electHost()
     if (this.phase === 'lobby') this.announceMatch(seat)
+    // Sin bucle la plataforma duerme la sala en unos segundos: lo que no esté guardado se pierde.
+    if (!this.loop) this.save()
     this.scheduleAlarm()
   }
 
@@ -356,6 +360,7 @@ export class Room {
     this.result = null
     this.votes.clear()
     this.announceMatch()
+    this.save()
     this.resume()
     this.scheduleAlarm()
   }
@@ -631,8 +636,8 @@ export class Room {
     if (this.connected().length === 0) {
       this.emptySince = now
       if (this.loop) this.stop()
-      else this.save()
     }
+    if (!this.loop) this.save()
     this.scheduleAlarm()
   }
 

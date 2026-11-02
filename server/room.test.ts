@@ -29,10 +29,10 @@ import { ABSENT_MS, CHAT_MS, FORGOTTEN_MS, ISLAND_TTL_MS, LOOP_MS, MAX_AHEAD, Me
 const CODE = 'K7QX2'
 
 /** Una sala con reloj manual, almacenamiento en memoria y tokens y semillas previsibles. */
-function setup(storage = new MemoryStorage(), dev = false, quickStart = true) {
+function setup(storage = new MemoryStorage(), dev = false, quickStart = true, tokenPrefix = 'tok') {
   const time = new ManualTime(1_000_000)
   let tokens = 0
-  const room = new Room(CODE, { storage, clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev, quickStart })
+  const room = new Room(CODE, { storage, clock: time, scheduler: time, random: { token: () => `${tokenPrefix}${++tokens}`, seed: () => 7 }, dev, quickStart })
   return { room, time, storage }
 }
 
@@ -720,6 +720,62 @@ describe('Room', () => {
     expect(back.welcome.you.inventory.counts).toEqual({ stone: 5 })
     expect(back.welcome.you.player.pos).toEqual(pos)
     expect(back.welcome.islandReset).toBeUndefined()
+  })
+
+  describe('la sala de espera, al dormirse', () => {
+    /** La sala se crea de nuevo desde lo guardado y sus sockets vuelven, como tras hibernar. */
+    function wake(storage: MemoryStorage, ...clients: Client[]) {
+      const next = setup(storage, false, false, 'nuevo')
+      const sockets = clients.map((client) => {
+        const socket = new Client(next.room, next.time, client.tab)
+        socket.token = client.token
+        expect(next.room.adopt(socket.transport.conn, client.token!, client.tab)).toBe(true)
+        return socket
+      })
+      return { ...next, sockets }
+    }
+
+    it('conserva a quienes esperan y se puede entrar y empezar', () => {
+      const storage = new MemoryStorage()
+      const first = setup(storage, false, false)
+      const a = new Client(first.room, first.time)
+      const b = new Client(first.room, first.time, 'b')
+      join(a, b)
+      const { room, time, sockets } = wake(storage, a, b)
+      expect(sockets.every((socket) => socket.closed === null)).toBe(true)
+      const c = new Client(room, time, 'c')
+      c.hello('join')
+      time.advance(0)
+      expect(c.welcome.id).toBe(2)
+      sockets[0].send({ type: 'start', difficulty: 'normal' })
+      time.advance(LOOP_MS)
+      expect(room.sim!.rules.players).toBe(3)
+    })
+
+    it('no echa a quien lleva rato esperando: en la sala de espera nadie manda comandos', () => {
+      const storage = new MemoryStorage()
+      const first = setup(storage, false, false)
+      const a = new Client(first.room, first.time)
+      join(a)
+      const { time, sockets } = wake(storage, a)
+      time.advance(FORGOTTEN_MS + 1000)
+      expect(sockets[0].closed).toBeNull()
+    })
+
+    it('recuerda quién es el anfitrión si el anterior se ha ido', () => {
+      const storage = new MemoryStorage()
+      const first = setup(storage, false, false)
+      const a = new Client(first.room, first.time)
+      const b = new Client(first.room, first.time, 'b')
+      join(a, b)
+      a.transport.close()
+      first.time.advance(0)
+      const { room, time, sockets } = wake(storage, b)
+      sockets[0].send({ type: 'start', difficulty: 'normal' })
+      time.advance(LOOP_MS)
+      expect(sockets[0].of('match').at(-1)!.match.phase).toBe('playing')
+      expect(room.sim!.rules.players).toBe(1)
+    })
   })
 
   it('tras hibernar, adopt vuelve a unir un socket a su hueco', () => {

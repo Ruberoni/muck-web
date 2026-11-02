@@ -203,6 +203,29 @@ describe('Durable Object', () => {
     again.close()
   })
 
+  it('la sala de espera sobrevive a hibernar: se puede entrar y empezar', async () => {
+    const ana = await Client.open(code)
+    ana.hello('create')
+    await ana.next('welcome')
+    // En la sala de espera no hay bucle, así que la plataforma la duerme a los pocos segundos.
+    await server.getWorker().evictDurableObject('RoomObject', { name: code, webSockets: 'hibernate' })
+    expect(ana.closed).toBeNull()
+
+    const bea = await Client.open(code)
+    bea.hello('join', { name: 'Bea', tab: 'b' })
+    const welcome = await bea.next('welcome')
+    expect(welcome.id).toBe(1)
+    expect(ana.closed).toBeNull()
+
+    ana.send({ type: 'start', difficulty: 'normal' })
+    await ana.next('snap')
+    await bea.next('snap')
+    expect(ana.closed).toBeNull()
+    expect(bea.closed).toBeNull()
+    ana.close()
+    bea.close()
+  })
+
   it('tras hibernar, el socket vuelve a su hueco y el siguiente cmds reanuda con un state', async () => {
     const ana = await Client.open(code)
     ana.hello('create')
