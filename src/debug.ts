@@ -103,6 +103,10 @@ export function installDebug(game: Game) {
       bots.push(bot)
       return bot.id
     },
+    /** Hace que el jugador `id` dé un golpe con `item` en esta pantalla, para ver su animación. */
+    swing(id: number, item: ItemId | null = null) {
+      game.remotePlayers.present([{ type: 'playerSwing', id, item, target: null }])
+    },
     /** Corta la conexión como si se cayera la red: la sesión vuelve a entrar sola (`reconnecting`). */
     drop() {
       const transport = game.net?.transport

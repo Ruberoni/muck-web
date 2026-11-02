@@ -1,6 +1,6 @@
 # muck-web
 
-Juego de supervivencia low-poly para el navegador, inspirado en [Muck](https://store.steampowered.com/app/1625450/Muck/). Todo el contenido (modelos, colores, iconos) es original; no se usan assets, sonidos ni logos del juego original.
+Juego de supervivencia low-poly para el navegador, inspirado en [Muck](https://store.steampowered.com/app/1625450/Muck/). No se usan assets, sonidos ni logos del juego original. Todo el contenido es propio salvo los personajes, del pack [Ultimate Modular Women](https://quaternius.com/packs/ultimatemodularwomen.html) de Quaternius (CC0).
 
 **Jugar:** https://ruberoni.github.io/muck-web/
 
@@ -118,6 +118,18 @@ El gólem no se aturde ni retrocede. Al trasgo y al espíritu, tras un golpe que
 Cada tipo de enemigo es una entrada de `ENEMY_DEFS` (`src/sim/constants.ts`): vida, velocidad, tamaño, daño, ritmo de ataque, botín, debilidades… Lo que vuela (`src/sim/projectiles.ts`) cae con la gravedad y choca con jugadores, props, estructuras y suelo, pero pasa por encima de lo que le queda 3 m por debajo. Los choques los decide el servidor; el cliente sigue la trayectoria en el momento de su predicción, para que se pueda esquivar lo que ve.
 
 Un enemigo puede ser débil o resistente a una clase de arma (`weakness`): el golpe multiplica su daño, y tanto el destello (amarillo si es eficaz, gris si lo resiste) como el sonido lo dejan ver.
+
+## Personajes
+
+En una sala, cada jugador es un personaje animado. Hay 10 skins, y en el menú se elige una con su vista previa ("Tu personaje"); se guarda en el navegador y la ven los demás. En "Automático" toca una de las cinco primeras según el número de jugador. Como la partida es en primera persona, la propia no se ve al jugar, y en solitario no se descarga ninguna hasta abrir la vista previa.
+
+Andan, corren en las cuatro direcciones, golpean, comen, reciben golpes y mueren, y llevan en la mano lo que tienen seleccionado. Las piernas y el torso se animan por separado, para poder correr y golpear a la vez (`src/view/CharacterRig.ts`). Solo se descarga la skin de quienes están en la sala; mientras llega, o si no se puede cargar, se ve el cuerpo de cajas de siempre. A la simulación le da igual la skin: colisiones, vida y velocidad no cambian.
+
+Los modelos están en `public/models/`, convertidos desde el pack con `scripts/build-models.mjs`: cada skin es un `.glb` de una sola malla con los colores en los vértices, y las animaciones van una vez en `animations.glb`, porque todas comparten esqueleto. El zip original no va en el repositorio. Para volver a generarlos:
+
+```bash
+node scripts/build-models.mjs "<carpeta Individual Characters/glTF del pack>"
+```
 
 ## Sonido y ajustes
 

@@ -30,6 +30,15 @@ const cmds = (extra: object = {}) => ({ type: 'cmds', t: 1, moves: [move], actio
 const parse = (msg: unknown) => parseClientMessage(JSON.stringify(msg))
 const valid = (msg: unknown) => parse(msg).ok
 
+describe('la skin del hello', () => {
+  it('es opcional, y solo vale un índice de la lista', () => {
+    expect(parse({ ...hello, skin: 3 })).toMatchObject({ ok: true, msg: { skin: 3 } })
+    expect(parse(hello)).toMatchObject({ ok: true })
+    expect(parse({ ...hello, skin: 99 })).toMatchObject({ ok: false })
+    expect(parse({ ...hello, skin: 'bruja' })).toMatchObject({ ok: false })
+  })
+})
+
 describe('protocolo', () => {
   it('salas de 5 jugadores, como da por hecho src/sim/balance.test.ts (que no puede importar MAX_PLAYERS)', () => {
     expect(MAX_PLAYERS).toBe(5)

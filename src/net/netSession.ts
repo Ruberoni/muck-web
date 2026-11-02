@@ -134,20 +134,20 @@ export class NetSession implements Session {
   }
 
   /** Entra en la sala `room` (o la crea) con el token guardado de una visita anterior, si lo hay. */
-  static async open(intent: 'create' | 'join', room: string, name: string, url = SERVER_URL): Promise<NetSession> {
+  static async open(intent: 'create' | 'join', room: string, name: string, skin?: number, url = SERVER_URL): Promise<NetSession> {
     const token = loadToken(room)
     const clean = cleanName(name) ?? ''
-    const { client, transport } = await connectClient({ intent, room, name: clean, tab: TAB, ...(token ? { token } : {}) }, url)
+    const { client, transport } = await connectClient({ intent, room, name: clean, tab: TAB, ...(token ? { token } : {}), ...(skin === undefined ? {} : { skin }) }, url)
     saveToken(room, client.token!)
     versionAccepted()
     return new NetSession(client, transport, room, clean, url)
   }
 
   /** Crea una sala con un código nuevo (otro si ya existe). */
-  static async create(name: string, url = SERVER_URL): Promise<NetSession> {
+  static async create(name: string, skin?: number, url = SERVER_URL): Promise<NetSession> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await NetSession.open('create', randomRoomCode(), name, url)
+        return await NetSession.open('create', randomRoomCode(), name, skin, url)
       } catch (error) {
         if (!(error instanceof NetError && error.reject?.reason === 'exists') || attempt >= 4) throw error
       }

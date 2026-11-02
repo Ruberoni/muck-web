@@ -9,13 +9,14 @@ import type { Player, Vec3 } from '../sim/player'
 import type { PropPlacement } from '../sim/props'
 import { STRUCTURE_KINDS, type StructureKind } from '../sim/structures'
 import type { Connection, SimState } from '../sim/Simulation'
+import { isSkin } from './skins'
 
 /**
  * Versión del protocolo y de la simulación. Se sube a mano cuando cambia cualquiera de los dos: el servidor
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 40
+export const PROTOCOL_VERSION = 41
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -70,6 +71,8 @@ export interface Hello {
   intent: 'create' | 'join'
   room: string
   name: string
+  /** La skin elegida (`SKINS`); sin ella le toca una según su número. */
+  skin?: number
   /** El de una visita anterior a esta sala: recupera el hueco. */
   token?: string
   /** Distinto en cada pestaña: separa una reconexión de una pestaña duplicada. */
@@ -188,7 +191,7 @@ export interface PickupSnap {
 /** El mundo entero, sin el azar ni los inventarios de los demás: lo que necesita un cliente para empezar. */
 export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | 'props' | 'enemies' | 'pickups' | 'projectiles' | 'structures' | 'worldEvents' | 'threat'> {
   /** Los demás jugadores en el mundo. */
-  players: (PlayerSnap & { name: string })[]
+  players: (PlayerSnap & { name: string; skin: number })[]
 }
 
 /** Por dónde va la sala: esperando en el lobby (también tras acabar una partida) o jugando. */
@@ -269,6 +272,7 @@ export interface Join {
   type: 'join'
   id: PlayerId
   name: string
+  skin: number
 }
 
 export interface Leave {
@@ -452,9 +456,10 @@ function parseHello(raw: Obj): Parsed {
   if (raw.v !== PROTOCOL_VERSION) return { ok: false, version: raw.v as number }
   const name = cleanName(raw.name)
   if (!isFiniteNum(raw.t) || (raw.intent !== 'create' && raw.intent !== 'join') || !isRoomCode(raw.room)) return INVALID
-  if (name === null || !isId(raw.tab) || (raw.token !== undefined && !isId(raw.token))) return INVALID
+  if (name === null || !isId(raw.tab) || (raw.token !== undefined && !isId(raw.token)) || (raw.skin !== undefined && !isSkin(raw.skin))) return INVALID
   const hello: Hello = { type: 'hello', v: raw.v, t: raw.t, intent: raw.intent, room: raw.room, name, tab: raw.tab }
   if (raw.token !== undefined) hello.token = raw.token
+  if (raw.skin !== undefined) hello.skin = raw.skin as number
   return { ok: true, msg: hello }
 }
 

@@ -9,7 +9,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 800,
     rolldownOptions: {
       output: {
-        codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three/ }] },
+        // Solo el núcleo: el cargador de modelos va aparte y no se descarga si no hace falta.
+        codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]build/ }] },
       },
     },
   },

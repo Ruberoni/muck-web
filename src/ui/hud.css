@@ -593,8 +593,10 @@ kbd {
 .results p:first-child { font-size: 20px; font-weight: 700; color: #ffd866; }
 .lobby .players { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .lobby .field select { font: inherit; padding: 4px; }
+.lobby .skin-preview { width: 120px; height: 170px; justify-self: center; }
 .lobby .field { display: grid; gap: 4px; text-align: left; font-weight: 600; }
 .lobby .buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.lobby .buttons[hidden] { display: none; }
 .lobby .join { display: flex; gap: 8px; justify-content: center; }
 .lobby .join input { width: 7em; text-transform: uppercase; letter-spacing: 0.15em; text-align: center; }
 .lobby .room { font-size: 16px; }

@@ -5,6 +5,8 @@ import { failureMessage, NetError, NetSession } from '../net/netSession'
 import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
 import { onVersionReject, reloadFor } from '../net/reload'
 import { LocalSession } from '../net/session'
+import { loadCharacter } from '../view/characters'
+import { skinField } from './skinPicker'
 import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
 const NAME_KEY = 'muck-web:name'
@@ -101,6 +103,7 @@ export function installLobby(game: Game) {
   nameInput.autocomplete = 'off'
   nameRow.appendChild(nameInput)
   offline.appendChild(nameRow)
+  const skin = skinField(offline, loadCharacter)
 
   const soloDifficulty = difficultyField(offline)
   const actions = div(offline, 'buttons')
@@ -297,14 +300,14 @@ export function installLobby(game: Game) {
     game.surrender()
     update()
   })
-  create.addEventListener('click', () => void enter(() => NetSession.create(name()), ''))
+  create.addEventListener('click', () => void enter(() => NetSession.create(name(), skin.value()), ''))
   joinUrl.addEventListener('click', () => {
     const code = urlRoom()
-    if (code) void enter(() => NetSession.open('join', code, name()), code)
+    if (code) void enter(() => NetSession.open('join', code, name(), skin.value()), code)
   })
   join.addEventListener('click', () => {
     const code = codeInput.value
-    if (isRoomCode(code)) void enter(() => NetSession.open('join', code, name()), code)
+    if (isRoomCode(code)) void enter(() => NetSession.open('join', code, name(), skin.value()), code)
   })
   copy.addEventListener('click', async () => {
     const link = location.href

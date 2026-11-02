@@ -8,6 +8,8 @@ import { PickupView } from '../view/PickupView'
 import { MeteorView } from '../view/MeteorView'
 import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
+import { autoSkin } from '../net/skins'
+import { loadCharacter } from '../view/characters'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
@@ -112,7 +114,7 @@ export class Game {
   readonly projectileView = new ProjectileView()
   readonly meteorView = new MeteorView()
   readonly structureView: StructureView
-  readonly remotePlayers = new RemotePlayerView()
+  readonly remotePlayers = new RemotePlayerView(loadCharacter)
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
@@ -911,7 +913,7 @@ export class Game {
     this.projectileView.update(dt, sim.projectiles.list, alpha)
     this.meteorView.update(dt, sim.worldEvents.meteor, net ? net.client.renderTick() : sim.tick)
     this.propView.update(dt)
-    this.remotePlayers.update(dt, net ? net.client.shownPlayers : [])
+    this.remotePlayers.update(dt, net ? net.client.shownPlayers : [], (id) => net?.client.skins.get(id) ?? autoSkin(id))
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08
 

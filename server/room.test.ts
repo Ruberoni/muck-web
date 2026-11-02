@@ -258,6 +258,17 @@ describe('Room por partidas', () => {
 })
 
 describe('Room', () => {
+  it('la skin elegida llega a los demás; sin elegir, toca una según el número', () => {
+    const { room, time } = setup()
+    const a = new Client(room, time)
+    const b = new Client(room, time, 'b')
+    a.hello('create', { skin: 7 })
+    b.hello('join')
+    time.advance(0)
+    expect(a.of('join')).toMatchObject([{ id: 1, skin: 1 }])
+    expect(b.welcome.state.players).toMatchObject([{ id: 0, skin: 7 }])
+  })
+
   it('dos clientes ven caer el mismo árbol', () => {
     const { room, time } = setup()
     const a = new Client(room, time)
@@ -266,7 +277,7 @@ describe('Room', () => {
     expect(a.welcome.id).toBe(0)
     expect(b.welcome.id).toBe(1)
     expect(b.welcome.placements).toHaveLength(room.placements.length)
-    expect(a.of('join')).toEqual([{ type: 'join', id: 1, name: 'Ana' }])
+    expect(a.of('join')).toEqual([{ type: 'join', id: 1, name: 'Ana', skin: 1 }])
 
     const sim = room.sim!
     quickProps(sim.world.props)

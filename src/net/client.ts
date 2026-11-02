@@ -39,7 +39,7 @@ import type { MoveInput } from './session'
 import type { Transport } from './transport'
 
 /** Con quién y cómo se entra en la sala (lo del `hello` que no es la versión ni el sello). */
-export type ClientHello = Pick<Hello, 'intent' | 'room' | 'name' | 'token' | 'tab'>
+export type ClientHello = Pick<Hello, 'intent' | 'room' | 'name' | 'skin' | 'token' | 'tab'>
 
 export type ClientState = 'connecting' | 'online' | 'closed'
 
@@ -184,6 +184,8 @@ export class NetClient {
   /** Eventos del servidor para presentarlos cuando el render llegue a su tick. */
   readonly presentation = new PresentationQueue<SimEvent>()
   readonly names = new Map<PlayerId, string>()
+  /** La skin de los demás. */
+  readonly skins = new Map<PlayerId, number>()
   /** Avisos pendientes de mostrar (`takeNotices`). */
   private notices: Notice[] = []
   /** Los que se han ido hace menos de LEAVE_GRACE_MS: si vuelven antes, no se avisa de nada. */
@@ -231,8 +233,8 @@ export class NetClient {
   }
 
   connect() {
-    const { intent, room, name, token, tab } = this.hello
-    this.send({ type: 'hello', v: PROTOCOL_VERSION, t: this.time.now(), intent, room, name, tab, ...(token ? { token } : {}) })
+    const { intent, room, name, skin, token, tab } = this.hello
+    this.send({ type: 'hello', v: PROTOCOL_VERSION, t: this.time.now(), intent, room, name, tab, ...(token ? { token } : {}), ...(skin === undefined ? {} : { skin }) })
   }
 
   /** Empieza la partida (solo vale del anfitrión). */
@@ -403,7 +405,10 @@ export class NetClient {
         this.clock.sync(now, msg.serverTick, msg)
         this.ackTick = msg.serverTick
         this.ackSeq = msg.you.appliedSeq
-        for (const p of msg.state.players) this.names.set(p.id, p.name)
+        for (const p of msg.state.players) {
+          this.names.set(p.id, p.name)
+          this.skins.set(p.id, p.skin)
+        }
         if (msg.islandReset) this.notices.push({ type: 'islandReset' })
         this.pushRemote(msg.state.tick, msg.state.players, msg.state.enemies.list)
         this.state = 'online'
@@ -445,6 +450,7 @@ export class NetClient {
         break
       case 'join':
         this.names.set(msg.id, msg.name)
+        this.skins.set(msg.id, msg.skin)
         // Ha vuelto enseguida: era un corte, no se avisa de nada.
         if (!this.leaving.delete(msg.id)) this.notices.push({ type: 'join', id: msg.id, name: msg.name })
         break

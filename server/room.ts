@@ -28,6 +28,7 @@ import type { PlayerId, SimEvent } from '../src/sim/events'
 import { DEFAULT_RULES, type Difficulty, type MatchResult, type MatchRules } from '../src/sim/match'
 import { generatePropPlacements, type PropPlacement } from '../src/sim/props'
 import { Simulation, type PlayerSlot, type SimState } from '../src/sim/Simulation'
+import { autoSkin } from '../src/net/skins'
 
 // --- Lo que la sala necesita de la plataforma (Durable Object, Node o los tests) ---
 
@@ -119,6 +120,7 @@ interface Seat {
   token: string
   id: PlayerId
   name: string
+  skin: number
   tab: string
   /** null: desconectado (`gone`). */
   conn: Conn | null
@@ -149,7 +151,7 @@ interface Seat {
 interface RoomBlob {
   schema: number
   sim: SimState
-  seats: { token: string; id: PlayerId; name: string; lastSeen: number }[]
+  seats: { token: string; id: PlayerId; name: string; skin: number; lastSeen: number }[]
   /** Desde cuándo no hay nadie conectado (null: hay alguien). */
   emptySince: number | null
   phase: MatchInfo['phase']
@@ -309,6 +311,7 @@ export class Room {
     const islandReset = this.discardedOldIsland && msg.token !== undefined && !seat
     if (!seat) seat = this.newSeat()
     seat.name = msg.name || `Jugador ${seat.id + 1}`
+    seat.skin = msg.skin ?? seat.skin
     if (!this.loop && this.phase === 'playing') this.resume()
     this.attach(seat, conn, msg.tab, 'present')
     seat.lastT = msg.t
@@ -328,7 +331,7 @@ export class Room {
       match: this.matchInfo(),
       ...(islandReset ? { islandReset: true as const } : {}),
     })
-    if (!reconnecting) this.broadcast({ type: 'join', id: seat.id, name: seat.name }, seat)
+    if (!reconnecting) this.broadcast({ type: 'join', id: seat.id, name: seat.name, skin: seat.skin }, seat)
     if (this.phase === 'lobby') this.announceMatch(seat)
     this.scheduleAlarm()
   }
@@ -595,7 +598,7 @@ export class Room {
     }
     const slot = sim.addPlayer()
     sim.setConnection(slot.id, 'gone')
-    const seat = blankSeat(this.deps.random.token(), slot.id, '', slot)
+    const seat = blankSeat(this.deps.random.token(), slot.id, '', autoSkin(slot.id), slot)
     this.seats.set(seat.token, seat)
     return seat
   }
@@ -605,7 +608,7 @@ export class Room {
     const sim = this.sim!
     const slot = this.slotOf(seat)
     const now = this.deps.clock.now()
-    Object.assign(seat, blankSeat(seat.token, seat.id, seat.name, slot), { conn, tab, lastCmdsAt: now, ackTick: sim.tick })
+    Object.assign(seat, blankSeat(seat.token, seat.id, seat.name, seat.skin, slot), { conn, tab, lastCmdsAt: now, ackTick: sim.tick })
     this.conns.set(conn, seat)
     conn.seated?.(seat.token, tab)
     sim.setConnection(seat.id, connection)
@@ -648,7 +651,7 @@ export class Room {
     const blob: RoomBlob = {
       schema: PROTOCOL_VERSION,
       sim: this.sim.toJSON(),
-      seats: [...this.seats.values()].map(({ token, id, name, lastSeen }) => ({ token, id, name, lastSeen })),
+      seats: [...this.seats.values()].map(({ token, id, name, skin, lastSeen }) => ({ token, id, name, skin, lastSeen })),
       emptySince: this.emptySince,
       phase: this.phase,
       host: this.host,
@@ -667,8 +670,8 @@ export class Room {
       const sim = Simulation.fromJSON(blob.sim, this.placements)
       // Nadie está conectado hasta que vuelva (con `hello`) o la plataforma devuelva su socket (`adopt`).
       for (const slot of sim.players.values()) sim.setConnection(slot.id, 'gone')
-      for (const { token, id, name, lastSeen } of blob.seats) {
-        const seat = blankSeat(token, id, name, sim.slot(id))
+      for (const { token, id, name, skin, lastSeen } of blob.seats) {
+        const seat = blankSeat(token, id, name, skin, sim.slot(id))
         seat.lastSeen = lastSeen
         this.seats.set(token, seat)
       }
@@ -723,10 +726,10 @@ export class Room {
   private worldState(me: PlayerId): WorldState {
     const sim = this.sim!
     const { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents, threat } = sim.toJSON()
-    const names = new Map([...this.seats.values()].map((s) => [s.id, s.name]))
+    const seats = new Map([...this.seats.values()].map((s) => [s.id, s]))
     const players = this.playerSnaps()
       .filter((p) => p.id !== me)
-      .map((p) => ({ ...p, name: names.get(p.id) ?? '' }))
+      .map((p) => ({ ...p, name: seats.get(p.id)?.name ?? '', skin: seats.get(p.id)?.skin ?? autoSkin(p.id) }))
     return { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents, threat, players }
   }
 
@@ -819,12 +822,13 @@ export class Room {
 /** Las reglas de una sala con `quickStart`: las de un grupo, sin vidas. */
 const QUICK_RULES: MatchRules = { players: 2, difficulty: 'normal' }
 
-function blankSeat(token: string, id: PlayerId, name: string, slot: PlayerSlot): Seat {
+function blankSeat(token: string, id: PlayerId, name: string, skin: number, slot: PlayerSlot): Seat {
   const { yaw, pitch } = slot.player
   return {
     token,
     id,
     name,
+    skin,
     tab: '',
     conn: null,
     lastCmdsAt: 0,
