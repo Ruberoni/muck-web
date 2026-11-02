@@ -24,7 +24,7 @@ import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
 import { biomeAt, BIOME_NAMES } from '../sim/world/biomes'
-import { heightAt, WATER_LEVEL } from '../sim/world/terrain'
+import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
@@ -51,9 +51,11 @@ export type { GameState } from './states'
 
 /** Segundos que tarda en cerrarse la niebla de la Noche Eterna. */
 const ETERNAL_FOG_TIME = 12
-/** Hasta aquí desde un faro encendido no hay niebla, y desde aquí ya está cerrada. */
-const LIGHTHOUSE_CLEAR = 70
-const LIGHTHOUSE_REACH = 100
+/** El faro encendido abre la niebla en toda la isla, sea cual sea su tamaño: hasta aquí no hay, y desde aquí ya está cerrada. */
+const LIGHTHOUSE_CLEAR = WORLD_SIZE * 0.55
+const LIGHTHOUSE_REACH = WORLD_SIZE * 0.75
+/** Con qué rapidez se nota la luz del faro al encenderlo o apagarlo. */
+const LIGHTHOUSE_FADE = 1.5
 
 const overlayFor = (state: GameState): OverlayKind => (inGame(state) ? null : state)
 
@@ -63,9 +65,9 @@ const CAMPFIRE_HEARING = 14
 /** Lo que dice el aviso al tener una estructura en la mano. */
 const PLACE_PROMPT: Record<StructureKind, string> = {
   campfire: 'Clic para colocar la fogata',
-  lighthouse: 'Clic para colocar el faro',
+  lighthouse: '',
   distiller: 'Clic para colocar el destilador',
-  totem: 'Clic para colocar el tótem',
+  totem: '',
   plane: '',
   grave: '',
   workbench: 'Clic para colocar la mesa de trabajo',
@@ -142,6 +144,8 @@ export class Game {
   /** Tras empezar o reanudar, el jugador se dibuja donde está, sin interpolar desde antes de la pausa. */
   private snapPlayer = true
   private shadowCenter = new THREE.Vector3()
+  /** Cuánto se nota el faro encendido, de 0 a 1: la luz entra y se va poco a poco. */
+  private lighthouseGlow = 0
   private spot: StructureSpot = { x: 0, y: 0, z: 0, valid: false }
   private sun = new THREE.Vector3()
   /** Acciones de `__debug` y de la pantalla de inventario (select, move, craft) para el siguiente paso. */
@@ -653,7 +657,7 @@ export class Game {
           if (e.finished) this.hud.showBanner(`${e.finished} terminado`)
           break
         case 'nightLit':
-          this.hud.showBanner('Campana · La noche quedó iluminada')
+          this.hud.showBanner(`${this.sim.clock.eternal ? 'Campana' : 'Amanece'} · La noche quedó iluminada`)
           break
         case 'totemActivated':
           this.hud.showBanner('El tótem ha despertado')
@@ -792,14 +796,14 @@ export class Game {
     )
   }
 
-  /** Cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1: junto a un faro encendido se abre. */
+  /** Cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1: con el faro encendido se abre. */
   private eternalFog() {
     const { clock, structures } = this.sim
     const closing = THREE.MathUtils.clamp((clock.elapsed - clock.eternalAt) / ETERNAL_FOG_TIME, 0, 1)
-    const lighthouse = structures.burning
+    const lighthouse = structures.list.find((s) => s.fire)
     if (!closing || !lighthouse) return closing
     const distance = Math.hypot(lighthouse.x - this.renderPos.x, lighthouse.z - this.renderPos.z)
-    return closing * THREE.MathUtils.smoothstep(distance, LIGHTHOUSE_CLEAR, LIGHTHOUSE_REACH)
+    return closing * (1 - this.lighthouseGlow * (1 - THREE.MathUtils.smoothstep(distance, LIGHTHOUSE_CLEAR, LIGHTHOUSE_REACH)))
   }
 
   /** Muerto en solitario: lo que falta para reaparecer y las vidas que quedan. */
@@ -917,7 +921,8 @@ export class Game {
       this.renderPos.y,
       this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
     )
-    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.eternalFog())
+    this.lighthouseGlow = THREE.MathUtils.damp(this.lighthouseGlow, structures.burning ? 1 : 0, LIGHTHOUSE_FADE, dt)
+    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.eternalFog(), this.lighthouseGlow)
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot) : null

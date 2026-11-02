@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { sunDirection } from '../world/daycycle'
 import { CAMPFIRE_LIGHT_DISTANCE, CAMPFIRE_LIGHT_INTENSITY, CAMPFIRE_LIGHTS } from '../sim/constants'
 import { STRUCTURE_DEFS, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
+import { WORLD_SIZE } from '../sim/world/terrain'
 
 const LIGHT_HEIGHT = 0.8
 // De día la fogata casi no se nota: a pleno sol la luz baja a esta fracción.
@@ -38,17 +39,43 @@ const anvilHornGeometry = new THREE.ConeGeometry(0.07, 0.22, 5).rotateZ(-Math.PI
 /** La barra de lo que está haciendo una estación, sobre ella. */
 const BAR_HEIGHT = 2
 const BAR_WIDTH = 1.2
+interface BarPlace {
+  height: number
+  scale: number
+}
+const SMALL_BAR: BarPlace = { height: BAR_HEIGHT, scale: 1 }
+const BIG_LIGHTHOUSE_BAR: BarPlace = { height: 20, scale: 5 }
+const BIG_TOTEM_BAR: BarPlace = { height: 7, scale: 3 }
 const barBackMaterial = new THREE.SpriteMaterial({ color: '#11100e', transparent: true, opacity: 0.7, depthTest: false })
 const barFillMaterial = new THREE.SpriteMaterial({ color: '#ffb13b', depthTest: false })
 
-const lighthouseBaseGeometry = new THREE.CylinderGeometry(1.6, 1.8, 1.2, 10)
-const lighthouseTowerGeometry = new THREE.CylinderGeometry(0.8, 1.3, 8, 10)
-const lighthouseLampGeometry = new THREE.CylinderGeometry(0.9, 0.9, 1.3, 10)
+/** Altura de la lámpara: el faro es enorme a propósito, para verse desde cualquier punto de la isla. */
+const LAMP_HEIGHT = 46
+// La base y las ruinas se hunden en el suelo, por las pendientes.
+const lighthouseBaseGeometry = new THREE.CylinderGeometry(5.6, 6.2, 8, 12)
+const lighthouseTowerGeometry = new THREE.CylinderGeometry(2.6, 4.6, 40, 12)
+const lighthouseStripeLowGeometry = new THREE.CylinderGeometry(3.75, 4.05, 6, 12)
+const lighthouseStripeHighGeometry = new THREE.CylinderGeometry(2.95, 3.25, 6, 12)
+const lighthouseGalleryGeometry = new THREE.CylinderGeometry(3.7, 3.7, 0.6, 12)
+const lighthouseLampGeometry = new THREE.CylinderGeometry(2.3, 2.3, 3.4, 12)
+const lighthouseRoofGeometry = new THREE.ConeGeometry(3, 2.6, 12)
+const lighthouseRuinGeometry = new THREE.CylinderGeometry(3.2, 4.6, 16, 9)
+const rubbleGeometry = new THREE.IcosahedronGeometry(1.4, 0)
 const lighthouseWallMaterial = new THREE.MeshStandardMaterial({ color: '#dcd8cc', flatShading: true })
+const lighthouseStripeMaterial = new THREE.MeshStandardMaterial({ color: '#c2304a', flatShading: true })
+const ruinMaterial = new THREE.MeshStandardMaterial({ color: '#8d8a80', flatShading: true })
 const lighthouseLampMaterial = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb13b', emissiveIntensity: 0.3, flatShading: true })
-// Un cono ancho que sale de la lámpara y gira.
-const lighthouseBeamGeometry = new THREE.ConeGeometry(9, 70, 12, 1, true).rotateZ(Math.PI / 2).translate(35, 0, 0)
-const lighthouseBeamMaterial = new THREE.MeshBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide, fog: false })
+// Dos conos opuestos que salen de la lámpara y giran: llegan de punta a punta de la isla, sea cual sea su tamaño.
+const BEAM_LENGTH = WORLD_SIZE
+const lighthouseBeamGeometry = new THREE.ConeGeometry(BEAM_LENGTH * 0.1, BEAM_LENGTH, 16, 1, true).rotateZ(Math.PI / 2).translate(BEAM_LENGTH / 2, 0, 0)
+const lighthouseBeamMaterial = new THREE.MeshBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending })
+const lighthouseGlowGeometry = new THREE.IcosahedronGeometry(4, 1)
+const lighthouseGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffd98a', transparent: true, opacity: 0.35, depthWrite: false, fog: false, blending: THREE.AdditiveBlending })
+/** Los haces bajan despacio y tocan el suelo lejos; la luz que recorre la isla con ellos cae más cerca, donde hay tierra. */
+const BEAM_TILT = Math.atan2(LAMP_HEIGHT, BEAM_LENGTH * 0.6)
+const BEAM_GROUND = WORLD_SIZE * 0.35
+const BEAM_SPREAD = 0.35
+const BEAM_LIGHT = 5
 const BEAM_TURN = 0.6
 const graveSlabGeometry = new THREE.BoxGeometry(1.2, 0.2, 2)
 const graveStoneGeometry = new THREE.BoxGeometry(1, 1.2, 0.25)
@@ -59,9 +86,11 @@ const planeWingGeometry = new THREE.BoxGeometry(8, 0.18, 1.6)
 const planeTailGeometry = new THREE.BoxGeometry(0.2, 1.4, 1.2)
 const planePropellerGeometry = new THREE.BoxGeometry(2.4, 0.2, 0.1)
 const planeMaterial = new THREE.MeshStandardMaterial({ color: '#7f8c8d', flatShading: true })
-const totemBaseGeometry = new THREE.BoxGeometry(2, 1, 2)
-const totemBodyGeometry = new THREE.BoxGeometry(1.2, 3.2, 1.2)
-const totemHeartGeometry = new THREE.IcosahedronGeometry(0.8, 0)
+// La base y las ruinas se hunden en el suelo, por las pendientes.
+const totemBaseGeometry = new THREE.BoxGeometry(6, 3, 6)
+const totemBodyGeometry = new THREE.BoxGeometry(3.2, 8, 3.2)
+const totemHeartGeometry = new THREE.IcosahedronGeometry(1.9, 0)
+const totemRuinGeometry = new THREE.BoxGeometry(3, 3.5, 3)
 const totemHeartMaterial = new THREE.MeshStandardMaterial({ color: '#4a403a', emissive: '#ff5a1f', emissiveIntensity: 0.1, flatShading: true })
 
 const logMaterial = new THREE.MeshStandardMaterial({ color: '#6b4426', flatShading: true })
@@ -175,11 +204,15 @@ function buildAnvil(m: MaterialFor, shadows: boolean): StructureModel {
 function buildTotem(m: MaterialFor, shadows: boolean): StructureModel {
   const root = new THREE.Group()
   const mesh = piece(root, m, shadows)
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) mesh(legGeometry, logMaterial, x, 0.3, z)
+  const ruin = new THREE.Group()
+  root.add(ruin)
+  const rubble = piece(ruin, m, shadows)
+  rubble(totemRuinGeometry, ruinMaterial, 0, 1.2, 0, 0.5)
+  for (const [x, z] of [[-3, 1.6], [2.4, -2.4]]) rubble(rubbleGeometry, stoneMaterial, x, 0.3, z, x)
   const base = mesh(totemBaseGeometry, stoneMaterial, 0, 0.5, 0)
-  const body = mesh(totemBodyGeometry, logMaterial, 0, 2.6, 0)
-  const heart = mesh(totemHeartGeometry, totemHeartMaterial, 0, 4.9, 0)
-  return { root, flame: null, stages: [base, body, heart] }
+  const body = mesh(totemBodyGeometry, logMaterial, 0, 6, 0)
+  const heart = mesh(totemHeartGeometry, totemHeartMaterial, 0, 12, 0)
+  return { root, flame: null, stages: [base, body, heart], ruin, bar: BIG_TOTEM_BAR }
 }
 
 /** Avión: el fuselaje caído, con un ala rota y llamas; al repararlo aparece la hélice. */
@@ -224,29 +257,52 @@ function buildDistiller(m: MaterialFor, shadows: boolean): StructureModel {
   return { root, flame: null }
 }
 
-/** Faro: estacas en el sitio y, según avanza la obra, el cimiento, la torre y la lámpara. */
+/** Faro: una torre en ruinas que se ve desde lejos y, según avanza la obra, el cimiento, la torre y la lámpara. */
 function buildLighthouse(m: MaterialFor, shadows: boolean): StructureModel {
   const root = new THREE.Group()
-  const mesh = piece(root, m, shadows)
-  for (const [x, z] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]]) mesh(legGeometry, logMaterial, x, 0.3, z)
-  const base = mesh(lighthouseBaseGeometry, stoneMaterial, 0, 0.6, 0)
-  const tower = mesh(lighthouseTowerGeometry, lighthouseWallMaterial, 0, 5, 0)
-  const lamp = mesh(lighthouseLampGeometry, lighthouseLampMaterial, 0, 9.6, 0)
-  const beam = new THREE.Mesh(lighthouseBeamGeometry, m(lighthouseBeamMaterial))
-  beam.position.y = 9.6
+  const stage = () => {
+    const group = new THREE.Group()
+    root.add(group)
+    return { group, mesh: piece(group, m, shadows) }
+  }
+  const ruin = stage()
+  ruin.mesh(lighthouseRuinGeometry, ruinMaterial, 0, 8, 0)
+  for (const [x, z] of [[-7, 3], [6.5, 4.5], [2, -7.5], [-5, -6]]) ruin.mesh(rubbleGeometry, stoneMaterial, x, 0.5, z, x)
+  const base = stage()
+  base.mesh(lighthouseBaseGeometry, stoneMaterial, 0, 0, 0)
+  const tower = stage()
+  tower.mesh(lighthouseTowerGeometry, lighthouseWallMaterial, 0, 24, 0)
+  tower.mesh(lighthouseStripeLowGeometry, lighthouseStripeMaterial, 0, 19, 0)
+  tower.mesh(lighthouseStripeHighGeometry, lighthouseStripeMaterial, 0, 35, 0)
+  tower.mesh(lighthouseGalleryGeometry, stoneMaterial, 0, 44.3, 0)
+  const lamp = stage()
+  lamp.mesh(lighthouseLampGeometry, lighthouseLampMaterial, 0, LAMP_HEIGHT, 0)
+  lamp.mesh(lighthouseRoofGeometry, lighthouseStripeMaterial, 0, LAMP_HEIGHT + 3, 0)
+  const beam = new THREE.Group()
+  beam.position.y = LAMP_HEIGHT
   beam.visible = false
+  for (const turn of [0, Math.PI]) {
+    const arm = new THREE.Mesh(lighthouseBeamGeometry, m(lighthouseBeamMaterial))
+    arm.rotation.set(0, turn, -BEAM_TILT)
+    beam.add(arm)
+  }
+  beam.add(new THREE.Mesh(lighthouseGlowGeometry, m(lighthouseGlowMaterial)))
   root.add(beam)
-  return { root, flame: null, stages: [base, tower, lamp], beam }
+  return { root, flame: null, stages: [base.group, tower.group, lamp.group], ruin: ruin.group, beam, bar: BIG_LIGHTHOUSE_BAR }
 }
 
 export interface StructureModel {
   root: THREE.Group
   /** Las llamas que parpadean (la fogata y el fuego del horno). */
   flame: THREE.Group | null
+  /** Dónde va y cuánto se agranda la barra de progreso, si no es la normal. */
+  bar?: BarPlace
   /** La barra de progreso y su relleno: se crean al ponerle el primer trabajo. */
-  bar?: { back: THREE.Sprite; fill: THREE.Sprite }
+  progress?: { back: THREE.Sprite; fill: THREE.Sprite }
   /** Lo que aparece con cada fase de una construcción. */
   stages?: THREE.Object3D[]
+  /** Lo que se ve antes de reparar la torre o el cuerpo. */
+  ruin?: THREE.Object3D
   /** El haz del faro: se ve desde lejos, también en la niebla. */
   beam?: THREE.Object3D
 }
@@ -278,6 +334,8 @@ export class StructureView {
   private ghosts = new Map<StructureKind, THREE.Group>()
   private ghostMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false })
   private lights: THREE.PointLight[] = []
+  /** La luz que los haces del faro pasean por el suelo. */
+  private sweeps: THREE.SpotLight[] = []
   private fires: Structure[] = []
   private sun = new THREE.Vector3()
 
@@ -287,6 +345,11 @@ export class StructureView {
       const light = new THREE.PointLight('#ff8636', 0, CAMPFIRE_LIGHT_DISTANCE, 2)
       this.lights.push(light)
       scene.add(light)
+    }
+    for (let i = 0; i < 2; i++) {
+      const sweep = new THREE.SpotLight('#ffe9a8', 0, 0, BEAM_SPREAD, 0.7, 0)
+      this.sweeps.push(sweep)
+      scene.add(sweep, sweep.target)
     }
     scene.add(this.group)
   }
@@ -331,14 +394,23 @@ export class StructureView {
     for (const s of structures) {
       const model = this.models.get(s.id)!
       if (model.flame) model.flame.scale.set(1, flicker(s.id) + 0.1, 1)
-      if (s.kind === 'campfire' || s.fire?.burning) this.fires.push(s)
+      if (s.kind === 'campfire') this.fires.push(s)
       this.showProgress(model, s)
       if (model.beam) {
         model.beam.visible = s.kind === 'grave' ? awake && !s.opened : (s.fire?.burning ?? false)
         model.beam.rotation.y = t * BEAM_TURN
       }
     }
-    lighthouseLampMaterial.emissiveIntensity = structures.some((s) => s.fire?.burning) ? 3 : 0.3
+    const burning = structures.find((s) => s.fire?.burning)
+    lighthouseLampMaterial.emissiveIntensity = burning ? 3 : 0.3
+    this.sweeps.forEach((sweep, i) => {
+      sweep.intensity = burning ? BEAM_LIGHT * level : 0
+      if (!burning) return
+      const angle = t * BEAM_TURN + burning.rotY + i * Math.PI
+      sweep.position.set(burning.x, burning.y + LAMP_HEIGHT, burning.z)
+      sweep.target.position.set(burning.x + Math.cos(angle) * BEAM_GROUND, burning.y, burning.z - Math.sin(angle) * BEAM_GROUND)
+      sweep.target.updateMatrixWorld()
+    })
     totemHeartMaterial.emissiveIntensity = awake ? 2.5 : 0.1
 
     const d = (f: Structure) => (f.x - viewer.x) ** 2 + (f.z - viewer.z) ** 2
@@ -358,30 +430,32 @@ export class StructureView {
   private showProgress(model: StructureModel, { jobs, build }: Structure) {
     const job = jobs[0]
     if (model.stages && build) model.stages.forEach((stage, i) => (stage.visible = build.phase > i))
+    if (model.ruin && build) model.ruin.visible = build.phase < 2
     const building = build && build.progress < 1
-    if (!job && !building && !model.bar) return
-    if (!model.bar) {
+    if (!job && !building && !model.progress) return
+    const { height, scale } = model.bar ?? SMALL_BAR
+    if (!model.progress) {
       const back = new THREE.Sprite(barBackMaterial)
       const fill = new THREE.Sprite(barFillMaterial)
-      back.scale.set(BAR_WIDTH + 0.08, 0.2, 1)
-      back.position.y = fill.position.y = BAR_HEIGHT
+      back.scale.set((BAR_WIDTH + 0.08) * scale, 0.2 * scale, 1)
+      back.position.y = fill.position.y = height
       back.renderOrder = 1
       fill.renderOrder = 2
       fill.center.set(0, 0.5)
-      fill.position.x = -BAR_WIDTH / 2
+      fill.position.x = (-BAR_WIDTH / 2) * scale
       model.root.add(back, fill)
-      model.bar = { back, fill }
+      model.progress = { back, fill }
     }
-    model.bar.back.visible = model.bar.fill.visible = job !== undefined || !!building
+    model.progress.back.visible = model.progress.fill.visible = job !== undefined || !!building
     const done = job ? 1 - job.left / job.time : (build?.progress ?? 0)
-    model.bar.fill.scale.set(Math.max(0.01, BAR_WIDTH * done), 0.12, 1)
+    model.progress.fill.scale.set(Math.max(0.01, BAR_WIDTH * done) * scale, 0.12 * scale, 1)
   }
 
   /** Reinicio de partida: sin estructuras, luces apagadas y sin vista previa. */
   reset() {
     for (const { root } of this.models.values()) this.group.remove(root)
     this.models.clear()
-    for (const light of this.lights) light.intensity = 0
+    for (const light of [...this.lights, ...this.sweeps]) light.intensity = 0
     this.setGhost(null)
   }
 

@@ -41,9 +41,11 @@ export interface ThreatState {
   next: MobTrait
   eternal: boolean
   totem: boolean
+  /** Noches normales que quedaron iluminadas: cada una resta lo que habría subido la vida. */
+  litNights: number
 }
 
-const fresh = (): ThreatState => ({ level: 0, traits: { fast: 0, strong: 0, aggressive: 0 }, next: 'strong', eternal: false, totem: false })
+const fresh = (): ThreatState => ({ level: 0, traits: { fast: 0, strong: 0, aggressive: 0 }, next: 'strong', eternal: false, totem: false, litNights: 0 })
 
 /**
  * Cuánto han subido los mobs. La cantidad tiene tope, así que lo que sube después es esto: un poco cada noche, un salto
@@ -56,6 +58,11 @@ export class Threat {
   fall(rng: () => number) {
     this.state.eternal = true
     this.state.next = TRAITS[Math.floor(rng() * TRAITS.length)]
+  }
+
+  /** Amanece tras una noche normal iluminada: esa noche no cuenta. */
+  lightNight() {
+    this.state.litNights++
   }
 
   /** Se activa el tótem: segundo salto. */
@@ -74,11 +81,11 @@ export class Threat {
 
   /** Escribe en `out` lo que vale ahora, la noche `day`. La dificultad multiplica lo que añaden los saltos. */
   apply(day: number, difficulty: Difficulty, out: MobScaling) {
-    const { traits, eternal, totem } = this.state
+    const { traits, eternal, totem, litNights } = this.state
     const jumps = DIFFICULTY_DEFS[difficulty].jumps
     const jump = (active: boolean, factor: number) => (active ? 1 + (factor - 1) * jumps : 1)
     const both = (key: keyof typeof ETERNAL_JUMP) => jump(eternal, ETERNAL_JUMP[key]) * jump(totem, TOTEM_JUMP[key])
-    const nights = Math.min(day, LAST_NORMAL_NIGHT) - 1
+    const nights = Math.max(0, Math.min(day, LAST_NORMAL_NIGHT) - 1 - litNights)
     out.hp = (1 + HP_PER_NIGHT * nights) * both('hp') * STRONG_HP ** traits.strong
     out.damage = both('damage') * STRONG_DAMAGE ** traits.strong
     out.speed = both('speed') * FAST_SPEED ** traits.fast

@@ -17,6 +17,7 @@ export function usePrompt(structure: Structure, rules: MatchRules, awake: boolea
     if (plane?.running) return plane.heat >= MOTOR_TIME ? `${def.name} · Listo para despegar` : `${def.name} · Calentando el motor`
     if (plane) return `${def.name} — E para arrancar el motor`
     if (!fire) return def.name
+    if (!fire.burning && fire.left <= 0 && fire.oil === 0) return `${def.name} · Sin aceite — hazlo en el destilador y cárgalo con E`
     return `${def.name} · Aceite ${fire.oil}/${OIL_MAX} — E para cargar aceite o ${fire.burning ? 'apagarlo' : 'encenderlo'}`
   }
   const { name } = def.phases[build.phase]

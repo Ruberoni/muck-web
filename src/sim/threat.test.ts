@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DAY_FRACTION, DAY_LENGTH } from './world/daycycle'
 import { ENEMY_DEFS, STEP } from './constants'
 import { Enemies } from './enemies'
@@ -79,6 +79,17 @@ describe('la amenaza', () => {
   })
 })
 
+describe('las noches normales iluminadas', () => {
+  it('cada una resta lo que habría subido la vida, sin bajar de la base', () => {
+    const threat = new Threat()
+    expect(goblin(threat, 4).hp).toBe(Math.round(GOBLIN.hp * 1.15))
+    threat.lightNight()
+    expect(goblin(threat, 4).hp).toBe(Math.round(GOBLIN.hp * 1.1))
+    for (let i = 0; i < 4; i++) threat.lightNight()
+    expect(goblin(threat, 5).hp).toBe(GOBLIN.hp)
+  })
+})
+
 describe('los mobs con la amenaza', () => {
   const setup = () => {
     const enemies = new Enemies([], mulberry32(7))
@@ -121,6 +132,9 @@ describe('los mobs con la amenaza', () => {
     expect(hits).toBeGreaterThanOrEqual(Math.floor(3 / (GOBLIN.attackInterval * 0.5)))
   })
 })
+
+// Llegar a una campana son minutos de partida.
+vi.setConfig({ testTimeout: 30_000 })
 
 describe('en la partida', () => {
   /** Una partida justo antes de que caiga la Noche Eterna. */

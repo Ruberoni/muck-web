@@ -1,26 +1,29 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { deliver, phaseCost } from './builds'
 import { Btn } from './commands'
-import { HEALTH_MAX, LIT_SHARE, OIL_MAX, OIL_SECONDS, RESPAWN_LIGHTHOUSE_DELAY, STEP } from './constants'
+import { HEALTH_MAX, LIT_SHARE, OIL_MAX, OIL_SECONDS, RESPAWN_DAY_DELAY, RESPAWN_LIGHTHOUSE_DELAY, STEP } from './constants'
 import { clockOf } from './match'
 import { Simulation } from './Simulation'
 import { STRUCTURE_DEFS, structureSpot } from './structures'
-import { DAY_FRACTION } from './world/daycycle'
+import { DAY_FRACTION, NIGHT_LENGTH } from './world/daycycle'
 
 const RULES = { players: 3, difficulty: 'normal' } as const
 
-/** Una partida justo antes de la Noche Eterna, con un faro acabado al lado. */
-function setup() {
+// Varios simulan campanas enteras, minutos de partida.
+vi.setConfig({ testTimeout: 30_000 })
+
+/** Una partida justo antes de la noche `day` (por defecto, la Noche Eterna), con un faro acabado al lado. */
+function setup(day = 6) {
   const sim = new Simulation(1)
   sim.addPlayer(0)
   sim.addPlayer(1)
   sim.rules = RULES
   const { player, inventory } = sim.slot(0)
-  const lighthouse = sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.lighthouse.radius, sim.obstacles), 'lighthouse')!
+  const lighthouse = sim.structures.place({ ...structureSpot(player.pos, 0, STRUCTURE_DEFS.lighthouse.radius, sim.obstacles), valid: true }, 'lighthouse')!
   for (const item of ['stone', 'wood', 'iron_bar', 'mithril_bar'] as const) inventory.add(item, 500)
   for (let i = 0; i < 3; i++) deliver(lighthouse, inventory, RULES)
   inventory.clear()
-  sim.setDay(6)
+  sim.setDay(day)
   sim.setPhase(DAY_FRACTION - 0.005)
 
   const keepAlive = () => {
@@ -66,16 +69,70 @@ describe('el faro', () => {
     expect(inventory.count('oil')).toBe(3)
   })
 
-  it('antes de la Noche Eterna no enciende; después, sí', () => {
-    const { inventory, fire, press, fall } = setup()
+  it('enciende también antes de la Noche Eterna', () => {
+    const { inventory, fire, press } = setup(3)
     inventory.add('oil', 2)
     press()
     press()
-    expect(fire.burning).toBe(false)
-    fall()
-    press()
     expect(fire).toMatchObject({ burning: true, oil: 1 })
     expect(fire.left).toBeCloseTo(OIL_SECONDS, 0)
+  })
+
+  it('una noche normal iluminada no suma vida a los mobs', () => {
+    const { sim, fire, press, run } = setup(3)
+    fire.oil = OIL_MAX
+    press()
+    const events = run(NIGHT_LENGTH + 5).map((e) => e.type)
+    expect(sim.clock.day).toBe(4)
+    expect(events).toContain('nightLit')
+    expect(sim.threat.state.litNights).toBe(1)
+  })
+
+  it('una noche normal a oscuras sí suma, y sin campana', () => {
+    const { sim, run } = setup(3)
+    const events = run(NIGHT_LENGTH + 5).map((e) => e.type)
+    expect(sim.clock.day).toBe(4)
+    expect(events).not.toContain('nightLit')
+    expect(events).not.toContain('bell')
+    expect(sim.threat.state.litNights).toBe(0)
+  })
+
+  it('de día arde y gasta, pero no cuenta para la noche', () => {
+    const { sim, fire, press, run } = setup(3)
+    sim.setPhase(0.1)
+    fire.oil = 2
+    press()
+    run(10)
+    expect(fire.burning).toBe(true)
+    expect(fire.left).toBeLessThan(OIL_SECONDS)
+    expect(fire.lit).toBe(0)
+  })
+
+  it('lo que ardió antes de la Noche Eterna no cuenta para la primera campana', () => {
+    const { sim, fire, run, fall } = setup()
+    fire.lit = clockOf(3).bell
+    fall()
+    expect(fire.lit).toBe(0)
+    expect(run(clockOf(3).bell).map((e) => e.type)).not.toContain('nightLit')
+    expect(sim.threat.state.level).toBe(1)
+  })
+
+  it('en una noche normal, con el faro encendido se reaparece en él a los 60 s; de día se sigue esperando 30 s', () => {
+    const { sim, fire, lighthouse, press, run } = setup(3)
+    fire.oil = OIL_MAX
+    press()
+    run(5)
+    const other = sim.slot(1)
+    Object.assign(other.player, { health: 0, hunger: 0 })
+    sim.step(new Map())
+    expect((other.respawnAt! - sim.tick) * STEP).toBeCloseTo(RESPAWN_LIGHTHOUSE_DELAY, 0)
+    run(RESPAWN_LIGHTHOUSE_DELAY)
+    expect(Math.hypot(other.player.pos.x - lighthouse.x, other.player.pos.z - lighthouse.z)).toBeLessThan(lighthouse.radius + 3)
+
+    sim.setPhase(0.2)
+    Object.assign(other.player, { health: 0, hunger: 0 })
+    sim.step(new Map())
+    expect((other.respawnAt! - sim.tick) * STEP).toBeCloseTo(RESPAWN_DAY_DELAY, 0)
   })
 
   it('sin aceite no enciende, y se apaga al acabarse', () => {

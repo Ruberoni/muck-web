@@ -428,8 +428,6 @@ describe('Simulation con varios jugadores', () => {
     expect(RECIPE_IDS.filter((id) => !used.has(id))).toEqual([
       'wood_axe',
       'campfire',
-      'lighthouse',
-      'totem',
       'wood_sword',
       'stone_sword',
       'distiller',

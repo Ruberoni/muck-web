@@ -1,4 +1,5 @@
 import { BUILD_DEFS, copyBuild, deliver, newBuild, type BuildState } from './builds'
+import { LIGHTHOUSE_RADIUS, TOTEM_RADIUS } from './landmarks'
 import type { MatchRules } from './match'
 import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from './world/terrain'
 import { SpatialGrid, type Collider } from './collision'
@@ -26,9 +27,9 @@ export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   workbench: { item: 'workbench', radius: 0.7, facesPlacer: true },
   furnace: { item: 'furnace', radius: 0.8, facesPlacer: true },
   anvil: { item: 'anvil', radius: 0.5, facesPlacer: true },
-  lighthouse: { item: 'lighthouse', radius: 1.8, facesPlacer: false },
+  lighthouse: { item: null, radius: LIGHTHOUSE_RADIUS, facesPlacer: false },
   distiller: { item: 'distiller', radius: 0.7, facesPlacer: true },
-  totem: { item: 'totem', radius: 1.2, facesPlacer: false },
+  totem: { item: null, radius: TOTEM_RADIUS, facesPlacer: false },
   plane: { item: null, radius: 3, facesPlacer: false },
   grave: { item: null, radius: 1, facesPlacer: false },
 }
@@ -233,12 +234,12 @@ export class Structures {
     this.fireChanged(structure)
   }
 
-  /** Paso fijo: los faros encendidos gastan aceite; sin él, se apagan. */
-  burn(dt: number, unit: number) {
+  /** Paso fijo: los faros encendidos gastan aceite; sin él, se apagan. Para la noche iluminada solo cuenta lo que arde de noche. */
+  burn(dt: number, unit: number, night: boolean) {
     for (const s of this.list) {
       const { fire } = s
       if (!fire?.burning) continue
-      fire.lit += dt
+      if (night) fire.lit += dt
       fire.left -= dt
       if (fire.left > 1e-9) continue
       fire.left = 0
@@ -294,13 +295,13 @@ export class Structures {
   }
 
   /** La copia del cliente: avanza las barras; quitar el trabajo lo dice su `stationDone`, y el faro, su `fireChanged`. */
-  follow(dt: number) {
+  follow(dt: number, night: boolean) {
     for (const s of this.list) {
       if (s.jobs[0]) s.jobs[0].left = Math.max(0, s.jobs[0].left - dt)
       if (s.plane?.running) s.plane.heat += dt
       if (!s.fire?.burning) continue
       s.fire.left = Math.max(0, s.fire.left - dt)
-      s.fire.lit += dt
+      if (night) s.fire.lit += dt
     }
   }
 

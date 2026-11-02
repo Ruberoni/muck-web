@@ -323,9 +323,7 @@ export function itemModel(item: ItemId): THREE.Group {
     case 'mithril_bar':
       return ingot(mithrilHead)
     case 'furnace':
-    case 'lighthouse':
     case 'distiller':
-    case 'totem':
       return furnace()
     case 'boss_trophy':
       return ingot(oilGold)

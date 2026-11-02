@@ -4,7 +4,7 @@ import { ENEMY_DEFS, GRAVE_HOLD, HEALTH_MAX, MOTOR_TIME, STEP, TOTEM_HOLD } from
 import type { SimEvent } from './events'
 import type { ItemId } from './inventory'
 import { Simulation } from './Simulation'
-import { STRUCTURE_DEFS, structureSpot, type Structure } from './structures'
+import type { Structure } from './structures'
 
 /** Una partida de verdad, conducida con comandos: lo único regalado son los materiales. */
 function game() {
@@ -42,8 +42,8 @@ describe('una partida entera', () => {
     const grave = sim.structures.list.find((s) => s.kind === 'grave')!
     expect(grave).toBeDefined()
 
-    // El tótem, con los materiales: la tumba sigue dormida.
-    const totem = sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.totem.radius, sim.obstacles), 'totem')!
+    // El tótem ya está en la isla; le faltan los materiales y la tumba sigue dormida.
+    const totem = sim.structures.list.find((s) => s.kind === 'totem')!
     near(grave)
     run(GRAVE_HOLD + 0.1, Btn.Use)
     expect(grave.opened).toBeUndefined()
@@ -130,6 +130,6 @@ describe('una partida entera', () => {
   it('empezar otra partida pone otra tumba, y solo una', () => {
     const { sim } = game()
     sim.startMatch({ players: 1, difficulty: 'easy' })
-    expect(sim.structures.list.map((s) => s.kind)).toEqual(['grave'])
+    expect(sim.structures.list.map((s) => s.kind)).toEqual(['lighthouse', 'totem', 'grave'])
   })
 })

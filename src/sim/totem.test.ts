@@ -13,7 +13,7 @@ function setup() {
   sim.addPlayer(0)
   sim.rules = RULES
   const { player, inventory } = sim.slot(0)
-  const totem = sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.totem.radius, sim.obstacles), 'totem')!
+  const totem = sim.structures.place({ ...structureSpot(player.pos, 0, STRUCTURE_DEFS.totem.radius, sim.obstacles), valid: true }, 'totem')!
   const hold = (seconds: number) => {
     const list = []
     for (let i = 0; i < Math.round(seconds / STEP); i++) {

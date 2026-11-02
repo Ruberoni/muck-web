@@ -76,7 +76,7 @@ describe('construcciones compartidas', () => {
       sim.addPlayer(0)
       sim.rules = GROUP
       const { player, inventory } = sim.slot(0)
-      const structure = sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.lighthouse.radius, sim.obstacles), 'lighthouse')!
+      const structure = sim.structures.place({ ...structureSpot(player.pos, 0, STRUCTURE_DEFS.lighthouse.radius, sim.obstacles), valid: true }, 'lighthouse')!
       /** Un paso con la tecla de uso pulsada o no. */
       const press = (use: boolean) => {
         const tick = sim.tick + 1

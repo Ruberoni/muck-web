@@ -1,7 +1,7 @@
 import { LIT_SHARE, MOTOR_TIME, OIL_MAX, PLANE_HP } from '../sim/constants'
 import type { Structure } from '../sim/structures'
 import { TRAIT_NAMES, type ThreatState } from '../sim/threat'
-import type { DayClock } from '../sim/world/daycycle'
+import { NIGHT_LENGTH, type DayClock } from '../sim/world/daycycle'
 
 const minutes = (seconds: number) => {
   const left = Math.max(0, Math.ceil(seconds))
@@ -20,12 +20,11 @@ export function planeText(structures: readonly Structure[]): string | null {
 
 /** Cómo va la noche iluminada, si hay un faro. */
 export function lightText(structures: readonly Structure[], clock: DayClock): string | null {
-  if (!clock.eternal) return null
   const fires = structures.filter((s) => s.fire && (s.fire.oil > 0 || s.fire.burning || s.fire.lit > 0)).map((s) => s.fire!)
   if (!fires.length) return null
   const lit = Math.max(...fires.map((f) => f.lit))
   const oil = Math.max(...fires.map((f) => f.oil))
-  const needed = clock.bellLength * LIT_SHARE
+  const needed = (clock.eternal ? clock.bellLength : NIGHT_LENGTH) * LIT_SHARE
   return `Faro: ${Math.min(100, Math.floor((lit / needed) * 100))} % · Aceite ${oil}/${OIL_MAX}`
 }
 

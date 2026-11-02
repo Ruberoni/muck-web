@@ -70,7 +70,7 @@ export type SimEventData =
   /** Acaba una noche de la Noche Eterna: lo que antes pasaba al amanecer pasa ahora. */
   | { type: 'bell'; night: number }
   /** El faro ha ardido bastante: los mobs no suben con esta campana. */
-  | { type: 'nightLit'; night: number }
+  | { type: 'nightLit'; night: number; threat: ThreatState }
   /** Se ha activado el tótem: ya no se puede deshacer. */
   | { type: 'totemActivated'; id: number }
   /** Al activar el tótem cae el avión en llamas (la estructura llega en su `structurePlaced`). */

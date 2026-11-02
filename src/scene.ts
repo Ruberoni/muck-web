@@ -18,6 +18,9 @@ const state = createSkyState()
 const ETERNAL_FOG = new THREE.Color('#06070c')
 const ETERNAL_FOG_NEAR = 10
 const ETERNAL_FOG_FAR = 40
+/** Con el faro encendido, de noche la isla se ve como con esta luz, algo más cálida. */
+const LIGHTHOUSE_HEMI = 1.1
+const LIGHTHOUSE_TINT = new THREE.Color('#ffe9a8')
 
 /** Escena con el terreno, el agua y el cielo. Los props los añade Game, con las colocaciones de su sesión. */
 export function createScene() {
@@ -59,17 +62,18 @@ export type Sky = ReturnType<typeof createScene>['sky']
 /**
  * Aplica la hora del día (`phase`, ver DayClock) a cielo, niebla y luces, y centra la cámara
  * de sombras en `center` (normalmente por delante del jugador), ajustada a la rejilla de texels
- * en el espacio de la luz para que las sombras no parpadeen. `eternal`: cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1.
+ * en el espacio de la luz para que las sombras no parpadeen. `eternal`: cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1;
+ * `lighthouse`: cuánto se nota el faro encendido, de 0 a 1.
  */
-export function updateSky(sky: Sky, phase: number, center: THREE.Vector3, eternal = 0) {
+export function updateSky(sky: Sky, phase: number, center: THREE.Vector3, eternal = 0, lighthouse = 0) {
   sampleSky(phase, state)
   sky.background.copy(state.sky).lerp(ETERNAL_FOG, eternal)
   sky.fog.color.copy(sky.background)
   sky.fog.near = THREE.MathUtils.lerp(state.fogNear, ETERNAL_FOG_NEAR, eternal)
   sky.fog.far = THREE.MathUtils.lerp(state.fogFar, ETERNAL_FOG_FAR, eternal)
-  sky.hemi.color.copy(state.hemiSky)
+  sky.hemi.color.copy(state.hemiSky).lerp(LIGHTHOUSE_TINT, lighthouse * 0.5)
   sky.hemi.groundColor.copy(state.hemiGround)
-  sky.hemi.intensity = state.hemiIntensity
+  sky.hemi.intensity = THREE.MathUtils.lerp(state.hemiIntensity, Math.max(state.hemiIntensity, LIGHTHOUSE_HEMI), lighthouse)
   const { sun } = sky
   sun.color.copy(state.lightColor)
   sun.intensity = state.lightIntensity

@@ -30,10 +30,8 @@ export type ItemId =
   | 'mithril_sword'
   | 'meteor_fragment'
   | 'meteor_sword'
-  | 'lighthouse'
   | 'distiller'
   | 'oil'
-  | 'totem'
   | 'boss_trophy'
   | 'plane_engine'
 
@@ -69,10 +67,8 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   mithril_sword: 'Espada de mithril',
   meteor_fragment: 'Fragmento de meteorito',
   meteor_sword: 'Espada de meteorito',
-  lighthouse: 'Faro por construir',
   distiller: 'Destilador',
   oil: 'Aceite',
-  totem: 'Tótem por construir',
   boss_trophy: 'Trofeo de jefe',
   plane_engine: 'Motor del avión',
 }

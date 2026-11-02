@@ -10,6 +10,7 @@ import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
 import { stationNear, stationWithRoom, structureSpot } from '../sim/structures'
+import { isNight } from '../sim/world/daycycle'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
 import { InterpBuffer, Interpolator, PresentationQueue, type Shown } from './interp'
 import { Predictor } from './predict'
@@ -310,7 +311,7 @@ export class NetClient {
     const sim = this.sim
     if (!sim) return { own, remote: [] }
     const tick = this.renderTick()
-    sim.structures.follow(Math.max(0, tick - this.lastRenderTick) * STEP)
+    sim.structures.follow(Math.max(0, tick - this.lastRenderTick) * STEP, isNight(sim.clock.phase))
     this.lastRenderTick = tick
     sim.clock.elapsed = (tick - this.worldStartTick) * STEP
     this.shownPlayers = this.players.sample(tick)
@@ -589,6 +590,7 @@ export class NetClient {
         sim.projectiles.remove(e.id)
         break
       case 'mobsRose':
+      case 'nightLit':
         sim.threat.load(e.threat)
         break
       case 'stationQueued':

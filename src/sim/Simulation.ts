@@ -1,5 +1,6 @@
 import type { PlayerCommands } from './commands'
 import { isBuilt, usableNear } from './builds'
+import { findLandmarks } from './landmarks'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import { recipeById, type CraftWorld, type RecipeId } from './crafting'
 import {
@@ -39,7 +40,7 @@ import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, stationWithRoom, Structures, structureSpot, type Structure, type StructuresState, type StructureSpot } from './structures'
 import { hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
-import { DayClock, isNight } from './world/daycycle'
+import { DayClock, isNight, NIGHT_LENGTH } from './world/daycycle'
 import { heightAt } from './world/terrain'
 import { WorldEvents, type WorldEventsState } from './worldEvents'
 
@@ -299,11 +300,15 @@ export class Simulation {
     const { day, eternal } = this.clock
     this.syncClock()
     if (this.clock.eternal && !eternal) {
+      // Lo que ardió antes no cuenta para la primera campana.
+      this.structures.endNight()
       this.threat.fall(this.rng)
       this.events.emit({ type: 'eternalNight' })
       this.events.emit({ type: 'mobsRose', trait: null, threat: this.threat.save() })
     } else if (this.clock.eternal && this.clock.day !== day) {
       this.bell()
+    } else if (this.clock.day !== day) {
+      this.dawn()
     }
     this.threat.apply(this.clock.day, this.rules.difficulty, this.enemies.scaling)
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
@@ -322,7 +327,7 @@ export class Simulation {
     }
 
     growBerries(this.world.props, STEP, this.events.emit)
-    this.structures.burn(STEP, this.oilUnit)
+    this.structures.burn(STEP, this.oilUnit, isNight(this.clock.phase))
     this.warmPlane(living)
     this.structures.step(STEP, (station, recipe) => {
       const { x, y, z } = station
@@ -412,7 +417,7 @@ export class Simulation {
     this.worldStartTick = this.tick
     this.syncClock()
     this.events.emit({ type: 'worldReset', worldStartTick: this.worldStartTick })
-    if (this.matchRules) this.placeGrave()
+    if (this.matchRules) this.placeLandmarks()
   }
 
   /** Salta a una hora del día actual (0 = amanecer), redondeada al tick. */
@@ -579,6 +584,14 @@ export class Simulation {
     this.enemies.spawnAt(grave.x + grave.radius + ENEMY_DEFS.colossus.radius + 0.5, grave.z, 'colossus', this.inWorld().length)
   }
 
+  /** Lo que ya viene puesto en la isla: el faro y el tótem no se fabrican, se reparan llevando materiales. */
+  private placeLandmarks() {
+    const { lighthouse, totem } = findLandmarks(this.world.grid, this.spawnCenter)
+    this.structures.place({ ...lighthouse, y: heightAt(lighthouse.x, lighthouse.z), valid: true }, 'lighthouse')
+    this.structures.place({ ...totem, y: heightAt(totem.x, totem.z), valid: true }, 'totem')
+    this.placeGrave()
+  }
+
   /** La tumba de la isla: dormida hasta que se active el tótem, pero se puede encontrar antes. */
   private placeGrave() {
     const around = [{ id: 0, pos: this.spawnCenter, alive: true }]
@@ -624,10 +637,9 @@ export class Simulation {
     if (aboard.length) this.finish('escaped', aboard.map((s) => s.id))
   }
 
-  /** Un faro acabado: primero se carga lo que se lleve; si no, se enciende o se apaga. Antes de la Noche Eterna no enciende. */
+  /** Un faro acabado: primero se carga lo que se lleve; si no, se enciende o se apaga. */
   private tendLighthouse(lighthouse: Structure, slot: PlayerSlot) {
-    if (this.structures.refuel(lighthouse, slot.inventory)) return
-    if (this.clock.eternal) this.structures.toggleFire(lighthouse, this.oilUnit)
+    if (!this.structures.refuel(lighthouse, slot.inventory)) this.structures.toggleFire(lighthouse, this.oilUnit)
   }
 
   /** Lo que da ahora una unidad de aceite: cada campana, un 10 % menos. */
@@ -635,10 +647,17 @@ export class Simulation {
     return OIL_SECONDS * OIL_WEAR ** Math.max(0, this.clock.bells)
   }
 
+  /** Acaba una noche normal. Si quedó iluminada, no suma vida a los mobs. */
+  private dawn() {
+    if (this.structures.endNight() < NIGHT_LENGTH * LIT_SHARE) return
+    this.threat.lightNight()
+    this.events.emit({ type: 'nightLit', night: this.clock.day - 1, threat: this.threat.save() })
+  }
+
   /** Acaba una noche de la Noche Eterna. Si quedó a oscuras, los mobs suben. */
   private bell() {
     this.events.emit({ type: 'bell', night: this.clock.day })
-    if (this.structures.endNight() >= this.clock.bellLength * LIT_SHARE) this.events.emit({ type: 'nightLit', night: this.clock.day })
+    if (this.structures.endNight() >= this.clock.bellLength * LIT_SHARE) this.events.emit({ type: 'nightLit', night: this.clock.day, threat: this.threat.save() })
     else this.events.emit({ type: 'mobsRose', trait: this.threat.rise(this.rng), threat: this.threat.save() })
   }
 
@@ -661,14 +680,14 @@ export class Simulation {
     slot.target = null
     slot.inventoryFull = false
     const night = isNight(this.clock.phase)
-    const lit = this.clock.eternal && this.structures.burning !== undefined
+    const lit = night && this.structures.burning !== undefined
     slot.respawnAt = lit ? this.tick + Math.round(RESPAWN_LIGHTHOUSE_DELAY / STEP) : night ? this.nextDawnTick() : this.tick + Math.round(RESPAWN_DAY_DELAY / STEP)
   }
 
   /** Vuelve vivo a su punto de aparición o junto al faro encendido, con la vida y el hambre llenas y el inventario vacío. */
   private respawn(slot: PlayerSlot) {
     const { yaw, pitch } = slot.player
-    const lighthouse = this.clock.eternal ? this.structures.burning : undefined
+    const lighthouse = this.structures.burning
     const at = lighthouse ? { x: lighthouse.x + lighthouse.radius + 1, z: lighthouse.z } : slot.spawn
     Object.assign(slot.player, createPlayer(this.env, at.x, at.z, yaw), { pitch })
     slot.alive = true

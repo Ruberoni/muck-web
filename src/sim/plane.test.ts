@@ -15,7 +15,7 @@ function setup() {
   sim.addPlayer(1)
   sim.rules = RULES
   const { player, inventory } = sim.slot(0)
-  const totem = sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.totem.radius, sim.obstacles), 'totem')!
+  const totem = sim.structures.place({ ...structureSpot(player.pos, 0, STRUCTURE_DEFS.totem.radius, sim.obstacles), valid: true }, 'totem')!
   for (const item of ['stone', 'dark_wood', 'iron_bar', 'meteor_fragment', 'boss_trophy'] as const) inventory.add(item, 500)
   for (let i = 0; i < 3; i++) deliver(totem, inventory, RULES)
   inventory.clear()
