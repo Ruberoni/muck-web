@@ -597,6 +597,11 @@ export class NetClient {
       case 'stationDone':
         sim.structures.byId(e.id)?.jobs.shift()
         break
+      case 'buildProgress': {
+        const structure = sim.structures.byId(e.id)
+        if (structure) structure.build = e.build
+        break
+      }
       case 'meteorIncoming':
         sim.worldEvents.add(e)
         break

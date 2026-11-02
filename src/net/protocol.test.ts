@@ -103,7 +103,7 @@ describe('protocolo', () => {
       { yaw: null },
       { tick: -1 },
       { tick: 1.5 },
-      { buttons: 128 },
+      { buttons: 256 },
       { n: 0 },
       { n: 1000 },
       { aim: { kind: 'tree', id: 1 } },

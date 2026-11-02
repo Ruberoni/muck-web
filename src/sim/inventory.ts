@@ -30,6 +30,7 @@ export type ItemId =
   | 'mithril_sword'
   | 'meteor_fragment'
   | 'meteor_sword'
+  | 'lighthouse'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -63,7 +64,11 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   mithril_sword: 'Espada de mithril',
   meteor_fragment: 'Fragmento de meteorito',
   meteor_sword: 'Espada de meteorito',
+  lighthouse: 'Faro por construir',
 }
+
+/** Lo que hace falta para escapar: no se puede perder, ni al irse quien lo lleva ni al caer al agua. */
+export const KEY_ITEMS: readonly ItemId[] = ['meteor_fragment']
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9
 /** Casillas del inventario: 0–8 son la hotbar y 9–26 la mochila. */

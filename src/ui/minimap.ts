@@ -18,6 +18,7 @@ export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; n
   workbench: { shape: 'square', near: '#d9a86a', far: '#ecc896' },
   furnace: { shape: 'square', near: '#cfc8bd', far: '#e6e1d8' },
   anvil: { shape: 'square', near: '#7f9cc4', far: '#b3c6e2' },
+  lighthouse: { shape: 'dot', near: '#ffe066', far: '#fff2b0' },
 }
 
 /** Cómo se marca el meteorito: como las estructuras, de cerca y de lejos. */

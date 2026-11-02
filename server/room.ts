@@ -619,6 +619,7 @@ export class Room {
     seat.lastSeen = now
     seat.moves.clear()
     seat.actions = []
+    sim.dropKeyItems(seat.id)
     sim.setConnection(seat.id, 'gone')
     this.votes.delete(seat.id)
     this.broadcast({ type: 'leave', id: seat.id, name: seat.name })

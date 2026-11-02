@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { Room, MemoryStorage, ABSENT_MS } from '../../server/room'
 import { Btn, type ActionData } from '../sim/commands'
 import { EYE_HEIGHT, MAX_PITCH } from '../sim/constants'
-import { RECIPE_IDS } from '../sim/crafting'
+import { RECIPE_IDS, recipeById } from '../sim/crafting'
 import { aimPose } from '../sim/interaction'
 import { quickProps } from '../sim/quickProps'
 import { mulberry32 } from '../sim/random'
+import { structureSpot } from '../sim/structures'
 import type { Simulation } from '../sim/Simulation'
 import { heightAt } from '../sim/world/terrain'
 import { clientCraftWorld, CLIENT_STATION_RANGE, sendableActions } from '../ui/recipes'
@@ -419,6 +420,31 @@ describe('el espejo de NetClient', () => {
     b.surrender(true)
     run(time, 500, [[a, idle], [b, idle]])
     expect(b.match).toMatchObject({ phase: 'lobby', result: { end: 'surrendered' } })
+  })
+
+  it('el espejo sigue la cola de las estaciones y la obra, y quien reconecta las recibe', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const slot = sim.slot(client.id)
+    const furnace = sim.structures.place(structureSpot(slot.player.pos, 0, 0.8, sim.obstacles), 'furnace')!
+    sim.structures.enqueue(furnace, recipeById('iron_bar')!, 15)
+    const lighthouse = sim.structures.place(structureSpot(slot.player.pos, Math.PI, 1.8, sim.obstacles), 'lighthouse')!
+    slot.inventory.add('stone', 5)
+    sim.structures.deliver(lighthouse, slot.inventory, sim.rules)
+    run(time, 500, [[client, idle]])
+    const mirror = client.sim!.structures
+    expect(mirror.byId(furnace.id)!.jobs).toMatchObject([{ recipe: 'iron_bar', time: 15 }])
+    expect(mirror.byId(furnace.id)!.jobs[0].left).toBeLessThan(15)
+    expect(mirror.byId(lighthouse.id)!.build).toEqual(lighthouse.build)
+
+    const { client: late } = connect('b')
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(late.sim!.structures.byId(lighthouse.id)!.build).toEqual(lighthouse.build)
+    expect(late.sim!.structures.byId(furnace.id)!.jobs).toHaveLength(1)
+    run(time, 16_000, [[client, idle], [late, idle]])
+    expect(mirror.byId(furnace.id)!.jobs).toEqual([])
   })
 
   it('el meteorito: el espejo lo sigue, choca con su roca y quien entra a mitad también lo ve', () => {

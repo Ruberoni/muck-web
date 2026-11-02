@@ -19,12 +19,13 @@ export const clientCraftWorld = (structures: () => readonly Structure[]): CraftW
   hasRoom: (kind, pos) => stationWithRoom(structures(), kind, pos, CLIENT_STATION_RANGE) !== null,
 })
 
-const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque' }
+const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque', lighthouse: 'Faro' }
 const STATION_NEEDED: Record<StructureKind, string> = {
   campfire: 'Necesitas una fogata cerca',
   workbench: 'Necesitas una mesa de trabajo cerca',
   furnace: 'Necesitas un horno cerca',
   anvil: 'Necesitas un yunque cerca',
+  lighthouse: 'Necesitas un faro cerca',
 }
 
 export interface RecipeGroup {

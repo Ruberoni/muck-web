@@ -154,6 +154,10 @@ export function installDebug(game: Game) {
     setAttack(held: boolean | null) {
       game.attackOverride = held
     },
+    /** Mantiene la tecla de uso (null: la de verdad). */
+    setUse(held: boolean | null) {
+      game.useOverride = held
+    },
     /** Pulsación única de tecla (e.code), se consume en el siguiente paso. */
     press: (code: string) => game.input.press(code),
     /** Pasos de rueda (positivo hacia abajo), se consumen en el siguiente paso. */

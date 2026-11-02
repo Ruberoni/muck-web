@@ -28,6 +28,8 @@ export interface Intent {
   /** Lo que el cliente dice tener delante; sin él (un jugador), lo calcula la simulación. */
   aim: TargetRef | null | undefined
   attack: boolean
+  /** La tecla de uso, mantenida. */
+  use: boolean
   swing: boolean
   place: boolean
   eat: boolean
@@ -41,7 +43,8 @@ export interface Intent {
  */
 export function applyActions(actor: Actor, command: PlayerCommands | undefined, world: CraftWorld, emit: Emit): Intent {
   const move = command?.move
-  const intent: Intent = { aim: move?.aim, attack: ((move?.buttons ?? 0) & Btn.Attack) !== 0, swing: false, place: false, eat: false, drops: [] }
+  const buttons = move?.buttons ?? 0
+  const intent: Intent = { aim: move?.aim, attack: (buttons & Btn.Attack) !== 0, use: (buttons & Btn.Use) !== 0, swing: false, place: false, eat: false, drops: [] }
   if (!command) return intent
   for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
     if (action.seq <= actor.appliedSeq) continue

@@ -39,6 +39,7 @@ describe('niveles: daño contra props', () => {
     ['mithril_ore', 1, 0, 0, 0, 0, 0, 1],
     ['mithril_bar', 1, 0, 0, 0, 0, 0, 1],
     ['meteor_fragment', 1, 0, 0, 0, 0, 0, 1],
+    ['lighthouse', 1, 0, 0, 0, 0, 0, 1],
     ['workbench', 1, 0, 0, 0, 0, 0, 1],
     ['furnace', 1, 0, 0, 0, 0, 0, 1],
     ['anvil', 1, 0, 0, 0, 0, 0, 1],

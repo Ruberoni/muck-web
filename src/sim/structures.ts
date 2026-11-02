@@ -1,7 +1,9 @@
+import { BUILD_DEFS, copyBuild, deliver, newBuild, type BuildState } from './builds'
+import type { MatchRules } from './match'
 import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from './world/terrain'
 import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
-import type { ItemId } from './inventory'
+import type { Inventory, ItemId } from './inventory'
 import { MAX_JOBS, PLACE_DISTANCE } from './constants'
 import type { Recipe, RecipeId } from './crafting'
 import type { Vec3 } from './player'
@@ -9,7 +11,7 @@ import type { Vec3 } from './player'
 const MIN_GROUND = WATER_LEVEL + 0.2
 
 /** Lo que se puede colocar en el mundo. Todas sirven de estación: las recetas dicen cuál hay que tener cerca. */
-export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil'
+export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse'
 
 export interface StructureDef {
   /** El objeto que se gasta al colocarla. */
@@ -24,6 +26,7 @@ export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   workbench: { item: 'workbench', radius: 0.7, facesPlacer: true },
   furnace: { item: 'furnace', radius: 0.8, facesPlacer: true },
   anvil: { item: 'anvil', radius: 0.5, facesPlacer: true },
+  lighthouse: { item: 'lighthouse', radius: 1.8, facesPlacer: false },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]
@@ -51,6 +54,8 @@ export interface Structure extends Collider {
   /** Giro del modelo: cada estructura distinta, sin depender de cuántas haya. */
   rotY: number
   jobs: StationJob[]
+  /** Lo que se construye entre todos (BUILD_DEFS). */
+  build?: BuildState
 }
 
 export interface StructureSpot {
@@ -73,10 +78,14 @@ const overlaps = (grid: SpatialGrid<Collider>, x: number, z: number, radius: num
   return false
 }
 
-/**
- * Dónde caería una estructura de radio `radius` colocada desde `pos` mirando a `yaw`, y si se puede poner ahí.
- * La distancia es fija (PLACE_DISTANCE): con radios de más de 1 m habría que alejarla.
- */
+const buildOf = (kind: StructureKind) => (BUILD_DEFS[kind] ? { build: newBuild() } : {})
+
+const copyStructure = (s: Structure): Structure => ({ ...s, jobs: s.jobs.map((job) => ({ ...job })), ...(s.build ? { build: copyBuild(s.build) } : {}) })
+
+/** Hueco entre el jugador y lo que coloca, si es grande. */
+const PLACE_GAP = 1.2
+
+/** Dónde caería una estructura de radio `radius` colocada desde `pos` mirando a `yaw`, y si se puede poner ahí. */
 export function structureSpot(
   pos: { x: number; z: number },
   yaw: number,
@@ -85,8 +94,9 @@ export function structureSpot(
   out: StructureSpot = { x: 0, y: 0, z: 0, valid: false },
 ): StructureSpot {
   // forward = (-sin(yaw), -cos(yaw))
-  out.x = pos.x - Math.sin(yaw) * PLACE_DISTANCE
-  out.z = pos.z - Math.cos(yaw) * PLACE_DISTANCE
+  const distance = Math.max(PLACE_DISTANCE, radius + PLACE_GAP)
+  out.x = pos.x - Math.sin(yaw) * distance
+  out.z = pos.z - Math.cos(yaw) * distance
   out.y = heightAt(out.x, out.z)
   out.valid =
     out.y > MIN_GROUND &&
@@ -134,7 +144,7 @@ export class Structures {
     const id = this.nextId++
     const { radius, facesPlacer } = STRUCTURE_DEFS[kind]
     const rotY = facesPlacer ? yaw : id * 1.3
-    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY, radius, alive: true, jobs: [] }
+    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY, radius, alive: true, jobs: [], ...buildOf(kind) }
     this.insert(structure)
     this.emit({ type: 'structurePlaced', id, kind, x: structure.x, y: structure.y, z: structure.z, rotY: structure.rotY, by })
     return structure
@@ -143,7 +153,7 @@ export class Structures {
   /** Añade una estructura ya colocada en otra parte (el espejo del cliente, con lo que dice `structurePlaced`). */
   add(structure: Omit<Structure, 'radius' | 'alive' | 'jobs'>) {
     if (this.list.some((s) => s.id === structure.id)) return
-    this.insert({ ...structure, radius: STRUCTURE_DEFS[structure.kind].radius, alive: true, jobs: [] })
+    this.insert({ ...structure, radius: STRUCTURE_DEFS[structure.kind].radius, alive: true, jobs: [], ...buildOf(structure.kind) })
     this.nextId = Math.max(this.nextId, structure.id + 1)
   }
 
@@ -151,6 +161,12 @@ export class Structures {
   enqueue(structure: Structure, recipe: Recipe, time: number) {
     structure.jobs.push({ recipe: recipe.id, time, left: time })
     this.emit({ type: 'stationQueued', id: structure.id, recipe: recipe.id, time })
+  }
+
+  /** Entrega a una construcción lo que falte de `inventory`. */
+  deliver(structure: Structure, inventory: Inventory, rules: MatchRules) {
+    const { changed, finished } = deliver(structure, inventory, rules)
+    if (changed) this.emit({ type: 'buildProgress', id: structure.id, build: copyBuild(structure.build!), finished })
   }
 
   /** Paso fijo: cada estación trabaja en lo primero de su cola. `done`: ha terminado esa receta. */
@@ -183,12 +199,12 @@ export class Structures {
   }
 
   save(): StructuresState {
-    return { list: this.list.map((s) => ({ ...s, jobs: s.jobs.map((job) => ({ ...job })) })), nextId: this.nextId }
+    return { list: this.list.map(copyStructure), nextId: this.nextId }
   }
 
   load(state: StructuresState) {
     this.clear()
-    for (const s of state.list) this.insert({ ...s, jobs: s.jobs.map((job) => ({ ...job })) })
+    for (const s of state.list) this.insert(copyStructure(s))
     this.nextId = state.nextId
   }
 

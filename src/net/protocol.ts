@@ -15,7 +15,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 34
+export const PROTOCOL_VERSION = 35
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -480,7 +480,7 @@ function parseCmds(raw: Obj): Cmds | null {
 }
 
 function parseMove(m: unknown): MoveMsg | null {
-  if (!isObj(m) || !isInt(m.tick, 0, Number.MAX_SAFE_INTEGER) || !isInt(m.buttons, 0, 127)) return null
+  if (!isObj(m) || !isInt(m.tick, 0, Number.MAX_SAFE_INTEGER) || !isInt(m.buttons, 0, 255)) return null
   if (!isFiniteNum(m.yaw) || !isFiniteNum(m.pitch) || Math.abs(m.pitch) > MAX_PITCH + 1e-9) return null
   if (m.n !== undefined && !isInt(m.n, 1, MAX_MOVE_REPEAT)) return null
   const move: MoveMsg = { tick: m.tick, buttons: m.buttons, yaw: m.yaw, pitch: m.pitch }

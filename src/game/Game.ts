@@ -15,7 +15,9 @@ import { TRAIT_NAMES } from '../sim/threat'
 import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
+import { usableNear } from '../sim/builds'
 import { clockTexts, threatText } from '../ui/clockText'
+import { usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
@@ -32,7 +34,7 @@ import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { CameraShake } from './shake'
 import { Input } from './input'
-import { stepActions, type InventoryFocus } from './actions'
+import { stepActions, USE_KEY, type InventoryFocus } from './actions'
 import { acceptsKeys, afterLockChange, inGame, showsCrosshair, type GameState } from './states'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/player'
@@ -58,6 +60,7 @@ const CAMPFIRE_HEARING = 14
 /** Lo que dice el aviso al tener una estructura en la mano. */
 const PLACE_PROMPT: Record<StructureKind, string> = {
   campfire: 'Clic para colocar la fogata',
+  lighthouse: 'Clic para colocar el faro',
   workbench: 'Clic para colocar la mesa de trabajo',
   furnace: 'Clic para colocar el horno',
   anvil: 'Clic para colocar el yunque',
@@ -113,6 +116,7 @@ export class Game {
   manualClock = false
   inputOverride: Partial<PlayerInput> | null = null
   attackOverride: boolean | null = null
+  useOverride: boolean | null = null
   /** Si un clic en el fondo del menú empieza a jugar. Con el lobby, no: se elige con sus botones. */
   menuClickStarts = true
   /** Al cambiar de estado o de partida (el lobby se rehace). */
@@ -523,17 +527,20 @@ export class Game {
     } else {
       const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
       const presses = this.input.takePresses()
+      const usable = usableNear(this.sim.structures.list, player.pos) !== null
       const { actions, inventory: openInventory } = stepActions(this.queued.splice(0), {
         presses,
         wheel: this.input.takeWheel(),
         selected: inventory.selected,
         slots: inventory.slots,
         clickSwings: this.attackOverride === null,
+        usable,
       })
       // El chat no se abre a la vez que el inventario.
       if (!openInventory) this.chatKey(presses)
       const attack = this.attackOverride ?? this.input.attackHeld
-      events = this.session.step({ buttons: inputButtons(input, attack), yaw, pitch }, sendable(actions))
+      const use = usable && (this.useOverride ?? this.input.isDown(USE_KEY))
+      events = this.session.step({ buttons: inputButtons(input, attack, use), yaw, pitch }, sendable(actions))
       if (openInventory) this.openInventory(openInventory)
     }
     this.snapPlayer = false
@@ -634,6 +641,9 @@ export class Game {
           break
         case 'eternalNight':
           this.hud.showBanner('Cae la Noche Eterna')
+          break
+        case 'buildProgress':
+          if (e.finished) this.hud.showBanner(`${e.finished} terminado`)
           break
         case 'mobsRose':
           if (e.trait) this.hud.showBanner(`Campana · Los mobs suben: ${TRAIT_NAMES[e.trait]}`)
@@ -882,6 +892,7 @@ export class Game {
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)
     // Se va antes de tiempo si ya se lleva en la mano lo que hacía falta.
     const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)
+    const usable = this.state === 'playing' ? usableNear(structures.list, p.pos) : null
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating' && !net) this.hud.setPrompt(this.waitingToRespawn())
@@ -889,6 +900,7 @@ export class Game {
     else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
     else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
+    else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules))
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
     this.hud.setClock(clockTexts(sim.clock))

@@ -6,6 +6,8 @@ import { CLICK, RIGHT_CLICK, withCtrl } from './input'
 
 /** Teclas que abren la pantalla de inventario jugando (y la cierran, desde la pantalla). */
 export const INVENTORY_KEYS: ReadonlySet<string> = new Set(['Tab', 'KeyE'])
+/** Actúa sobre lo que se tenga cerca; si no hay nada, abre el inventario. */
+export const USE_KEY = 'KeyE'
 /** Abre la misma pantalla con las recetas a la vista (y también la cierra). */
 export const RECIPES_KEY = 'KeyC'
 /** Tira uno de la casilla elegida; con Ctrl, la pila entera (en la pantalla de inventario, la casilla bajo el ratón). */
@@ -25,6 +27,8 @@ export interface KeyStep {
   slots: readonly (ItemId | null)[]
   /** Si el clic golpea (no lo hace con `attackOverride` de debug, que golpea manteniendo). */
   clickSwings: boolean
+  /** Hay algo cerca que usar: E actúa sobre ello en vez de abrir el inventario. */
+  usable?: boolean
 }
 
 /**
@@ -58,6 +62,7 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
   }
   if (k.presses.has(EAT_KEY) || k.presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })
   if (k.presses.has(DROP_KEY) && slots[selected]) actions.push({ kind: 'drop', slot: selected, all: k.presses.has(withCtrl(DROP_KEY)) })
-  const inventory = k.presses.has(RECIPES_KEY) ? 'recipes' : [...INVENTORY_KEYS].some((code) => k.presses.has(code)) ? 'slots' : null
+  const opensInventory = [...INVENTORY_KEYS].some((code) => k.presses.has(code) && !(k.usable && code === USE_KEY))
+  const inventory = k.presses.has(RECIPES_KEY) ? 'recipes' : opensInventory ? 'slots' : null
   return { actions, inventory }
 }

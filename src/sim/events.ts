@@ -1,5 +1,6 @@
 import type { EnemyType, HitEfficacy } from './constants'
 import type { RecipeId } from './crafting'
+import type { BuildState } from './builds'
 import type { ChargeState } from './enemies'
 import type { ItemId } from './inventory'
 import type { MatchResult } from './match'
@@ -30,6 +31,8 @@ export type SimEventData =
   /** Una estación tiene un trabajo más en cola, o ha terminado el primero (lo hecho llega en su `pickupSpawn`). */
   | { type: 'stationQueued'; id: number; recipe: RecipeId; time: number }
   | { type: 'stationDone'; id: number }
+  /** Han entregado materiales a una construcción. `finished`: la fase que ha acabado, si ha acabado alguna. */
+  | { type: 'buildProgress'; id: number; build: BuildState; finished: string | null }
   | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId; efficacy: HitEfficacy }

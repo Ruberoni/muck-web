@@ -1,11 +1,12 @@
 import type { PlayerCommands } from './commands'
+import { isBuilt, usableNear } from './builds'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import { recipeById, type CraftWorld, type RecipeId } from './crafting'
 import { DEATH_DROP_HEIGHT, ENEMY_DEFS, EYE_HEIGHT, GAME_OVER_DELAY, METEOR_RADIUS, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
-import { Inventory, type InventoryState, type ItemId } from './inventory'
+import { Inventory, KEY_ITEMS, type InventoryState, type ItemId } from './inventory'
 import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, workFactor, type MatchEnd, type MatchResult, type MatchRules } from './match'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
@@ -48,6 +49,8 @@ export interface PlayerSlot extends Actor {
   shieldUntil: number
   /** Veces que ha muerto en esta partida. */
   deaths: number
+  /** Segundos que lleva mantenida la tecla de uso sobre algo. */
+  useHeld: number
 }
 
 /** Un PlayerSlot como datos (el objetivo no se guarda: se recalcula en cada paso). */
@@ -64,6 +67,7 @@ export interface PlayerSlotState {
   respawnAt: number | null
   shieldUntil: number
   deaths: number
+  useHeld: number
 }
 
 /** Todo lo que cambia durante la partida, como datos (ver Simulation.toJSON). */
@@ -222,6 +226,7 @@ export class Simulation {
       respawnAt: null,
       shieldUntil: 0,
       deaths: 0,
+      useHeld: 0,
     }
     this.players.set(id, slot)
     return slot
@@ -298,6 +303,7 @@ export class Simulation {
       // dice a qué apunta (ve a los enemigos en el pasado) y aquí solo se comprueba que sea creíble.
       if (intent.aim === undefined) this.interaction.updateTarget(slot)
       else this.interaction.validateAim(slot, intent.aim)
+      this.use(slot, intent.use)
       const hands = useHands(slot, intent)
       if (hands.swing) this.interaction.strike(slot)
       if (hands.place) this.place(slot)
@@ -367,6 +373,7 @@ export class Simulation {
       slot.respawnAt = null
       slot.shieldUntil = 0
       slot.deaths = 0
+      slot.useHeld = 0
       Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
     }
     this.gameOverAt = null
@@ -443,6 +450,7 @@ export class Simulation {
           respawnAt: slot.respawnAt,
           shieldUntil: slot.shieldUntil,
           deaths: slot.deaths,
+          useHeld: slot.useHeld,
         })),
       nextPlayerId: this.nextPlayerId,
       gameOverAt: this.gameOverAt,
@@ -485,10 +493,32 @@ export class Simulation {
       slot.respawnAt = saved.respawnAt
       slot.shieldUntil = saved.shieldUntil
       slot.deaths = saved.deaths
+      slot.useHeld = saved.useHeld
     }
     this.nextPlayerId = state.nextPlayerId
     this.gameOverAt = state.gameOverAt
     this.result = state.result
+  }
+
+  /** Quien se va no se lleva lo imprescindible: se quedaría la partida sin poder ganarse. */
+  dropKeyItems(id: PlayerId) {
+    const { player, inventory } = this.slot(id)
+    for (const item of KEY_ITEMS) {
+      const amount = inventory.count(item)
+      if (amount && inventory.remove(item, amount)) this.pickups.dropPile(item, amount, player.pos.x, player.pos.y + DEATH_DROP_HEIGHT, player.pos.z)
+    }
+  }
+
+  /** La tecla de uso: pulsarla entrega; mantenerla cuenta el tiempo, para lo que no debe hacerse sin querer. */
+  private use(slot: PlayerSlot, held: boolean) {
+    const target = held ? usableNear(this.structures.list, slot.player.pos) : null
+    if (!target) {
+      slot.useHeld = 0
+      return
+    }
+    const pressed = slot.useHeld === 0
+    slot.useHeld += STEP
+    if (pressed && target.build && !isBuilt(target)) this.structures.deliver(target, slot.inventory, this.rules)
   }
 
   /** En solitario la partida sigue mientras queden vidas; en grupo, cualquiera en pie basta. */

@@ -41,6 +41,12 @@ const BAR_WIDTH = 1.2
 const barBackMaterial = new THREE.SpriteMaterial({ color: '#11100e', transparent: true, opacity: 0.7, depthTest: false })
 const barFillMaterial = new THREE.SpriteMaterial({ color: '#ffb13b', depthTest: false })
 
+const lighthouseBaseGeometry = new THREE.CylinderGeometry(1.6, 1.8, 1.2, 10)
+const lighthouseTowerGeometry = new THREE.CylinderGeometry(0.8, 1.3, 8, 10)
+const lighthouseLampGeometry = new THREE.CylinderGeometry(0.9, 0.9, 1.3, 10)
+const lighthouseWallMaterial = new THREE.MeshStandardMaterial({ color: '#dcd8cc', flatShading: true })
+const lighthouseLampMaterial = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb13b', emissiveIntensity: 0.3, flatShading: true })
+
 const logMaterial = new THREE.MeshStandardMaterial({ color: '#6b4426', flatShading: true })
 const stoneMaterial = new THREE.MeshStandardMaterial({ color: '#8a877b', flatShading: true })
 const plankMaterial = new THREE.MeshStandardMaterial({ color: '#c8955a', flatShading: true })
@@ -148,12 +154,25 @@ function buildAnvil(m: MaterialFor, shadows: boolean): StructureModel {
   return { root, flame: null }
 }
 
+/** Faro: estacas en el sitio y, según avanza la obra, el cimiento, la torre y la lámpara. */
+function buildLighthouse(m: MaterialFor, shadows: boolean): StructureModel {
+  const root = new THREE.Group()
+  const mesh = piece(root, m, shadows)
+  for (const [x, z] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]]) mesh(legGeometry, logMaterial, x, 0.3, z)
+  const base = mesh(lighthouseBaseGeometry, stoneMaterial, 0, 0.6, 0)
+  const tower = mesh(lighthouseTowerGeometry, lighthouseWallMaterial, 0, 5, 0)
+  const lamp = mesh(lighthouseLampGeometry, lighthouseLampMaterial, 0, 9.6, 0)
+  return { root, flame: null, stages: [base, tower, lamp] }
+}
+
 export interface StructureModel {
   root: THREE.Group
   /** Las llamas que parpadean (la fogata y el fuego del horno). */
   flame: THREE.Group | null
   /** La barra de progreso y su relleno: se crean al ponerle el primer trabajo. */
   bar?: { back: THREE.Sprite; fill: THREE.Sprite }
+  /** Lo que aparece con cada fase de una construcción. */
+  stages?: THREE.Object3D[]
 }
 
 /** El modelo de cada tipo de estructura. */
@@ -162,6 +181,7 @@ const MODELS: Record<StructureKind, (m: MaterialFor, shadows: boolean) => Struct
   workbench: buildWorkbench,
   furnace: buildFurnace,
   anvil: buildAnvil,
+  lighthouse: buildLighthouse,
 }
 
 const own: MaterialFor = (material) => material
@@ -247,10 +267,12 @@ export class StructureView {
     })
   }
 
-  /** La barra de lo que está haciendo, si hace algo. */
-  private showProgress(model: StructureModel, { jobs }: Structure) {
+  /** La barra de lo que está haciendo o de cómo va la obra, si hay algo que enseñar. */
+  private showProgress(model: StructureModel, { jobs, build }: Structure) {
     const job = jobs[0]
-    if (!job && !model.bar) return
+    if (model.stages && build) model.stages.forEach((stage, i) => (stage.visible = build.phase > i))
+    const building = build && build.progress < 1
+    if (!job && !building && !model.bar) return
     if (!model.bar) {
       const back = new THREE.Sprite(barBackMaterial)
       const fill = new THREE.Sprite(barFillMaterial)
@@ -263,8 +285,9 @@ export class StructureView {
       model.root.add(back, fill)
       model.bar = { back, fill }
     }
-    model.bar.back.visible = model.bar.fill.visible = job !== undefined
-    if (job) model.bar.fill.scale.set(Math.max(0.01, BAR_WIDTH * (1 - job.left / job.time)), 0.12, 1)
+    model.bar.back.visible = model.bar.fill.visible = job !== undefined || !!building
+    const done = job ? 1 - job.left / job.time : (build?.progress ?? 0)
+    model.bar.fill.scale.set(Math.max(0.01, BAR_WIDTH * done), 0.12, 1)
   }
 
   /** Reinicio de partida: sin estructuras, luces apagadas y sin vista previa. */

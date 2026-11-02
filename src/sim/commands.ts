@@ -2,8 +2,8 @@ import type { RecipeId } from './crafting'
 import type { TargetRef } from './events'
 import type { PlayerInput } from './player'
 
-/** Botones de un `Move`, como bits. `Attack` es el clic mantenido. */
-export const Btn = { Fwd: 1, Back: 2, Left: 4, Right: 8, Sprint: 16, Jump: 32, Attack: 64 } as const
+/** Botones de un `Move`, como bits. `Attack` es el clic mantenido y `Use`, la tecla de uso mantenida. */
+export const Btn = { Fwd: 1, Back: 2, Left: 4, Right: 8, Sprint: 16, Jump: 32, Attack: 64, Use: 128 } as const
 
 /** Lo que el jugador mantiene durante un tick: botones y orientación (absoluta). */
 export interface Move {
@@ -42,7 +42,7 @@ export interface PlayerCommands {
 }
 
 /** Botones de un `Move` a partir de las teclas y el clic mantenido. */
-export function inputButtons(input: PlayerInput, attack: boolean): number {
+export function inputButtons(input: PlayerInput, attack: boolean, use = false): number {
   return (
     (input.forward ? Btn.Fwd : 0) |
     (input.back ? Btn.Back : 0) |
@@ -50,7 +50,8 @@ export function inputButtons(input: PlayerInput, attack: boolean): number {
     (input.right ? Btn.Right : 0) |
     (input.sprint ? Btn.Sprint : 0) |
     (input.jump ? Btn.Jump : 0) |
-    (attack ? Btn.Attack : 0)
+    (attack ? Btn.Attack : 0) |
+    (use ? Btn.Use : 0)
   )
 }
 

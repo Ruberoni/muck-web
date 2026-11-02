@@ -168,6 +168,11 @@ export class Input {
     return this.taken
   }
 
+  /** Si esa tecla está pulsada ahora, por e.code. */
+  isDown(code: string) {
+    return this.keys.has(code)
+  }
+
   state(): PlayerInput {
     const k = this.keys
     return {

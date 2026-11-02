@@ -2,7 +2,7 @@ import { heightAt, WATER_LEVEL } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import { DROP_PICKUP_DELAY, GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS } from './constants'
-import type { Inventory, ItemId } from './inventory'
+import { KEY_ITEMS, type Inventory, type ItemId } from './inventory'
 
 const RADIUS = 0.2
 // Al caer saltan hacia fuera y hacia arriba.
@@ -60,7 +60,22 @@ export interface PickupsState {
 const copyPickup = (p: Pickup): Pickup => ({ ...p, pos: { ...p.pos }, prev: { ...p.prev }, vel: { ...p.vel } })
 
 /** Encima del agua flotan: se pueden recoger vadeando. */
+const SHORE_STEP = 2
+const SHORE_RANGE = 300
+const SHORE_ANGLES = 16
 const groundAt = (x: number, z: number) => Math.max(heightAt(x, z), WATER_LEVEL)
+
+/** La tierra más cercana a (x, z), buscando en anillos. */
+function shoreNear(x: number, z: number): { x: number; z: number } {
+  for (let r = SHORE_STEP; r < SHORE_RANGE; r += SHORE_STEP) {
+    for (let i = 0; i < SHORE_ANGLES; i++) {
+      const angle = (i / SHORE_ANGLES) * Math.PI * 2
+      const spot = { x: x + Math.cos(angle) * r, z: z + Math.sin(angle) * r }
+      if (heightAt(spot.x, spot.z) > WATER_LEVEL + 0.2) return spot
+    }
+  }
+  return { x: 0, z: 0 }
+}
 
 /**
  * Objetos en el suelo: caen al soltarse, se deslizan hacia un jugador si le caben y se recogen al pasar por encima.
@@ -188,6 +203,11 @@ export class Pickups {
     p.pos.y = ground
     p.vel.x = p.vel.y = p.vel.z = 0
     p.grounded = true
+    // Lo imprescindible no se pierde en el agua: aparece en la orilla.
+    if (heightAt(p.pos.x, p.pos.z) < WATER_LEVEL && KEY_ITEMS.includes(p.item)) {
+      Object.assign(p.pos, shoreNear(p.pos.x, p.pos.z))
+      p.pos.y = groundAt(p.pos.x, p.pos.z)
+    }
   }
 
   /** Reinicio de partida: sin nada en el suelo. */
