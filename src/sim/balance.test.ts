@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ENEMY_DEFS, ENEMY_TYPES, HIT_COOLDOWN, PROP_DEFS, SWEEP_TARGETS, type EnemyType } from './constants'
+import { ENEMY_DEFS, ENEMY_TYPES, HIT_COOLDOWN, PROP_DEFS, SHELL_RESIST, SWEEP_TARGETS, type EnemyType } from './constants'
 import { BUILD_DEFS, phaseCost } from './builds'
 import { recipeById, type RecipeId } from './crafting'
 import { bossScale, enemyCapFor, spawnChance } from './enemies'
@@ -197,9 +197,17 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
     ['giant', 75, 45, 28, 18],
     ['thrower', 44, 29, 19, 13],
     ['guardian', 63, 38, 23, 15],
+    ['colossus', 188, 94, 54, 33],
   ] as const)('%s, con un jugador, tarda lo que debe', (type, stone, iron, mithril, meteor) => {
     const seconds = (item: ItemId) => Math.round(ENEMY_DEFS[type].hp / ((attackDamage(item, type) / swingCooldown(item)) * 0.4))
     expect((['stone_sword', 'iron_sword', 'mithril_sword', 'meteor_sword'] as const).map(seconds)).toEqual([stone, iron, mithril, meteor])
+  })
+
+  it('la coraza del Coloso se rompe en pocos golpes con un pico bueno, y nada se la salta', () => {
+    const swings = (item: ItemId) => Math.ceil(ENEMY_DEFS.colossus.shell! / attackDamage(item, 'colossus'))
+    expect((['stone_pickaxe', 'iron_pickaxe', 'mithril_pickaxe'] as const).map(swings)).toEqual([27, 16, 9])
+    // Con la espada, sin romperla: un 10 % de lo que haría.
+    expect(ENEMY_DEFS.colossus.hp / (attackDamage('meteor_sword', 'colossus') * SHELL_RESIST)).toBeGreaterThan(500)
   })
 
   it('un grupo no mata a un jefe antes que uno solo: la vida sube igual que el daño', () => {

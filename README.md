@@ -157,6 +157,8 @@ El tótem se levanta igual, en tres fases: la última pide 3 fragmentos de meteo
 
 Al activar el tótem el avión cae en llamas, lejos de él, y se anuncia hacia dónde. Se repara entregando materiales. Después, cualquiera arranca el motor con <kbd>E</kbd>: tarda 90 s en calentar y mientras tanto todos los mobs comunes van a por él. Si le quitan toda la vida el motor se apaga, pero no se destruye: se repara con 10 de madera y se vuelve a arrancar. Al acabar despegan quienes estén vivos y a menos de 8 m; si no hay nadie, espera. Se gana si escapa al menos uno, y la pantalla final dice quién se salvó y quién se quedó.
 
+Hay una tumba escondida en la isla, y se puede encontrar antes de activar el tótem, aunque hasta entonces está dormida. Al activarlo lanza una columna de luz que se ve a través de la niebla y sale en el minimapa. Manteniendo <kbd>E</kbd> 3 s se abre y nace el **Coloso de Cristal**: 3.000 de vida por jugador, armadura 15 y una coraza que hay que romper a pico, porque hasta entonces lo demás apenas le hace daño. Suelta el motor, que es lo último que le falta al avión. Si no se mata, sigue ahí; no se pierde nada.
+
 Lo imprescindible para escapar no se puede perder: si quien lo lleva se va, cae al suelo, y si cae al agua aparece en la orilla.
 
 ## Meteoritos

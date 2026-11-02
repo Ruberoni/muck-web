@@ -76,6 +76,10 @@ export type SimEventData =
   /** Al activar el tótem cae el avión en llamas (la estructura llega en su `structurePlaced`). */
   | { type: 'planeCrashed'; id: number; x: number; z: number }
   | { type: 'planeChanged'; id: number; plane: PlaneState }
+  /** Se ha abierto una tumba: ha nacido su jefe. */
+  | { type: 'graveOpened'; id: number }
+  /** Un pico ha roto la coraza de un jefe de luz. */
+  | { type: 'shellBroken'; id: number }
   /** Los mobs han subido: un rasgo con la campana o, sin él (`trait` null), uno de los saltos. */
   | { type: 'mobsRose'; trait: MobTrait | null; threat: ThreatState }
   | { type: 'clockSet'; worldStartTick: number }

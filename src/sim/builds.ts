@@ -47,7 +47,11 @@ export const BUILD_DEFS: Partial<Record<StructureKind, BuildDef>> = {
   },
   plane: {
     name: 'Avión',
-    phases: [{ name: 'Fuselaje', cost: [{ item: 'wood', amount: 150 }, { item: 'iron_bar', amount: 40 }] }],
+    phases: [
+      { name: 'Fuselaje', cost: [{ item: 'wood', amount: 150 }, { item: 'iron_bar', amount: 40 }] },
+      // De momento hay un solo jefe de luz: faltan las otras cuatro piezas.
+      { name: 'Motor', cost: [{ item: 'plane_engine', amount: 1, fixed: 'one' }] },
+    ],
   },
 }
 
@@ -111,7 +115,7 @@ export function usableNear(structures: readonly Structure[], pos: Vec3): Structu
   let best: Structure | null = null
   let bestDistance = Infinity
   for (const s of structures) {
-    if (!BUILD_DEFS[s.kind]) continue
+    if (!BUILD_DEFS[s.kind] && s.kind !== 'grave') continue
     const distance = Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius
     if (distance > STATION_RANGE || distance >= bestDistance) continue
     best = s

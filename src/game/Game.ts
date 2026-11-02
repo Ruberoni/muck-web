@@ -67,6 +67,7 @@ const PLACE_PROMPT: Record<StructureKind, string> = {
   distiller: 'Clic para colocar el destilador',
   totem: 'Clic para colocar el tótem',
   plane: '',
+  grave: '',
   workbench: 'Clic para colocar la mesa de trabajo',
   furnace: 'Clic para colocar el horno',
   anvil: 'Clic para colocar el yunque',
@@ -658,6 +659,14 @@ export class Game {
           this.hud.showBanner('El tótem ha despertado')
           this.sound.play('roar')
           break
+        case 'graveOpened':
+          this.hud.showBanner('Se ha abierto una tumba')
+          this.sound.play('roar')
+          break
+        case 'shellBroken':
+          this.hud.showBanner('¡La coraza se ha roto!')
+          this.sound.play('breakStone')
+          break
         case 'planeCrashed':
           this.hud.showBanner(`El avión ha caído al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}`)
           this.shake.start(Math.hypot(e.x - this.renderPos.x, e.z - this.renderPos.z))
@@ -928,7 +937,7 @@ export class Game {
     else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
     else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
-    else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules))
+    else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules, sim.threat.state.totem))
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
     this.hud.setClock(clockTexts(sim.clock))
@@ -937,7 +946,8 @@ export class Game {
     if (banner) this.hud.showBanner(banner)
     this.hud.setTonight(tonight ?? threatText(sim.threat.state))
     this.hud.setLight(planeText(structures.list) ?? lightText(structures.list, sim.clock))
-    this.hud.setBoss(boss ? { name: ENEMY_DEFS[boss.type].name, hp: boss.hp, maxHp: boss.maxHp } : null)
+    const shown = enemies.list.find((e) => ENEMY_DEFS[e.type].light) ?? boss
+    this.hud.setBoss(shown ? { name: ENEMY_DEFS[shown.type].name, hp: shown.hp, maxHp: shown.maxHp } : null)
     if (this.state === 'playing') {
       const entered = this.biomeNotice.update(biomeAt(p.pos.x, p.pos.z), dt)
       if (entered) this.hud.showBiome(BIOME_NAMES[entered])
@@ -946,7 +956,8 @@ export class Game {
       x: this.renderPos.x,
       z: this.renderPos.z,
       yaw: look.yaw,
-      structures: structures.list,
+      // La tumba hay que encontrarla: en el mapa solo sale cuando la luz la delata.
+      structures: structures.list.filter((s) => s.kind !== 'grave' || sim.threat.state.totem),
       // En la Noche Eterna solo se ve lo que hay delante.
       enemies: sim.clock.eternal ? [] : enemies.list,
       meteor: sim.worldEvents.meteor,

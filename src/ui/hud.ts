@@ -96,7 +96,7 @@ export class Hud {
     this.day = el('div', 'day', root)
     this.biome = el('div', 'biome-notice', root)
     this.tonight = el('div', 'tonight', root)
-    this.light = el('div', 'light', root)
+    this.light = el('div', 'lit', root)
     this.banner = el('div', 'banner', root)
     this.boss = el('div', 'boss', root)
     this.boss.hidden = true

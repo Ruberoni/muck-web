@@ -597,6 +597,11 @@ export class NetClient {
       case 'stationDone':
         sim.structures.byId(e.id)?.jobs.shift()
         break
+      case 'graveOpened': {
+        const structure = sim.structures.byId(e.id)
+        if (structure) structure.opened = true
+        break
+      }
       case 'planeChanged': {
         const structure = sim.structures.byId(e.id)
         if (structure) structure.plane = e.plane
@@ -659,6 +664,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     hp,
     maxHp: hp,
     lootScale: 1,
+    shell: 0,
     alive: true,
     attackCooldown: 0,
     stagger: 0,

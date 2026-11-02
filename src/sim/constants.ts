@@ -259,9 +259,13 @@ export interface EnemyDef {
   ranged?: RangedDef
   /** Sale de un evento, no de la noche: no cuenta para el tope, y su vida y su botín van por jugador. */
   guard?: GuardDef
+  /** Jefe de luz: nace de una tumba, con vida por jugador. Guarda una pieza del avión. */
+  light?: boolean
+  /** Coraza, por jugador: hasta romperla a pico casi no recibe daño. */
+  shell?: number
 }
 
-export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian', EnemyDef> = {
+export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian' | 'colossus', EnemyDef> = {
   // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
@@ -406,6 +410,31 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     cost: 6,
     guard: { aggro: 15, leash: 25 },
   },
+  // Jefe de luz: casi no recibe daño hasta que un pico le rompe la coraza. Guarda el motor del avión.
+  colossus: {
+    name: 'Coloso de Cristal',
+    verb: 'atacar',
+    hp: 3000,
+    armor: 15,
+    shell: 400,
+    speed: 4.5,
+    radius: 1.1,
+    scale: 2.6,
+    damage: 30,
+    gap: 0.35,
+    reach: 1,
+    attackInterval: 1.6,
+    windup: 0.7,
+    knockback: 0,
+    stagger: 0,
+    staggerGap: 0,
+    nocturnal: false,
+    ai: 'chase',
+    weakness: {},
+    loot: [{ item: 'plane_engine', amount: 1 }],
+    cost: 10,
+    light: true,
+  },
 }
 export type EnemyType = keyof typeof ENEMY_DEFS
 /** Los tipos en orden fijo: un `snap` lleva el índice en vez del nombre. */
@@ -467,6 +496,10 @@ export const PLANE_HP = 600
 export const MOTOR_TIME = 90
 export const PLANE_BOARD = 8
 export const PLANE_REPAIR_WOOD = 10
+/** Segundos que hay que mantener la tecla de uso para abrir una tumba. */
+export const GRAVE_HOLD = 3
+/** Lo que entra de cada golpe a quien aún tiene la coraza, si no es de pico. */
+export const SHELL_RESIST = 0.1
 /** Trabajos en cola por estación. Rinde lo mismo con 1 o con 5 jugadores, y eso aprieta a los grupos grandes. */
 export const MAX_JOBS = 5
 // Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.

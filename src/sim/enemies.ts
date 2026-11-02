@@ -24,6 +24,7 @@ import {
   ENEMY_SPAWN_MIN,
   ENEMY_TYPES,
   PLAYER_RADIUS,
+  SHELL_RESIST,
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
   type ChargeDef,
@@ -32,6 +33,7 @@ import {
   type GuardDef,
   type HitEfficacy,
   type RangedDef,
+  type WeaponClass,
 } from './constants'
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
@@ -77,6 +79,8 @@ export interface EnemyData {
   maxHp: number
   /** Por cuánto se multiplica su botín: según los jugadores, no según lo que hayan subido los mobs. */
   lootScale: number
+  /** Lo que queda de su coraza. */
+  shell: number
   alive: boolean
   attackCooldown: number
   /** Tras un golpe retrocede con `knock` y no persigue ni ataca durante este tiempo. */
@@ -146,13 +150,13 @@ export function bossOfNight(day: number): EnemyType | null {
 export const bossScale = (players: number) => Math.max(1, players)
 
 /** Por cuánto se multiplica la vida de un enemigo con `players` jugadores. */
-const hpScale = (def: EnemyDef, players: number) => (def.boss || def.guard ? bossScale(players) : 1)
+const hpScale = (def: EnemyDef, players: number) => (def.boss || def.guard || def.light ? bossScale(players) : 1)
 
 /** Y su botín: el guardián suelta por jugador; un jefe, algo menos. */
 const lootScaleOf = (def: EnemyDef, players: number) => (def.guard ? bossScale(players) : def.boss ? 1 + BOSS_PER_PLAYER * (bossScale(players) - 1) : 1)
 
 /** Los que suben con la amenaza: ni los jefes ni los guardianes. */
-const isCommon = (type: EnemyType) => !ENEMY_DEFS[type].boss && !ENEMY_DEFS[type].guard
+const isCommon = (type: EnemyType) => !ENEMY_DEFS[type].boss && !ENEMY_DEFS[type].guard && !ENEMY_DEFS[type].light
 
 /** Probabilidad de que una aparición de la noche `day` en `biome` sea de tipo `type` en vez de un trasgo. */
 export function spawnChance(type: EnemyType, day: number, biome: Biome): number {
@@ -500,6 +504,7 @@ export class Enemies {
       hp,
       maxHp: hp,
       lootScale,
+      shell: (def.shell ?? 0) * bossScale(players),
       alive: true,
       attackCooldown: def.windup,
       stagger: 0,
@@ -515,8 +520,16 @@ export class Enemies {
   }
 
   /** Golpe de `by` desde `from` (la posición del atacante). Devuelve true si lo mata. */
-  hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId, efficacy: HitEfficacy = 'normal'): boolean {
+  hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId, efficacy: HitEfficacy = 'normal', weapon: WeaponClass = 'hand'): boolean {
     if (!e.alive) return false
+    if (e.shell > 0) {
+      // El pico rompe la coraza; lo demás apenas le hace nada.
+      const breaking = weapon === 'pickaxe'
+      if (breaking) e.shell = Math.max(0, e.shell - damage)
+      damage = breaking ? 0 : damage * SHELL_RESIST
+      efficacy = breaking ? 'effective' : 'resisted'
+      if (breaking && e.shell <= 0) this.emit({ type: 'shellBroken', id: e.id })
+    }
     const dazed = e.charge.state === 'dazed'
     if (dazed) efficacy = 'effective'
     e.hp = Math.max(0, e.hp - (dazed ? damage * DAZED_DAMAGE : damage))

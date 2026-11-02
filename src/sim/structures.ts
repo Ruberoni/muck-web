@@ -11,7 +11,7 @@ import type { Vec3 } from './player'
 const MIN_GROUND = WATER_LEVEL + 0.2
 
 /** Lo que se puede colocar en el mundo. Todas sirven de estación: las recetas dicen cuál hay que tener cerca. */
-export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse' | 'distiller' | 'totem' | 'plane'
+export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse' | 'distiller' | 'totem' | 'plane' | 'grave'
 
 export interface StructureDef {
   /** El objeto que se gasta al colocarla; null: no la coloca nadie. */
@@ -30,6 +30,7 @@ export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   distiller: { item: 'distiller', radius: 0.7, facesPlacer: true },
   totem: { item: 'totem', radius: 1.2, facesPlacer: false },
   plane: { item: null, radius: 3, facesPlacer: false },
+  grave: { item: null, radius: 1, facesPlacer: false },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]
@@ -82,6 +83,8 @@ export interface Structure extends Collider {
   /** El tótem, ya activado. */
   awake?: boolean
   plane?: PlaneState
+  /** La tumba, ya abierta. */
+  opened?: boolean
 }
 
 export interface StructureSpot {

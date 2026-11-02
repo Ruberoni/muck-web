@@ -447,6 +447,24 @@ describe('el espejo de NetClient', () => {
     expect(mirror.byId(furnace.id)!.jobs).toEqual([])
   })
 
+  it('la tumba: el espejo sabe cuándo se abre, y quien entra después también', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const grave = sim.structures.place(structureSpot(sim.slot(client.id).player.pos, Math.PI, 1, sim.obstacles), 'grave')!
+    sim.threat.awaken()
+    run(time, 3500, [[client, () => ({ buttons: Btn.Use, yaw: 0, pitch: 0 })]])
+    run(time, 500, [[client, idle]])
+    expect(grave.opened).toBe(true)
+    expect(client.sim!.structures.byId(grave.id)!.opened).toBe(true)
+    expect(client.sim!.enemies.list.map((e) => e.type)).toContain('colossus')
+
+    const { client: late } = connect('b')
+    run(time, 500, [[client, idle], [late, idle]])
+    expect(late.sim!.structures.byId(grave.id)!.opened).toBe(true)
+  })
+
   it('el meteorito: el espejo lo sigue, choca con su roca y quien entra a mitad también lo ve', () => {
     const { room, time, connect } = setup()
     const { client } = connect('a', 'create')

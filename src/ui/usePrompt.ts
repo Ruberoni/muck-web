@@ -1,11 +1,12 @@
 import { BUILD_DEFS, isBuilt, phaseCost } from '../sim/builds'
-import { MOTOR_TIME, OIL_MAX, PLANE_REPAIR_WOOD, TOTEM_HOLD } from '../sim/constants'
+import { GRAVE_HOLD, MOTOR_TIME, OIL_MAX, PLANE_REPAIR_WOOD, TOTEM_HOLD } from '../sim/constants'
 import { ITEM_NAMES } from '../sim/inventory'
 import type { MatchRules } from '../sim/match'
 import type { Structure } from '../sim/structures'
 
-/** Lo que dice el HUD delante de algo que se usa con E. */
-export function usePrompt(structure: Structure, rules: MatchRules): string {
+/** Lo que dice el HUD delante de algo que se usa con E. `awake`: si el tótem está activado. */
+export function usePrompt(structure: Structure, rules: MatchRules, awake: boolean): string {
+  if (structure.kind === 'grave') return structure.opened ? 'Tumba abierta' : awake ? `Tumba — Mantén E ${GRAVE_HOLD} s para abrirla` : 'Tumba dormida'
   const def = BUILD_DEFS[structure.kind]!
   const { build } = structure
   if (!build || isBuilt(structure)) {

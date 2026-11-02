@@ -7,7 +7,7 @@ import { enemyAimHeight, type Enemies, type EnemyData } from './enemies'
 import type { Inventory, ItemId } from './inventory'
 import type { Player } from './player'
 import type { Pickups } from './pickups'
-import { attackDamage, hitEfficacy, isSword, propDamage, swingCooldown } from './tiers'
+import { attackDamage, hitEfficacy, isSword, propDamage, swingCooldown, weaponClass } from './tiers'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
 export type Target = PropData | EnemyData
@@ -160,7 +160,7 @@ export class Interaction {
     // El retroceso es en sentido contrario al atacante.
     const { pos } = fighter.player
     const item = fighter.inventory.selectedItem
-    if (!this.enemies?.hit(enemy, attackDamage(item, enemy.type), pos, fighter.id, hitEfficacy(item, enemy.type))) return false
+    if (!this.enemies?.hit(enemy, attackDamage(item, enemy.type), pos, fighter.id, hitEfficacy(item, enemy.type), weaponClass(item))) return false
     if (fighter.target === enemy) fighter.target = null
     const { x, z } = enemy.pos
     const def = ENEMY_DEFS[enemy.type]

@@ -329,6 +329,8 @@ export function itemModel(item: ItemId): THREE.Group {
       return furnace()
     case 'boss_trophy':
       return ingot(oilGold)
+    case 'plane_engine':
+      return ingot(ironHead)
     case 'oil':
       return ingot(oilGold)
     case 'anvil':

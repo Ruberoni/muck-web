@@ -121,6 +121,7 @@ const LOOKS: Record<EnemyType, EnemyLook> = {
     { geometry: heldRockGeometry, material: rockMaterial },
   ),
   guardian: look('#3b322d', '#1c0c06', [{ geometry: golemDetailGeometry, material: emberMaterial, castShadow: true }, eyes('#ffd23f')]),
+  colossus: look('#9fd8ff', '#1e4a66', [{ geometry: golemDetailGeometry, material: standard('#d6efff'), castShadow: true }, eyes('#ffffff')]),
 }
 
 /** Modelo de un enemigo y sus animaciones, que solo existen en la vista. */

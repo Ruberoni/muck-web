@@ -49,6 +49,8 @@ function setup() {
     sim.step(new Map())
     inventory.add('wood', 500)
     inventory.add('iron_bar', 500)
+    inventory.add('plane_engine', 1)
+    deliver(structure, inventory, RULES)
     deliver(structure, inventory, RULES)
     inventory.clear()
   }

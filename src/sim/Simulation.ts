@@ -7,6 +7,7 @@ import {
   ENEMY_DEFS,
   EYE_HEIGHT,
   GAME_OVER_DELAY,
+  GRAVE_HOLD,
   LIT_SHARE,
   METEOR_RADIUS,
   MOTOR_TIME,
@@ -49,7 +50,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 const TOSS_HEIGHT = 1.2
 /** Altura sobre el suelo desde la que sale lo que termina una estación. */
 const STATION_DROP_HEIGHT = 1.4
-/** Intentos de encontrar dónde cae el avión. */
+/** Intentos de encontrar dónde cae el avión o dónde va la tumba. */
 const CRASH_ATTEMPTS = 20
 /** Altura sobre el suelo desde la que sale una roca lanzada. */
 const THROW_HEIGHT = 1.5
@@ -411,6 +412,7 @@ export class Simulation {
     this.worldStartTick = this.tick
     this.syncClock()
     this.events.emit({ type: 'worldReset', worldStartTick: this.worldStartTick })
+    if (this.matchRules) this.placeGrave()
   }
 
   /** Salta a una hora del día actual (0 = amanecer), redondeada al tick. */
@@ -549,6 +551,7 @@ export class Simulation {
     const pressed = slot.useHeld === 0
     slot.useHeld += STEP
     if (target.kind === 'totem' && isBuilt(target) && !target.awake && slot.useHeld >= TOTEM_HOLD) this.activateTotem(target)
+    if (target.kind === 'grave' && this.threat.state.totem && !target.opened && slot.useHeld >= GRAVE_HOLD) this.openGrave(target)
     if (!pressed) return
     if (target.build && !isBuilt(target)) this.structures.deliver(target, slot.inventory, this.rules)
     else if (target.kind === 'lighthouse') this.tendLighthouse(target, slot)
@@ -567,6 +570,22 @@ export class Simulation {
     const { x, z } = spot ?? this.spawnCenter
     const plane = this.structures.place({ x, y: heightAt(x, z), z, valid: true }, 'plane')!
     this.events.emit({ type: 'planeCrashed', id: plane.id, x, z })
+  }
+
+  /** Nace su jefe, con vida por jugador; si no se mata sigue ahí, y no se pierde nada. */
+  private openGrave(grave: Structure) {
+    grave.opened = true
+    this.events.emit({ type: 'graveOpened', id: grave.id })
+    this.enemies.spawnAt(grave.x + grave.radius + ENEMY_DEFS.colossus.radius + 0.5, grave.z, 'colossus', this.inWorld().length)
+  }
+
+  /** La tumba de la isla: dormida hasta que se active el tótem, pero se puede encontrar antes. */
+  private placeGrave() {
+    const around = [{ id: 0, pos: this.spawnCenter, alive: true }]
+    let spot: { x: number; z: number } | null = null
+    for (let i = 0; i < CRASH_ATTEMPTS && !spot; i++) spot = this.worldEvents.findSpot(around)
+    const { x, z } = spot ?? { x: this.spawnCenter.x + 12, z: this.spawnCenter.z }
+    this.structures.place({ x, y: heightAt(x, z), z, valid: true }, 'grave')
   }
 
   /** Averiado se repara; reparado se arranca. */
