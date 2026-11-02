@@ -542,6 +542,7 @@ export class NetClient {
     sim.structures.load(state.structures)
     sim.projectiles.load(state.projectiles)
     sim.worldEvents.load(state.worldEvents)
+    sim.threat.load(state.threat)
     this.worldStartTick = state.worldStartTick
     this.pickups.clear()
     for (const p of state.pickups.list) {
@@ -583,6 +584,9 @@ export class NetClient {
       case 'projectileHit':
         sim.projectiles.remove(e.id)
         break
+      case 'mobsRose':
+        sim.threat.load(e.threat)
+        break
       case 'meteorIncoming':
         sim.worldEvents.add(e)
         break
@@ -603,6 +607,7 @@ export class NetClient {
         sim.structures.clear()
         sim.projectiles.clear()
         sim.worldEvents.reset()
+        sim.threat.reset()
         this.pickups.clear()
         this.worldStartTick = e.worldStartTick
         break
@@ -623,6 +628,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     yaw: 0,
     hp,
     maxHp: hp,
+    lootScale: 1,
     alive: true,
     attackCooldown: 0,
     stagger: 0,

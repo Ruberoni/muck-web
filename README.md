@@ -141,6 +141,8 @@ La partida va contra el reloj, y el reloj depende de cuántos empezaron: con má
 | 4 | 3,5 min | minuto 31 | cada 4,5 min |
 | 5 | 3 min | minuto 28 | cada 4 min |
 
+Los mobs comunes tienen tope (hasta 24 a la vez), así que lo que sube es su fuerza: un 5 % más de vida por noche, un salto al caer la Noche Eterna (vida ×1,5, daño ×1,3, velocidad ×1,15) y, con cada campana, un nivel y un rasgo anunciado de antemano: Rápidos (+8 % de velocidad), Fuertes (+15 % de vida y +10 % de daño) o Agresivos (atacan y aparecen un 10 % más seguido). Nunca pasan de velocidad 9: corriendo siempre se les deja atrás. Los jefes y los guardianes no suben. Desde la Noche Eterna los enemigos desaparecen del minimapa. La dificultad multiplica lo que añaden los saltos: ×0,75 en fácil y ×1,5 en ultrahard.
+
 ## Meteoritos
 
 Desde el día 2 cae un meteorito al día, a media mañana o a mediodía, a la hora que toque en cada partida; en la Noche Eterna, con cada campana. Se anuncia 6 s antes con una bola de fuego en el cielo, un silbido, el aviso "¡Cae un meteorito al norte!" (según dónde estés) y una marca roja en el suelo. Cae en hierba libre, entre 40 y 70 m de un jugador vivo, y quien esté a menos de 4 m recibe 20 de daño. Deja un cráter y una roca que no se puede atravesar, con su rombo en el minimapa, y junto a ella aparece su guardián. Mientras viva, la roca sigue al rojo y no cae otro; al morir, la roca se enfría y desaparece al amanecer siguiente. Los decide `src/sim/worldEvents.ts`, y en red el cliente sigue sus eventos.

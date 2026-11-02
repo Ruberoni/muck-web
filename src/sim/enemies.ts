@@ -1,3 +1,4 @@
+import { MOB_MAX_SPEED, NO_SCALING, type MobScaling } from './threat'
 import { biomeAt, type Biome } from './world/biomes'
 import { DAY_FRACTION, DAY_LENGTH, isNight } from './world/daycycle'
 import { heightAt, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
@@ -73,6 +74,8 @@ export interface EnemyData {
   yaw: number
   hp: number
   maxHp: number
+  /** Por cuánto se multiplica su botín: según los jugadores, no según lo que hayan subido los mobs. */
+  lootScale: number
   alive: boolean
   attackCooldown: number
   /** Tras un golpe retrocede con `knock` y no persigue ni ataca durante este tiempo. */
@@ -139,6 +142,9 @@ export const bossScale = (players: number) => 1 + BOSS_PER_PLAYER * Math.max(0, 
 /** Por cuánto se multiplican la vida y el botín de un enemigo con `players` jugadores: el guardián, por jugador. */
 const hpScale = (def: EnemyDef, players: number) => (def.guard ? Math.max(1, players) : def.boss ? bossScale(players) : 1)
 
+/** Los que suben con la amenaza: ni los jefes ni los guardianes. */
+const isCommon = (type: EnemyType) => !ENEMY_DEFS[type].boss && !ENEMY_DEFS[type].guard
+
 /** Probabilidad de que una aparición de la noche `day` en `biome` sea de tipo `type` en vez de un trasgo. */
 export function spawnChance(type: EnemyType, day: number, biome: Biome): number {
   const { spawn } = ENEMY_DEFS[type]
@@ -167,6 +173,8 @@ export class Enemies {
   /** A qué jugador vivo le toca la siguiente aparición (por turnos). */
   private spawnTurn = 0
   private bossDay = 0
+  /** Lo que han subido los mobs comunes (ver Threat). */
+  scaling: MobScaling = { ...NO_SCALING }
 
   /** `grids`: obstáculos que rodean (props, estructuras…). `throwRock`: lo que vuela va por los proyectiles de la partida. */
   constructor(
@@ -185,13 +193,13 @@ export class Enemies {
     if (isNight(phase)) {
       this.spawnTimer -= dt
       if (this.spawnTimer <= 1e-9) {
-        const count = this.list.filter((e) => !ENEMY_DEFS[e.type].boss && !ENEMY_DEFS[e.type].guard).length
+        const count = this.list.filter((e) => isCommon(e.type)).length
         if (prey.length && count < enemyCapFor(day, players.length)) {
           // Por turnos: cada aparición elige a un jugador vivo distinto.
           const around = prey[this.spawnTurn++ % prey.length]
           this.trySpawn(around, prey, ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX, (x, z) => spawnType(this.rng(), day, biomeAt(x, z)))
         }
-        this.spawnTimer = spawnIntervalFor(players.length)
+        this.spawnTimer = spawnIntervalFor(players.length) * this.scaling.spawnInterval
       }
       this.trySpawnBoss(prey, players.length, phase, day)
     } else {
@@ -205,7 +213,7 @@ export class Enemies {
       e.prev.z = e.pos.z
       const target = this.chooseTarget(e, prey, dt)
       if (!this.chase(e, target, dt) || !target) continue
-      const dealt = ENEMY_DEFS[e.type].damage
+      const dealt = isCommon(e.type) ? Math.round(ENEMY_DEFS[e.type].damage * this.scaling.damage) : ENEMY_DEFS[e.type].damage
       const hurt = damage.find((d) => d.playerId === target.id)
       if (hurt) hurt.damage += dealt
       else damage.push({ playerId: target.id, damage: dealt })
@@ -284,7 +292,8 @@ export class Enemies {
     }
     const contact = contactOf(e.type)
     if (dist > contact + def.gap) {
-      const step = Math.min(def.speed * dt, dist - contact - def.gap)
+      const speed = isCommon(e.type) ? Math.min(def.speed * this.scaling.speed, MOB_MAX_SPEED) : def.speed
+      const step = Math.min(speed * dt, dist - contact - def.gap)
       this.move(e, (dx / dist) * step, (dz / dist) * step)
     }
     if (dist > contact + def.reach) {
@@ -294,7 +303,7 @@ export class Enemies {
     }
     e.attackCooldown -= dt
     if (e.attackCooldown > 1e-9) return false
-    e.attackCooldown = def.attackInterval
+    e.attackCooldown = isCommon(e.type) ? def.attackInterval * this.scaling.attackInterval : def.attackInterval
     this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return true
   }
@@ -459,7 +468,8 @@ export class Enemies {
   /** Crea un enemigo de tipo `type` en (x, z) mirando hacia +Z. Un jefe o un guardián sale con más vida cuantos más `players` haya. */
   spawnAt(x: number, z: number, type: EnemyType = 'goblin', players = 1): EnemyData {
     const def = ENEMY_DEFS[type]
-    const hp = def.hp * hpScale(def, players)
+    const lootScale = hpScale(def, players)
+    const hp = Math.round(def.hp * lootScale * (isCommon(type) ? this.scaling.hp : 1))
     const e: EnemyData = {
       kind: 'enemy',
       type,
@@ -470,6 +480,7 @@ export class Enemies {
       yaw: 0,
       hp,
       maxHp: hp,
+      lootScale,
       alive: true,
       attackCooldown: def.windup,
       stagger: 0,

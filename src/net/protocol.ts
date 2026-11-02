@@ -15,7 +15,7 @@ import type { Connection, SimState } from '../sim/Simulation'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 31
+export const PROTOCOL_VERSION = 32
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -186,7 +186,7 @@ export interface PickupSnap {
 }
 
 /** El mundo entero, sin el azar ni los inventarios de los demás: lo que necesita un cliente para empezar. */
-export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | 'props' | 'enemies' | 'pickups' | 'projectiles' | 'structures' | 'worldEvents'> {
+export interface WorldState extends Pick<SimState, 'tick' | 'worldStartTick' | 'props' | 'enemies' | 'pickups' | 'projectiles' | 'structures' | 'worldEvents' | 'threat'> {
   /** Los demás jugadores en el mundo. */
   players: (PlayerSnap & { name: string })[]
 }

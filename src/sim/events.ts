@@ -5,6 +5,7 @@ import type { ItemId } from './inventory'
 import type { MatchResult } from './match'
 import type { ProjectileEnd, ProjectileKind } from './projectiles'
 import type { StructureKind } from './structures'
+import type { MobTrait, ThreatState } from './threat'
 
 /** Identificador de jugador. Con un jugador siempre es LOCAL_PLAYER. */
 export type PlayerId = number
@@ -60,6 +61,8 @@ export type SimEventData =
   | { type: 'eternalNight' }
   /** Acaba una noche de la Noche Eterna: lo que antes pasaba al amanecer pasa ahora. */
   | { type: 'bell'; night: number }
+  /** Los mobs han subido: un rasgo con la campana o, sin él (`trait` null), uno de los saltos. */
+  | { type: 'mobsRose'; trait: MobTrait | null; threat: ThreatState }
   | { type: 'clockSet'; worldStartTick: number }
   | { type: 'worldReset'; worldStartTick: number }
 

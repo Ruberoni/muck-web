@@ -15,6 +15,7 @@ import { createPropWorld, findSpawn, generatePropPlacements, growBerries, type P
 import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
 import { hurt, isDead } from './survival'
+import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight } from './world/daycycle'
 import { heightAt } from './world/terrain'
 import { WorldEvents, type WorldEventsState } from './worldEvents'
@@ -75,6 +76,7 @@ export interface SimState {
   projectiles: ProjectilesState
   structures: StructuresState
   worldEvents: WorldEventsState
+  threat: ThreatState
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
   nextPlayerId: number
@@ -107,6 +109,8 @@ export class Simulation {
   readonly pickups: Pickups
   readonly projectiles: Projectiles
   readonly worldEvents: WorldEvents
+  /** Cuánto han subido los mobs. */
+  readonly threat = new Threat()
   /** Lo que ocupa sitio en la isla: props, estructuras y la roca del meteorito. */
   readonly obstacles: SpatialGrid<Collider>[]
   readonly interaction: Interaction
@@ -257,8 +261,15 @@ export class Simulation {
 
     const { day, eternal } = this.clock
     this.syncClock()
-    if (this.clock.eternal && !eternal) this.events.emit({ type: 'eternalNight' })
-    else if (this.clock.eternal && this.clock.day !== day) this.events.emit({ type: 'bell', night: this.clock.day })
+    if (this.clock.eternal && !eternal) {
+      this.threat.fall(this.rng)
+      this.events.emit({ type: 'eternalNight' })
+      this.events.emit({ type: 'mobsRose', trait: null, threat: this.threat.save() })
+    } else if (this.clock.eternal && this.clock.day !== day) {
+      this.events.emit({ type: 'bell', night: this.clock.day })
+      this.events.emit({ type: 'mobsRose', trait: this.threat.rise(this.rng), threat: this.threat.save() })
+    }
+    this.threat.apply(this.clock.day, this.rules.difficulty, this.enemies.scaling)
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
     const hits = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
@@ -334,6 +345,7 @@ export class Simulation {
     this.projectiles.clear()
     this.structures.clear()
     this.worldEvents.reset()
+    this.threat.reset()
     for (const slot of this.players.values()) {
       slot.inventory.clear()
       Object.assign(slot.combat, createCombat())
@@ -403,6 +415,7 @@ export class Simulation {
       projectiles: this.projectiles.save(),
       structures: this.structures.save(),
       worldEvents: this.worldEvents.save(),
+      threat: this.threat.save(),
       players: [...this.players.values()]
         .sort((a, b) => a.id - b.id)
         .map((slot) => ({
@@ -445,6 +458,7 @@ export class Simulation {
     this.projectiles.load(state.projectiles)
     this.structures.load(state.structures)
     this.worldEvents.load(state.worldEvents)
+    this.threat.load(state.threat)
     this.players.clear()
     for (const saved of state.players) {
       const slot = this.addPlayer(saved.id)

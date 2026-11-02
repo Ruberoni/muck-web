@@ -11,10 +11,11 @@ import { StructureView } from '../view/StructureView'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
+import { TRAIT_NAMES } from '../sim/threat'
 import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
-import { clockTexts } from '../ui/clockText'
+import { clockTexts, threatText } from '../ui/clockText'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
@@ -634,8 +635,8 @@ export class Game {
         case 'eternalNight':
           this.hud.showBanner('Cae la Noche Eterna')
           break
-        case 'bell':
-          this.hud.showBanner(`Campana · Noche ${e.night}`)
+        case 'mobsRose':
+          if (e.trait) this.hud.showBanner(`Campana · Los mobs suben: ${TRAIT_NAMES[e.trait]}`)
           break
         case 'meteorIncoming':
           this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
@@ -894,7 +895,7 @@ export class Game {
     const boss = enemies.list.find((e) => ENEMY_DEFS[e.type].boss)
     const { banner, tonight } = this.bossWatch.update(sim.clock.day, boss?.type ?? null)
     if (banner) this.hud.showBanner(banner)
-    this.hud.setTonight(tonight)
+    this.hud.setTonight(tonight ?? threatText(sim.threat.state))
     this.hud.setBoss(boss ? { name: ENEMY_DEFS[boss.type].name, hp: boss.hp, maxHp: boss.maxHp } : null)
     if (this.state === 'playing') {
       const entered = this.biomeNotice.update(biomeAt(p.pos.x, p.pos.z), dt)
@@ -905,7 +906,8 @@ export class Game {
       z: this.renderPos.z,
       yaw: look.yaw,
       structures: structures.list,
-      enemies: enemies.list,
+      // En la Noche Eterna solo se ve lo que hay delante.
+      enemies: sim.clock.eternal ? [] : enemies.list,
       meteor: sim.worldEvents.meteor,
       players: net?.client.shownPlayers.map(({ id, pose, data }) => ({ x: pose.x, z: pose.z, yaw: pose.yaw, color: playerCss(id), alive: data.alive })),
     })
