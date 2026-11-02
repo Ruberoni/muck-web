@@ -16,7 +16,7 @@ import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
 import { usableNear } from '../sim/builds'
-import { clockTexts, threatText } from '../ui/clockText'
+import { clockTexts, lightText, threatText } from '../ui/clockText'
 import { usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
@@ -51,6 +51,9 @@ export type { GameState } from './states'
 
 /** Segundos que tarda en cerrarse la niebla de la Noche Eterna. */
 const ETERNAL_FOG_TIME = 12
+/** Hasta aquí desde un faro encendido no hay niebla, y desde aquí ya está cerrada. */
+const LIGHTHOUSE_CLEAR = 70
+const LIGHTHOUSE_REACH = 100
 
 const overlayFor = (state: GameState): OverlayKind => (inGame(state) ? null : state)
 
@@ -61,6 +64,7 @@ const CAMPFIRE_HEARING = 14
 const PLACE_PROMPT: Record<StructureKind, string> = {
   campfire: 'Clic para colocar la fogata',
   lighthouse: 'Clic para colocar el faro',
+  distiller: 'Clic para colocar el destilador',
   workbench: 'Clic para colocar la mesa de trabajo',
   furnace: 'Clic para colocar el horno',
   anvil: 'Clic para colocar el yunque',
@@ -645,6 +649,9 @@ export class Game {
         case 'buildProgress':
           if (e.finished) this.hud.showBanner(`${e.finished} terminado`)
           break
+        case 'nightLit':
+          this.hud.showBanner('Campana · La noche quedó iluminada')
+          break
         case 'mobsRose':
           if (e.trait) this.hud.showBanner(`Campana · Los mobs suben: ${TRAIT_NAMES[e.trait]}`)
           break
@@ -765,6 +772,16 @@ export class Game {
     )
   }
 
+  /** Cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1: junto a un faro encendido se abre. */
+  private eternalFog() {
+    const { clock, structures } = this.sim
+    const closing = THREE.MathUtils.clamp((clock.elapsed - clock.eternalAt) / ETERNAL_FOG_TIME, 0, 1)
+    const lighthouse = structures.burning
+    if (!closing || !lighthouse) return closing
+    const distance = Math.hypot(lighthouse.x - this.renderPos.x, lighthouse.z - this.renderPos.z)
+    return closing * THREE.MathUtils.smoothstep(distance, LIGHTHOUSE_CLEAR, LIGHTHOUSE_REACH)
+  }
+
   /** Muerto en solitario: lo que falta para reaparecer y las vidas que quedan. */
   private waitingToRespawn(): string {
     const { respawnAt, deaths } = this.slot
@@ -880,7 +897,7 @@ export class Game {
       this.renderPos.y,
       this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
     )
-    updateSky(this.sky, sim.clock.phase, this.shadowCenter, THREE.MathUtils.clamp((sim.clock.elapsed - sim.clock.eternalAt) / ETERNAL_FOG_TIME, 0, 1))
+    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.eternalFog())
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot) : null
@@ -908,6 +925,7 @@ export class Game {
     const { banner, tonight } = this.bossWatch.update(sim.clock.day, boss?.type ?? null)
     if (banner) this.hud.showBanner(banner)
     this.hud.setTonight(tonight ?? threatText(sim.threat.state))
+    this.hud.setLight(lightText(structures.list, sim.clock))
     this.hud.setBoss(boss ? { name: ENEMY_DEFS[boss.type].name, hp: boss.hp, maxHp: boss.maxHp } : null)
     if (this.state === 'playing') {
       const entered = this.biomeNotice.update(biomeAt(p.pos.x, p.pos.z), dt)

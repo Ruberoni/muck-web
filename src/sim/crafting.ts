@@ -38,6 +38,8 @@ export type RecipeId =
   | 'mithril_sword'
   | 'meteor_sword'
   | 'lighthouse'
+  | 'distiller'
+  | 'oil'
 
 export interface Recipe {
   id: RecipeId
@@ -64,6 +66,7 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'stone_pickaxe', result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
   { id: 'stone_sword', result: 'stone_sword', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 2 }], station: 'workbench' },
   { id: 'furnace', result: 'furnace', cost: [{ item: 'stone', amount: 12 }, { item: 'wood', amount: 4 }], station: 'workbench' },
+  { id: 'distiller', result: 'distiller', cost: [{ item: 'wood', amount: 8 }, { item: 'stone', amount: 4 }], station: 'workbench' },
   { id: 'anvil', result: 'anvil', cost: [{ item: 'iron_bar', amount: 4 }, { item: 'stone', amount: 6 }], station: 'workbench' },
   { id: 'iron_bar', result: 'iron_bar', cost: [{ item: 'iron_ore', amount: 1 }, { item: 'wood', amount: 1 }], station: 'furnace', time: 15 },
   { id: 'mithril_bar', result: 'mithril_bar', cost: [{ item: 'mithril_ore', amount: 1 }, { item: 'wood', amount: 2 }], station: 'furnace', time: 25 },
@@ -76,6 +79,8 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'meteor_sword', result: 'meteor_sword', cost: [{ item: 'meteor_fragment', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'cooked_meat', result: 'cooked_meat', cost: [{ item: 'raw_meat', amount: 1 }], station: 'campfire', time: 10 },
   { id: 'berry_infusion', result: 'berry_infusion', cost: [{ item: 'berry', amount: 4 }], station: 'campfire', time: 15 },
+  // Con carne cruda: compite con la comida.
+  { id: 'oil', result: 'oil', cost: [{ item: 'raw_meat', amount: 1 }, { item: 'wood', amount: 2 }], station: 'distiller', time: 60 },
 ]
 
 const BY_ID = new Map<string, Recipe>(RECIPES.map((r) => [r.id, r]))

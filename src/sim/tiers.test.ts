@@ -40,6 +40,8 @@ describe('niveles: daño contra props', () => {
     ['mithril_bar', 1, 0, 0, 0, 0, 0, 1],
     ['meteor_fragment', 1, 0, 0, 0, 0, 0, 1],
     ['lighthouse', 1, 0, 0, 0, 0, 0, 1],
+    ['distiller', 1, 0, 0, 0, 0, 0, 1],
+    ['oil', 1, 0, 0, 0, 0, 0, 1],
     ['workbench', 1, 0, 0, 0, 0, 0, 1],
     ['furnace', 1, 0, 0, 0, 0, 0, 1],
     ['anvil', 1, 0, 0, 0, 0, 0, 1],

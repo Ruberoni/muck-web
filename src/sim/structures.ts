@@ -4,14 +4,14 @@ import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from './world/terrain'
 import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { Inventory, ItemId } from './inventory'
-import { MAX_JOBS, PLACE_DISTANCE } from './constants'
+import { MAX_JOBS, OIL_MAX, PLACE_DISTANCE } from './constants'
 import type { Recipe, RecipeId } from './crafting'
 import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
 
 /** Lo que se puede colocar en el mundo. Todas sirven de estación: las recetas dicen cuál hay que tener cerca. */
-export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse'
+export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse' | 'distiller'
 
 export interface StructureDef {
   /** El objeto que se gasta al colocarla. */
@@ -27,6 +27,7 @@ export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   furnace: { item: 'furnace', radius: 0.8, facesPlacer: true },
   anvil: { item: 'anvil', radius: 0.5, facesPlacer: true },
   lighthouse: { item: 'lighthouse', radius: 1.8, facesPlacer: false },
+  distiller: { item: 'distiller', radius: 0.7, facesPlacer: true },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]
@@ -38,6 +39,17 @@ export const PLACEABLE_DEFS: Partial<Record<ItemId, { kind: StructureKind; radiu
 
 /** La estructura que coloca `item`, o null si no es colocable. */
 export const placeableOf = (item: ItemId | null) => (item !== null && Object.hasOwn(PLACEABLE_DEFS, item) && PLACEABLE_DEFS[item]) || null
+
+/** El fuego de un faro. */
+export interface LighthouseFire {
+  /** Unidades de aceite guardadas. */
+  oil: number
+  burning: boolean
+  /** Segundos que le quedan a la unidad que arde. */
+  left: number
+  /** Segundos que ha ardido desde la última campana. */
+  lit: number
+}
 
 /** Un trabajo en la cola de una estación. */
 export interface StationJob {
@@ -56,6 +68,7 @@ export interface Structure extends Collider {
   jobs: StationJob[]
   /** Lo que se construye entre todos (BUILD_DEFS). */
   build?: BuildState
+  fire?: LighthouseFire
 }
 
 export interface StructureSpot {
@@ -78,9 +91,17 @@ const overlaps = (grid: SpatialGrid<Collider>, x: number, z: number, radius: num
   return false
 }
 
-const buildOf = (kind: StructureKind) => (BUILD_DEFS[kind] ? { build: newBuild() } : {})
+const buildOf = (kind: StructureKind) => ({
+  ...(BUILD_DEFS[kind] ? { build: newBuild() } : {}),
+  ...(kind === 'lighthouse' ? { fire: { oil: 0, burning: false, left: 0, lit: 0 } } : {}),
+})
 
-const copyStructure = (s: Structure): Structure => ({ ...s, jobs: s.jobs.map((job) => ({ ...job })), ...(s.build ? { build: copyBuild(s.build) } : {}) })
+const copyStructure = (s: Structure): Structure => ({
+  ...s,
+  jobs: s.jobs.map((job) => ({ ...job })),
+  ...(s.build ? { build: copyBuild(s.build) } : {}),
+  ...(s.fire ? { fire: { ...s.fire } } : {}),
+})
 
 /** Hueco entre el jugador y lo que coloca, si es grande. */
 const PLACE_GAP = 1.2
@@ -169,6 +190,69 @@ export class Structures {
     if (changed) this.emit({ type: 'buildProgress', id: structure.id, build: copyBuild(structure.build!), finished })
   }
 
+  /** Carga en el faro el aceite de `inventory` que quepa. Devuelve si ha cargado algo. */
+  refuel(structure: Structure, inventory: Inventory): boolean {
+    const { fire } = structure
+    const amount = fire ? Math.min(OIL_MAX - fire.oil, inventory.count('oil')) : 0
+    if (!fire || amount <= 0) return false
+    inventory.remove('oil', amount)
+    fire.oil += amount
+    this.fireChanged(structure)
+    return true
+  }
+
+  /** Enciende o apaga el faro. Sin aceite no enciende. `unit`: segundos que da una unidad ahora. */
+  toggleFire(structure: Structure, unit: number) {
+    const { fire } = structure
+    if (!fire) return
+    if (fire.burning) fire.burning = false
+    else if (fire.left > 0) fire.burning = true
+    else if (fire.oil > 0) {
+      fire.oil--
+      fire.left = unit
+      fire.burning = true
+    }
+    this.fireChanged(structure)
+  }
+
+  /** Paso fijo: los faros encendidos gastan aceite; sin él, se apagan. */
+  burn(dt: number, unit: number) {
+    for (const s of this.list) {
+      const { fire } = s
+      if (!fire?.burning) continue
+      fire.lit += dt
+      fire.left -= dt
+      if (fire.left > 1e-9) continue
+      fire.left = 0
+      if (fire.oil > 0) {
+        fire.oil--
+        fire.left = unit
+      } else fire.burning = false
+      this.fireChanged(s)
+    }
+  }
+
+  /** Suena la campana: devuelve lo que ha ardido el que más, y empieza a contar otra noche. */
+  endNight(): number {
+    let lit = 0
+    for (const s of this.list) {
+      if (!s.fire) continue
+      lit = Math.max(lit, s.fire.lit)
+      s.fire.lit = 0
+      this.fireChanged(s)
+    }
+    return lit
+  }
+
+  /** El primer faro encendido, si hay alguno. */
+  get burning(): Structure | undefined {
+    return this.list.find((s) => s.fire?.burning)
+  }
+
+  private fireChanged(structure: Structure) {
+    this.emit({ type: 'fireChanged', id: structure.id, fire: { ...structure.fire! } })
+  }
+
   /** Paso fijo: cada estación trabaja en lo primero de su cola. `done`: ha terminado esa receta. */
   step(dt: number, done: (structure: Structure, recipe: RecipeId) => void) {
     for (const s of this.list) {
@@ -182,9 +266,14 @@ export class Structures {
     }
   }
 
-  /** La copia del cliente: avanza la barra; quitar el trabajo lo dice su `stationDone`. */
+  /** La copia del cliente: avanza las barras; quitar el trabajo lo dice su `stationDone`, y el faro, su `fireChanged`. */
   follow(dt: number) {
-    for (const s of this.list) if (s.jobs[0]) s.jobs[0].left = Math.max(0, s.jobs[0].left - dt)
+    for (const s of this.list) {
+      if (s.jobs[0]) s.jobs[0].left = Math.max(0, s.jobs[0].left - dt)
+      if (!s.fire?.burning) continue
+      s.fire.left = Math.max(0, s.fire.left - dt)
+      s.fire.lit += dt
+    }
   }
 
   byId(id: number) {

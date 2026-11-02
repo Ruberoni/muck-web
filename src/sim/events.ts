@@ -5,7 +5,7 @@ import type { ChargeState } from './enemies'
 import type { ItemId } from './inventory'
 import type { MatchResult } from './match'
 import type { ProjectileEnd, ProjectileKind } from './projectiles'
-import type { StructureKind } from './structures'
+import type { LighthouseFire, StructureKind } from './structures'
 import type { MobTrait, ThreatState } from './threat'
 
 /** Identificador de jugador. Con un jugador siempre es LOCAL_PLAYER. */
@@ -31,6 +31,8 @@ export type SimEventData =
   /** Una estación tiene un trabajo más en cola, o ha terminado el primero (lo hecho llega en su `pickupSpawn`). */
   | { type: 'stationQueued'; id: number; recipe: RecipeId; time: number }
   | { type: 'stationDone'; id: number }
+  /** Ha cambiado el fuego de un faro. */
+  | { type: 'fireChanged'; id: number; fire: LighthouseFire }
   /** Han entregado materiales a una construcción. `finished`: la fase que ha acabado, si ha acabado alguna. */
   | { type: 'buildProgress'; id: number; build: BuildState; finished: string | null }
   | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
@@ -67,6 +69,8 @@ export type SimEventData =
   | { type: 'eternalNight' }
   /** Acaba una noche de la Noche Eterna: lo que antes pasaba al amanecer pasa ahora. */
   | { type: 'bell'; night: number }
+  /** El faro ha ardido bastante: los mobs no suben con esta campana. */
+  | { type: 'nightLit'; night: number }
   /** Los mobs han subido: un rasgo con la campana o, sin él (`trait` null), uno de los saltos. */
   | { type: 'mobsRose'; trait: MobTrait | null; threat: ThreatState }
   | { type: 'clockSet'; worldStartTick: number }

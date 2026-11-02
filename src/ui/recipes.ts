@@ -19,13 +19,14 @@ export const clientCraftWorld = (structures: () => readonly Structure[]): CraftW
   hasRoom: (kind, pos) => stationWithRoom(structures(), kind, pos, CLIENT_STATION_RANGE) !== null,
 })
 
-const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque', lighthouse: 'Faro' }
+const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque', lighthouse: 'Faro', distiller: 'Destilador' }
 const STATION_NEEDED: Record<StructureKind, string> = {
   campfire: 'Necesitas una fogata cerca',
   workbench: 'Necesitas una mesa de trabajo cerca',
   furnace: 'Necesitas un horno cerca',
   anvil: 'Necesitas un yunque cerca',
   lighthouse: 'Necesitas un faro cerca',
+  distiller: 'Necesitas un destilador cerca',
 }
 
 export interface RecipeGroup {
@@ -35,7 +36,7 @@ export interface RecipeGroup {
 }
 
 /** Las recetas por estación, en el orden de `RECIPES` (sin los grupos que aún no tienen ninguna). */
-export const RECIPE_GROUPS: readonly RecipeGroup[] = ([null, 'campfire', 'workbench', 'furnace', 'anvil'] as const)
+export const RECIPE_GROUPS: readonly RecipeGroup[] = ([null, 'campfire', 'workbench', 'furnace', 'anvil', 'distiller'] as const)
   .map((station) => ({ station, title: station ? STATION_NAMES[station] : 'Sin estación', recipes: RECIPES.filter((r) => r.station === station) }))
   .filter((group) => group.recipes.length > 0)
 

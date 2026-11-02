@@ -79,6 +79,15 @@
 }
 
 .day { white-space: pre-line; }
+.light {
+  position: absolute;
+  left: 16px;
+  top: 90px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffe066;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
 .tonight {
   position: absolute;
   left: 16px;

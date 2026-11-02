@@ -452,6 +452,14 @@ export const ENEMY_RETARGET_MARGIN = 3
 export const PLACE_DISTANCE = 2.2
 // Alcance de una estación al fabricar: en horizontal, del centro del jugador al borde de la estación.
 export const STATION_RANGE = 3.5
+/** Segundos de luz de una unidad de aceite, cuánto dura menos con cada campana y cuántas guarda el faro. */
+export const OIL_SECONDS = 30
+export const OIL_WEAR = 0.9
+export const OIL_MAX = 10
+/** Parte del tiempo entre campanas que debe arder el faro para que la noche cuente como iluminada. */
+export const LIT_SHARE = 2 / 3
+/** Con el faro encendido se reaparece en él a los tantos segundos, también en la Noche Eterna. */
+export const RESPAWN_LIGHTHOUSE_DELAY = 60
 /** Trabajos en cola por estación. Rinde lo mismo con 1 o con 5 jugadores, y eso aprieta a los grupos grandes. */
 export const MAX_JOBS = 5
 // Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.

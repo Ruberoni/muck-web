@@ -31,6 +31,8 @@ export type ItemId =
   | 'meteor_fragment'
   | 'meteor_sword'
   | 'lighthouse'
+  | 'distiller'
+  | 'oil'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -65,6 +67,8 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   meteor_fragment: 'Fragmento de meteorito',
   meteor_sword: 'Espada de meteorito',
   lighthouse: 'Faro por construir',
+  distiller: 'Destilador',
+  oil: 'Aceite',
 }
 
 /** Lo que hace falta para escapar: no se puede perder, ni al irse quien lo lleva ni al caer al agua. */

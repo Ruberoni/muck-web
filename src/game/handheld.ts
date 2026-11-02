@@ -101,6 +101,7 @@ const mithrilVein = new THREE.MeshStandardMaterial({ color: '#4fb3f0', flatShadi
 // Lo del meteorito brilla un poco por sí mismo, como su roca.
 const meteorHead = new THREE.MeshStandardMaterial({ color: '#ff7a2f', emissive: '#c8400f', emissiveIntensity: 0.6, flatShading: true })
 const meteorRock = mat('#3b322d')
+const oilGold = mat('#d9a632')
 const meteorVein = new THREE.MeshStandardMaterial({ color: '#ff7a1f', emissive: '#ff5a1f', flatShading: true })
 const berryRed = mat('#c2304a')
 const leaf = mat('#3d7d35')
@@ -323,7 +324,10 @@ export function itemModel(item: ItemId): THREE.Group {
       return ingot(mithrilHead)
     case 'furnace':
     case 'lighthouse':
+    case 'distiller':
       return furnace()
+    case 'oil':
+      return ingot(oilGold)
     case 'anvil':
       return anvil()
   }

@@ -149,6 +149,10 @@ Los mobs comunes tienen tope (hasta 24 a la vez), así que lo que sube es su fue
 
 El faro se construye entre todos, llevando los materiales hasta el sitio. Se fabrica sin estación y se coloca como la fogata; luego, <kbd>E</kbd> al lado entrega lo que falte de la fase actual, y una barra enseña a todos cómo va. Mientras dure el mapa actual cuestan la mitad del diseño, y con un jugador, además, el 60 %. <kbd>E</kbd> actúa sobre lo que haya cerca; si no hay nada, abre el inventario.
 
+Con el faro acabado, <kbd>E</kbd> carga el aceite que se lleve (guarda hasta 10) y, si no se lleva, lo enciende o lo apaga; solo enciende en la Noche Eterna. Una unidad da 30 s de luz, y cada campana un 10 % menos. Si entre dos campanas arde al menos dos tercios del tiempo, la noche cuenta como iluminada y los mobs no suben; no hace falta tenerlo siempre encendido, sino elegir qué noches se compran. Además abre la niebla en unos 100 m, y mientras arda se reaparece en él a los 60 s; apagado, en la siguiente campana y en el punto inicial.
+
+El aceite se hace en el destilador (se fabrica en la mesa de trabajo) con 1 carne cruda y 2 de madera, en 60 s: compite con la comida, y un destilador no basta para una noche.
+
 Lo imprescindible para escapar no se puede perder: si quien lo lleva se va, cae al suelo, y si cae al agua aparece en la orilla.
 
 ## Meteoritos

@@ -431,11 +431,13 @@ describe('Simulation con varios jugadores', () => {
       'lighthouse',
       'wood_sword',
       'stone_sword',
+      'distiller',
       'iron_sword',
       'mithril_sword',
       'meteor_sword',
       'cooked_meat',
       'berry_infusion',
+      'oil',
     ])
     expect(sim.slot(0).player.health).toBeGreaterThan(0)
   })

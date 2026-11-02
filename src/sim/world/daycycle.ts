@@ -63,8 +63,13 @@ export class DayClock {
     return this.elapsed >= this.eternalAt
   }
 
+  /** Segundos entre campanas. */
+  get bellLength() {
+    return this.rules.bell
+  }
+
   /** Noches enteras que han pasado desde que cayó la Noche Eterna. */
-  private get bells() {
+  get bells() {
     return Math.floor((this.elapsed - this.eternalAt) / this.rules.bell)
   }
 

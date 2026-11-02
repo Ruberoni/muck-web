@@ -23,13 +23,14 @@ describe('recetas en la pantalla de inventario', () => {
     expect(listed).toHaveLength(RECIPES.length)
     expect(new Set(listed)).toEqual(new Set(RECIPES))
     expect(RECIPE_GROUPS.every((g) => g.recipes.length > 0 && g.recipes.every((r) => r.station === g.station))).toBe(true)
-    expect(RECIPE_GROUPS.map((g) => g.title)).toEqual(['Sin estación', 'Fogata', 'Mesa de trabajo', 'Horno', 'Yunque'])
+    expect(RECIPE_GROUPS.map((g) => g.title)).toEqual(['Sin estación', 'Fogata', 'Mesa de trabajo', 'Horno', 'Yunque', 'Destilador'])
     expect(RECIPE_GROUPS.map((g) => g.recipes.map((r) => r.id))).toEqual([
       ['wood_axe', 'wood_pickaxe', 'campfire', 'workbench', 'lighthouse'],
       ['cooked_meat', 'berry_infusion'],
-      ['wood_sword', 'stone_axe', 'stone_pickaxe', 'stone_sword', 'furnace', 'anvil'],
+      ['wood_sword', 'stone_axe', 'stone_pickaxe', 'stone_sword', 'furnace', 'distiller', 'anvil'],
       ['iron_bar', 'mithril_bar'],
       ['iron_axe', 'iron_pickaxe', 'iron_sword', 'mithril_axe', 'mithril_pickaxe', 'mithril_sword', 'meteor_sword'],
+      ['oil'],
     ])
   })
 

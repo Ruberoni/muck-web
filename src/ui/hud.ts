@@ -37,7 +37,7 @@ const CONTROLS = `
     <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
     <li><kbd>Q</kbd> tirar uno de la mano (<kbd>Ctrl</kbd> + <kbd>Q</kbd>: todos)</li>
     <li><kbd>Tab</kbd> o <kbd>E</kbd> inventario (clic en dos casillas: cambiarlas)</li>
-    <li><kbd>E</kbd> cerca de una construcción: entregar materiales o usarla</li>
+    <li><kbd>E</kbd> cerca de una construcción: entregar materiales, cargar aceite o encender el faro</li>
     <li><kbd>C</kbd> inventario con las recetas (clic: fabricar; <kbd>Mayús</kbd> + clic: hasta ${CRAFT_MANY}; horno y fogata trabajan solos)</li>
     <li><kbd>Clic</kbd> con la fogata o una estación en la mano: colocarla</li>
     <li><kbd>Enter</kbd> chat (en una sala)</li>
@@ -72,6 +72,7 @@ export class Hud {
   private day: HTMLElement
   private biome: HTMLElement
   private tonight: HTMLElement
+  private light: HTMLElement
   private banner: HTMLElement
   private boss: HTMLElement
   private bossName: HTMLElement
@@ -85,7 +86,7 @@ export class Hud {
   private results: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
   readonly panel: HTMLElement
-  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', clock: '', tonight: '', boss: '' }
+  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', clock: '', tonight: '', light: '', boss: '' }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
@@ -95,6 +96,7 @@ export class Hud {
     this.day = el('div', 'day', root)
     this.biome = el('div', 'biome-notice', root)
     this.tonight = el('div', 'tonight', root)
+    this.light = el('div', 'light', root)
     this.banner = el('div', 'banner', root)
     this.boss = el('div', 'boss', root)
     this.boss.hidden = true
@@ -255,6 +257,13 @@ export class Hud {
     if ((text ?? '') === this.last.tonight) return
     this.last.tonight = text ?? ''
     this.tonight.textContent = text ?? ''
+  }
+
+  /** Cómo va la noche iluminada; null lo quita. */
+  setLight(text: string | null) {
+    if ((text ?? '') === this.last.light) return
+    this.last.light = text ?? ''
+    this.light.textContent = text ?? ''
   }
 
   /** Arriba, la barra del jefe que haya vivo; null la quita. */

@@ -46,6 +46,10 @@ const lighthouseTowerGeometry = new THREE.CylinderGeometry(0.8, 1.3, 8, 10)
 const lighthouseLampGeometry = new THREE.CylinderGeometry(0.9, 0.9, 1.3, 10)
 const lighthouseWallMaterial = new THREE.MeshStandardMaterial({ color: '#dcd8cc', flatShading: true })
 const lighthouseLampMaterial = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb13b', emissiveIntensity: 0.3, flatShading: true })
+// Un cono ancho que sale de la lámpara y gira.
+const lighthouseBeamGeometry = new THREE.ConeGeometry(9, 70, 12, 1, true).rotateZ(Math.PI / 2).translate(35, 0, 0)
+const lighthouseBeamMaterial = new THREE.MeshBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide, fog: false })
+const BEAM_TURN = 0.6
 
 const logMaterial = new THREE.MeshStandardMaterial({ color: '#6b4426', flatShading: true })
 const stoneMaterial = new THREE.MeshStandardMaterial({ color: '#8a877b', flatShading: true })
@@ -154,6 +158,16 @@ function buildAnvil(m: MaterialFor, shadows: boolean): StructureModel {
   return { root, flame: null }
 }
 
+/** Destilador: una caldera de madera con su alambique. */
+function buildDistiller(m: MaterialFor, shadows: boolean): StructureModel {
+  const root = new THREE.Group()
+  const mesh = piece(root, m, shadows)
+  mesh(stumpGeometry, plankMaterial, 0, 0.45, 0)
+  mesh(chimneyGeometry, ironMaterial, 0, 1.1, 0)
+  mesh(hammerHandleGeometry, ironMaterial, 0.3, 1.25, 0, Math.PI / 2)
+  return { root, flame: null }
+}
+
 /** Faro: estacas en el sitio y, según avanza la obra, el cimiento, la torre y la lámpara. */
 function buildLighthouse(m: MaterialFor, shadows: boolean): StructureModel {
   const root = new THREE.Group()
@@ -162,7 +176,11 @@ function buildLighthouse(m: MaterialFor, shadows: boolean): StructureModel {
   const base = mesh(lighthouseBaseGeometry, stoneMaterial, 0, 0.6, 0)
   const tower = mesh(lighthouseTowerGeometry, lighthouseWallMaterial, 0, 5, 0)
   const lamp = mesh(lighthouseLampGeometry, lighthouseLampMaterial, 0, 9.6, 0)
-  return { root, flame: null, stages: [base, tower, lamp] }
+  const beam = new THREE.Mesh(lighthouseBeamGeometry, m(lighthouseBeamMaterial))
+  beam.position.y = 9.6
+  beam.visible = false
+  root.add(beam)
+  return { root, flame: null, stages: [base, tower, lamp], beam }
 }
 
 export interface StructureModel {
@@ -173,6 +191,8 @@ export interface StructureModel {
   bar?: { back: THREE.Sprite; fill: THREE.Sprite }
   /** Lo que aparece con cada fase de una construcción. */
   stages?: THREE.Object3D[]
+  /** El haz del faro: se ve desde lejos, también en la niebla. */
+  beam?: THREE.Object3D
 }
 
 /** El modelo de cada tipo de estructura. */
@@ -182,6 +202,7 @@ const MODELS: Record<StructureKind, (m: MaterialFor, shadows: boolean) => Struct
   furnace: buildFurnace,
   anvil: buildAnvil,
   lighthouse: buildLighthouse,
+  distiller: buildDistiller,
 }
 
 const own: MaterialFor = (material) => material
@@ -250,9 +271,14 @@ export class StructureView {
     for (const s of structures) {
       const model = this.models.get(s.id)!
       if (model.flame) model.flame.scale.set(1, flicker(s.id) + 0.1, 1)
-      if (s.kind === 'campfire') this.fires.push(s)
+      if (s.kind === 'campfire' || s.fire?.burning) this.fires.push(s)
       this.showProgress(model, s)
+      if (model.beam) {
+        model.beam.visible = s.fire?.burning ?? false
+        model.beam.rotation.y = t * BEAM_TURN
+      }
     }
+    lighthouseLampMaterial.emissiveIntensity = structures.some((s) => s.fire?.burning) ? 3 : 0.3
 
     const d = (f: Structure) => (f.x - viewer.x) ** 2 + (f.z - viewer.z) ** 2
     this.fires.sort((a, b) => d(a) - d(b))
