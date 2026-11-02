@@ -8,6 +8,7 @@ import { aimPose } from './interaction'
 import { Inventory, type ItemId } from './inventory'
 import { Pickups, type Collector } from './pickups'
 import { createPropWorld, generatePropPlacements, type PropData } from './props'
+import { quickProps } from './quickProps'
 import { mulberry32 } from './random'
 import { Simulation } from './Simulation'
 import { DAY_FRACTION } from './world/daycycle'
@@ -30,6 +31,7 @@ interface Command {
 /** Simulación con `n` jugadores (ids 0…n-1). */
 function withPlayers(n: number, seed = 1) {
   const sim = new Simulation(seed, placements)
+  quickProps(sim.world.props)
   for (let i = 0; i < n; i++) sim.addPlayer()
   return sim
 }
@@ -53,6 +55,22 @@ function stepAll(sim: Simulation, commands: Record<PlayerId, Command> = {}) {
     })
   }
   return sim.step(map)
+}
+
+/** Espera a que las estaciones acaben y pasa el jugador `id` por encima de lo que han soltado. */
+function collectFromStations(sim: Simulation, id: PlayerId = 0) {
+  const { player } = sim.slot(id)
+  const stay = () => Object.assign(player, { health: 100, hunger: 100 })
+  while (sim.structures.list.some((s) => s.jobs.length)) {
+    stay()
+    stepAll(sim)
+  }
+  for (let t = 0; t < 600 && sim.pickups.list.length; t++) {
+    stay()
+    const piece = sim.pickups.list[0]
+    sim.teleport(id, piece.pos.x, piece.pos.z, 0, 0)
+    stepAll(sim)
+  }
 }
 
 /** Pone al jugador delante del prop mirándolo, en un sitio libre que cumpla `also`; devuelve su orientación. */
@@ -263,9 +281,16 @@ describe('Simulation con varios jugadores', () => {
     expect(craft(0, 'workbench')).toBe(1)
     expect(place('workbench', 0)).toHaveLength(1)
     expect(craft(0, 'furnace')).toBe(1)
-    // El horno, a la izquierda y de frente: se funde al momento, uno por clic.
+    // El horno, a la izquierda y de frente: admite cinco a la cola y trabaja solo.
     expect(place('furnace', Math.PI / 2)).toEqual([expect.objectContaining({ kind: 'furnace', rotY: Math.PI / 2, by: 0 })])
-    expect(craft(0, 'iron_bar', 5) + craft(0, 'iron_bar', 5)).toBe(7)
+    expect(craft(0, 'iron_bar', 5) + craft(0, 'iron_bar', 5)).toBe(5)
+    expect(sim.structures.list[1].jobs).toHaveLength(5)
+    expect(inventory.count('iron_bar')).toBe(0)
+    collectFromStations(sim)
+    sim.teleport(0, spot.x, spot.z, 0, 0)
+    expect(craft(0, 'iron_bar', 5)).toBe(2)
+    collectFromStations(sim)
+    sim.teleport(0, spot.x, spot.z, 0, 0)
     expect(inventory.toJSON()).toMatchObject({ iron_bar: 7, stone: 6, birch_wood: 4 })
     expect(inventory.count('iron_ore')).toBe(0)
     expect(inventory.count('wood')).toBe(0)
@@ -293,7 +318,8 @@ describe('Simulation con varios jugadores', () => {
     expect(craft(1, 'iron_bar')).toBe(0)
     sim.teleport(1, spot.x, spot.z, 0, 0)
     expect(craft(1, 'iron_bar')).toBe(1)
-    expect(other.toJSON()).toEqual({ iron_axe: 1, iron_bar: 1 })
+    expect(other.toJSON()).toEqual({ iron_axe: 1 })
+    expect(sim.structures.list[1].jobs).toHaveLength(1)
   })
 
   it('el pico de hierro rompe una mena de hierro en 2 golpes', () => {
@@ -373,7 +399,12 @@ describe('Simulation con varios jugadores', () => {
     gather('iron_ore', 10, 'stone_pickaxe')
     gather('birch', 4, 'stone_axe')
     atSpot()
-    expect(craft('iron_bar', 5) + craft('iron_bar', 5)).toBe(10)
+    expect(craft('iron_bar', 5)).toBe(5)
+    collectFromStations(sim)
+    atSpot()
+    expect(craft('iron_bar', 5)).toBe(5)
+    collectFromStations(sim)
+    atSpot()
     expect(craft('anvil')).toBe(1)
     expect(place('anvil', Math.PI)).toHaveLength(1)
     atSpot()
@@ -384,7 +415,12 @@ describe('Simulation con varios jugadores', () => {
     gather('darkpine', 4, 'iron_axe')
     gather('tree', 12, 'iron_axe')
     atSpot()
-    expect(craft('mithril_bar', 5) + craft('mithril_bar')).toBe(6)
+    expect(craft('mithril_bar', 5)).toBe(5)
+    collectFromStations(sim)
+    atSpot()
+    expect(craft('mithril_bar')).toBe(1)
+    collectFromStations(sim)
+    atSpot()
     expect(craft('mithril_axe') + craft('mithril_pickaxe')).toBe(2)
     expect(inventory.count('mithril_axe')).toBe(1)
     expect(inventory.count('mithril_pickaxe')).toBe(1)
@@ -501,6 +537,7 @@ describe('Simulation con varios jugadores', () => {
     expect(a.slot(0).connection).toBe('gone')
 
     const b = Simulation.fromJSON(JSON.parse(JSON.stringify(a.toJSON())), placements)
+    quickProps(b.world.props)
     expect(JSON.stringify(b.toJSON())).toBe(JSON.stringify(a.toJSON()))
     const seen = new Set<string>()
     const hurt = new Set<PlayerId>()

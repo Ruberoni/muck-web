@@ -74,32 +74,34 @@ describe('niveles: daño contra props', () => {
     expect(new Set(TABLE.map(([item]) => item))).toEqual(new Set(ITEMS))
   })
 
-  it('el pico de piedra pica la mena de hierro en 3 golpes y el de madera no; con el abedul, igual con las hachas', () => {
-    expect(Math.ceil(PROP_DEFS.iron_ore.hp / propDamage('stone_pickaxe', 'iron_ore'))).toBe(3)
+  it.each([
+    ['wood_axe', 'tree', 8, 'mithril_axe', 2],
+    ['wood_pickaxe', 'rock', 10, 'mithril_pickaxe', 2],
+    ['stone_axe', 'birch', 10, 'mithril_axe', 4],
+    ['stone_pickaxe', 'iron_ore', 15, 'mithril_pickaxe', 5],
+    ['iron_axe', 'darkpine', 12, 'mithril_axe', 6],
+    ['iron_pickaxe', 'mithril_ore', 16, 'mithril_pickaxe', 8],
+  ] as const)('%s rompe un %s en %i golpes y %s en %i: mejorar la herramienta es ganar tiempo', (worst, kind, slow, best, fast) => {
+    expect(hits(worst, kind)).toBe(slow)
+    expect(hits(best, kind)).toBe(fast)
+  })
+
+  it('el pico de piedra pica la mena de hierro y el de madera no; con el abedul, igual con las hachas', () => {
+    expect(canDamage('stone_pickaxe', 'iron_ore')).toBe(true)
     expect(canDamage('wood_pickaxe', 'iron_ore')).toBe(false)
-    expect(Math.ceil(PROP_DEFS.birch.hp / propDamage('stone_axe', 'birch'))).toBe(3)
+    expect(canDamage('stone_axe', 'birch')).toBe(true)
     expect(canDamage('wood_axe', 'birch')).toBe(false)
     expect(requiredTool('iron_ore')).toEqual({ family: 'pickaxe', tier: 2 })
     expect(requiredTool('birch')).toEqual({ family: 'axe', tier: 2 })
   })
 
-  it('las herramientas de hierro: 2 golpes a la mena de hierro y al abedul, 1 a la roca y al árbol', () => {
-    expect(hits('iron_pickaxe', 'iron_ore')).toBe(2)
-    expect(hits('iron_axe', 'birch')).toBe(2)
-    expect(hits('iron_pickaxe', 'rock')).toBe(1)
-    expect(hits('iron_axe', 'tree')).toBe(1)
+  it('las herramientas de hierro cada una solo sirve para lo suyo', () => {
     // Cada una solo sirve para lo suyo.
     expect(canDamage('iron_axe', 'iron_ore')).toBe(false)
     expect(canDamage('iron_pickaxe', 'birch')).toBe(false)
   })
 
-  it('mena de mithril y pino oscuro: 3 golpes con hierro y 2 con mithril; con mithril, abedul y mena de hierro caen de uno', () => {
-    expect(hits('iron_pickaxe', 'mithril_ore')).toBe(3)
-    expect(hits('mithril_pickaxe', 'mithril_ore')).toBe(2)
-    expect(hits('iron_axe', 'darkpine')).toBe(3)
-    expect(hits('mithril_axe', 'darkpine')).toBe(2)
-    expect(hits('mithril_pickaxe', 'iron_ore')).toBe(1)
-    expect(hits('mithril_axe', 'birch')).toBe(1)
+  it('mena de mithril y pino oscuro piden herramienta de hierro', () => {
     expect(canDamage('stone_pickaxe', 'mithril_ore')).toBe(false)
     expect(canDamage('stone_axe', 'darkpine')).toBe(false)
     expect(canDamage('mithril_axe', 'mithril_ore')).toBe(false)

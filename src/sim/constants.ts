@@ -101,12 +101,13 @@ export const BERRY_REGROW = 15
 
 // Las claves son los tipos de prop: `PropKind` (props.ts) se saca de aquí, así que un tipo nuevo solo se añade aquí.
 export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb', PropDef> = {
-  tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 3, drop: { item: 'wood', amount: 4 } },
-  birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 12, drop: { item: 'birch_wood', amount: 4 } },
-  darkpine: { name: 'Pino oscuro', verb: 'talar', family: 'tree', tool: 'axe', tier: 3, hp: 18, drop: { item: 'dark_wood', amount: 4 } },
-  rock: { name: 'Roca', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 4, drop: { item: 'stone', amount: 3 } },
-  iron_ore: { name: 'Mena de hierro', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 2, hp: 12, drop: { item: 'iron_ore', amount: 3 } },
-  mithril_ore: { name: 'Mena de mithril', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 18, drop: { item: 'mithril_ore', amount: 5 } },
+  // Recolectar lleva tiempo, y el tiempo es lo que falta: mejorar una herramienta es ganarlo.
+  tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 16, drop: { item: 'wood', amount: 4 } },
+  birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 40, drop: { item: 'birch_wood', amount: 4 } },
+  darkpine: { name: 'Pino oscuro', verb: 'talar', family: 'tree', tool: 'axe', tier: 3, hp: 72, drop: { item: 'dark_wood', amount: 4 } },
+  rock: { name: 'Roca', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 20, drop: { item: 'stone', amount: 3 } },
+  iron_ore: { name: 'Mena de hierro', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 2, hp: 60, drop: { item: 'iron_ore', amount: 3 } },
+  mithril_ore: { name: 'Mena de mithril', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 96, drop: { item: 'mithril_ore', amount: 5 } },
   bush: {
     name: 'Arbusto de bayas',
     verb: 'recoger',
@@ -451,6 +452,8 @@ export const ENEMY_RETARGET_MARGIN = 3
 export const PLACE_DISTANCE = 2.2
 // Alcance de una estación al fabricar: en horizontal, del centro del jugador al borde de la estación.
 export const STATION_RANGE = 3.5
+/** Trabajos en cola por estación. Rinde lo mismo con 1 o con 5 jugadores, y eso aprieta a los grupos grandes. */
+export const MAX_JOBS = 5
 // Solo las fogatas más cercanas al jugador iluminan: el número de luces no cambia y no recompila shaders.
 export const CAMPFIRE_LIGHTS = 4
 export const CAMPFIRE_LIGHT_INTENSITY = 30

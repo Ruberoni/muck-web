@@ -27,6 +27,9 @@ export type SimEventData =
   | { type: 'pickupSpawn'; id: number; item: ItemId; amount: number }
   | { type: 'pickupCollected'; id: number; by: PlayerId }
   | { type: 'structurePlaced'; id: number; kind: StructureKind; x: number; y: number; z: number; rotY: number; by: PlayerId }
+  /** Una estación tiene un trabajo más en cola, o ha terminado el primero (lo hecho llega en su `pickupSpawn`). */
+  | { type: 'stationQueued'; id: number; recipe: RecipeId; time: number }
+  | { type: 'stationDone'; id: number }
   | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId; efficacy: HitEfficacy }

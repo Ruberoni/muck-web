@@ -9,7 +9,7 @@ import type { Pickup } from '../sim/pickups'
 import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
-import { stationNear, structureSpot } from '../sim/structures'
+import { stationNear, stationWithRoom, structureSpot } from '../sim/structures'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
 import { InterpBuffer, Interpolator, PresentationQueue, type Shown } from './interp'
 import { Predictor } from './predict'
@@ -212,6 +212,7 @@ export class NetClient {
   /** Eventos del servidor que tratan del jugador local: se presentan en cuanto llegan. */
   private own: SimEvent[] = []
   private worldStartTick = 0
+  private lastRenderTick = 0
   private mirrorEnemies = new Map<number, EnemyData>()
   private pickups = new Map<number, MirrorPickup>()
 
@@ -309,6 +310,8 @@ export class NetClient {
     const sim = this.sim
     if (!sim) return { own, remote: [] }
     const tick = this.renderTick()
+    sim.structures.follow(Math.max(0, tick - this.lastRenderTick) * STEP)
+    this.lastRenderTick = tick
     sim.clock.elapsed = (tick - this.worldStartTick) * STEP
     this.shownPlayers = this.players.sample(tick)
     this.syncEnemies(sim, this.enemies.sample(tick))
@@ -393,6 +396,7 @@ export class NetClient {
           canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, sim.obstacles).valid,
           // Como en la simulación: las estaciones del espejo, con el mismo alcance.
           nearStation: (kind, pos) => stationNear(sim.structures.list, kind, pos, STATION_RANGE),
+          hasRoom: (kind, pos) => stationWithRoom(sim.structures.list, kind, pos, STATION_RANGE) !== null,
         })
         this.predictor.start(msg.serverTick, msg.you)
         this.clock.sync(now, msg.serverTick, msg)
@@ -586,6 +590,12 @@ export class NetClient {
         break
       case 'mobsRose':
         sim.threat.load(e.threat)
+        break
+      case 'stationQueued':
+        sim.structures.byId(e.id)?.jobs.push({ recipe: e.recipe, time: e.time, left: e.time })
+        break
+      case 'stationDone':
+        sim.structures.byId(e.id)?.jobs.shift()
         break
       case 'meteorIncoming':
         sim.worldEvents.add(e)

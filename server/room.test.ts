@@ -20,6 +20,7 @@ import { STRUCTURE_DEFS, structureSpot } from '../src/sim/structures'
 import { aimPose } from '../src/sim/interaction'
 import { INVENTORY_SIZE } from '../src/sim/inventory'
 import type { PropData } from '../src/sim/props'
+import { quickProps } from '../src/sim/quickProps'
 import type { Simulation } from '../src/sim/Simulation'
 import { DAY_FRACTION } from '../src/sim/world/daycycle'
 import { heightAt } from '../src/sim/world/terrain'
@@ -268,6 +269,7 @@ describe('Room', () => {
     expect(a.of('join')).toEqual([{ type: 'join', id: 1, name: 'Ana' }])
 
     const sim = room.sim!
+    quickProps(sim.world.props)
     const tree = sim.world.props.find((p) => p.kind === 'tree')!
     const look = aimAt(sim, a.id, tree)
     play(time, 2000, [[a, { buttons: Btn.Attack, ...look }], [b]])
@@ -915,6 +917,7 @@ describe('Room', () => {
     b.hello('join')
     time.advance(200)
     const sim = room.sim!
+    quickProps(sim.world.props)
     const tree = sim.world.props.find((p) => p.kind === 'tree')!
     const look = aimAt(sim, a.id, tree)
     // Por delante del servidor lo que tarda en llegar.

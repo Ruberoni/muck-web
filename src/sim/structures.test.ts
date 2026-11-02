@@ -150,7 +150,7 @@ describe('estructuras en general', () => {
     const mirror = new Structures()
     mirror.add({ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3 })
     mirror.add({ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3 })
-    expect(mirror.list).toEqual([{ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3, radius: RADIUS, alive: true }])
+    expect(mirror.list).toEqual([{ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3, radius: RADIUS, alive: true, jobs: [] }])
     expect(mirror.save().nextId).toBe(5)
     expect(resolveCircle({ x: 1.1, z: 2 }, PLAYER_RADIUS, mirror.grid)).toBe(true)
   })

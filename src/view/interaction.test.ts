@@ -8,9 +8,11 @@ import type { SimEventData } from '../sim/events'
 import { aimPose, createCombat, Interaction, type Fighter } from '../sim/interaction'
 import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from '../sim/pickups'
+import { quickProps } from '../sim/quickProps'
 
 function setup() {
   const world = createPropWorld()
+  quickProps(world.props)
   const view = new PropView(world.placements)
   const inventory = new Inventory()
   const pickups = new Pickups([world.grid], () => 0.5)

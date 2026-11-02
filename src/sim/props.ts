@@ -264,6 +264,17 @@ export function createPropWorld(placements: readonly PropPlacement[] = generateP
 
 export type PropWorld = ReturnType<typeof createPropWorld>
 
+/** La vida de lo que se rompe en esta partida, sin tocar lo que ya se haya dañado. */
+export function scaleProps(props: readonly PropData[], factor: number) {
+  for (const prop of props) {
+    const { hp, harvest } = PROP_DEFS[prop.kind]
+    if (harvest) continue
+    const whole = prop.hp === prop.maxHp
+    prop.maxHp = Math.ceil(hp * factor)
+    if (whole) prop.hp = prop.maxHp
+  }
+}
+
 /** Devuelve un prop a su estado inicial. */
 export function resetProp(prop: PropData) {
   prop.hp = prop.maxHp

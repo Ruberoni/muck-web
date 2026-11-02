@@ -83,8 +83,12 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
 export function craftRecipe(actor: Actor, id: RecipeId, world: CraftWorld, emit: Emit): boolean {
   const recipe = recipeById(id)
   if (!recipe) return false
-  if (recipe.station !== null && !world.nearStation(recipe.station, actor.player.pos)) return false
+  const { pos } = actor.player
+  if (recipe.station !== null && !world.nearStation(recipe.station, pos)) return false
+  const timed = recipe.time !== undefined
+  if (timed && recipe.station !== null && world.hasRoom?.(recipe.station, pos) === false) return false
   if (!craft(actor.inventory, recipe)) return false
+  if (timed) world.enqueue?.(recipe, pos)
   emit({ type: 'playerCrafted', id: actor.id, recipe: id })
   return true
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EventLog, type SimEventData } from './events'
 import { DAY_FRACTION } from './world/daycycle'
 import { createPropWorld, growBerries, type PropData } from './props'
+import { quickProps } from './quickProps'
 import { mulberry32 } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
 import { BERRY_REGROW, ENEMY_DEFS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from './constants'
@@ -14,6 +15,7 @@ const NIGHT = DAY_FRACTION + 0.1
 const DAY = 0.3
 
 const world = createPropWorld()
+quickProps(world.props)
 
 /** Primer punto de hierba, en espiral desde el centro, sin props en `clearance` metros. */
 function clearSpot(clearance: number) {

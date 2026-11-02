@@ -3,6 +3,7 @@ import { Btn, type Action, type ActionData, type Move } from './commands'
 import { BERRY_REGROW, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
 import { aimPose } from './interaction'
 import { generatePropPlacements, type PropData } from './props'
+import { quickProps } from './quickProps'
 import { Simulation } from './Simulation'
 import { STRUCTURE_DEFS, structureSpot } from './structures'
 import { DAY_FRACTION } from './world/daycycle'
@@ -22,6 +23,7 @@ interface Command {
 /** Simulación con un solo jugador, el 0, como la de LocalSession. */
 function solo(seed: number) {
   const sim = new Simulation(seed, placements)
+  quickProps(sim.world.props)
   sim.addPlayer(0)
   return sim
 }
@@ -155,7 +157,7 @@ describe('Simulation', () => {
     expect(inventory.count('raw_meat')).toBe(1)
   })
 
-  it('junto a una fogata se cocina: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
+  it('junto a una fogata se cocina, y mientras uno se va: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
     const sim = solo(1)
     const { inventory, player } = sim.slot(0)
     inventory.add('raw_meat', 2)
@@ -167,6 +169,14 @@ describe('Simulation', () => {
     sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.campfire.radius, [sim.world.grid, sim.structures.grid]), 'campfire')
     const events = step(sim, { actions: [{ kind: 'craft', recipe: 'cooked_meat' }, { kind: 'craft', recipe: 'berry_infusion' }] })
     expect(events).toContainEqual(expect.objectContaining({ type: 'playerCrafted', recipe: 'cooked_meat' }))
+    expect(inventory.toJSON()).toEqual({ raw_meat: 1 })
+    // Lo terminado queda junto a la fogata, y lo recoge quien pase.
+    for (let i = 0; i < Math.round(25 / STEP) + 1; i++) step(sim)
+    for (let i = 0; i < 300 && sim.pickups.list.length; i++) {
+      const { pos } = sim.pickups.list[0]
+      sim.teleport(0, pos.x, pos.z, 0, 0)
+      step(sim)
+    }
     expect(inventory.toJSON()).toEqual({ raw_meat: 1, cooked_meat: 1, berry_infusion: 1 })
 
     const cooked = CONSUMABLE_DEFS.cooked_meat!
@@ -391,6 +401,7 @@ describe('Simulation', () => {
     expect(a.slot(0).inventory.slots[15]).not.toBe(null)
 
     const b = Simulation.fromJSON(JSON.parse(JSON.stringify(a.toJSON())), placements)
+    quickProps(b.world.props)
     expect(JSON.stringify(b.toJSON())).toBe(JSON.stringify(a.toJSON()))
     const seen = new Set<string>()
     for (let t = SPLIT + 1; t <= SPLIT + 900; t++) {

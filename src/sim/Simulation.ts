@@ -1,19 +1,19 @@
 import type { PlayerCommands } from './commands'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
-import type { CraftWorld, RecipeId } from './crafting'
+import { recipeById, type CraftWorld, type RecipeId } from './crafting'
 import { DEATH_DROP_HEIGHT, ENEMY_DEFS, EYE_HEIGHT, GAME_OVER_DELAY, METEOR_RADIUS, PLAYER_RADIUS, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, ROCK_SPEED, STATION_RANGE, STEP } from './constants'
 import { Enemies, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, type InventoryState, type ItemId } from './inventory'
-import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, type MatchEnd, type MatchResult, type MatchRules } from './match'
+import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, workFactor, type MatchEnd, type MatchResult, type MatchRules } from './match'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
 import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
-import { createPropWorld, findSpawn, generatePropPlacements, growBerries, type PropPlacement, type PropWorld } from './props'
+import { createPropWorld, findSpawn, generatePropPlacements, growBerries, scaleProps, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
-import { placeableOf, stationNear, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
+import { placeableOf, stationNear, stationWithRoom, Structures, structureSpot, type StructuresState, type StructureSpot } from './structures'
 import { hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight } from './world/daycycle'
@@ -25,6 +25,8 @@ const SPAWN_RING = 2.5
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 /** Altura sobre los pies desde la que sale lo que tira un jugador. */
 const TOSS_HEIGHT = 1.2
+/** Altura sobre el suelo desde la que sale lo que termina una estación. */
+const STATION_DROP_HEIGHT = 1.4
 /** Altura sobre el suelo desde la que sale una roca lanzada. */
 const THROW_HEIGHT = 1.5
 
@@ -136,6 +138,11 @@ export class Simulation {
   /** Las estaciones para fabricar son las estructuras colocadas. */
   private readonly craftWorld: CraftWorld = {
     nearStation: (kind, pos) => stationNear(this.structures.list, kind, pos, STATION_RANGE),
+    hasRoom: (kind, pos) => stationWithRoom(this.structures.list, kind, pos, STATION_RANGE) !== null,
+    enqueue: (recipe, pos) => {
+      const station = recipe.station && stationWithRoom(this.structures.list, recipe.station, pos, STATION_RANGE)
+      if (station) this.structures.enqueue(station, recipe, recipe.time! * workFactor(this.rules))
+    },
   }
 
   constructor(seed: number, placements: readonly PropPlacement[] = generatePropPlacements()) {
@@ -170,6 +177,7 @@ export class Simulation {
   set rules(rules: MatchRules) {
     this.matchRules = rules
     this.clock.configure(clockOf(rules.players))
+    scaleProps(this.world.props, workFactor(rules))
     this.syncClock()
   }
 
@@ -280,6 +288,10 @@ export class Simulation {
     }
 
     growBerries(this.world.props, STEP, this.events.emit)
+    this.structures.step(STEP, (station, recipe) => {
+      const { x, y, z } = station
+      this.pickups.drop(recipeById(recipe)!.result, 1, x, y + STATION_DROP_HEIGHT, z)
+    })
     for (const slot of living) {
       const intent = intents.get(slot)!
       // Desde la posición simulada (no interpolada): golpear no depende del framerate. En red, el cliente

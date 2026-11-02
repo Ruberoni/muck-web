@@ -4,6 +4,7 @@ import { Btn, type ActionData } from '../sim/commands'
 import { EYE_HEIGHT, MAX_PITCH } from '../sim/constants'
 import { RECIPE_IDS } from '../sim/crafting'
 import { aimPose } from '../sim/interaction'
+import { quickProps } from '../sim/quickProps'
 import { mulberry32 } from '../sim/random'
 import type { Simulation } from '../sim/Simulation'
 import { heightAt } from '../sim/world/terrain'
@@ -470,6 +471,7 @@ describe('el espejo de NetClient', () => {
     const { client, sent } = connect('a', 'create')
     run(time, 1000, [[client, idle]])
     const sim = room.sim!
+    quickProps(sim.world.props)
     const tree = sim.world.props.find((p) => p.kind === 'tree' && p.alive)!
     const isFree = (x: number, z: number) => sim.world.props.every((o) => o === tree || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
     const pose = aimPose(tree, isFree)

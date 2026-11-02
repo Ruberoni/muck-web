@@ -2,7 +2,8 @@ import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from './world/terrain'
 import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { ItemId } from './inventory'
-import { PLACE_DISTANCE } from './constants'
+import { MAX_JOBS, PLACE_DISTANCE } from './constants'
+import type { Recipe, RecipeId } from './crafting'
 import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
@@ -35,12 +36,21 @@ export const PLACEABLE_DEFS: Partial<Record<ItemId, { kind: StructureKind; radiu
 /** La estructura que coloca `item`, o null si no es colocable. */
 export const placeableOf = (item: ItemId | null) => (item !== null && Object.hasOwn(PLACEABLE_DEFS, item) && PLACEABLE_DEFS[item]) || null
 
+/** Un trabajo en la cola de una estación. */
+export interface StationJob {
+  recipe: RecipeId
+  /** Segundos que tarda en total y los que le quedan: solo avanza el primero de la cola. */
+  time: number
+  left: number
+}
+
 export interface Structure extends Collider {
   id: number
   kind: StructureKind
   y: number
   /** Giro del modelo: cada estructura distinta, sin depender de cuántas haya. */
   rotY: number
+  jobs: StationJob[]
 }
 
 export interface StructureSpot {
@@ -94,6 +104,19 @@ export function stationNear(structures: readonly Structure[], kind: StructureKin
   return structures.some((s) => s.kind === kind && Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius <= range)
 }
 
+/** La estación más cercana de ese tipo al alcance, con hueco en su cola; null si no hay. */
+export function stationWithRoom(structures: readonly Structure[], kind: StructureKind, pos: Vec3, range: number): Structure | null {
+  let best: Structure | null = null
+  let bestDistance = Infinity
+  for (const s of structures) {
+    const distance = Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius
+    if (s.kind !== kind || distance > range || s.jobs.length >= MAX_JOBS || distance >= bestDistance) continue
+    best = s
+    bestDistance = distance
+  }
+  return best
+}
+
 /** Estructuras colocadas (fogatas y estaciones) y su rejilla de colisión. Las dibuja StructureView. */
 export class Structures {
   readonly list: Structure[] = []
@@ -111,17 +134,45 @@ export class Structures {
     const id = this.nextId++
     const { radius, facesPlacer } = STRUCTURE_DEFS[kind]
     const rotY = facesPlacer ? yaw : id * 1.3
-    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY, radius, alive: true }
+    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY, radius, alive: true, jobs: [] }
     this.insert(structure)
     this.emit({ type: 'structurePlaced', id, kind, x: structure.x, y: structure.y, z: structure.z, rotY: structure.rotY, by })
     return structure
   }
 
   /** Añade una estructura ya colocada en otra parte (el espejo del cliente, con lo que dice `structurePlaced`). */
-  add(structure: Omit<Structure, 'radius' | 'alive'>) {
+  add(structure: Omit<Structure, 'radius' | 'alive' | 'jobs'>) {
     if (this.list.some((s) => s.id === structure.id)) return
-    this.insert({ ...structure, radius: STRUCTURE_DEFS[structure.kind].radius, alive: true })
+    this.insert({ ...structure, radius: STRUCTURE_DEFS[structure.kind].radius, alive: true, jobs: [] })
     this.nextId = Math.max(this.nextId, structure.id + 1)
+  }
+
+  /** Pone un trabajo en la cola de una estación; `time`: lo que tarda en esta partida. */
+  enqueue(structure: Structure, recipe: Recipe, time: number) {
+    structure.jobs.push({ recipe: recipe.id, time, left: time })
+    this.emit({ type: 'stationQueued', id: structure.id, recipe: recipe.id, time })
+  }
+
+  /** Paso fijo: cada estación trabaja en lo primero de su cola. `done`: ha terminado esa receta. */
+  step(dt: number, done: (structure: Structure, recipe: RecipeId) => void) {
+    for (const s of this.list) {
+      const job = s.jobs[0]
+      if (!job) continue
+      job.left -= dt
+      if (job.left > 1e-9) continue
+      s.jobs.shift()
+      this.emit({ type: 'stationDone', id: s.id })
+      done(s, job.recipe)
+    }
+  }
+
+  /** La copia del cliente: avanza la barra; quitar el trabajo lo dice su `stationDone`. */
+  follow(dt: number) {
+    for (const s of this.list) if (s.jobs[0]) s.jobs[0].left = Math.max(0, s.jobs[0].left - dt)
+  }
+
+  byId(id: number) {
+    return this.list.find((s) => s.id === id)
   }
 
   /** Reinicio de partida: sin estructuras. */
@@ -132,12 +183,12 @@ export class Structures {
   }
 
   save(): StructuresState {
-    return { list: this.list.map((s) => ({ ...s })), nextId: this.nextId }
+    return { list: this.list.map((s) => ({ ...s, jobs: s.jobs.map((job) => ({ ...job })) })), nextId: this.nextId }
   }
 
   load(state: StructuresState) {
     this.clear()
-    for (const s of state.list) this.insert({ ...s })
+    for (const s of state.list) this.insert({ ...s, jobs: s.jobs.map((job) => ({ ...job })) })
     this.nextId = state.nextId
   }
 

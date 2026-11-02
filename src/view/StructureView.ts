@@ -35,6 +35,12 @@ const anvilWaistGeometry = new THREE.BoxGeometry(0.2, 0.16, 0.16)
 const anvilFaceGeometry = new THREE.BoxGeometry(0.5, 0.14, 0.24)
 const anvilHornGeometry = new THREE.ConeGeometry(0.07, 0.22, 5).rotateZ(-Math.PI / 2)
 
+/** La barra de lo que está haciendo una estación, sobre ella. */
+const BAR_HEIGHT = 2
+const BAR_WIDTH = 1.2
+const barBackMaterial = new THREE.SpriteMaterial({ color: '#11100e', transparent: true, opacity: 0.7, depthTest: false })
+const barFillMaterial = new THREE.SpriteMaterial({ color: '#ffb13b', depthTest: false })
+
 const logMaterial = new THREE.MeshStandardMaterial({ color: '#6b4426', flatShading: true })
 const stoneMaterial = new THREE.MeshStandardMaterial({ color: '#8a877b', flatShading: true })
 const plankMaterial = new THREE.MeshStandardMaterial({ color: '#c8955a', flatShading: true })
@@ -146,6 +152,8 @@ export interface StructureModel {
   root: THREE.Group
   /** Las llamas que parpadean (la fogata y el fuego del horno). */
   flame: THREE.Group | null
+  /** La barra de progreso y su relleno: se crean al ponerle el primer trabajo. */
+  bar?: { back: THREE.Sprite; fill: THREE.Sprite }
 }
 
 /** El modelo de cada tipo de estructura. */
@@ -220,9 +228,10 @@ export class StructureView {
 
     this.fires.length = 0
     for (const s of structures) {
-      const { flame } = this.models.get(s.id)!
-      if (flame) flame.scale.set(1, flicker(s.id) + 0.1, 1)
+      const model = this.models.get(s.id)!
+      if (model.flame) model.flame.scale.set(1, flicker(s.id) + 0.1, 1)
       if (s.kind === 'campfire') this.fires.push(s)
+      this.showProgress(model, s)
     }
 
     const d = (f: Structure) => (f.x - viewer.x) ** 2 + (f.z - viewer.z) ** 2
@@ -236,6 +245,26 @@ export class StructureView {
       light.position.set(fire.x, fire.y + LIGHT_HEIGHT, fire.z)
       light.intensity = CAMPFIRE_LIGHT_INTENSITY * level * flicker(fire.id)
     })
+  }
+
+  /** La barra de lo que está haciendo, si hace algo. */
+  private showProgress(model: StructureModel, { jobs }: Structure) {
+    const job = jobs[0]
+    if (!job && !model.bar) return
+    if (!model.bar) {
+      const back = new THREE.Sprite(barBackMaterial)
+      const fill = new THREE.Sprite(barFillMaterial)
+      back.scale.set(BAR_WIDTH + 0.08, 0.2, 1)
+      back.position.y = fill.position.y = BAR_HEIGHT
+      back.renderOrder = 1
+      fill.renderOrder = 2
+      fill.center.set(0, 0.5)
+      fill.position.x = -BAR_WIDTH / 2
+      model.root.add(back, fill)
+      model.bar = { back, fill }
+    }
+    model.bar.back.visible = model.bar.fill.visible = job !== undefined
+    if (job) model.bar.fill.scale.set(Math.max(0.01, BAR_WIDTH * (1 - job.left / job.time)), 0.12, 1)
   }
 
   /** Reinicio de partida: sin estructuras, luces apagadas y sin vista previa. */

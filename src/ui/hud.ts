@@ -37,7 +37,7 @@ const CONTROLS = `
     <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
     <li><kbd>Q</kbd> tirar uno de la mano (<kbd>Ctrl</kbd> + <kbd>Q</kbd>: todos)</li>
     <li><kbd>Tab</kbd> o <kbd>E</kbd> inventario (clic en dos casillas: cambiarlas)</li>
-    <li><kbd>C</kbd> inventario con las recetas (clic: fabricar; <kbd>Mayús</kbd> + clic: hasta ${CRAFT_MANY})</li>
+    <li><kbd>C</kbd> inventario con las recetas (clic: fabricar; <kbd>Mayús</kbd> + clic: hasta ${CRAFT_MANY}; horno y fogata trabajan solos)</li>
     <li><kbd>Clic</kbd> con la fogata o una estación en la mano: colocarla</li>
     <li><kbd>Enter</kbd> chat (en una sala)</li>
     <li><kbd>Esc</kbd> pausa</li>

@@ -44,6 +44,12 @@ export function clockOf(players: number): ClockRules {
   return { daylight: DAYLIGHT_MINUTES[i] * 60, eternalDay: ETERNAL_DAY, bell: BELL_MINUTES[i] * 60 }
 }
 
+/** Dificultad de referencia: los valores base de tiempos y materiales son los de un 45 %. */
+const BASE_COST = DIFFICULTY_DEFS.normal.cost
+
+/** Por cuánto se multiplica lo que tarda el trabajo (recolectar y las estaciones): un solo ajuste mueve armas, faro y tótem. */
+export const workFactor = ({ difficulty }: MatchRules) => DIFFICULTY_DEFS[difficulty].cost / BASE_COST
+
 /** Cómo acaba una partida. */
 export type MatchEnd = 'lost' | 'surrendered' | 'escaped'
 

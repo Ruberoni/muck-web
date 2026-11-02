@@ -1,3 +1,4 @@
+import { quickProps } from '../sim/quickProps'
 import { describe, expect, it } from 'vitest'
 import { Btn } from '../sim/commands'
 import type { SimEvent } from '../sim/events'
@@ -12,6 +13,7 @@ const ofType = <T extends SimEvent['type']>(events: readonly SimEvent[], type: T
 function play(seconds: number) {
   const session = new LocalSession(1)
   const { sim } = session
+  quickProps(sim.world.props)
   const tree = sim.world.props.find((p) => p.kind === 'tree' && biomeAt(p.x, p.z) === 'forest')!
   sim.teleport(session.me, tree.x + 2, tree.z, 0, 0)
   const events: SimEvent[] = []

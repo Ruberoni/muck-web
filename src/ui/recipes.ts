@@ -2,7 +2,7 @@ import type { ActionData } from '../sim/commands'
 import { canCraft, craft, RECIPES, recipeById, type CraftWorld, type Recipe } from '../sim/crafting'
 import { Inventory, ITEM_NAMES, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
-import { stationNear, type Structure, type StructureKind } from '../sim/structures'
+import { stationNear, stationWithRoom, type Structure, type StructureKind } from '../sim/structures'
 
 /** Cuántas veces fabrica Mayúsculas + clic (cada una es una acción `craft`, en el mismo paso). */
 export const CRAFT_MANY = 5
@@ -16,6 +16,7 @@ export const CLIENT_STATION_RANGE = 3.3
 /** El mundo de fabricar tal como lo ve el cliente: las estaciones de `structures()` con el alcance con margen. */
 export const clientCraftWorld = (structures: () => readonly Structure[]): CraftWorld => ({
   nearStation: (kind, pos) => stationNear(structures(), kind, pos, CLIENT_STATION_RANGE),
+  hasRoom: (kind, pos) => stationWithRoom(structures(), kind, pos, CLIENT_STATION_RANGE) !== null,
 })
 
 const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque' }
@@ -42,7 +43,10 @@ export const RECIPE_GROUPS: readonly RecipeGroup[] = ([null, 'campfire', 'workbe
  * cliente (`world`, que mira las estaciones con algo de margen para no acabar en una corrección en el borde).
  */
 export const canCraftHere = (inventory: Inventory, recipe: Recipe, world: CraftWorld, pos: Vec3) =>
-  (recipe.station === null || world.nearStation(recipe.station, pos)) && canCraft(inventory, recipe)
+  (recipe.station === null || world.nearStation(recipe.station, pos)) && !queueFull(recipe, world, pos) && canCraft(inventory, recipe)
+
+/** Lo hace una estación y no le cabe un trabajo más. */
+const queueFull = (recipe: Recipe, world: CraftWorld, pos: Vec3) => recipe.time !== undefined && recipe.station !== null && world.hasRoom?.(recipe.station, pos) === false
 
 export interface CostStatus {
   item: ItemId
@@ -70,6 +74,7 @@ export function recipeStatus(inventory: Inventory, recipe: Recipe, world: CraftW
     reasons.push(`${one ? 'Falta' : 'Faltan'} ${missing.map((c) => `${c.amount - c.have} ${lower(c.item)}`).join(' y ')}`)
   }
   if (recipe.station !== null && !world.nearStation(recipe.station, pos)) reasons.push(STATION_NEEDED[recipe.station])
+  else if (queueFull(recipe, world, pos)) reasons.push('Cola llena')
   // Con todo lo demás en orden, solo queda que no quepa (hoy no puede pasar: hay más casillas que tipos).
   if (!reasons.length && !canCraft(inventory, recipe)) reasons.push('Inventario lleno')
   return { available: !reasons.length, reason: reasons.length ? reasons.join(' · ') : null, cost }
