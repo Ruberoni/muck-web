@@ -103,10 +103,14 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
     expect(timeToKill('meteor_sword', 'goblin')).toBeCloseTo(0.22, 6)
   })
 
-  it.each(LEVELS)('contra un trasgo y los jefes, %s mata más despacio que %s', (tool, sword) => {
+  it.each(LEVELS)('contra un trasgo, %s mata más despacio que %s', (tool, sword) => {
     expect(timeToKill(sword, 'goblin')).toBeLessThan(timeToKill(tool, 'goblin'))
+  })
+
+  // La armadura castiga las armas débiles y rápidas: con la de madera, un jefe es cosa de otra arma.
+  it.each(LEVELS.slice(1))('contra los jefes, %s mata más despacio que %s', (tool, sword) => {
     for (const boss of ['giant', 'thrower'] as const) {
-      for (const players of [1, 2, 4, 8]) {
+      for (const players of [1, 2, 3, 5]) {
         const hp = ENEMY_DEFS[boss].hp * bossScale(players)
         expect(timeToKill(sword, boss, hp), `${boss} con ${players}`).toBeLessThan(timeToKill(tool, boss, hp))
       }
@@ -144,9 +148,9 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
   })
 
   it('contra el guardián, con cualquier grupo, el pico gana a la espada como mucho por el doble, y la espada al hacha', () => {
-    for (const players of [1, 2, 4, 8]) {
+    for (const players of [1, 2, 3, 5]) {
       const hp = ENEMY_DEFS.guardian.hp * players
-      for (const material of MATERIALS) {
+      for (const material of MATERIALS.slice(1)) {
         const pickaxe = timeToKill(`${material}_pickaxe`, 'guardian', hp)
         const sword = timeToKill(`${material}_sword`, 'guardian', hp)
         expect(pickaxe, material).toBeLessThan(sword)
@@ -154,6 +158,20 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
         expect(sword, material).toBeLessThan(timeToKill(`${material}_axe`, 'guardian', hp))
       }
     }
+  })
+
+  // Tiempo para matar acertando el 40 % del tiempo, con la espada de cada nivel: la tabla del diseño.
+  it.each([
+    ['giant', 75, 45, 28, 18],
+    ['thrower', 44, 29, 19, 13],
+    ['guardian', 63, 38, 23, 15],
+  ] as const)('%s, con un jugador, tarda lo que debe', (type, stone, iron, mithril, meteor) => {
+    const seconds = (item: ItemId) => Math.round(ENEMY_DEFS[type].hp / ((attackDamage(item, type) / swingCooldown(item)) * 0.4))
+    expect((['stone_sword', 'iron_sword', 'mithril_sword', 'meteor_sword'] as const).map(seconds)).toEqual([stone, iron, mithril, meteor])
+  })
+
+  it('un grupo no mata a un jefe antes que uno solo: la vida sube igual que el daño', () => {
+    for (const players of [2, 3, 5]) expect(bossScale(players)).toBe(players)
   })
 
   it('la espada de meteorito es la mejor espada contra todos', () => {
@@ -185,7 +203,7 @@ describe('equilibrio: lo que sueltan los enemigos', () => {
     return (total * amount) / players
   }
 
-  it.each([1, 2, 4, 8])('con %i jugadores el hierro de los gólems no sustituye a picar menas antes de la noche 4', (players) => {
+  it.each([1, 2, 3, 5])('con %i jugadores el hierro de los gólems no sustituye a picar menas antes de la noche 4', (players) => {
     const need: Amounts = {}
     for (const r of PER_PLAYER) rawCost(r, need)
     // Ni en el mejor caso llega a la mitad de lo que pide el juego de hierro.

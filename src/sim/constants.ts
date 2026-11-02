@@ -192,7 +192,12 @@ export interface ChargeDef {
   time: number
   /** Segundos hasta poder volver a embestir. */
   cooldown: number
+  /** Segundos que queda aturdido al acabar: quieto, y recibe DAZED_DAMAGE veces el daño. */
+  dazed: number
 }
+
+/** Por cuánto se multiplica el daño a un jefe aturdido tras embestir. */
+export const DAZED_DAMAGE = 2
 
 /**
  * A distancia: se acerca hasta `max` metros y retrocede si tiene al jugador a menos de `flee`. Hasta `range` metros
@@ -239,6 +244,8 @@ export interface EnemyDef {
   ai: EnemyAI
   /** Multiplicador del daño por clase de arma; lo que no está vale 1. */
   weakness: Partial<Record<WeaponClass, number>>
+  /** Lo que resta a cada golpe: castiga las armas rápidas y débiles. */
+  armor?: number
   /** Lo que suelta al morir. */
   loot: { item: ItemId; amount: number }[]
   /** Puntos que gasta al salir, para el futuro director de apariciones (docs/diseno-del-juego.md §4). */
@@ -328,7 +335,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
   giant: {
     name: 'Trasgo gigante',
     verb: 'atacar',
-    hp: 400,
+    hp: 1800,
+    armor: 10,
     speed: 6.5,
     radius: 0.95,
     scale: 2.25,
@@ -346,13 +354,14 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     loot: [{ item: 'raw_meat', amount: 3 }, { item: 'iron_bar', amount: 2 }],
     cost: 8,
     boss: true,
-    charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 4 },
+    charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 5, dazed: 2.5 },
   },
   // Mini-boss a distancia: más lento que andar, para que se le pueda alcanzar, y sus rocas se esquivan.
   thrower: {
     name: 'Lanzarrocas',
     verb: 'atacar',
-    hp: 300,
+    hp: 1400,
+    armor: 5,
     speed: 5,
     radius: 0.8,
     scale: 1.9,
@@ -376,7 +385,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
   guardian: {
     name: 'Guardián del meteorito',
     verb: 'atacar',
-    hp: 500,
+    hp: 1500,
+    armor: 10,
     speed: 4.5,
     radius: 0.9,
     scale: 2,

@@ -10,6 +10,7 @@ import {
   BOSS_PER_PLAYER,
   BOSS_SPAWN_MAX,
   BOSS_SPAWN_MIN,
+  DAZED_DAMAGE,
   ENEMY_BASE_COUNT,
   ENEMY_DEFS,
   ENEMY_HARD_MAX,
@@ -44,8 +45,8 @@ export const enemyAimHeight = (type: EnemyType) => 0.8 * ENEMY_DEFS[type].scale
 /** Distancia entre centros a la que un enemigo de este tipo toca a un jugador. */
 const contactOf = (type: EnemyType) => PLAYER_RADIUS + ENEMY_DEFS[type].radius
 
-/** `crouch` y `rush`: la embestida. `aim`: preparando un lanzamiento. */
-export type ChargeState = 'idle' | 'crouch' | 'rush' | 'aim'
+/** `crouch` y `rush`: la embestida. `dazed`: aturdido tras ella. `aim`: preparando un lanzamiento. */
+export type ChargeState = 'idle' | 'crouch' | 'rush' | 'dazed' | 'aim'
 
 /** Por dónde va una embestida o un lanzamiento. */
 export interface EnemyCharge {
@@ -136,11 +137,14 @@ export function bossOfNight(day: number): EnemyType | null {
   return BOSSES[(day / BOSS_EVERY - 1) % BOSSES.length]
 }
 
-/** Por cuánto se multiplican la vida y el botín de un jefe con `players` jugadores. */
-export const bossScale = (players: number) => 1 + BOSS_PER_PLAYER * Math.max(0, players - 1)
+/** Por cuánto se multiplica la vida de un jefe o un guardián: por jugador, para que un grupo no lo mate antes que uno solo. */
+export const bossScale = (players: number) => Math.max(1, players)
 
-/** Por cuánto se multiplican la vida y el botín de un enemigo con `players` jugadores: el guardián, por jugador. */
-const hpScale = (def: EnemyDef, players: number) => (def.guard ? Math.max(1, players) : def.boss ? bossScale(players) : 1)
+/** Por cuánto se multiplica la vida de un enemigo con `players` jugadores. */
+const hpScale = (def: EnemyDef, players: number) => (def.boss || def.guard ? bossScale(players) : 1)
+
+/** Y su botín: el guardián suelta por jugador; un jefe, algo menos. */
+const lootScaleOf = (def: EnemyDef, players: number) => (def.guard ? bossScale(players) : def.boss ? 1 + BOSS_PER_PLAYER * (bossScale(players) - 1) : 1)
 
 /** Los que suben con la amenaza: ni los jefes ni los guardianes. */
 const isCommon = (type: EnemyType) => !ENEMY_DEFS[type].boss && !ENEMY_DEFS[type].guard
@@ -321,7 +325,8 @@ export class Enemies {
 
   /**
    * La embestida: null si sigue andando como cualquiera; si no, si alcanza al jugador en este paso. Agachado sigue
-   * mirando al jugador, pero la dirección se fija al salir: apartándose se esquiva. Se para al chocar con algo.
+   * mirando al jugador, pero la dirección se fija al salir: apartándose se esquiva. Se para al chocar con algo, y
+   * entonces queda aturdido: es el momento de golpearlo.
    */
   private charge(e: EnemyData, def: ChargeDef, prey: EnemyPrey, dist: number, dt: number): boolean | null {
     const c = e.charge
@@ -334,6 +339,12 @@ export class Enemies {
       return false
     }
     c.time -= dt
+    if (c.state === 'dazed') {
+      if (c.time > 1e-9) return false
+      c.state = 'idle'
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
+      return null
+    }
     if (c.state === 'crouch') {
       if (c.time > 1e-9) return false
       c.state = 'rush'
@@ -350,10 +361,11 @@ export class Enemies {
     const blocked = Math.hypot(e.pos.x - x, e.pos.z - z) < step * 0.5
     const hit = Math.hypot(prey.pos.x - e.pos.x, prey.pos.z - e.pos.z) <= contactOf(e.type) + ENEMY_DEFS[e.type].reach
     if (!hit && !blocked && c.time > 1e-9) return false
-    c.state = 'idle'
+    c.state = 'dazed'
+    c.time = def.dazed
     c.cooldown = def.cooldown
     e.attackCooldown = Math.max(e.attackCooldown, ENEMY_DEFS[e.type].attackInterval)
-    this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
+    this.emit({ type: 'enemyCharge', id: e.id, state: 'dazed' })
     if (hit) this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return hit
   }
@@ -468,8 +480,8 @@ export class Enemies {
   /** Crea un enemigo de tipo `type` en (x, z) mirando hacia +Z. Un jefe o un guardián sale con más vida cuantos más `players` haya. */
   spawnAt(x: number, z: number, type: EnemyType = 'goblin', players = 1): EnemyData {
     const def = ENEMY_DEFS[type]
-    const lootScale = hpScale(def, players)
-    const hp = Math.round(def.hp * lootScale * (isCommon(type) ? this.scaling.hp : 1))
+    const lootScale = lootScaleOf(def, players)
+    const hp = Math.round(def.hp * hpScale(def, players) * (isCommon(type) ? this.scaling.hp : 1))
     const e: EnemyData = {
       kind: 'enemy',
       type,
@@ -498,7 +510,9 @@ export class Enemies {
   /** Golpe de `by` desde `from` (la posición del atacante). Devuelve true si lo mata. */
   hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId, efficacy: HitEfficacy = 'normal'): boolean {
     if (!e.alive) return false
-    e.hp = Math.max(0, e.hp - damage)
+    const dazed = e.charge.state === 'dazed'
+    if (dazed) efficacy = 'effective'
+    e.hp = Math.max(0, e.hp - (dazed ? damage * DAZED_DAMAGE : damage))
     if (e.hp <= 0) {
       this.kill(e)
       this.emit({ type: 'enemyDied', id: e.id, by })

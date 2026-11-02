@@ -13,6 +13,7 @@ const CROUCH_SQUASH = new THREE.Vector3(1.15, 0.7, 1.15)
 const RUSH_LEAN = 0.4
 const AIM_STRETCH = new THREE.Vector3(0.95, 1.08, 0.95)
 const AIM_LEAN = -0.2
+const DAZED_TILT = 0.3
 // Por debajo de esta fracción de su velocidad no se considera que ande (los empujones entre ellos no lo hacen botar).
 const WALK_MIN_SPEED = 0.1
 
@@ -275,9 +276,11 @@ export class EnemyView {
     if (charge === 'crouch') o.scale.multiply(CROUCH_SQUASH)
     if (charge === 'aim') o.scale.multiply(AIM_STRETCH)
     o.rotation.x = charge === 'rush' ? RUSH_LEAN : charge === 'aim' ? AIM_LEAN : 0
+    // Aturdido se tambalea: es el momento de golpearlo.
+    o.rotation.z = charge === 'dazed' ? Math.sin(model.walk + performance.now() / 180) * DAZED_TILT : 0
     if (model.held) model.held.visible = charge === 'aim'
     const look = LOOKS[model.type]
     const warning = charge === 'crouch' || charge === 'aim'
-    model.body.material = warning ? look.flashes.normal : model.hurt > 0 ? look.flashes[model.efficacy] : look.material
+    model.body.material = warning ? look.flashes.normal : charge === 'dazed' ? look.flashes.effective : model.hurt > 0 ? look.flashes[model.efficacy] : look.material
   }
 }

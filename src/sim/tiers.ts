@@ -53,9 +53,10 @@ export const swingCooldown = (item: ItemId | null) => (item ? TOOL_DEFS[item]?.c
 
 const weakness = (item: ItemId | null, type: EnemyType) => ENEMY_DEFS[type].weakness[weaponClass(item)] ?? 1
 
-/** Daño contra un enemigo: el ataque de lo que se lleva (a mano o con otra cosa, HAND_ATTACK), por su debilidad a ello. */
+/** Daño contra un enemigo: el ataque de lo que se lleva (a mano o con otra cosa, HAND_ATTACK), por su debilidad a ello y menos su armadura. */
 export function attackDamage(item: ItemId | null, type: EnemyType): number {
-  return ((item ? TOOL_DEFS[item]?.attack : undefined) ?? HAND_ATTACK) * weakness(item, type)
+  const attack = ((item ? TOOL_DEFS[item]?.attack : undefined) ?? HAND_ATTACK) * weakness(item, type)
+  return Math.max(1, attack - (ENEMY_DEFS[type].armor ?? 0))
 }
 
 /** Si `item` le hace más o menos daño de lo normal a un enemigo. */

@@ -9,6 +9,15 @@ const ITEMS = [null, ...(Object.keys(ITEM_NAMES) as ItemId[])]
 /** Golpes para romper un prop de `kind` con `item`. */
 const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / propDamage(item, kind))
 
+describe('armadura', () => {
+  it('resta a cada golpe, tras la debilidad, y siempre queda algo', () => {
+    expect(attackDamage('iron_sword', 'giant')).toBe(25)
+    expect(attackDamage('stone_pickaxe', 'guardian')).toBe(35)
+    expect(attackDamage(null, 'giant')).toBe(1)
+    expect(attackDamage('iron_sword', 'goblin')).toBe(35)
+  })
+})
+
 describe('niveles: daño contra props', () => {
   // Tabla completa (§2.3 del plan): árbol y arbusto de nivel 0, roca de nivel 1, abedul y mena de hierro de nivel 2,
   // pino oscuro y mena de mithril de nivel 3.

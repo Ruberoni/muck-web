@@ -331,10 +331,10 @@ describe('jefes', () => {
 
   it('vida y botín crecen con los jugadores', () => {
     expect(bossScale(1)).toBe(1)
-    expect(bossScale(3)).toBe(2)
+    expect(bossScale(3)).toBe(3)
     expect(enemies.spawnAt(0, 0, 'giant').maxHp).toBe(GIANT.hp)
     const crowd = enemies.spawnAt(5, 0, 'giant', 3)
-    expect(crowd).toMatchObject({ hp: GIANT.hp * 2, maxHp: GIANT.hp * 2 })
+    expect(crowd).toMatchObject({ hp: GIANT.hp * 3, maxHp: GIANT.hp * 3, lootScale: 2 })
     expect(enemies.spawnAt(9, 0, 'goblin', 3).maxHp).toBe(GOBLIN.hp)
   })
 
@@ -371,7 +371,24 @@ describe('jefes', () => {
       let damage = 0
       for (let i = 0; i < Math.round(CHARGE.time / STEP); i++) for (const hit of step(0.3, 3)) damage += hit.damage
       expect(damage).toBe(0)
-      expect(boss.charge).toMatchObject({ state: 'idle', cooldown: expect.any(Number) })
+      expect(boss.charge).toMatchObject({ state: 'dazed', cooldown: expect.any(Number) })
+    })
+
+    it('tras embestir queda aturdido, sin moverse ni atacar, y recibe el doble', () => {
+      const { boss, charge } = facing(7)
+      for (let i = 0; i < 120 && boss.charge.state !== 'dazed'; i++) step(0.3, 3)
+      expect(boss.charge.state).toBe('dazed')
+      const { x, z } = boss.pos
+      const { hp } = boss
+      enemies.hit(boss, 100, player, 0)
+      expect(boss.hp).toBe(hp - 200)
+      // Hasta que se recupera no hace nada.
+      let damage = 0
+      for (let i = 0; i < Math.round(GIANT.charge!.dazed / STEP) - 2; i++) for (const hit of step(0.3, 3)) damage += hit.damage
+      expect(damage).toBe(0)
+      expect(boss.pos).toEqual({ x, z })
+      charge()
+      expect(boss.charge.state).not.toBe('dazed')
     })
 
     it('muy cerca o muy lejos no embiste, y tras embestir espera', () => {
@@ -395,7 +412,7 @@ describe('jefes', () => {
       expect(boss.charge.state).toBe('rush')
       let damage = 0
       for (let i = 0; i < 30; i++) for (const hit of step(0.3, 3)) damage += hit.damage
-      expect(boss.charge.state).toBe('idle')
+      expect(boss.charge.state).toBe('dazed')
       expect(boss.pos.x).toBeGreaterThan(rock.x + rock.radius)
       expect(damage).toBe(0)
     })
