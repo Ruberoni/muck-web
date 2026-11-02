@@ -371,7 +371,7 @@ export class NetClient {
         this.applyWorld(msg.state)
         this.predictor = new Predictor(slot, {
           env: sim.env,
-          canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, [sim.world.grid, sim.structures.grid]).valid,
+          canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, sim.obstacles).valid,
           // Como en la simulación: las estaciones del espejo, con el mismo alcance.
           nearStation: (kind, pos) => stationNear(sim.structures.list, kind, pos, STATION_RANGE),
         })
