@@ -1,18 +1,40 @@
 import { STATION_RANGE } from './constants'
 import type { Inventory, ItemId } from './inventory'
-import type { MatchRules } from './match'
+import { clockOf, workFactor, type MatchRules } from './match'
 import type { Vec3 } from './player'
 import type { Structure, StructureKind } from './structures'
+import { DayClock } from './world/daycycle'
 
-/** Los costes del diseño son para un mapa mayor: con el actual no alcanzaría la piedra. Hasta ampliarlo, la mitad. */
-const PROVISIONAL_COST = 0.5
-/** Con un solo jugador cuestan el 60 %. */
-const SOLO_COST = 0.6
+/** Los costes van para 3 jugadores; con otros, ver `playerScale`. */
+const REFERENCE_PLAYERS = 3
+
+/** Segundos hasta la Noche Eterna con `players` jugadores. */
+function untilEternal(players: number) {
+  const clock = new DayClock()
+  clock.configure(clockOf(players))
+  return clock.eternalAt
+}
+
+const SCALES = new Map<number, number>()
+
+/**
+ * Por cuánto se multiplica lo compartido con `players` jugadores: por el tiempo de trabajo que juntan hasta la Noche
+ * Eterna (jugadores × ese tiempo, que baja con más jugadores) respecto al de 3. Así cada uno pone la misma parte de su
+ * tiempo, sea cual sea el grupo: con uno, algo menos de la mitad; con cinco, casi una vez y media.
+ */
+export function playerScale(players: number): number {
+  let scale = SCALES.get(players)
+  if (scale === undefined) SCALES.set(players, (scale = (players * untilEternal(players)) / (REFERENCE_PLAYERS * untilEternal(REFERENCE_PLAYERS))))
+  return scale
+}
 
 export interface BuildCost {
   item: ItemId
   amount: number
-  /** `each`: tantos por jugador; `one`: tal cual. Sin él escala con los jugadores y el mapa: lo que no sale de recolectar no. */
+  /**
+   * `each`: tantos por jugador; `one`: tal cual. Sin él escala con los jugadores (`playerScale`) y con la dificultad, que
+   * así también alarga la caminata: lo que no sale de recolectar, no.
+   */
   fixed?: 'each' | 'one'
 }
 
@@ -26,29 +48,34 @@ export interface BuildDef {
   phases: BuildPhase[]
 }
 
-/** Lo que se construye entre todos, llevando materiales hasta el sitio. */
+/**
+ * Lo que se construye entre todos, llevando materiales hasta el sitio. Con 3 jugadores en normal, el faro y el tótem
+ * cuestan cada uno algo menos de la mitad del tiempo hasta la Noche Eterna, como las armas de cada uno: no da para todo
+ * (el presupuesto, en balance.test.ts).
+ */
 export const BUILD_DEFS: Partial<Record<StructureKind, BuildDef>> = {
   lighthouse: {
     name: 'Faro',
     phases: [
-      { name: 'Cimiento', cost: [{ item: 'stone', amount: 120 }] },
-      { name: 'Torre', cost: [{ item: 'wood', amount: 100 }, { item: 'iron_bar', amount: 20 }] },
-      { name: 'Lámpara', cost: [{ item: 'iron_bar', amount: 20 }, { item: 'mithril_bar', amount: 10 }] },
+      { name: 'Cimiento', cost: [{ item: 'stone', amount: 240 }] },
+      { name: 'Torre', cost: [{ item: 'wood', amount: 220 }, { item: 'iron_bar', amount: 45 }] },
+      // La lente, de cristal de las cimas.
+      { name: 'Lámpara', cost: [{ item: 'iron_bar', amount: 45 }, { item: 'mithril_bar', amount: 22 }, { item: 'crystal', amount: 12 }] },
     ],
   },
   // Meteoritos y jefes de noche forman parte del objetivo.
   totem: {
     name: 'Tótem',
     phases: [
-      { name: 'Base', cost: [{ item: 'stone', amount: 80 }, { item: 'dark_wood', amount: 40 }] },
-      { name: 'Cuerpo', cost: [{ item: 'iron_bar', amount: 30 }] },
+      { name: 'Base', cost: [{ item: 'stone', amount: 200 }, { item: 'dark_wood', amount: 150 }] },
+      { name: 'Cuerpo', cost: [{ item: 'iron_bar', amount: 100 }] },
       { name: 'Corazón', cost: [{ item: 'meteor_fragment', amount: 3, fixed: 'each' }, { item: 'boss_trophy', amount: 1, fixed: 'one' }] },
     ],
   },
   plane: {
     name: 'Avión',
     phases: [
-      { name: 'Fuselaje', cost: [{ item: 'wood', amount: 150 }, { item: 'iron_bar', amount: 40 }] },
+      { name: 'Fuselaje', cost: [{ item: 'wood', amount: 200 }, { item: 'iron_bar', amount: 50 }] },
       // De momento hay un solo jefe de luz: faltan las otras cuatro piezas.
       { name: 'Motor', cost: [{ item: 'plane_engine', amount: 1, fixed: 'one' }] },
     ],
@@ -72,7 +99,7 @@ export const isBuilt = ({ kind, build }: Pick<Structure, 'kind' | 'build'>) => !
 
 /** Lo que pide la fase `phase` en esta partida. */
 export function phaseCost(kind: StructureKind, phase: number, rules: MatchRules): { item: ItemId; amount: number }[] {
-  const scale = PROVISIONAL_COST * (rules.players === 1 ? SOLO_COST : 1)
+  const scale = playerScale(rules.players) * workFactor(rules)
   return BUILD_DEFS[kind]!.phases[phase].cost.map(({ item, amount, fixed }) => ({
     item,
     amount: fixed === 'one' ? amount : fixed === 'each' ? amount * rules.players : Math.ceil(amount * scale),

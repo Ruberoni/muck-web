@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BUILD_DEFS, deliver, isBuilt, phaseCost, usableNear } from './builds'
+import { BUILD_DEFS, deliver, isBuilt, phaseCost, playerScale, usableNear } from './builds'
 import { Btn } from './commands'
 import { HEALTH_MAX, STATION_RANGE, STEP } from './constants'
 import { Inventory } from './inventory'
@@ -15,10 +15,19 @@ function site(): Structure {
 }
 
 describe('construcciones compartidas', () => {
-  it('el coste provisional es la mitad del diseño, y con un jugador el 60 % de eso', () => {
-    expect(phaseCost('lighthouse', 0, GROUP)).toEqual([{ item: 'stone', amount: 60 }])
-    expect(phaseCost('lighthouse', 0, SOLO)).toEqual([{ item: 'stone', amount: 36 }])
-    expect(phaseCost('lighthouse', 2, GROUP)).toEqual([{ item: 'iron_bar', amount: 10 }, { item: 'mithril_bar', amount: 5 }])
+  it('con 3 jugadores en normal cuesta lo del diseño; con otros, por el tiempo que juntan hasta la Noche Eterna', () => {
+    expect(phaseCost('lighthouse', 0, GROUP)).toEqual([{ item: 'stone', amount: 240 }])
+    expect(phaseCost('lighthouse', 2, GROUP)).toEqual([
+      { item: 'iron_bar', amount: 45 },
+      { item: 'mithril_bar', amount: 22 },
+      { item: 'crystal', amount: 12 },
+    ])
+    expect([1, 2, 3, 4, 5].map((p) => Math.round(playerScale(p) * 100) / 100)).toEqual([0.45, 0.78, 1, 1.22, 1.38])
+    expect(phaseCost('lighthouse', 0, SOLO)).toEqual([{ item: 'stone', amount: Math.ceil(240 * playerScale(1)) }])
+    // La dificultad también: más material, así que también más camino.
+    expect(phaseCost('lighthouse', 0, { players: 3, difficulty: 'hard' })[0].amount).toBe(Math.ceil((240 * 55) / 45))
+    // Lo que no se recolecta, no.
+    expect(phaseCost('totem', 2, { players: 3, difficulty: 'ultra' })).toEqual([{ item: 'meteor_fragment', amount: 9 }, { item: 'boss_trophy', amount: 1 }])
   })
 
   it('se entrega lo que se tenga, sin pasarse, y la barra lo refleja', () => {
@@ -28,8 +37,9 @@ describe('construcciones compartidas', () => {
     expect(deliver(lighthouse, inventory, GROUP)).toEqual({ changed: true, finished: null })
     expect(inventory.count('stone')).toBe(0)
     expect(lighthouse.build).toMatchObject({ phase: 0, delivered: { stone: 40 } })
-    expect(lighthouse.build!.progress).toBeCloseTo(40 / 135, 6)
-    inventory.add('stone', 50)
+    const total = [0, 1, 2].reduce((sum, phase) => sum + phaseCost('lighthouse', phase, GROUP).reduce((n, c) => n + c.amount, 0), 0)
+    expect(lighthouse.build!.progress).toBeCloseTo(40 / total, 6)
+    inventory.add('stone', 230)
     expect(deliver(lighthouse, inventory, GROUP)).toEqual({ changed: true, finished: 'Cimiento' })
     expect(inventory.count('stone')).toBe(30)
     expect(lighthouse.build).toMatchObject({ phase: 1, delivered: {} })
@@ -46,7 +56,7 @@ describe('construcciones compartidas', () => {
   it('acabadas todas las fases está construido', () => {
     const lighthouse = site()
     const inventory = new Inventory()
-    for (const item of ['stone', 'wood', 'iron_bar', 'mithril_bar'] as const) inventory.add(item, 500)
+    for (const item of ['stone', 'wood', 'iron_bar', 'mithril_bar', 'crystal'] as const) inventory.add(item, 500)
     for (let i = 0; i < BUILD_DEFS.lighthouse!.phases.length; i++) {
       expect(isBuilt(lighthouse)).toBe(false)
       deliver(lighthouse, inventory, GROUP)

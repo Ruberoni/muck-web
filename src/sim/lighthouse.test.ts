@@ -20,7 +20,7 @@ function setup(day = 6) {
   sim.rules = RULES
   const { player, inventory } = sim.slot(0)
   const lighthouse = sim.structures.place({ ...structureSpot(player.pos, 0, STRUCTURE_DEFS.lighthouse.radius, sim.obstacles), valid: true }, 'lighthouse')!
-  for (const item of ['stone', 'wood', 'iron_bar', 'mithril_bar'] as const) inventory.add(item, 500)
+  for (const item of ['stone', 'wood', 'iron_bar', 'mithril_bar', 'crystal'] as const) inventory.add(item, 500)
   for (let i = 0; i < 3; i++) deliver(lighthouse, inventory, RULES)
   inventory.clear()
   sim.setDay(day)

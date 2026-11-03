@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { ENEMY_DEFS, ENEMY_TYPES, HIT_COOLDOWN, PROP_DEFS, SHELL_RESIST, SWEEP_TARGETS, type EnemyType } from './constants'
+import { ENEMY_DEFS, ENEMY_TYPES, HIT_COOLDOWN, PROP_DEFS, SHELL_RESIST, SWEEP_TARGETS, WALK_SPEED, type EnemyType } from './constants'
 import { BUILD_DEFS, phaseCost } from './builds'
 import { recipeById, type RecipeId } from './crafting'
 import { bossScale, enemyCapFor, spawnChance } from './enemies'
 import type { ItemId } from './inventory'
-import type { MatchRules } from './match'
-import { generatePropPlacements, type PropKind } from './props'
+import { pickIsland } from './islands'
+import { clockOf, DIFFICULTIES, workFactor, type MatchRules } from './match'
+import { generatePropPlacements, propCounts, type PropKind } from './props'
 import { FUEL_SECONDS, STATION_DEFS } from './stations'
 import type { StructureKind } from './structures'
-import { attackDamage, swingCooldown } from './tiers'
+import { attackDamage, propDamage, swingCooldown } from './tiers'
+import { DayClock } from './world/daycycle'
 
 /** Jugadores de una sala llena (MAX_PLAYERS en src/net/protocol.ts, que src/sim no importa). */
 const MAX_PLAYERS = 5
@@ -60,10 +62,13 @@ function rawCost(recipe: RecipeId, into: Amounts = {}, times = 1): Amounts {
 /** Redondeado hacia arriba: la madera del horno sale en fracciones. */
 const whole = (amounts: Amounts): Amounts => Object.fromEntries(Object.entries(amounts).map(([item, n]) => [item, Math.ceil(n! - 1e-9)]))
 
+/** Una isla de partida, la referencia del equilibrio (la de siempre es más pequeña y ya no se juega). */
+const ISLAND = pickIsland(11)
+
 /** Lo que dan todos los árboles y rocas de la isla (no vuelven); lo que se recoge poco a poco no cuenta. */
-function supply(): Amounts {
+function supply(island = ISLAND): Amounts {
   const total: Amounts = {}
-  for (const { kind } of generatePropPlacements()) {
+  for (const { kind } of generatePropPlacements(island)) {
     const { item, amount } = PROP_DEFS[kind].drop
     if (!PROP_DEFS[kind].harvest) total[item] = (total[item] ?? 0) + amount
   }
@@ -77,7 +82,12 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     for (const r of SHARED) rawCost(r, need)
     expect(whole(need)).toEqual({ wood: 280, stone: 93, iron_ore: 49, birch_wood: 30, mithril_ore: 40, dark_wood: 30 })
     const have = supply()
-    expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 80, dark_wood: 80, coal: 60, crystal: 36, dry_wood: 72 })
+    // Lo de cada tipo: cuántos hay en la isla por lo que suelta cada uno.
+    const counts = propCounts(ISLAND)
+    for (const kind of Object.keys(counts) as PropKind[]) {
+      const { item, amount, harvest } = { ...PROP_DEFS[kind].drop, harvest: PROP_DEFS[kind].harvest }
+      if (!harvest) expect(have[item], item).toBe(counts[kind] * amount)
+    }
     // Sobra de todo: el faro, el tótem y el avión también tiran de lo mismo.
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })
@@ -132,15 +142,19 @@ function buildRaw(kind: StructureKind, rules: MatchRules, into: Amounts = {}) {
 }
 
 describe('equilibrio de las prioridades', () => {
-  it.each([1, 2, 3, 4, 5])('con %i jugadores, lo imprescindible para escapar cabe en la isla', (players) => {
-    const rules: MatchRules = { players, difficulty: 'normal' }
+  it.each(DIFFICULTIES.flatMap((difficulty) => [1, 2, 3, 4, 5].map((players) => [players, difficulty] as const)))(
+    'con %i jugadores en %s, lo imprescindible para escapar cabe en la isla, y el faro también',
+    (players, difficulty) => {
+    const rules: MatchRules = { players, difficulty }
     const need = buildRaw('totem', rules)
+    buildRaw('lighthouse', rules, need)
     const have = supply()
     for (const item of Object.keys(need) as ItemId[]) {
       if (item === 'meteor_fragment' || item === 'boss_trophy') continue
       expect(need[item], item).toBeLessThanOrEqual(have[item]!)
     }
-  })
+  },
+  )
 
   it('el corazón del tótem sale de un guardián y de un jefe de noche', () => {
     expect(phaseCost('totem', 2, { players: 4, difficulty: 'normal' })).toEqual([{ item: 'meteor_fragment', amount: 12 }, { item: 'boss_trophy', amount: 1 }])
@@ -270,5 +284,111 @@ describe('equilibrio: lo que sueltan los enemigos', () => {
     for (const r of PER_PLAYER) rawCost(r, need)
     // Ni en el mejor caso llega a la mitad de lo que pide el juego de hierro.
     expect(ironFromGolems(3, players)).toBeLessThan(need.iron_ore! * 0.5)
+  })
+})
+
+/**
+ * El presupuesto de tiempo (el "2 de 3" del plan): lo que cuesta cada prioridad (armas, faro, tótem) como parte del
+ * tiempo hasta la Noche Eterna. Cuenta los golpes con la herramienta que se tiene a esas alturas, el paseo hasta cada
+ * prop (por lo juntos que están los de su tipo en la isla), recogerlo y un viaje por material; las estaciones trabajan
+ * solas. De ese tiempo se trabaja EFFICIENCY: el resto se va en las noches, en comer, en fabricar y en volver a la obra.
+ */
+const EFFICIENCY = 0.4
+const TRIP_SECONDS = 30
+const PICKUP_SECONDS = 0.5
+/** Con qué se recoge cada cosa cuando hace falta en cantidad. */
+const GATHER_TOOL: Partial<Record<PropKind, ItemId>> = {
+  tree: 'stone_axe',
+  rock: 'stone_pickaxe',
+  iron_ore: 'stone_pickaxe',
+  birch: 'stone_axe',
+  darkpine: 'iron_axe',
+  mithril_ore: 'iron_pickaxe',
+  coal_ore: 'stone_pickaxe',
+  crystal_ore: 'iron_pickaxe',
+  deadtree: 'stone_axe',
+}
+/** Las armas de cada uno: herramientas y espadas hasta el mithril, un peto y un escudo de hierro. */
+const WEAPONS: readonly RecipeId[] = [...PER_PLAYER, 'iron_chestplate', 'iron_shield']
+
+const LAND = (() => {
+  let land = 0
+  const n = 120
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (ISLAND.heightAt(((i + 0.5) / n - 0.5) * ISLAND.size, ((j + 0.5) / n - 0.5) * ISLAND.size) > 0) land++
+  return (land / n / n) * ISLAND.size ** 2
+})()
+
+/** Segundos de trabajo de un jugador para recoger `raw`. */
+function workSeconds(raw: Amounts, rules: MatchRules) {
+  const counts = propCounts(ISLAND)
+  let seconds = 0
+  for (const [item, amount] of Object.entries(raw) as [ItemId, number][]) {
+    const kind = (Object.keys(PROP_DEFS) as PropKind[]).find((k) => PROP_DEFS[k].drop.item === item && !PROP_DEFS[k].harvest)
+    if (!kind) continue
+    const tool = GATHER_TOOL[kind]!
+    const props = Math.ceil(amount / PROP_DEFS[kind].drop.amount)
+    const hits = Math.ceil((PROP_DEFS[kind].hp * workFactor(rules)) / propDamage(tool, kind))
+    const walk = 0.5 / Math.sqrt(counts[kind] / LAND) / WALK_SPEED
+    seconds += props * ((hits - 1) * swingCooldown(tool) + walk + PICKUP_SECONDS) + TRIP_SECONDS
+  }
+  return seconds
+}
+
+/** Qué parte del tiempo hasta la Noche Eterna se lleva cada prioridad: las armas, cada uno las suyas; lo demás, entre todos. */
+function budget(rules: MatchRules) {
+  const clock = new DayClock()
+  clock.configure(clockOf(rules.players))
+  const available = clock.eternalAt * EFFICIENCY
+  const weapons = WEAPONS.reduce((into, r) => rawCost(r, into), {} as Amounts)
+  const shared = (kind: StructureKind) => workSeconds(buildRaw(kind, rules), rules) / rules.players / available
+  return { weapons: workSeconds(weapons, rules) / available, lighthouse: shared('lighthouse'), totem: shared('totem') }
+}
+
+const total = ({ weapons, lighthouse, totem }: ReturnType<typeof budget>) => weapons + lighthouse + totem
+
+describe('equilibrio: el presupuesto de tiempo', () => {
+  it('con 3 jugadores en normal, cada prioridad se lleva algo menos de la mitad del tiempo: hacer las tres, un 135 %', () => {
+    const b = budget({ players: 3, difficulty: 'normal' })
+    for (const [name, share] of Object.entries(b)) {
+      expect(share, name).toBeGreaterThan(0.38)
+      expect(share, name).toBeLessThan(0.52)
+    }
+    expect(total(b)).toBeGreaterThan(1.25)
+    expect(total(b)).toBeLessThan(1.45)
+  })
+
+  it.each([1, 2, 3, 4, 5])('con %i jugadores en normal da para dos de las tres, pero no para las tres', (players) => {
+    const b = budget({ players, difficulty: 'normal' })
+    const shares = Object.values(b).sort((x, y) => x - y)
+    for (const share of shares) expect(share).toBeGreaterThan(0.25)
+    expect(shares[0] + shares[1]).toBeLessThan(1)
+    expect(total(b)).toBeGreaterThan(1.1)
+  })
+
+  it('la dificultad lo encarece todo, también lo compartido: fácil da casi para las tres y ultra apenas para dos', () => {
+    const totals = DIFFICULTIES.map((difficulty) => total(budget({ players: 3, difficulty })))
+    for (let i = 1; i < totals.length; i++) expect(totals[i]).toBeGreaterThan(totals[i - 1])
+    expect(totals[0]).toBeLessThan(1.05)
+    expect(totals[3]).toBeGreaterThan(1.7)
+  })
+})
+
+describe('equilibrio: el combustible', () => {
+  it(`el carbón de la isla funde lo de un grupo de ${MAX_PLAYERS} y el aceite de 10 campanas, y sin él vale la madera`, () => {
+    const rules: MatchRules = { players: MAX_PLAYERS, difficulty: 'normal' }
+    const bars: Amounts = {}
+    for (const r of WEAPONS) for (const { item, amount } of recipeById(r)!.cost) bars[item] = (bars[item] ?? 0) + amount * MAX_PLAYERS
+    for (const kind of ['lighthouse', 'totem'] as const) {
+      BUILD_DEFS[kind]!.phases.forEach((_, phase) => {
+        for (const { item, amount } of phaseCost(kind, phase, rules)) bars[item] = (bars[item] ?? 0) + amount
+      })
+    }
+    const smelt = (bars.iron_bar ?? 0) * 15 + (bars.mithril_bar ?? 0) * 25
+    // Una noche iluminada en la Noche Eterna pide unas 7 unidades, de 60 s de destilador cada una.
+    const oil = 10 * 7 * 60
+    const { coal, wood, dry_wood } = supply()
+    expect((coal! * FUEL_SECONDS.coal!) / (smelt + oil)).toBeGreaterThan(1.5)
+    // Sin carbón: la madera seca y la mitad de la madera de la isla también llegan (la otra mitad, para construir).
+    expect(dry_wood! * FUEL_SECONDS.dry_wood! + wood! * FUEL_SECONDS.wood! * 0.5).toBeGreaterThan(smelt + oil)
   })
 })
