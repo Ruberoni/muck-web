@@ -10,6 +10,8 @@ import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { autoSkin } from '../net/skins'
 import { loadCharacter } from '../view/characters'
+import { DecorView } from '../view/DecorView'
+import { loadNature, type NatureModels } from '../view/nature'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
@@ -107,6 +109,9 @@ export class Game {
   session: Session = new LocalSession()
   /** Se rehace con las colocaciones de cada sesión (ver buildPropView). */
   propView: PropView
+  /** Los modelos de naturaleza, cuando llegan, y la decoración que sale de ellos (se rehace con los props). */
+  private nature: NatureModels | null = null
+  private decor: DecorView | null = null
   readonly hud: Hud
   readonly input: Input
   readonly enemyView = new EnemyView()
@@ -193,6 +198,14 @@ export class Game {
     this.sky = sky
     this.water = water
     this.propView = this.buildPropView(null)
+    // Mientras no llegan (o si fallan) se ven las formas de siempre.
+    loadNature().then(
+      (models) => {
+        this.nature = models
+        this.propView = this.buildPropView(this.propView)
+      },
+      (error) => console.warn('No se han podido cargar los modelos de naturaleza', error),
+    )
     this.structureView = new StructureView(scene)
     scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.remotePlayers.group)
     this.lookFromPlayer()
@@ -874,6 +887,17 @@ export class Game {
       old.dispose()
     }
     this.scene.add(view.group)
+    if (this.nature) {
+      view.useModels(this.nature)
+      // Lo que ya se había roto sigue roto.
+      view.sync(this.sim.world.props)
+      if (this.decor) {
+        this.scene.remove(this.decor.group)
+        this.decor.dispose()
+      }
+      this.decor = new DecorView(this.nature, this.sim.world.placements)
+      this.scene.add(this.decor.group)
+    }
     return view
   }
 
@@ -937,6 +961,8 @@ export class Game {
     this.projectileView.update(dt, sim.projectiles.list, alpha)
     this.meteorView.update(dt, sim.worldEvents.meteor, net ? net.client.renderTick() : sim.tick)
     this.propView.update(dt)
+    this.propView.updateLod(this.camera.position)
+    this.decor?.update(this.camera.position)
     this.remotePlayers.update(dt, net ? net.client.shownPlayers : [], (id) => net?.client.skins.get(id) ?? autoSkin(id))
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08

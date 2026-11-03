@@ -22,6 +22,7 @@ import {
   type PropKind,
   type PropPlacement,
 } from '../sim/props'
+import type { NatureModels } from './nature'
 
 // Las geometrías son por familia (abedul y pino oscuro tienen la forma del árbol y las menas la de la roca) y los
 // materiales por tipo. sim/aim.ts construye las hitboxes de cada familia con las mismas caras (salvo las bayas, la flor
@@ -150,6 +151,36 @@ const PARTS: Record<PropKind, Part[]> = {
   healing_herb: [{ geometry: herbGeometry, material: material('#57a85a') }, { geometry: flowerGeometry, material: material('#f2a6d8', { emissive: '#5c2450' }) }],
 }
 
+/**
+ * Las piezas de los modelos (`nature.ts`) que sustituyen a las de cada tipo, por variante: `{v}` es su número. Van en el
+ * orden de PARTS y con sus materiales; lo que se recoge (las bayas) sigue siendo lo de siempre. Lo que no está aquí (la
+ * hierba curativa) no cambia.
+ */
+const MODELS: Partial<Record<PropKind, { pieces: string[]; variants: number }>> = {
+  tree: { pieces: ['tree_trunk_{v}', 'tree_leaves_{v}'], variants: 2 },
+  birch: { pieces: ['birch_trunk_{v}', 'tree_leaves_{v}'], variants: 2 },
+  darkpine: { pieces: ['pine_trunk_{v}', 'pine_leaves_{v}'], variants: 2 },
+  rock: { pieces: ['rock_{v}'], variants: 3 },
+  iron_ore: { pieces: ['rock_{v}', 'crystals_{v}'], variants: 3 },
+  mithril_ore: { pieces: ['rock_{v}', 'crystals_{v}'], variants: 3 },
+  coal_ore: { pieces: ['rock_{v}', 'crystals_{v}'], variants: 3 },
+  crystal_ore: { pieces: ['rock_{v}', 'crystals_{v}'], variants: 3 },
+  bush: { pieces: ['bush_{v}'], variants: 3 },
+}
+/** Las piezas de los modelos que usan los props, de todas sus variantes (scripts/nature.test.ts mira que estén). */
+export const MODEL_PIECES: readonly string[] = Object.values(MODELS).flatMap(({ pieces, variants }) =>
+  pieces.flatMap((piece) => [...Array(variants).keys()].map((v) => piece.replace('{v}', String(v)))),
+)
+
+/** A partir de aquí (en metros, en horizontal) se dibuja la versión simplificada, sin sombra; con margen para no parpadear. */
+export const LOD_DISTANCE = 55
+const LOD_MARGIN = 4
+/** Cuánto tiene que moverse la cámara para volver a mirar qué se ve de cerca. */
+const LOD_STEP = 3
+
+/** La variante de un prop: la misma en todos los clientes, repartida sin seguir el orden de los ids. */
+const variantOf = (id: number, variants: number) => ((Math.imul(id, 2654435761) >>> 0) % variants)
+
 /** Desde qué pieza es lo que se recoge (se oculta al recogerlo): las bayas del arbusto y la flor de la hierba. */
 const FIRST_FRUIT: Partial<Record<PropKind, number>> = { bush: 1, healing_herb: 1 }
 
@@ -162,6 +193,8 @@ export interface PropInstance {
   base: THREE.Matrix4
   /** Solo en lo que se recoge: número de baya. Se ve mientras sea menor que las bayas que le quedan. */
   berry?: number
+  /** Solo en los modelos: 0 de cerca y 1 de lejos. Se ve el que toca por la distancia (`updateLod`). */
+  lod?: 0 | 1
 }
 
 function createInstanced(geometry: THREE.BufferGeometry, material: THREE.Material, count: number) {
@@ -193,8 +226,17 @@ export class PropView {
   private berries: Int8Array
   private destroyed: Uint8Array
   private scratch = new THREE.Matrix4()
+  private placements: readonly PropPlacement[]
+  /** Con los modelos: los meshes que se han añadido, qué versión se ve de cada prop y desde dónde se miró. */
+  private modelMeshes: THREE.InstancedMesh[] = []
+  private modelMaterials: THREE.Material[] = []
+  private band: Uint8Array
+  private modelled: number[] = []
+  private lodFrom: { x: number; z: number } | null = null
 
   constructor(placements: readonly PropPlacement[]) {
+    this.placements = placements
+    this.band = new Uint8Array(placements.length)
     const count = (kind: PropKind) => placements.filter((p) => p.kind === kind).length
     const kinds = Object.keys(PARTS) as PropKind[]
     const meshesOf = Object.fromEntries(
@@ -233,6 +275,88 @@ export class PropView {
     this.berries = new Int8Array(placements.length).fill(BERRIES_PER_BUSH)
     this.destroyed = new Uint8Array(placements.length)
     this.group.add(...this.allMeshes)
+  }
+
+  /**
+   * Dibuja los modelos en vez de las formas de siempre, que quedan ocultas (pero siguen ahí: la puntería y las pruebas
+   * miran esas, que son las hitboxes). Cada prop lleva dos versiones, cerca y lejos, y se ve la que toca por la distancia
+   * (`updateLod`); empieza viéndose la de lejos. Se llama una vez, cuando llegan los modelos.
+   */
+  useModels(models: NatureModels) {
+    if (this.modelMeshes.length) return
+    const dummy = new THREE.Object3D()
+    for (const [kind, def] of Object.entries(MODELS) as [PropKind, NonNullable<(typeof MODELS)[PropKind]>][]) {
+      const props = this.placements.filter((p) => p.kind === kind)
+      const geometries = (v: number) => def.pieces.map((piece) => piece.replace('{v}', String(v)))
+      // Sin alguna pieza (un modelo que no ha llegado), el tipo se queda como estaba.
+      if (![...Array(def.variants).keys()].every((v) => geometries(v).every((name) => models.has(name)))) continue
+      // Los materiales de siempre, que tiñen los colores de los vértices.
+      const materials = def.pieces.map((_, part) => {
+        const material = (PARTS[kind][part].material as THREE.MeshStandardMaterial).clone()
+        material.vertexColors = true
+        this.modelMaterials.push(material)
+        return material
+      })
+      for (let v = 0; v < def.variants; v++) {
+        const ofVariant = props.filter((p) => variantOf(p.id, def.variants) === v)
+        if (!ofVariant.length) continue
+        geometries(v).forEach((name, part) => {
+          const near = createInstanced(models.get(name)!, materials[part], ofVariant.length)
+          const far = createInstanced(models.get(`${name}_far`) ?? models.get(name)!, materials[part], ofVariant.length)
+          far.castShadow = false
+          ofVariant.forEach((p, index) => {
+            dummy.position.set(p.x, p.y, p.z)
+            dummy.rotation.set(p.rotX, p.rotY, 0)
+            dummy.scale.set(p.scaleX, p.scaleY, p.scaleZ)
+            dummy.updateMatrix()
+            for (const [lod, mesh] of [near, far].entries() as IterableIterator<[0 | 1, THREE.InstancedMesh]>) {
+              // Leída de vuelta (Float32), como las de siempre: restaurarla es exacto.
+              const base = new THREE.Matrix4()
+              mesh.setMatrixAt(index, dummy.matrix)
+              mesh.getMatrixAt(index, base)
+              mesh.setMatrixAt(index, HIDDEN)
+              this.instances[p.id].push({ mesh, index, base, lod })
+            }
+          })
+          this.modelMeshes.push(near, far)
+        })
+      }
+      for (const p of props) this.band[p.id] = 1
+      this.modelled.push(...props.map((p) => p.id))
+      // Lo de siempre se oculta, salvo lo que se recoge.
+      PARTS[kind].forEach((_, part) => {
+        const firstFruit = FIRST_FRUIT[kind]
+        if (firstFruit === undefined || part < firstFruit) this.byKind[kind][part].visible = false
+      })
+    }
+    for (const id of this.modelled) if (!this.destroyed[id]) this.showBand(id)
+    this.group.add(...this.modelMeshes)
+  }
+
+  /**
+   * Con los modelos, por frame: de cerca de `camera` se ve la versión entera, con sombra, y de lejos la simplificada.
+   * Solo mira de nuevo si la cámara se ha movido algo.
+   */
+  updateLod(camera: { x: number; z: number }) {
+    if (!this.modelled.length || (this.lodFrom && Math.hypot(camera.x - this.lodFrom.x, camera.z - this.lodFrom.z) < LOD_STEP)) return
+    this.lodFrom = { x: camera.x, z: camera.z }
+    for (const id of this.modelled) {
+      const p = this.placements[id]
+      const distance = Math.hypot(p.x - camera.x, p.z - camera.z)
+      const band = this.band[id] === 0 ? (distance > LOD_DISTANCE + LOD_MARGIN ? 1 : 0) : distance < LOD_DISTANCE - LOD_MARGIN ? 0 : 1
+      if (band === this.band[id]) continue
+      this.band[id] = band
+      if (!this.destroyed[id]) this.showBand(id)
+    }
+  }
+
+  /** Enseña la versión de los modelos que toca y oculta la otra. */
+  private showBand(id: number) {
+    for (const { mesh, index, base, lod } of this.instances[id]) {
+      if (lod === undefined) continue
+      mesh.setMatrixAt(index, lod === this.band[id] ? base : HIDDEN)
+      mesh.instanceMatrix.needsUpdate = true
+    }
   }
 
   /** Instancias del prop `id` (tronco y copa; roca; mena y cristales; arbusto y sus bayas). */
@@ -274,8 +398,9 @@ export class PropView {
       const done = t >= WOBBLE_DURATION
       const a = done ? 0 : WOBBLE_AMOUNT * Math.sin((Math.PI * t) / WOBBLE_DURATION)
       for (const instance of this.instances[id]) {
-        // Las bayas ya recogidas siguen ocultas durante el wobble.
+        // Las bayas ya recogidas siguen ocultas durante el wobble, y la versión del modelo que no toca también.
         if (instance.berry !== undefined && instance.berry >= this.berries[id]) continue
+        if (instance.lod !== undefined && instance.lod !== this.band[id]) continue
         const { mesh, index, base } = instance
         this.scratch.makeScale(1 + a, 1 - a * 0.5, 1 + a).premultiply(base)
         mesh.setMatrixAt(index, this.scratch)
@@ -291,10 +416,10 @@ export class PropView {
     this.wobbles.clear()
     this.berries.fill(BERRIES_PER_BUSH)
     this.destroyed.fill(0)
-    for (const instances of this.instances) {
-      for (const { mesh, index, base } of instances) mesh.setMatrixAt(index, base)
-    }
-    for (const mesh of this.allMeshes) mesh.instanceMatrix.needsUpdate = true
+    this.instances.forEach((instances, id) => {
+      for (const { mesh, index, base, lod } of instances) mesh.setMatrixAt(index, lod === undefined || lod === this.band[id] ? base : HIDDEN)
+    })
+    for (const mesh of [...this.allMeshes, ...this.modelMeshes]) mesh.instanceMatrix.needsUpdate = true
   }
 
   /** Los props como dice un estado completo (al entrar en una sala o volver de la pausa en red), sin animar. */
@@ -308,7 +433,8 @@ export class PropView {
 
   /** Libera las instancias (las geometrías y los materiales son compartidos y se quedan). */
   dispose() {
-    for (const mesh of this.allMeshes) mesh.dispose()
+    for (const mesh of [...this.allMeshes, ...this.modelMeshes]) mesh.dispose()
+    for (const material of this.modelMaterials) material.dispose()
   }
 
   /**

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { BERRIES_PER_BUSH, WOBBLE_DURATION } from '../sim/constants'
 import { generatePropPlacements } from '../sim/props'
-import { PropView, type PropInstance } from './PropView'
+import { LOD_DISTANCE, MODEL_PIECES, PropView, type PropInstance } from './PropView'
 
 const placements = generatePropPlacements()
 const tree = placements.find((p) => p.kind === 'tree')!
@@ -88,5 +88,62 @@ describe('PropView', () => {
     expect(view.instancesOf(rock.id).every(atBase)).toBe(true)
     expect(view.instancesOf(bush.id).filter((i) => i.berry !== undefined && !isHidden(i))).toHaveLength(2)
     expect(view.instancesOf(bush.id).filter((i) => !isHidden(i)).every(atBase)).toBe(true)
+  })
+})
+
+describe('PropView con los modelos de naturaleza', () => {
+  /** Todas las piezas, con una caja cualquiera: solo importa a qué mesh va cada prop. */
+  const fake = () => new Map([...MODEL_PIECES, ...MODEL_PIECES.map((n) => `${n}_far`)].map((name) => [name, new THREE.BoxGeometry()]))
+  const withModels = () => {
+    const view = new PropView(placements)
+    view.useModels(fake())
+    return view
+  }
+  const models = (id: number) => view(id).filter((i) => i.lod !== undefined)
+  let current: PropView
+  const view = (id: number) => current.instancesOf(id)
+  const shown = (id: number) => models(id).filter((i) => !isHidden(i)).map((i) => i.lod)
+
+  it('oculta las formas de siempre salvo las bayas, que siguen siendo las mismas', () => {
+    current = withModels()
+    expect(current.meshes.trunks.visible).toBe(false)
+    expect(current.meshes.foliage.visible).toBe(false)
+    expect(current.meshes.bushes.visible).toBe(false)
+    expect(current.meshes.berries.every((b) => b.visible)).toBe(true)
+    // La hierba curativa no tiene modelo.
+    expect(current.byKind.healing_herb.every((mesh) => mesh.visible)).toBe(true)
+    // Tronco y copa, de cerca y de lejos; empieza viéndose lo de lejos.
+    expect(models(tree.id)).toHaveLength(4)
+    expect(shown(tree.id)).toEqual([1, 1])
+  })
+
+  it('de cerca se ve la versión entera, con sombra, y de lejos la simplificada, sin ella', () => {
+    current = withModels()
+    current.updateLod(tree)
+    expect(shown(tree.id)).toEqual([0, 0])
+    const near = models(tree.id).find((i) => i.lod === 0)!
+    const far = models(tree.id).find((i) => i.lod === 1)!
+    expect(near.mesh.castShadow).toBe(true)
+    expect(far.mesh.castShadow).toBe(false)
+    current.updateLod({ x: tree.x + LOD_DISTANCE + 10, z: tree.z })
+    expect(shown(tree.id)).toEqual([1, 1])
+    // Justo en el borde no cambia: hay margen para no parpadear.
+    current.updateLod({ x: tree.x + LOD_DISTANCE - 1, z: tree.z })
+    expect(shown(tree.id)).toEqual([1, 1])
+  })
+
+  it('romper oculta las dos versiones, el temblor no saca la que no toca y reset vuelve a la que toca', () => {
+    current = withModels()
+    current.updateLod(tree)
+    current.present([{ type: 'propHit', id: tree.id, by: 0, hp: 1 } as never])
+    for (let t = 0; t < WOBBLE_DURATION; t += 0.016) current.update(0.016)
+    expect(shown(tree.id)).toEqual([0, 0])
+    current.present([{ type: 'propDestroyed', id: tree.id } as never])
+    expect(shown(tree.id)).toEqual([])
+    current.updateLod({ x: tree.x + 200, z: tree.z })
+    expect(shown(tree.id)).toEqual([])
+    current.reset()
+    expect(shown(tree.id)).toEqual([1, 1])
+    expect(models(tree.id).filter((i) => i.lod === 1).every(atBase)).toBe(true)
   })
 })
