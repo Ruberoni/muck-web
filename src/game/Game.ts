@@ -11,6 +11,7 @@ import { StructureView } from '../view/StructureView'
 import { autoSkin } from '../net/skins'
 import { loadCharacter } from '../view/characters'
 import { DecorView } from '../view/DecorView'
+import { FishView } from '../view/FishView'
 import { loadNature, type NatureModels } from '../view/nature'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
@@ -121,6 +122,7 @@ export class Game {
   readonly pickupView = new PickupView()
   readonly projectileView = new ProjectileView()
   readonly meteorView = new MeteorView()
+  readonly fishView = new FishView()
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView(loadCharacter)
   readonly settings: Settings = loadSettings()
@@ -215,7 +217,7 @@ export class Game {
       (error) => console.warn('No se han podido cargar los modelos de naturaleza', error),
     )
     this.structureView = new StructureView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.remotePlayers.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.fishView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
@@ -674,8 +676,12 @@ export class Game {
     this.propView.present(events)
     this.enemyView.present(events)
     this.remotePlayers.present(events)
+    this.fishView.present(events)
     for (const e of events) {
       switch (e.type) {
+        case 'fishAppeared':
+          if (e.id === slot.id) this.hud.showBanner('¡Un pez te ronda! Sal del agua')
+          break
         case 'playerHurt':
           if (e.id === slot.id) this.hud.flashHurt()
           break
@@ -779,6 +785,7 @@ export class Game {
         case 'playerAte':
         case 'playerCrafted':
         case 'playerDropped':
+        case 'fishAppeared':
           return playerAt(e.id)
         default:
           return null
@@ -935,6 +942,7 @@ export class Game {
     this.pickupView.reset()
     this.projectileView.reset()
     this.meteorView.reset()
+    this.fishView.reset()
     this.structureView.reset()
     this.remotePlayers.reset()
     this.audio.reset()
@@ -988,6 +996,7 @@ export class Game {
     this.pickupView.update(sim.pickups.list, alpha)
     this.projectileView.update(dt, sim.projectiles.list, alpha)
     this.meteorView.update(dt, sim.worldEvents.meteor, net ? net.client.renderTick() : sim.tick)
+    this.fishView.update(dt, sim.fishes.list, (id) => (id === slot.id ? this.renderPos : (net?.client.shownPlayers.find((p) => p.id === id)?.pose ?? null)))
     this.propView.update(dt)
     this.propView.updateLod(this.camera.position)
     this.decor?.update(this.camera.position)

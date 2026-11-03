@@ -44,7 +44,8 @@ import { putInto, takeFrom } from './stations'
 import { hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight, NIGHT_LENGTH } from './world/daycycle'
-import { createIsland, DEFAULT_ISLAND, type Island } from './world/island'
+import { createIsland, DEFAULT_ISLAND, inLake, type Island } from './world/island'
+import { Fishes, type FishState } from './fish'
 import { WORLD_SEED } from './random'
 import { WorldEvents, type WorldEventsState } from './worldEvents'
 
@@ -112,6 +113,8 @@ export interface SimState {
   projectiles: ProjectilesState
   structures: StructuresState
   worldEvents: WorldEventsState
+  /** Las partidas guardadas antes del pez no lo traen. */
+  fish?: FishState
   threat: ThreatState
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
@@ -151,6 +154,8 @@ export class Simulation {
   worldEvents!: WorldEvents
   /** Cuánto han subido los mobs. */
   readonly threat = new Threat()
+  /** Los peces del mar, detrás de quien nada lejos de la orilla. */
+  readonly fishes: Fishes
   /** Lo que ocupa sitio en la isla: props, estructuras y la roca del meteorito. */
   obstacles!: SpatialGrid<Collider>[]
   interaction!: Interaction
@@ -182,6 +187,7 @@ export class Simulation {
   constructor(seed: number, placements?: readonly PropPlacement[], island: Island = DEFAULT_ISLAND) {
     this.rng = mulberry32(seed)
     this.structures = new Structures(this.events.emit)
+    this.fishes = new Fishes(this.events.emit)
     // El mismo objeto con cualquier isla: la predicción del cliente se lo guarda.
     this.env = {
       heightAt: (x, z) => this.island.heightAt(x, z),
@@ -341,6 +347,13 @@ export class Simulation {
     const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
     hits.push(...this.worldEvents.step(this.tick, prey, this.clock.phase, this.clock.day, this.clock.eternal))
+    // Muerde desde abajo: tampoco se para.
+    hits.push(
+      ...this.fishes.step(
+        STEP,
+        present.map(({ id, player, alive, shieldUntil }) => ({ id, alive: alive && this.tick >= shieldUntil, inSea: player.floating && !inLake(this.island, player.pos.x, player.pos.z) })),
+      ),
+    )
     // Golpe a golpe, por si el escudo para unos y otros no; el aviso, uno por jugador y paso.
     const taken = new Map<PlayerId, { dmg: number; blocked: number }>()
     for (const { playerId, damage, from } of hits) {
@@ -434,6 +447,7 @@ export class Simulation {
     this.projectiles.clear()
     this.structures.clear()
     this.worldEvents.reset()
+    this.fishes.reset()
     this.threat.reset()
     for (const slot of this.players.values()) {
       slot.inventory.clear()
@@ -507,6 +521,7 @@ export class Simulation {
       projectiles: this.projectiles.save(),
       structures: this.structures.save(),
       worldEvents: this.worldEvents.save(),
+      fish: this.fishes.save(),
       threat: this.threat.save(),
       players: [...this.players.values()]
         .sort((a, b) => a.id - b.id)
@@ -551,6 +566,7 @@ export class Simulation {
     this.projectiles.load(state.projectiles)
     this.structures.load(state.structures)
     this.worldEvents.load(state.worldEvents)
+    if (state.fish) this.fishes.load(state.fish)
     this.threat.load(state.threat)
     this.players.clear()
     for (const saved of state.players) {

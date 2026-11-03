@@ -13,6 +13,9 @@ export interface Island extends Terrain, Biomes {
   readonly seed: number
 }
 
+/** Si (x, z) cae en un lago: el agua de dentro, que no es mar. */
+export const inLake = (island: Island, x: number, z: number) => island.lakes.some((lake) => Math.hypot(x - lake.x, z - lake.z) < lake.radius)
+
 /** La de siempre (WORLD_SEED): la de las pruebas, y la que se usa mientras no hay otra. */
 export const DEFAULT_ISLAND: Island = { seed: WORLD_SEED, ...DEFAULT_TERRAIN, ...DEFAULT_BIOMES }
 

@@ -352,6 +352,7 @@ export function installDebug(game: Game) {
     island: () => sim().island.seed,
     /** La escena, para medir qué cuesta cada cosa (ocultándola y con `renderCost`). */
     scene: () => game.scene,
+    camera: () => game.camera,
     /** Los lagos de la isla de la partida (centro y radio). */
     lakes: () => sim().island.lakes,
     clock: () => ({ day: sim().clock.day, phase: sim().clock.phase }),

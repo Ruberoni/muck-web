@@ -91,7 +91,7 @@ const SNAP_TICKS = 3
 const spinOf = (id: number) => (id * 2.39996) % (2 * Math.PI)
 
 /** Lo que el jugador local ya ha presentado al predecirlo: el servidor se lo repite, pero no se presenta otra vez. */
-const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerAte', 'playerCrafted', 'playerPlaced', 'playerDropped'])
+const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerAte', 'playerCrafted', 'playerPlaced', 'playerDropped', 'playerEquipped'])
 
 /** Un evento que trata del jugador `me` (lo que le pasa o lo que ha provocado), o del mundo entero. */
 function concerns(e: SimEvent, me: PlayerId): boolean {
@@ -102,7 +102,11 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
     case 'playerCrafted':
     case 'playerPlaced':
     case 'playerDropped':
+    case 'playerEquipped':
     case 'playerHurt':
+    case 'fishAppeared':
+    case 'fishBite':
+    case 'fishLeft':
     case 'playerDied':
     case 'playerRespawn':
       return e.id === me
@@ -560,6 +564,8 @@ export class NetClient {
     sim.projectiles.load(state.projectiles)
     sim.worldEvents.load(state.worldEvents)
     sim.threat.load(state.threat)
+    if (state.fish) sim.fishes.load(state.fish)
+    else sim.fishes.reset()
     this.worldStartTick = state.worldStartTick
     this.pickups.clear()
     for (const p of state.pickups.list) {
@@ -583,6 +589,12 @@ export class NetClient {
         break
       case 'propDestroyed':
         sim.world.props[e.id].alive = false
+        break
+      case 'fishAppeared':
+        sim.fishes.appeared(e.id)
+        break
+      case 'fishLeft':
+        sim.fishes.left(e.id)
         break
       case 'structurePlaced':
         sim.structures.add({ id: e.id, kind: e.kind, x: e.x, y: e.y, z: e.z, rotY: e.rotY })

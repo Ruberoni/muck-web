@@ -3,6 +3,7 @@ import { Room, MemoryStorage, ABSENT_MS } from '../../server/room'
 import { Btn, type ActionData } from '../sim/commands'
 import { EYE_HEIGHT, MAX_PITCH } from '../sim/constants'
 import { RECIPE_IDS } from '../sim/crafting'
+import { FISH_DELAY } from '../sim/fish'
 import { putInto } from '../sim/stations'
 import { aimPose } from '../sim/interaction'
 import { quickProps } from '../sim/quickProps'
@@ -502,6 +503,25 @@ describe('el espejo de NetClient', () => {
     run(time, 1000, [[a, idle], [b, idle]])
     expect(b.shownPlayers.find((p) => p.id === a.id)!.data).toMatchObject({ shield: 'iron_shield', blocking: false })
     expect(a.predictor!.stats.corrections).toBe(0)
+  })
+
+  it('el pez: los espejos saben a quién ronda y cuándo se va, y quien entra después también', () => {
+    const { room, time, connect } = setup()
+    const { client: a } = connect('a', 'create')
+    const { client: b } = connect('b')
+    run(time, 1000, [[a, idle], [b, idle]])
+    const sim = room.sim!
+    // Lejos de la orilla, en el mar.
+    sim.teleport(a.id, 0, 94, 0, 0)
+    run(time, (FISH_DELAY + 1) * 1000, [[a, idle], [b, idle]])
+    expect(sim.fishes.list.map((f) => f.target)).toEqual([a.id])
+    for (const c of [a, b]) expect(c.sim!.fishes.list.map((f) => f.target)).toEqual([a.id])
+    const { client: late } = connect('c')
+    run(time, 500, [[a, idle], [b, idle], [late, idle]])
+    expect(late.sim!.fishes.list.map((f) => f.target)).toEqual([a.id])
+    sim.teleport(a.id, sim.spawnCenter.x, sim.spawnCenter.z, 0, 0)
+    run(time, 500, [[a, idle], [b, idle], [late, idle]])
+    for (const c of [a, b, late]) expect(c.sim!.fishes.list).toEqual([])
   })
 
   it('la tumba: el espejo sabe cuándo se abre, y quien entra después también', () => {

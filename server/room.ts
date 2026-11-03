@@ -744,12 +744,12 @@ export class Room {
 
   private worldState(me: PlayerId): WorldState {
     const sim = this.sim!
-    const { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents, threat } = sim.toJSON()
+    const { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents, threat, fish } = sim.toJSON()
     const seats = new Map([...this.seats.values()].map((s) => [s.id, s]))
     const players = this.playerSnaps()
       .filter((p) => p.id !== me)
       .map((p) => ({ ...p, name: seats.get(p.id)?.name ?? '', skin: seats.get(p.id)?.skin ?? autoSkin(p.id) }))
-    return { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents, threat, players }
+    return { tick, worldStartTick, props, enemies, pickups, projectiles, structures, worldEvents, threat, fish, players }
   }
 
   private fullState(seat: Seat) {

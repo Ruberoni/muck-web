@@ -169,6 +169,10 @@ export class GameAudio {
         case 'playerEquipped':
           if (e.id === me) s.play('place')
           break
+        // El pez avisa antes de morder.
+        case 'fishAppeared':
+          if (e.id === me) s.play('growl')
+          break
         case 'playerAte':
           if (e.id === me) s.play('eat')
           break
@@ -242,6 +246,9 @@ export class GameAudio {
           break
         case 'playerHurt':
           at(e, REMOTE_HEARING.hurt, e.blocked ? 'clank' : 'hurt')
+          break
+        case 'fishAppeared':
+          at(e, REMOTE_HEARING.other, 'growl')
           break
         case 'playerAte':
           at(e, REMOTE_HEARING.other, 'eat')

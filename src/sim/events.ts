@@ -67,6 +67,10 @@ export type SimEventData =
   | { type: 'matchEnded'; result: MatchResult }
   /** Un meteorito: se anuncia (`landTick`: cuándo cae), cae, se enfría y desaparece. Ver `WorldEvents`. */
   | { type: 'meteorIncoming'; x: number; y: number; z: number; landTick: number }
+  /** Un pez va a por quien lleva rato nadando en el mar, le muerde y se va cuando sale (fish.ts). */
+  | { type: 'fishAppeared'; id: PlayerId }
+  | { type: 'fishBite'; id: PlayerId }
+  | { type: 'fishLeft'; id: PlayerId }
   | { type: 'meteorLanded'; x: number; y: number; z: number }
   | { type: 'meteorCooled'; day: number }
   | { type: 'meteorGone' }
