@@ -2,7 +2,7 @@ import { MOB_MAX_SPEED, NO_SCALING, type MobScaling } from './threat'
 import type { Biome } from './world/biomes'
 import { DEFAULT_ISLAND, type Island } from './world/island'
 import { DAY_FRACTION, DAY_LENGTH, isNight } from './world/daycycle'
-import { WATER_LEVEL, WORLD_SIZE } from './world/terrain'
+import { WATER_LEVEL } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import {
@@ -37,7 +37,6 @@ import {
   type WeaponClass,
 } from './constants'
 
-const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
 const SPAWN_ATTEMPTS = 12
 /** Noches que tarda un tipo nuevo en llegar a toda su probabilidad, desde la primera en que sale. */
 const SPAWN_RAMP = 3
@@ -422,9 +421,10 @@ export class Enemies {
     if (walkable(this.island, e.pos.x + mx, e.pos.z)) e.pos.x += mx
     if (walkable(this.island, e.pos.x, e.pos.z + mz)) e.pos.z += mz
     const r = Math.hypot(e.pos.x, e.pos.z)
-    if (r > BOUND) {
-      e.pos.x *= BOUND / r
-      e.pos.z *= BOUND / r
+    const bound = this.island.size * WORLD_BOUND_FACTOR
+    if (r > bound) {
+      e.pos.x *= bound / r
+      e.pos.z *= bound / r
     }
     this.settle(e, x, z)
   }
@@ -485,7 +485,7 @@ export class Enemies {
       const r = min + this.rng() * (max - min)
       const x = around.pos.x + Math.cos(angle) * r
       const z = around.pos.z + Math.sin(angle) * r
-      if (Math.hypot(x, z) > BOUND || this.island.heightAt(x, z) < WATER_LEVEL + 0.2) continue
+      if (Math.hypot(x, z) > this.island.size * WORLD_BOUND_FACTOR || this.island.heightAt(x, z) < WATER_LEVEL + 0.2) continue
       if (prey.some((p) => p !== around && Math.hypot(p.pos.x - x, p.pos.z - z) < min)) continue
       const type = pick(x, z)
       const pos = { x, z }

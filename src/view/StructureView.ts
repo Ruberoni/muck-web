@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { sunDirection } from '../world/daycycle'
 import { CAMPFIRE_LIGHT_DISTANCE, CAMPFIRE_LIGHT_INTENSITY, CAMPFIRE_LIGHTS } from '../sim/constants'
 import { STRUCTURE_DEFS, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
-import { WORLD_SIZE } from '../sim/world/terrain'
+import { ISLAND_SIZE } from '../sim/world/island'
 
 const LIGHT_HEIGHT = 0.8
 // De día la fogata casi no se nota: a pleno sol la luz baja a esta fracción.
@@ -66,14 +66,14 @@ const lighthouseStripeMaterial = new THREE.MeshStandardMaterial({ color: '#c2304
 const ruinMaterial = new THREE.MeshStandardMaterial({ color: '#8d8a80', flatShading: true })
 const lighthouseLampMaterial = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb13b', emissiveIntensity: 0.3, flatShading: true })
 // Dos conos opuestos que salen de la lámpara y giran: llegan de punta a punta de la isla, sea cual sea su tamaño.
-const BEAM_LENGTH = WORLD_SIZE
+const BEAM_LENGTH = ISLAND_SIZE
 const lighthouseBeamGeometry = new THREE.ConeGeometry(BEAM_LENGTH * 0.1, BEAM_LENGTH, 16, 1, true).rotateZ(Math.PI / 2).translate(BEAM_LENGTH / 2, 0, 0)
 const lighthouseBeamMaterial = new THREE.MeshBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending })
 const lighthouseGlowGeometry = new THREE.IcosahedronGeometry(4, 1)
 const lighthouseGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffd98a', transparent: true, opacity: 0.35, depthWrite: false, fog: false, blending: THREE.AdditiveBlending })
 /** Los haces bajan despacio y tocan el suelo lejos; la luz que recorre la isla con ellos cae más cerca, donde hay tierra. */
 const BEAM_TILT = Math.atan2(LAMP_HEIGHT, BEAM_LENGTH * 0.6)
-const BEAM_GROUND = WORLD_SIZE * 0.35
+const BEAM_GROUND = ISLAND_SIZE * 0.35
 const BEAM_SPREAD = 0.35
 const BEAM_LIGHT = 5
 const BEAM_TURN = 0.6

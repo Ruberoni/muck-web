@@ -2,6 +2,9 @@ import { WORLD_SEED } from '../random'
 import { biomesFor, DEFAULT_BIOMES, type Biomes } from './biomes'
 import { DEFAULT_TERRAIN, terrainFor, type Terrain } from './terrain'
 
+/** Lado de las islas de cada partida, en metros: la de siempre (WORLD_SIZE) es tres veces más pequeña. */
+export const ISLAND_SIZE = 600
+
 /**
  * Una isla: su semilla, su terreno y sus biomas. Cada partida tiene la suya (los props salen de ella, ver props.ts), y
  * todo lo que mira el suelo la recibe en vez de una isla fija.
@@ -13,8 +16,9 @@ export interface Island extends Terrain, Biomes {
 /** La de siempre (WORLD_SEED): la de las pruebas, y la que se usa mientras no hay otra. */
 export const DEFAULT_ISLAND: Island = { seed: WORLD_SEED, ...DEFAULT_TERRAIN, ...DEFAULT_BIOMES }
 
+/** La isla de semilla `seed` (de ISLAND_SIZE de lado; la de WORLD_SEED es la de siempre). */
 export function createIsland(seed: number): Island {
   if (seed === WORLD_SEED) return DEFAULT_ISLAND
-  const terrain = terrainFor(seed)
+  const terrain = terrainFor(seed, ISLAND_SIZE)
   return { seed, ...terrain, ...biomesFor(seed, terrain) }
 }

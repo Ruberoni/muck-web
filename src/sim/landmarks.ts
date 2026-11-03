@@ -1,14 +1,14 @@
 import type { Collider, SpatialGrid } from './collision'
 import { DEFAULT_ISLAND, type Island } from './world/island'
-import { MAX_SLOPE, WORLD_SIZE } from './world/terrain'
+import { MAX_SLOPE } from './world/terrain'
 
 /** Radios de lo que ya viene puesto en la isla: los usan la colisión y la búsqueda de sitio. */
 export const LIGHTHOUSE_RADIUS = 6.2
 export const TOTEM_RADIUS = 3.4
 /** Cada cuánto se mira el mapa buscando sitio: crece con él, para que la búsqueda cueste lo mismo. */
-const SEARCH_STEP = WORLD_SIZE / 100
+const searchStep = (island: Island) => island.size / 100
 /** Hasta dónde se busca: donde se colocan los props. */
-const SEARCH_RADIUS = WORLD_SIZE * 0.45
+const searchRadius = (island: Island) => island.size * 0.45
 /** Hueco libre alrededor de lo colocado y distancia mínima al punto de aparición. */
 const CLEARANCE = 1.5
 const SPAWN_GAP = 12
@@ -29,9 +29,11 @@ const isClear = (grid: SpatialGrid<Collider>, x: number, z: number, radius: numb
 function bestSpot(island: Island, grid: SpatialGrid<Collider>, radius: number, score: (x: number, z: number) => number | null): Spot | null {
   let best: Spot | null = null
   let bestScore = -Infinity
-  for (let x = -SEARCH_RADIUS; x <= SEARCH_RADIUS; x += SEARCH_STEP) {
-    for (let z = -SEARCH_RADIUS; z <= SEARCH_RADIUS; z += SEARCH_STEP) {
-      if (Math.hypot(x, z) > SEARCH_RADIUS || island.slopeAt(x, z) > MAX_SLOPE) continue
+  const reach = searchRadius(island)
+  const step = searchStep(island)
+  for (let x = -reach; x <= reach; x += step) {
+    for (let z = -reach; z <= reach; z += step) {
+      if (Math.hypot(x, z) > reach || island.slopeAt(x, z) > MAX_SLOPE) continue
       const value = score(x, z)
       if (value === null || value <= bestScore || !isClear(grid, x, z, radius + CLEARANCE)) continue
       best = { x, z }

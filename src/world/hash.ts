@@ -1,6 +1,6 @@
 import type * as THREE from 'three'
 import { DEFAULT_ISLAND } from '../sim/world/island'
-import { WORLD_SIZE, type Terrain } from '../sim/world/terrain'
+import type { Terrain } from '../sim/world/terrain'
 
 const SAMPLE_GRID = 16
 
@@ -15,10 +15,11 @@ export function computeWorldHash(instances: THREE.InstancedMesh[], terrain: Terr
   for (const mesh of instances) feed(mesh.instanceMatrix.array.subarray(0, mesh.count * 16) as Float32Array)
 
   const samples = new Float32Array(SAMPLE_GRID * SAMPLE_GRID)
-  const step = WORLD_SIZE / SAMPLE_GRID
+  const { size } = terrain
+  const step = size / SAMPLE_GRID
   for (let i = 0; i < SAMPLE_GRID; i++) {
     for (let j = 0; j < SAMPLE_GRID; j++) {
-      samples[i * SAMPLE_GRID + j] = terrain.heightAt(-WORLD_SIZE / 2 + i * step, -WORLD_SIZE / 2 + j * step)
+      samples[i * SAMPLE_GRID + j] = terrain.heightAt(-size / 2 + i * step, -size / 2 + j * step)
     }
   }
   feed(samples)

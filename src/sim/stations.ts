@@ -57,8 +57,8 @@ export const STATION_DEFS: Partial<Record<StructureKind, StationDef>> = {
   },
 }
 
-/** Segundos que arde una unidad de cada combustible: la madera da para fundir un lingote de hierro. */
-export const FUEL_SECONDS: Partial<Record<ItemId, number>> = { wood: 15, coal: 60 }
+/** Segundos que arde una unidad de cada combustible: la madera da para fundir un lingote de hierro, y la seca, para dos. */
+export const FUEL_SECONDS: Partial<Record<ItemId, number>> = { wood: 15, dry_wood: 30, coal: 60 }
 
 /** Lo que cabe en cada ranura. */
 export const STATION_STACK = 99

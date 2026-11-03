@@ -9,7 +9,7 @@ import { biomeBlend, terrainColor } from '../world/ground'
 import type { NatureModels } from './nature'
 
 /** Hasta dónde se dibuja la decoración alrededor de la cámara: más allá no se distingue y solo costaría. */
-export const DECOR_RADIUS = 50
+export const DECOR_RADIUS = 40
 /** Cuánto tiene que moverse la cámara para volver a elegir qué se dibuja. */
 const DECOR_STEP = 4
 /** Siempre la misma: la decoración no es de la partida y sale igual en todos los clientes. */
@@ -54,11 +54,14 @@ export function scatterDecor(placements: readonly PropPlacement[], island: Islan
   const props = new SpatialGrid<Collider>()
   for (const { x, z, radius } of placements) props.insert({ x, z, radius, alive: true })
   const dummy = new THREE.Object3D()
+  // Lo mismo por metro cuadrado en cualquier isla.
+  const area = (island.size / WORLD_SIZE) ** 2
   return DECOR.map((def) => {
     const byModel: DecorItem[][] = def.models.map(() => [])
-    for (let tries = 0, placed = 0; placed < def.count && tries < def.count * 20; tries++) {
-      const x = (rng() - 0.5) * WORLD_SIZE
-      const z = (rng() - 0.5) * WORLD_SIZE
+    const count = Math.round(def.count * area)
+    for (let tries = 0, placed = 0; placed < count && tries < count * 20; tries++) {
+      const x = (rng() - 0.5) * island.size
+      const z = (rng() - 0.5) * island.size
       const model = Math.floor(rng() * def.models.length)
       const s = def.scale[0] + rng() * (def.scale[1] - def.scale[0])
       const turn = rng() * Math.PI * 2

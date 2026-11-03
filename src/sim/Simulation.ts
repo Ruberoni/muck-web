@@ -19,6 +19,7 @@ import {
   PLANE_REPAIR_WOOD,
   TOTEM_HOLD,
   PLAYER_RADIUS,
+  WORLD_BOUND_FACTOR,
   RESPAWN_DAY_DELAY,
   RESPAWN_LIGHTHOUSE_DELAY,
   RESPAWN_SHIELD,
@@ -185,6 +186,7 @@ export class Simulation {
     this.env = {
       heightAt: (x, z) => this.island.heightAt(x, z),
       collide: (pos) => this.obstacles.reduce((touched, grid) => resolveCircle(pos, PLAYER_RADIUS, grid) || touched, false),
+      bound: () => this.island.size * WORLD_BOUND_FACTOR,
     }
     this.build(island, placements ?? generatePropPlacements(island))
   }
@@ -357,7 +359,7 @@ export class Simulation {
     }
     for (const [id, { dmg, blocked }] of taken) this.events.emit({ type: 'playerHurt', id, dmg, ...(blocked > 0 ? { blocked } : {}) })
 
-    growBerries(this.world.props, STEP, this.events.emit)
+    growBerries(this.world.regrowing, STEP, this.events.emit)
     this.structures.burn(STEP, this.oilUnit, isNight(this.clock.phase))
     this.warmPlane(living)
     this.structures.step(STEP, workFactor(this.rules))

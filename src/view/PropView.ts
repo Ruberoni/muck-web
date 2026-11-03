@@ -130,6 +130,11 @@ const PARTS: Record<PropKind, Part[]> = {
     { geometry: trunkGeometry, material: material('#4a3626') },
     { geometry: foliageGeometry, material: material('#1b3a24') },
   ],
+  // Sin hojas: la copa de siempre, del color de las ramas secas, hasta que llega su modelo.
+  deadtree: [
+    { geometry: trunkGeometry, material: material('#8a7a68') },
+    { geometry: foliageGeometry, material: material('#6b5c4b') },
+  ],
   rock: [{ geometry: rockGeometry, material: material('#9a978a') }],
   iron_ore: [
     { geometry: rockGeometry, material: material('#7b7268') },
@@ -166,6 +171,7 @@ const MODELS: Partial<Record<PropKind, { pieces: string[]; variants: number }>> 
   coal_ore: { pieces: ['rock_{v}', 'crystals_{v}'], variants: 3 },
   crystal_ore: { pieces: ['rock_{v}', 'crystals_{v}'], variants: 3 },
   bush: { pieces: ['bush_{v}'], variants: 3 },
+  deadtree: { pieces: ['dead_tree_{v}'], variants: 3 },
 }
 /** Las piezas de los modelos que usan los props, de todas sus variantes (scripts/nature.test.ts mira que estén). */
 export const MODEL_PIECES: readonly string[] = Object.values(MODELS).flatMap(({ pieces, variants }) =>
@@ -174,9 +180,18 @@ export const MODEL_PIECES: readonly string[] = Object.values(MODELS).flatMap(({ 
 
 /** A partir de aquí (en metros, en horizontal) se dibuja la versión simplificada, sin sombra; con margen para no parpadear. */
 export const LOD_DISTANCE = 55
+/** Y desde aquí no se dibuja: la niebla más lejana (daycycle.ts) ya lo tapa entero. */
+export const CULL_DISTANCE = 330
 const LOD_MARGIN = 4
 /** Cuánto tiene que moverse la cámara para volver a mirar qué se ve de cerca. */
 const LOD_STEP = 3
+
+/** 0 de cerca, 1 de lejos y 2 tapado por la niebla, a `distance`; con margen respecto a `band`, la que tenía. */
+function bandAt(distance: number, band: number): 0 | 1 | 2 {
+  const near = LOD_DISTANCE + (band === 0 ? LOD_MARGIN : -LOD_MARGIN)
+  const fog = CULL_DISTANCE + (band === 2 ? -LOD_MARGIN : LOD_MARGIN)
+  return distance < near ? 0 : distance < fog ? 1 : 2
+}
 
 /** La variante de un prop: la misma en todos los clientes, repartida sin seguir el orden de los ids. */
 const variantOf = (id: number, variants: number) => ((Math.imul(id, 2654435761) >>> 0) % variants)
@@ -193,8 +208,18 @@ export interface PropInstance {
   base: THREE.Matrix4
   /** Solo en lo que se recoge: número de baya. Se ve mientras sea menor que las bayas que le quedan. */
   berry?: number
-  /** Solo en los modelos: 0 de cerca y 1 de lejos. Se ve el que toca por la distancia (`updateLod`). */
+  /**
+   * Solo en los modelos: 0 de cerca y 1 de lejos. Se ve el que toca por la distancia (`updateLod`); el otro tiene `index`
+   * -1, porque cada mesh solo lleva lo que se ve, junto al principio.
+   */
   lod?: 0 | 1
+}
+
+/** Un modelo de un tipo, de cerca y de lejos, y los props que dibuja. */
+interface ModelGroup {
+  near: THREE.InstancedMesh
+  far: THREE.InstancedMesh
+  props: { id: number; near: PropInstance; far: PropInstance }[]
 }
 
 function createInstanced(geometry: THREE.BufferGeometry, material: THREE.Material, count: number) {
@@ -230,6 +255,7 @@ export class PropView {
   readonly placements: readonly PropPlacement[]
   /** Con los modelos: los meshes que se han añadido, qué versión se ve de cada prop y desde dónde se miró. */
   private modelMeshes: THREE.InstancedMesh[] = []
+  private modelGroups: ModelGroup[] = []
   private modelMaterials: THREE.Material[] = []
   private band: Uint8Array
   private modelled: number[] = []
@@ -305,20 +331,19 @@ export class PropView {
           const near = createInstanced(models.get(name)!, materials[part], ofVariant.length)
           const far = createInstanced(models.get(`${name}_far`) ?? models.get(name)!, materials[part], ofVariant.length)
           far.castShadow = false
-          ofVariant.forEach((p, index) => {
+          const group: ModelGroup = { near, far, props: [] }
+          for (const p of ofVariant) {
             dummy.position.set(p.x, p.y, p.z)
             dummy.rotation.set(p.rotX, p.rotY, 0)
             dummy.scale.set(p.scaleX, p.scaleY, p.scaleZ)
             dummy.updateMatrix()
-            for (const [lod, mesh] of [near, far].entries() as IterableIterator<[0 | 1, THREE.InstancedMesh]>) {
-              // Leída de vuelta (Float32), como las de siempre: restaurarla es exacto.
-              const base = new THREE.Matrix4()
-              mesh.setMatrixAt(index, dummy.matrix)
-              mesh.getMatrixAt(index, base)
-              mesh.setMatrixAt(index, HIDDEN)
-              this.instances[p.id].push({ mesh, index, base, lod })
-            }
-          })
+            // En Float32, como queda en el mesh: restaurarla es exacto.
+            const base = new THREE.Matrix4().fromArray(Float32Array.from(dummy.matrix.elements))
+            const entry = { id: p.id, near: { mesh: near, index: -1, base, lod: 0 as const }, far: { mesh: far, index: -1, base, lod: 1 as const } }
+            group.props.push(entry)
+            this.instances[p.id].push(entry.near, entry.far)
+          }
+          this.modelGroups.push(group)
           this.modelMeshes.push(near, far)
         })
       }
@@ -330,7 +355,7 @@ export class PropView {
         if (firstFruit === undefined || part < firstFruit) this.byKind[kind][part].visible = false
       })
     }
-    for (const id of this.modelled) if (!this.destroyed[id]) this.showBand(id)
+    this.packModels()
     this.group.add(...this.modelMeshes)
   }
 
@@ -341,22 +366,40 @@ export class PropView {
   updateLod(camera: { x: number; z: number }) {
     if (!this.modelled.length || (this.lodFrom && Math.hypot(camera.x - this.lodFrom.x, camera.z - this.lodFrom.z) < LOD_STEP)) return
     this.lodFrom = { x: camera.x, z: camera.z }
+    let changed = false
     for (const id of this.modelled) {
       const p = this.placements[id]
       const distance = Math.hypot(p.x - camera.x, p.z - camera.z)
-      const band = this.band[id] === 0 ? (distance > LOD_DISTANCE + LOD_MARGIN ? 1 : 0) : distance < LOD_DISTANCE - LOD_MARGIN ? 0 : 1
+      const band = bandAt(distance, this.band[id])
       if (band === this.band[id]) continue
       this.band[id] = band
-      if (!this.destroyed[id]) this.showBand(id)
+      changed = true
     }
+    if (changed) this.packModels()
   }
 
-  /** Enseña la versión de los modelos que toca y oculta la otra. */
-  private showBand(id: number) {
-    for (const { mesh, index, base, lod } of this.instances[id]) {
-      if (lod === undefined) continue
-      mesh.setMatrixAt(index, lod === this.band[id] ? base : HIDDEN)
-      mesh.instanceMatrix.needsUpdate = true
+  /**
+   * Reparte cada prop con modelo en su mesh de cerca o de lejos, juntos al principio, y deja fuera lo roto y lo que tapa
+   * la niebla: una instancia
+   * oculta también pasa por la GPU, así que cada mesh dibuja solo las que se ven (`count`).
+   */
+  private packModels() {
+    for (const { near, far, props } of this.modelGroups) {
+      let n = 0
+      let m = 0
+      for (const entry of props) {
+        const shown = !this.destroyed[entry.id]
+        entry.near.index = shown && this.band[entry.id] === 0 ? n++ : -1
+        entry.far.index = shown && this.band[entry.id] === 1 ? m++ : -1
+        for (const instance of [entry.near, entry.far]) if (instance.index >= 0) instance.mesh.setMatrixAt(instance.index, instance.base)
+      }
+      near.count = n
+      far.count = m
+      for (const mesh of [near, far]) {
+        mesh.instanceMatrix.needsUpdate = true
+        // Lo que se ve ha cambiado: su esfera (para descartar lo que queda fuera de la cámara) se vuelve a calcular.
+        mesh.boundingSphere = null
+      }
     }
   }
 
@@ -401,7 +444,7 @@ export class PropView {
       for (const instance of this.instances[id]) {
         // Las bayas ya recogidas siguen ocultas durante el wobble, y la versión del modelo que no toca también.
         if (instance.berry !== undefined && instance.berry >= this.berries[id]) continue
-        if (instance.lod !== undefined && instance.lod !== this.band[id]) continue
+        if (instance.index < 0) continue
         const { mesh, index, base } = instance
         this.scratch.makeScale(1 + a, 1 - a * 0.5, 1 + a).premultiply(base)
         mesh.setMatrixAt(index, this.scratch)
@@ -417,10 +460,11 @@ export class PropView {
     this.wobbles.clear()
     this.berries.fill(BERRIES_PER_BUSH)
     this.destroyed.fill(0)
-    this.instances.forEach((instances, id) => {
-      for (const { mesh, index, base, lod } of instances) mesh.setMatrixAt(index, lod === undefined || lod === this.band[id] ? base : HIDDEN)
-    })
-    for (const mesh of [...this.allMeshes, ...this.modelMeshes]) mesh.instanceMatrix.needsUpdate = true
+    for (const instances of this.instances) {
+      for (const { mesh, index, base, lod } of instances) if (lod === undefined) mesh.setMatrixAt(index, base)
+    }
+    for (const mesh of this.allMeshes) mesh.instanceMatrix.needsUpdate = true
+    this.packModels()
   }
 
   /** Los props como dice un estado completo (al entrar en una sala o volver de la pausa en red), sin animar. */
@@ -450,10 +494,13 @@ export class PropView {
     // Cancelar la animación antes de ocultar: si no, restauraría la escala y el prop "reviviría".
     this.wobbles.delete(id)
     this.destroyed[id] = 1
-    for (const { mesh, index } of this.instances[id]) {
+    for (const { mesh, index, lod } of this.instances[id]) {
+      if (lod !== undefined) continue
       mesh.setMatrixAt(index, HIDDEN)
       mesh.instanceMatrix.needsUpdate = true
     }
+    // El de los modelos deja de dibujarse.
+    if (this.modelGroups.length) this.packModels()
   }
 
   /** Deja `count` bayas visibles; solo toca las que cambian. */

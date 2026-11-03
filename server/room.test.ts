@@ -252,6 +252,8 @@ describe('Room por partidas', () => {
     time.advance(0)
     const first = room.sim!.island.seed
     expect(a.welcome.island).toBe(first)
+    // Una isla grande son miles de props: en tuplas, el welcome entero sigue por debajo de esto (comprimido, mucho menos).
+    expect(a.raw.find((m) => m.includes('"welcome"'))!.length).toBeLessThan(200 * 1024)
     a.send({ type: 'start', difficulty: 'normal' })
     time.advance(0)
     const island = room.sim!.island.seed

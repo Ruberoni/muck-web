@@ -18,6 +18,9 @@ import {
   type RejectReason,
   type ServerMessage,
   type SnapWire,
+  type StateWire,
+  type WelcomeWire,
+  placementTuple,
   type WorldState,
   type You,
 } from '../src/net/protocol'
@@ -331,7 +334,7 @@ export class Room {
       serverTick: sim.tick,
       worldStartTick: sim.startTick,
       island: sim.island.seed,
-      placements: sim.world.placements,
+      placements: sim.world.placements.map(placementTuple),
       state: this.worldState(seat.id),
       you: own,
       match: this.matchInfo(),
@@ -753,7 +756,7 @@ export class Room {
     const sim = this.sim!
     const own = you(this.slotOf(seat))
     seat.sentInventory = JSON.stringify(own.inventory)
-    const island = seat.sentIsland === sim.island.seed ? {} : { island: { seed: sim.island.seed, placements: sim.world.placements } }
+    const island = seat.sentIsland === sim.island.seed ? {} : { island: { seed: sim.island.seed, placements: sim.world.placements.map(placementTuple) } }
     seat.sentIsland = sim.island.seed
     return { ...island, tick: sim.tick, worldStartTick: sim.startTick, state: this.worldState(seat.id), you: own }
   }
@@ -795,7 +798,7 @@ export class Room {
     }))
   }
 
-  private send(conn: Conn, msg: ServerMessage) {
+  private send(conn: Conn, msg: ServerMessage | WelcomeWire | StateWire) {
     conn.send(JSON.stringify(msg))
   }
 

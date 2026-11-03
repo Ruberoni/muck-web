@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { islandProblems, pickIsland } from './islands'
-import { findSpawn, createPropWorld, generatePropPlacements } from './props'
+import { FLOAT_DEPTH, PROP_DEFS, WORLD_BOUND_FACTOR } from './constants'
+import { findSpawn, createPropWorld, generatePropPlacements, PROP_COUNTS, propCounts, type PropKind } from './props'
+import { FUEL_SECONDS } from './stations'
+import { WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import { Simulation } from './Simulation'
-import { createIsland, DEFAULT_ISLAND } from './world/island'
+import { createIsland, DEFAULT_ISLAND, ISLAND_SIZE } from './world/island'
 
 const SEEDS = [1, 2, 3, 42, 777, 2026, 31337, 0xdeadbeef]
 
@@ -54,5 +57,60 @@ describe('islas aleatorias', () => {
     const copy = Simulation.fromJSON(JSON.parse(JSON.stringify(sim.toJSON())))
     expect(copy.island.seed).toBe(island.seed)
     expect(copy.world.placements).toEqual(sim.world.placements)
+  })
+})
+
+describe('islas de partida', () => {
+  const island = pickIsland(11)
+
+  it('miden ISLAND_SIZE, el triple que la de siempre, y tienen más de todo', () => {
+    expect(island.size).toBe(ISLAND_SIZE)
+    expect(DEFAULT_ISLAND.size).toBe(WORLD_SIZE)
+    const counts = propCounts(island)
+    for (const [kind, count] of Object.entries(PROP_COUNTS)) expect(counts[kind as PropKind], kind).toBeGreaterThan(count * 4)
+    // Y la de siempre no cambia.
+    expect(propCounts(DEFAULT_ISLAND)).toEqual(PROP_COUNTS)
+  })
+
+  it('tienen lagos tierra adentro, que se vadean casi enteros y no tocan el mar', () => {
+    expect(island.lakes.length).toBeGreaterThanOrEqual(3)
+    expect(DEFAULT_ISLAND.lakes).toEqual([])
+    for (const lake of island.lakes) {
+      let wet = 0
+      let wadeable = 0
+      for (let i = 0; i < 200; i++) {
+        const a = i * 2.4
+        const r = Math.sqrt((i + 0.5) / 200) * lake.radius * 0.55
+        const h = island.heightAt(lake.x + Math.cos(a) * r, lake.z + Math.sin(a) * r)
+        if (h < WATER_LEVEL) wet++
+        if (h > WATER_LEVEL - FLOAT_DEPTH) wadeable++
+      }
+      expect(wet).toBe(200)
+      expect(wadeable / 200).toBeGreaterThan(0.6)
+      // La orilla, en tierra.
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2
+        expect(island.heightAt(lake.x + Math.cos(a) * lake.radius * 1.2, lake.z + Math.sin(a) * lake.radius * 1.2)).toBeGreaterThan(WATER_LEVEL)
+      }
+    }
+  })
+
+  it('se llega hasta casi el borde, y nada más', () => {
+    const sim = new Simulation(1, undefined, island)
+    const slot = sim.addPlayer(0)
+    expect(sim.env.bound!()).toBeCloseTo(ISLAND_SIZE * WORLD_BOUND_FACTOR, 6)
+    sim.teleport(0, ISLAND_SIZE, 0, Math.PI / 2, 0)
+    for (let i = 0; i < 10; i++) sim.step(new Map())
+    expect(Math.hypot(slot.player.pos.x, slot.player.pos.z)).toBeLessThanOrEqual(ISLAND_SIZE * WORLD_BOUND_FACTOR + 1e-6)
+  })
+
+  it('el árbol muerto sale en la playa y la montaña y da madera seca, que arde el doble', () => {
+    const dead = generatePropPlacements(island).filter((p) => p.kind === 'deadtree')
+    expect(dead).toHaveLength(propCounts(island).deadtree)
+    const biomes = new Set(dead.map((p) => island.biomeAt(p.x, p.z)))
+    expect([...biomes].every((b) => b !== 'forest')).toBe(true)
+    expect(biomes.has('beach') || biomes.has('mountain')).toBe(true)
+    expect(PROP_DEFS.deadtree).toMatchObject({ tool: 'axe', tier: 2, drop: { item: 'dry_wood' } })
+    expect(FUEL_SECONDS.dry_wood).toBe(FUEL_SECONDS.wood! * 2)
   })
 })

@@ -1,5 +1,5 @@
 import { findLandmarks } from './landmarks'
-import { createPropWorld, findSpawn, generatePropPlacements, PROP_COUNTS, type PropKind } from './props'
+import { createPropWorld, findSpawn, generatePropPlacements, propCounts, type PropKind } from './props'
 import { mulberry32 } from './random'
 import { createIsland, DEFAULT_ISLAND, type Island } from './world/island'
 import { MAX_SLOPE, SAND_LEVEL } from './world/terrain'
@@ -19,7 +19,7 @@ export function islandProblems(island: Island): string[] {
   const placements = generatePropPlacements(island)
   const counts = new Map<PropKind, number>()
   for (const { kind } of placements) counts.set(kind, (counts.get(kind) ?? 0) + 1)
-  for (const [kind, count] of Object.entries(PROP_COUNTS) as [PropKind, number][]) {
+  for (const [kind, count] of Object.entries(propCounts(island)) as [PropKind, number][]) {
     if ((counts.get(kind) ?? 0) < count) problems.push(`solo caben ${counts.get(kind) ?? 0} de ${count} ${kind}`)
   }
   const { grid } = createPropWorld(placements)

@@ -1,10 +1,10 @@
 import { PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import type { Emit } from './events'
-import { createBirchRng, createCoalOreRng, createCrystalOreRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
+import { createBirchRng, createCoalOreRng, createCrystalOreRng, createDeadTreeRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
 import { BIOME_FLORA } from './world/biomes'
 import { DEFAULT_ISLAND, type Island } from './world/island'
-import { MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, WORLD_SIZE } from './world/terrain'
+import { MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 
 const TREE_COUNT = 180
 const ROCK_COUNT = 60
@@ -16,6 +16,7 @@ export const MITHRIL_ORE_COUNT = 16
 export const HERB_COUNT = 30
 export const COAL_ORE_COUNT = 30
 export const CRYSTAL_ORE_COUNT = 12
+export const DEADTREE_COUNT = 24
 /** Las rocas llegan hasta la arena; el resto de lo que crece en el suelo, solo hasta la hierba. */
 const ROCK_MIN_HEIGHT = 0.4
 /** Franjas de altura del terreno (en el centro) de algunos tipos: las de las menas no se solapan entre sí. */
@@ -61,7 +62,16 @@ export const BUSH_LIFT = 0.45
 
 export type PropKind = keyof typeof PROP_DEFS
 
-/** Cuántos hay de cada tipo en toda isla: el bioma decide dónde salen, no cuántos (islands.ts comprueba que quepan). */
+/** Cuántos hay de cada tipo en la isla de siempre: el bioma decide dónde salen, no cuántos (islands.ts comprueba que quepan). */
+/**
+ * Cuántos hay de cada tipo en `island`: los de la isla de siempre por lo que crece su lado elevado a 1,5. Algo menos que
+ * su superficie: en una grande hay más sitio vacío entre zonas, y caminar es parte del juego.
+ */
+export function propCounts(island: Island): Record<PropKind, number> {
+  const scale = (island.size / WORLD_SIZE) ** 1.5
+  return Object.fromEntries(Object.entries(PROP_COUNTS).map(([kind, count]) => [kind, Math.round(count * scale)])) as Record<PropKind, number>
+}
+
 export const PROP_COUNTS: Record<PropKind, number> = {
   tree: TREE_COUNT,
   rock: ROCK_COUNT,
@@ -73,6 +83,7 @@ export const PROP_COUNTS: Record<PropKind, number> = {
   healing_herb: HERB_COUNT,
   coal_ore: COAL_ORE_COUNT,
   crystal_ore: CRYSTAL_ORE_COUNT,
+  deadtree: DEADTREE_COUNT,
 }
 
 /**
@@ -137,13 +148,16 @@ export function generatePropPlacements(island: Island = DEFAULT_ISLAND): readonl
  */
 export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacement[] {
   const placements: PropPlacement[] = []
+  const counts = propCounts(island)
+  // En las grandes, al milímetro: viajan en el welcome y así ocupan menos (la de siempre, como siempre).
+  const round = island.size > WORLD_SIZE ? (n: number) => Math.round(n * 1000) / 1000 : (n: number) => n
   const grid = new SpatialGrid<Collider>()
   let spawn: { x: number; z: number } | null = null
   const scatter = (rng: Rng, count: number, sample: (x: number, z: number, y: number) => Omit<PropPlacement, 'id'> | null) => {
     let placed = 0
     for (let attempt = 0; placed < count && attempt < count * ATTEMPTS_PER_PROP; attempt++) {
       const angle = rng() * Math.PI * 2
-      const r = Math.sqrt(rng()) * WORLD_SIZE * 0.45
+      const r = Math.sqrt(rng()) * island.size * 0.45
       const x = Math.cos(angle) * r
       const z = Math.sin(angle) * r
       const y = island.heightAt(x, z)
@@ -153,14 +167,27 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
       if (!placement || roll >= BIOME_FLORA[placement.kind][island.biomeAt(x, z, y)]) continue
       if (spawn && Math.hypot(x - spawn.x, z - spawn.z) - placement.radius < SPAWN_EXCLUSION) continue
       if (overlaps(grid, x, z, placement.radius)) continue
-      placements.push({ id: placements.length, ...placement })
+      const { kind, rotX, rotY, scaleX, scaleY, scaleZ } = placement
+      placements.push({
+        id: placements.length,
+        kind,
+        x: round(placement.x),
+        y: round(placement.y),
+        z: round(placement.z),
+        radius: round(placement.radius),
+        rotX: round(rotX),
+        rotY: round(rotY),
+        scaleX: round(scaleX),
+        scaleY: round(scaleY),
+        scaleZ: round(scaleZ),
+      })
       grid.insert({ x, z, radius: placement.radius, alive: true })
       placed++
     }
   }
 
   const treeRng = createTreeRng(island.seed)
-  scatter(treeRng, TREE_COUNT, (x, z, y) => {
+  scatter(treeRng, counts.tree, (x, z, y) => {
     const scale = 0.8 + treeRng() * 0.6
     const rotation = treeRng() * Math.PI * 2
     if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
@@ -168,7 +195,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const rockRng = createRockRng(island.seed)
-  scatter(rockRng, ROCK_COUNT, (x, z, y) => {
+  scatter(rockRng, counts.rock, (x, z, y) => {
     const sx = 0.8 + rockRng() * 1.4
     const sy = 0.5 + rockRng() * 0.7
     const sz = 0.8 + rockRng() * 1.4
@@ -181,7 +208,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const bushRng = createBushRng(island.seed)
-  scatter(bushRng, BUSH_COUNT, (x, z, y) => {
+  scatter(bushRng, counts.bush, (x, z, y) => {
     const scale = 0.8 + bushRng() * 0.4
     const rotation = bushRng() * Math.PI * 2
     if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
@@ -192,7 +219,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   spawn = findSpawn(grid, island)
 
   const birchRng = createBirchRng(island.seed)
-  scatter(birchRng, BIRCH_COUNT, (x, z, y) => {
+  scatter(birchRng, counts.birch, (x, z, y) => {
     const scale = 0.9 + birchRng() * 0.4
     const rotation = birchRng() * Math.PI * 2
     if (y < BIRCH_BAND.min || y > BIRCH_BAND.max || island.slopeAt(x, z) > MAX_SLOPE) return null
@@ -200,7 +227,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const oreRng = createIronOreRng(island.seed)
-  scatter(oreRng, IRON_ORE_COUNT, (x, z, y) => {
+  scatter(oreRng, counts.iron_ore, (x, z, y) => {
     const sx = 0.8 + oreRng() * 0.8
     const sy = 0.6 + oreRng() * 0.5
     const sz = 0.8 + oreRng() * 0.8
@@ -212,7 +239,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const pineRng = createDarkpineRng(island.seed)
-  scatter(pineRng, DARKPINE_COUNT, (x, z, y) => {
+  scatter(pineRng, counts.darkpine, (x, z, y) => {
     const scale = 1.2 + pineRng() * 0.4
     const rotation = pineRng() * Math.PI * 2
     if (y < DARKPINE_BAND.min || y > DARKPINE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE) return null
@@ -220,7 +247,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const mithrilRng = createMithrilOreRng(island.seed)
-  scatter(mithrilRng, MITHRIL_ORE_COUNT, (x, z, y) => {
+  scatter(mithrilRng, counts.mithril_ore, (x, z, y) => {
     // Más pequeñas que las de hierro: caben más en las cimas.
     const sx = 0.6 + mithrilRng() * 0.4
     const sy = 0.6 + mithrilRng() * 0.4
@@ -232,7 +259,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const herbRng = createHerbRng(island.seed)
-  scatter(herbRng, HERB_COUNT, (x, z, y) => {
+  scatter(herbRng, counts.healing_herb, (x, z, y) => {
     const scale = 0.9 + herbRng() * 0.4
     const rotation = herbRng() * Math.PI * 2
     if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
@@ -240,7 +267,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const coalRng = createCoalOreRng(island.seed)
-  scatter(coalRng, COAL_ORE_COUNT, (x, z, y) => {
+  scatter(coalRng, counts.coal_ore, (x, z, y) => {
     const sx = 0.8 + coalRng() * 0.6
     const sy = 0.6 + coalRng() * 0.4
     const sz = 0.8 + coalRng() * 0.6
@@ -251,7 +278,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   })
 
   const crystalRng = createCrystalOreRng(island.seed)
-  scatter(crystalRng, CRYSTAL_ORE_COUNT, (x, z, y) => {
+  scatter(crystalRng, counts.crystal_ore, (x, z, y) => {
     const sx = 0.6 + crystalRng() * 0.4
     const sy = 0.6 + crystalRng() * 0.4
     const sz = 0.6 + crystalRng() * 0.4
@@ -259,6 +286,15 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
     const ry = crystalRng() * Math.PI * 2
     if (y < CRYSTAL_ORE_BAND.min || y > CRYSTAL_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     return { kind: 'crystal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
+  })
+
+  const deadRng = createDeadTreeRng(island.seed)
+  scatter(deadRng, counts.deadtree, (x, z, y) => {
+    const scale = 0.9 + deadRng() * 0.4
+    const rotation = deadRng() * Math.PI * 2
+    // También en la arena, a diferencia de los vivos.
+    if (y < WATER_LEVEL + 0.4 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
+    return { kind: 'deadtree', x, y: y - 0.1, z, radius: TRUNK_BOTTOM_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
   return placements
@@ -309,7 +345,9 @@ export function createPropWorld(placements: readonly PropPlacement[] = generateP
   })
   const grid = new SpatialGrid<PropData>()
   for (const prop of props) grid.insert(prop)
-  return { placements, props, grid }
+  // Lo que vuelve a crecer (arbustos y hierbas): lo único que hay que mirar en cada paso.
+  const regrowing = props.filter((p) => PROP_DEFS[p.kind].harvest)
+  return { placements, props, grid, regrowing }
 }
 
 export type PropWorld = ReturnType<typeof createPropWorld>

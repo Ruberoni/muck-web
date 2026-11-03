@@ -100,11 +100,13 @@ export const BERRIES_PER_BUSH = 6
 export const BERRY_REGROW = 15
 
 // Las claves son los tipos de prop: `PropKind` (props.ts) se saca de aquí, así que un tipo nuevo solo se añade aquí.
-export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb' | 'coal_ore' | 'crystal_ore', PropDef> = {
+export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb' | 'coal_ore' | 'crystal_ore' | 'deadtree', PropDef> = {
   // Recolectar lleva tiempo, y el tiempo es lo que falta: mejorar una herramienta es ganarlo.
   tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 16, drop: { item: 'wood', amount: 4 } },
   birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 40, drop: { item: 'birch_wood', amount: 4 } },
   darkpine: { name: 'Pino oscuro', verb: 'talar', family: 'tree', tool: 'axe', tier: 3, hp: 72, drop: { item: 'dark_wood', amount: 4 } },
+  // En la playa y la montaña: su madera seca arde el doble en el horno.
+  deadtree: { name: 'Árbol muerto', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 30, drop: { item: 'dry_wood', amount: 3 } },
   rock: { name: 'Roca', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 20, drop: { item: 'stone', amount: 3 } },
   iron_ore: { name: 'Mena de hierro', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 2, hp: 60, drop: { item: 'iron_ore', amount: 3 } },
   mithril_ore: { name: 'Mena de mithril', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 96, drop: { item: 'mithril_ore', amount: 5 } },

@@ -1,6 +1,5 @@
 import { ENEMY_DEFS, type EnemyType } from '../sim/constants'
 import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
-import { WORLD_SIZE } from '../sim/world/terrain'
 import type { StructureKind } from '../sim/structures'
 import { biomeBlend, DEEP, terrainColor } from '../world/ground'
 
@@ -8,6 +7,7 @@ import { biomeBlend, DEEP, terrainColor } from '../world/ground'
 export const VIEW_RADIUS = 75
 // Píxeles de la textura de la isla por unidad del mundo.
 const TEXELS_PER_UNIT = 1.5
+const MAX_TEXELS = 600
 // Hueco entre el borde del círculo y las marcas fijadas en él (estructuras lejanas, N).
 const RIM_INSET = 9
 /** Radio (px) del punto de un enemigo de la escala del trasgo: los más grandes se ven mayores. */
@@ -95,16 +95,17 @@ export function teammateMark(dx: number, dz: number, yaw: number, viewYaw: numbe
 
 /** Textura de la isla vista desde arriba, con -Z (norte) hacia arriba. Se genera una vez por isla. */
 function renderIsland(island: Island): HTMLCanvasElement {
-  const size = Math.round(WORLD_SIZE * TEXELS_PER_UNIT)
+  // En las islas grandes, menos detalle: el minimapa enseña poco más de 100 m y así no tarda en pintarse.
+  const size = Math.round(Math.min(island.size * TEXELS_PER_UNIT, MAX_TEXELS))
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = size
   const ctx = canvas.getContext('2d')!
   const image = ctx.createImageData(size, size)
-  const unit = WORLD_SIZE / size
+  const unit = island.size / size
   for (let j = 0; j < size; j++) {
     for (let i = 0; i < size; i++) {
-      const x = -WORLD_SIZE / 2 + (i + 0.5) * unit
-      const z = -WORLD_SIZE / 2 + (j + 0.5) * unit
+      const x = -island.size / 2 + (i + 0.5) * unit
+      const z = -island.size / 2 + (j + 0.5) * unit
       const h = island.heightAt(x, z)
       // Pendiente aproximada: mismo umbral que la malla (normal.y < 0.8 ⇔ pendiente > 0.75).
       const slope = Math.hypot(island.heightAt(x + unit, z) - h, island.heightAt(x, z + unit) - h) / unit
@@ -174,7 +175,8 @@ export class Minimap {
     ctx.rotate(view.yaw)
     ctx.scale(scale, scale)
     ctx.translate(-view.x, -view.z)
-    ctx.drawImage(this.island, -WORLD_SIZE / 2, -WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE)
+    const side = this.shown.size
+    ctx.drawImage(this.island, -side / 2, -side / 2, side, side)
     ctx.restore()
 
     // Enemigos: solo los que caben en el mapa.

@@ -77,7 +77,7 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     for (const r of SHARED) rawCost(r, need)
     expect(whole(need)).toEqual({ wood: 280, stone: 93, iron_ore: 49, birch_wood: 30, mithril_ore: 40, dark_wood: 30 })
     const have = supply()
-    expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 80, dark_wood: 80, coal: 60, crystal: 36 })
+    expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 80, dark_wood: 80, coal: 60, crystal: 36, dry_wood: 72 })
     // Sobra de todo: el faro, el tótem y el avión también tiran de lo mismo.
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })

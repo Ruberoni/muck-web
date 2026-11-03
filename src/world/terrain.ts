@@ -1,12 +1,14 @@
 import * as THREE from 'three'
-import type { Island } from '../sim/world/island'
-import { WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import { ISLAND_SIZE, type Island } from '../sim/world/island'
+import { WATER_LEVEL } from '../sim/world/terrain'
 import { biomeBlend, terrainColor } from './ground'
 
-const SEGMENTS = 80
+/** Metros por cuadro de la malla: más grande la isla, más cuadros. */
+const SEGMENT_SIZE = 2.5
 
 export function createTerrain(island: Island): THREE.Mesh {
-  const indexed = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, SEGMENTS, SEGMENTS)
+  const segments = Math.round(island.size / SEGMENT_SIZE)
+  const indexed = new THREE.PlaneGeometry(island.size, island.size, segments, segments)
   // Rotar la geometría (no el mesh) para que cada vértice quede en (x, z) del mundo.
   indexed.rotateX(-Math.PI / 2)
 
@@ -44,7 +46,8 @@ export function createTerrain(island: Island): THREE.Mesh {
 }
 
 export function createWater(): THREE.Mesh {
-  const geometry = new THREE.PlaneGeometry(WORLD_SIZE * 4, WORLD_SIZE * 4)
+  // Hasta el horizonte de la isla más grande.
+  const geometry = new THREE.PlaneGeometry(ISLAND_SIZE * 4, ISLAND_SIZE * 4)
   geometry.rotateX(-Math.PI / 2)
   const material = new THREE.MeshStandardMaterial({
     color: '#3a8fc4',

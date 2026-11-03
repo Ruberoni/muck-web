@@ -152,6 +152,29 @@ export function installDebug(game: Game) {
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
     },
+    /**
+     * Lo que cuesta dibujar un frame, esperando a que acabe la GPU, y lo que dibuja (llamadas y triángulos, con las
+     * sombras): una medida que no depende de que la ventana esté a la vista.
+     */
+    renderCost(frames = 30) {
+      const { renderer } = game
+      const gl = renderer.getContext()
+      const pixel = new Uint8Array(4)
+      renderer.info.autoReset = false
+      let calls = 0
+      let triangles = 0
+      const start = performance.now()
+      for (let i = 0; i < frames; i++) {
+        renderer.info.reset()
+        game.frame(performance.now())
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel)
+        calls = renderer.info.render.calls
+        triangles = renderer.info.render.triangles
+      }
+      const ms = (performance.now() - start) / frames
+      renderer.info.autoReset = true
+      return { ms: Math.round(ms * 10) / 10, calls, triangles }
+    },
     setKeys(keys: Partial<PlayerInput> | null) {
       game.inputOverride = keys
     },
@@ -327,6 +350,10 @@ export function installDebug(game: Game) {
     heightAt: (x: number, z: number) => sim().island.heightAt(x, z),
     /** La semilla de la isla de la partida. */
     island: () => sim().island.seed,
+    /** La escena, para medir qué cuesta cada cosa (ocultándola y con `renderCost`). */
+    scene: () => game.scene,
+    /** Los lagos de la isla de la partida (centro y radio). */
+    lakes: () => sim().island.lakes,
     clock: () => ({ day: sim().clock.day, phase: sim().clock.phase }),
     /** Salta a una hora del día actual (0 = amanecer, redondeada al tick) y renderiza. */
     setPhase: (phase: number) =>

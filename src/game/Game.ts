@@ -30,7 +30,7 @@ import { euclideanModulo } from '../sim/world/daycycle'
 import { BIOME_NAMES } from '../sim/world/biomes'
 import type { Island } from '../sim/world/island'
 import { createTerrain } from '../world/terrain'
-import { WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import { WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
@@ -58,8 +58,9 @@ export type { GameState } from './states'
 /** Segundos que tarda en cerrarse la niebla de la Noche Eterna. */
 const ETERNAL_FOG_TIME = 12
 /** El faro encendido abre la niebla en toda la isla, sea cual sea su tamaño: hasta aquí no hay, y desde aquí ya está cerrada. */
-const LIGHTHOUSE_CLEAR = WORLD_SIZE * 0.55
-const LIGHTHOUSE_REACH = WORLD_SIZE * 0.75
+/** Por el tamaño de la isla: hasta aquí el faro abre la niebla del todo, y desde aquí ya no. */
+const LIGHTHOUSE_CLEAR = 0.55
+const LIGHTHOUSE_REACH = 0.75
 /** Con qué rapidez se nota la luz del faro al encenderlo o apagarlo. */
 const LIGHTHOUSE_FADE = 1.5
 
@@ -849,7 +850,7 @@ export class Game {
     const lighthouse = structures.list.find((s) => s.fire)
     if (!closing || !lighthouse) return closing
     const distance = Math.hypot(lighthouse.x - this.renderPos.x, lighthouse.z - this.renderPos.z)
-    return closing * (1 - this.lighthouseGlow * (1 - THREE.MathUtils.smoothstep(distance, LIGHTHOUSE_CLEAR, LIGHTHOUSE_REACH)))
+    return closing * (1 - this.lighthouseGlow * (1 - THREE.MathUtils.smoothstep(distance, LIGHTHOUSE_CLEAR * this.sim.island.size, LIGHTHOUSE_REACH * this.sim.island.size)))
   }
 
   /** Muerto en solitario: lo que falta para reaparecer y las vidas que quedan. */

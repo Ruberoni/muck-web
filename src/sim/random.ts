@@ -37,3 +37,5 @@ export const createHerbRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x7a3d91e5
 export const createCoalOreRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x3c6ef372)
 // El cristal, detrás del carbón.
 export const createCrystalOreRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x7f4a7c15)
+// El árbol muerto, detrás del cristal.
+export const createDeadTreeRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x2f8a5d31)

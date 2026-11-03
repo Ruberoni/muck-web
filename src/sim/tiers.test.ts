@@ -46,6 +46,7 @@ describe('niveles: daño contra props', () => {
     ['coin', 1, 0, 0, 0, 0, 0, 1],
     ['coal', 1, 0, 0, 0, 0, 0, 1],
     ['crystal', 1, 0, 0, 0, 0, 0, 1],
+    ['dry_wood', 1, 0, 0, 0, 0, 0, 1],
     // El equipo tampoco tala ni pica.
     ['iron_chestplate', 1, 0, 0, 0, 0, 0, 1],
     ['mithril_chestplate', 1, 0, 0, 0, 0, 0, 1],

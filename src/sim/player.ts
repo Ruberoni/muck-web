@@ -45,6 +45,8 @@ export interface PlayerEnv {
   heightAt(x: number, z: number): number
   /** Empuja la posición fuera de los obstáculos (XZ). */
   collide?(pos: Vec3): void
+  /** Hasta dónde se llega desde el centro (en horizontal); sin él, lo de la isla de siempre. */
+  bound?(): number
 }
 
 export interface Player extends Vitals {
@@ -189,9 +191,10 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
   pos.x += vel.x * dt
   pos.z += vel.z * dt
   const r = Math.hypot(pos.x, pos.z)
-  if (r > BOUND) {
-    pos.x *= BOUND / r
-    pos.z *= BOUND / r
+  const bound = env.bound?.() ?? BOUND
+  if (r > bound) {
+    pos.x *= bound / r
+    pos.z *= bound / r
   }
   env.collide?.(pos)
 

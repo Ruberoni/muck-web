@@ -14,6 +14,7 @@ const chestplate = (metal: string, shade: string) =>
   `<svg viewBox="0 0 32 32"><path d="M5 8 L11 5 Q16 9 21 5 L27 8 L25 14 L23 13 L23 27 H9 V13 L7 14 Z" fill="${metal}"/><path d="M16 9 V27 H23 V13 L25 14 L27 8 L21 5 Q19 8 16 9" fill="${shade}"/><rect x="10" y="18" width="12" height="2" fill="#5f6670"/></svg>`
 /** Iconos SVG de cada objeto, para la hotbar, la pantalla de inventario y las recetas. */
 export const ICONS: Record<ItemId, string> = {
+  dry_wood: `<svg viewBox="0 0 32 32"><rect x="4" y="9" width="24" height="14" rx="3" fill="#8d7b68"/><path d="M8 12 L13 15 M10 19 L16 17" stroke="#6b5c4b" stroke-width="1.5"/><ellipse cx="26" cy="16" rx="4" ry="7" fill="#d8ccb8"/><ellipse cx="26" cy="16" rx="2" ry="3.5" fill="#a89880"/></svg>`,
   wood: `<svg viewBox="0 0 32 32"><rect x="4" y="9" width="24" height="14" rx="3" fill="#8a5a32"/><ellipse cx="26" cy="16" rx="4" ry="7" fill="#d9a86a"/><ellipse cx="26" cy="16" rx="2" ry="3.5" fill="#b07b45"/></svg>`,
   stone: `<svg viewBox="0 0 32 32"><polygon points="6,22 10,10 20,6 27,14 25,24 14,27" fill="#9a978a"/><polygon points="10,10 20,6 18,15" fill="#b8b5a8"/><polygon points="18,15 27,14 25,24" fill="#7c796e"/></svg>`,
   berry: `<svg viewBox="0 0 32 32"><path d="M16 9 Q18 4 23 4 Q21 8 16 9" fill="#3d7d35"/><circle cx="11" cy="19" r="6" fill="#c2304a"/><circle cx="21" cy="20" r="6" fill="#a8243d"/><circle cx="16" cy="12" r="5.5" fill="#d63d58"/><circle cx="14.5" cy="10.5" r="1.5" fill="#f2a0ad"/></svg>`,

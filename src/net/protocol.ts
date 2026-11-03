@@ -1,13 +1,13 @@
 import { ALL_BUTTONS, type Action, type ActionData, type Move } from '../sim/commands'
 import { EQUIP_SLOTS, type EquipSlot } from '../sim/equipment'
-import { ENEMY_DEFS, ENEMY_TYPES, MAX_PITCH, type EnemyType } from '../sim/constants'
+import { ENEMY_DEFS, ENEMY_TYPES, MAX_PITCH, PROP_DEFS, type EnemyType } from '../sim/constants'
 import { isRecipeId } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { Combat } from '../sim/interaction'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type InventoryState, type ItemId } from '../sim/inventory'
 import { isDifficulty, type Difficulty, type MatchResult, type MatchRules } from '../sim/match'
 import type { Player, Vec3 } from '../sim/player'
-import type { PropPlacement } from '../sim/props'
+import type { PropKind, PropPlacement } from '../sim/props'
 import { STRUCTURE_KINDS, type StructureKind } from '../sim/structures'
 import type { Connection, SimState } from '../sim/Simulation'
 import { isSkin } from './skins'
@@ -18,7 +18,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 46
+export const PROTOCOL_VERSION = 47
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -305,6 +305,46 @@ export interface MatchMsg {
 /** Los mensajes del servidor ya leídos (un `snap` llega en `SnapWire` y lo lee `ServerDecoder`). */
 export type ServerMessage = Welcome | Reject | Snap | Ev | StateMsg | Join | Leave | Chat | MatchMsg
 
+// --- Las colocaciones en el cable ---
+
+/** Los tipos de prop en el orden del cable. */
+const PROP_KINDS = Object.keys(PROP_DEFS) as PropKind[]
+
+/**
+ * Una colocación como viaja en `welcome` y `state`: `[tipo, x, y, z, radio, rotX, rotY, escala]`, con `tipo` el índice
+ * en PROP_KINDS, o con `[…, sx, sy, sz]` si la escala no es la misma en los tres ejes. El id es su índice en la lista.
+ * Una isla grande tiene miles: así ocupan menos de la mitad.
+ */
+export type PlacementTuple = [number, number, number, number, number, number, number, number, number?, number?]
+
+export function placementTuple(p: PropPlacement): PlacementTuple {
+  const tuple: PlacementTuple = [PROP_KINDS.indexOf(p.kind), p.x, p.y, p.z, p.radius, p.rotX, p.rotY, p.scaleX]
+  if (p.scaleY !== p.scaleX || p.scaleZ !== p.scaleX) tuple.push(p.scaleY, p.scaleZ)
+  return tuple
+}
+
+const fromPlacementTuple = ([kind, x, y, z, radius, rotX, rotY, scaleX, scaleY = scaleX, scaleZ = scaleX]: PlacementTuple, id: number): PropPlacement => ({
+  id,
+  kind: PROP_KINDS[kind],
+  x,
+  y,
+  z,
+  radius,
+  rotX,
+  rotY,
+  scaleX,
+  scaleY,
+  scaleZ,
+})
+
+/** El `welcome` y el `state` como viajan: con las colocaciones en tuplas. */
+export interface WelcomeWire extends Omit<Welcome, 'placements'> {
+  placements: PlacementTuple[]
+}
+export interface StateWire extends Omit<StateMsg, 'island'> {
+  island?: { seed: number; placements: PlacementTuple[] }
+}
+
 // --- `snap` en el cable ---
 
 /**
@@ -349,12 +389,16 @@ export class ServerDecoder {
   private inventory: InventoryState | null = null
 
   decode(data: string): ServerMessage {
-    const msg = JSON.parse(data) as Exclude<ServerMessage, Snap> | SnapWire
+    const msg = JSON.parse(data) as Exclude<ServerMessage, Snap | Welcome | StateMsg> | SnapWire | WelcomeWire | StateWire
     switch (msg.type) {
       case 'welcome':
-      case 'state':
         this.inventory = msg.you.inventory
-        return msg
+        return { ...msg, placements: msg.placements.map(fromPlacementTuple) }
+      case 'state': {
+        this.inventory = msg.you.inventory
+        const { island, ...rest } = msg
+        return island ? { ...rest, island: { seed: island.seed, placements: island.placements.map(fromPlacementTuple) } } : rest
+      }
       case 'snap': {
         const inventory = msg.you.inventory ?? this.inventory
         if (!inventory) throw new Error('snap sin inventario antes de welcome')

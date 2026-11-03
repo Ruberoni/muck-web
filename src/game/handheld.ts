@@ -101,6 +101,7 @@ const bark = mat('#7a5230')
 const birchBark = mat('#ece8dc')
 const birchMark = mat('#2f2c28')
 const darkBark = mat('#3e2c20')
+const deadBark = mat('#8d7b68')
 const ore = mat('#7b7268')
 const oreVein = new THREE.MeshStandardMaterial({ color: '#c8743a', flatShading: true, metalness: 0.4, roughness: 0.5 })
 const mithrilRock = mat('#6c7080')
@@ -335,6 +336,8 @@ export function itemModel(item: ItemId): THREE.Group {
       return oreChunk(meteorRock, meteorVein)
     case 'wood':
       return log(bark)
+    case 'dry_wood':
+      return log(deadBark)
     case 'dark_wood':
       return log(darkBark)
     case 'stone': {

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { BERRIES_PER_BUSH, WOBBLE_DURATION } from '../sim/constants'
 import { generatePropPlacements } from '../sim/props'
-import { LOD_DISTANCE, MODEL_PIECES, PropView, type PropInstance } from './PropView'
+import { CULL_DISTANCE, LOD_DISTANCE, MODEL_PIECES, PropView, type PropInstance } from './PropView'
 
 const placements = generatePropPlacements()
 const tree = placements.find((p) => p.kind === 'tree')!
@@ -102,7 +102,7 @@ describe('PropView con los modelos de naturaleza', () => {
   const models = (id: number) => view(id).filter((i) => i.lod !== undefined)
   let current: PropView
   const view = (id: number) => current.instancesOf(id)
-  const shown = (id: number) => models(id).filter((i) => !isHidden(i)).map((i) => i.lod)
+  const shown = (id: number) => models(id).filter((i) => i.index >= 0 && i.index < i.mesh.count && !isHidden(i)).map((i) => i.lod)
 
   it('oculta las formas de siempre salvo las bayas, que siguen siendo las mismas', () => {
     current = withModels()
@@ -117,7 +117,7 @@ describe('PropView con los modelos de naturaleza', () => {
     expect(shown(tree.id)).toEqual([1, 1])
   })
 
-  it('de cerca se ve la versión entera, con sombra, y de lejos la simplificada, sin ella', () => {
+  it('de cerca se ve la versión entera, con sombra, de lejos la simplificada, sin ella, y tras la niebla nada', () => {
     current = withModels()
     current.updateLod(tree)
     expect(shown(tree.id)).toEqual([0, 0])
@@ -125,11 +125,17 @@ describe('PropView con los modelos de naturaleza', () => {
     const far = models(tree.id).find((i) => i.lod === 1)!
     expect(near.mesh.castShadow).toBe(true)
     expect(far.mesh.castShadow).toBe(false)
+    // Cada mesh dibuja solo lo que se ve: de cerca, pocos.
+    expect(near.mesh.count).toBeGreaterThan(0)
+    expect(near.mesh.count).toBeLessThan(placements.filter((p) => p.kind === 'tree').length / 2)
     current.updateLod({ x: tree.x + LOD_DISTANCE + 10, z: tree.z })
     expect(shown(tree.id)).toEqual([1, 1])
     // Justo en el borde no cambia: hay margen para no parpadear.
     current.updateLod({ x: tree.x + LOD_DISTANCE - 1, z: tree.z })
     expect(shown(tree.id)).toEqual([1, 1])
+    // Lo que tapa la niebla no se dibuja.
+    current.updateLod({ x: tree.x + CULL_DISTANCE + 10, z: tree.z })
+    expect(shown(tree.id)).toEqual([])
   })
 
   it('romper oculta las dos versiones, el temblor no saca la que no toca y reset vuelve a la que toca', () => {
