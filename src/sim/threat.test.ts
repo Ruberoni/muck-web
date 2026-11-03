@@ -186,3 +186,14 @@ describe('en la partida', () => {
     expect(NIGHT).toBeGreaterThan(DAY_FRACTION)
   })
 })
+
+describe('las monedas de los mobs', () => {
+  it('suben con la vida de los comunes, y los jefes dan las suyas', () => {
+    const enemies = new Enemies([], mulberry32(1))
+    expect(enemies.spawnAt(0, 0, 'goblin').coinScale).toBe(1)
+    enemies.scaling.hp = 2.5
+    expect(enemies.spawnAt(3, 0, 'goblin').coinScale).toBe(2.5)
+    expect(enemies.spawnAt(6, 0, 'giant').coinScale).toBe(1)
+    expect(ENEMY_DEFS.giant.loot.find((l) => l.item === 'coin')!.amount).toBeGreaterThan(ENEMY_DEFS.goblin.loot.find((l) => l.item === 'coin')!.amount)
+  })
+})

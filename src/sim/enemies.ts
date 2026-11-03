@@ -79,6 +79,8 @@ export interface EnemyData {
   maxHp: number
   /** Por cuánto se multiplica su botín: según los jugadores, no según lo que hayan subido los mobs. */
   lootScale: number
+  /** Las monedas suben con la vida de los mobs comunes: cuanto más cuesta matarlo, más da. */
+  coinScale: number
   /** Lo que queda de su coraza. */
   shell: number
   alive: boolean
@@ -504,6 +506,7 @@ export class Enemies {
       hp,
       maxHp: hp,
       lootScale,
+      coinScale: isCommon(type) ? this.scaling.hp : 1,
       shell: (def.shell ?? 0) * bossScale(players),
       alive: true,
       attackCooldown: def.windup,

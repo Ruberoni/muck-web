@@ -164,7 +164,10 @@ export class Interaction {
     if (fighter.target === enemy) fighter.target = null
     const { x, z } = enemy.pos
     const def = ENEMY_DEFS[enemy.type]
-    for (const { item, amount } of def.loot) this.pickups.drop(item, Math.round(amount * enemy.lootScale), x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
+    for (const { item, amount } of def.loot) {
+      const scale = item === 'coin' ? enemy.lootScale * enemy.coinScale : enemy.lootScale
+      this.pickups.drop(item, Math.round(amount * scale), x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
+    }
     return true
   }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { STEP } from '../sim/constants'
 import type { ItemId } from '../sim/inventory'
-import type { Pickup } from '../sim/pickups'
+import { timeLeft, type Pickup } from '../sim/pickups'
 import { itemModel } from '../game/handheld'
 
 // Los modelos de la mano son pequeños: en el suelo se ven algo más grandes.
@@ -57,6 +57,10 @@ export class PickupView {
   }
 }
 
+/** Los últimos segundos en el suelo parpadea, para que se vea que va a desaparecer. */
+const BLINK_FROM = 10
+const BLINK_RATE = 6
+
 function place(object: THREE.Object3D, p: Pickup, alpha: number) {
   const lerp = (a: number, b: number) => a + (b - a) * alpha
   const t = p.age - STEP * (1 - alpha)
@@ -64,4 +68,6 @@ function place(object: THREE.Object3D, p: Pickup, alpha: number) {
   const bob = p.grounded ? HOVER + BOB * (1 + Math.sin(t * 3 + p.spin)) : 0
   object.position.set(lerp(p.prev.x, p.pos.x), lerp(p.prev.y, p.pos.y) + bob, lerp(p.prev.z, p.pos.z))
   object.rotation.y = p.spin + t * SPIN_RATE
+  const left = timeLeft(p)
+  object.visible = left === null || left > BLINK_FROM || Math.floor(t * BLINK_RATE) % 2 === 0
 }

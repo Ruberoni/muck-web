@@ -25,7 +25,9 @@ export type SimEventData =
   | { type: 'propDestroyed'; id: number; by: PlayerId }
   | { type: 'berryTaken'; id: number; hp: number; by: PlayerId }
   | { type: 'berryGrew'; id: number; hp: number }
-  | { type: 'pickupSpawn'; id: number; item: ItemId; amount: number }
+  | { type: 'pickupSpawn'; id: number; item: ItemId; amount: number; keep?: true }
+  /** Ha pasado demasiado tiempo en el suelo (`GROUND_TIME`). */
+  | { type: 'pickupExpired'; id: number }
   | { type: 'pickupCollected'; id: number; by: PlayerId }
   | { type: 'structurePlaced'; id: number; kind: StructureKind; x: number; y: number; z: number; rotY: number; by: PlayerId }
   /** Una estación tiene un trabajo más en cola, o ha terminado el primero (lo hecho llega en su `pickupSpawn`). */

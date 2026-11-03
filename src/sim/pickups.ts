@@ -2,7 +2,7 @@ import { heightAt, WATER_LEVEL } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import { DROP_PICKUP_DELAY, GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS } from './constants'
-import { KEY_ITEMS, type Inventory, type ItemId } from './inventory'
+import { GROUND_TIME, KEY_ITEMS, type Inventory, type ItemId } from './inventory'
 
 const RADIUS = 0.2
 // Al caer saltan hacia fuera y hacia arriba.
@@ -36,6 +36,14 @@ export interface Pickup {
   claimedBy: PlayerId | null
   /** Quién lo tiró (null: lo soltó un prop o un enemigo): no lo puede recoger hasta DROP_PICKUP_DELAY. */
   droppedBy: PlayerId | null
+  /** No desaparece aunque su objeto caduque: lo que soltó un jugador al morir. */
+  keep: boolean
+}
+
+/** Segundos que le quedan en el suelo; null: no desaparece. */
+export const timeLeft = (p: Pick<Pickup, 'item' | 'age' | 'keep'>): number | null => {
+  const limit = GROUND_TIME[p.item]
+  return limit === null || p.keep ? null : limit - p.age
 }
 
 /** Un jugador que puede recoger: está en el mundo y vivo. */
@@ -101,9 +109,9 @@ export class Pickups {
     }
   }
 
-  /** Suelta un único montón con `amount` unidades de `item` desde (x, y, z). */
-  dropPile(item: ItemId, amount: number, x: number, y: number, z: number) {
-    this.spawn(item, amount, x, y, z, this.rng() * Math.PI * 2, POP_SPEED)
+  /** Suelta un único montón con `amount` unidades de `item` desde (x, y, z). Con `keep` no caduca nunca. */
+  dropPile(item: ItemId, amount: number, x: number, y: number, z: number, keep = false) {
+    this.spawn(item, amount, x, y, z, this.rng() * Math.PI * 2, POP_SPEED, POP_UP, null, keep)
   }
 
   /** El jugador `by` tira un montón de `amount` unidades desde (x, y, z) hacia donde mira (`yaw`). */
@@ -113,7 +121,7 @@ export class Pickups {
     this.spawn(item, amount, x, y, z, angle, TOSS_SPEED, TOSS_UP, by)
   }
 
-  private spawn(item: ItemId, amount: number, x: number, y: number, z: number, angle: number, speed: number, up = POP_UP, by: PlayerId | null = null) {
+  private spawn(item: ItemId, amount: number, x: number, y: number, z: number, angle: number, speed: number, up = POP_UP, by: PlayerId | null = null, keep = false) {
     const pickup: Pickup = {
       id: this.nextId++,
       item,
@@ -126,9 +134,10 @@ export class Pickups {
       spin: this.rng() * Math.PI * 2,
       claimedBy: null,
       droppedBy: by,
+      keep,
     }
     this.list.push(pickup)
-    this.emit({ type: 'pickupSpawn', id: pickup.id, item, amount })
+    this.emit({ type: 'pickupSpawn', id: pickup.id, item, amount, ...(keep ? { keep } : {}) })
   }
 
   /**
@@ -145,6 +154,12 @@ export class Pickups {
       p.prev.y = p.pos.y
       p.prev.z = p.pos.z
       p.age += dt
+      const left = timeLeft(p)
+      if (left !== null && left <= 1e-9) {
+        this.list.splice(i, 1)
+        this.emit({ type: 'pickupExpired', id: p.id })
+        continue
+      }
       if (!p.grounded) {
         this.fall(p, dt)
         continue

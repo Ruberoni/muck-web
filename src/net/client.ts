@@ -560,7 +560,7 @@ export class NetClient {
       const samples = new InterpBuffer<boolean>()
       // Desde siempre: los quietos se dibujan ya, sin esperar a que el render llegue al tick del estado.
       samples.push(0, { ...p.pos, yaw: 0, pitch: 0 }, p.grounded)
-      this.pickups.set(p.id, { pickup: mirrorPickup(p.id, p.item, p.amount, p.spin), samples, spawnTick: state.tick - Math.round(p.age / STEP), goneAt: null })
+      this.pickups.set(p.id, { pickup: mirrorPickup(p.id, p.item, p.amount, p.spin, p.keep), samples, spawnTick: state.tick - Math.round(p.age / STEP), goneAt: null })
     }
     this.worldVersion++
   }
@@ -582,9 +582,10 @@ export class NetClient {
         sim.structures.add({ id: e.id, kind: e.kind, x: e.x, y: e.y, z: e.z, rotY: e.rotY })
         break
       case 'pickupSpawn':
-        this.pickups.set(e.id, { pickup: mirrorPickup(e.id, e.item, e.amount, spinOf(e.id)), samples: new InterpBuffer(), spawnTick: e.tick, goneAt: null })
+        this.pickups.set(e.id, { pickup: mirrorPickup(e.id, e.item, e.amount, spinOf(e.id), e.keep ?? false), samples: new InterpBuffer(), spawnTick: e.tick, goneAt: null })
         break
-      case 'pickupCollected': {
+      case 'pickupCollected':
+      case 'pickupExpired': {
         const mirror = this.pickups.get(e.id)
         if (mirror) mirror.goneAt = e.tick
         break
@@ -672,6 +673,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     hp,
     maxHp: hp,
     lootScale: 1,
+    coinScale: 1,
     shell: 0,
     alive: true,
     attackCooldown: 0,
@@ -684,6 +686,6 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
   }
 }
 
-function mirrorPickup(id: number, item: ItemId, amount: number, spin: number): Pickup {
-  return { id, item, amount, pos: { x: 0, y: 0, z: 0 }, prev: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, grounded: false, age: 0, spin, claimedBy: null, droppedBy: null }
+function mirrorPickup(id: number, item: ItemId, amount: number, spin: number, keep: boolean): Pickup {
+  return { id, item, amount, pos: { x: 0, y: 0, z: 0 }, prev: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, grounded: false, age: 0, spin, claimedBy: null, droppedBy: null, keep }
 }

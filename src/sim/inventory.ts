@@ -34,6 +34,7 @@ export type ItemId =
   | 'oil'
   | 'boss_trophy'
   | 'plane_engine'
+  | 'coin'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -70,11 +71,55 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   distiller: 'Destilador',
   oil: 'Aceite',
   boss_trophy: 'Trofeo de jefe',
+  coin: 'Moneda',
   plane_engine: 'Motor del avión',
 }
 
 /** Lo que hace falta para escapar: no se puede perder, ni al irse quien lo lleva ni al caer al agua. */
 export const KEY_ITEMS: readonly ItemId[] = ['meteor_fragment', 'boss_trophy', 'plane_engine']
+
+/** Segundos que dura cada objeto en el suelo antes de desaparecer; null: no desaparece nunca. */
+const MATERIAL = 300
+const FOOD = 180
+const GEAR = 600
+export const GROUND_TIME: Record<ItemId, number | null> = {
+  wood: MATERIAL,
+  stone: MATERIAL,
+  berry: FOOD,
+  wood_axe: GEAR,
+  wood_pickaxe: GEAR,
+  stone_axe: GEAR,
+  stone_pickaxe: GEAR,
+  raw_meat: FOOD,
+  campfire: GEAR,
+  workbench: GEAR,
+  birch_wood: MATERIAL,
+  iron_ore: MATERIAL,
+  iron_bar: MATERIAL,
+  iron_axe: GEAR,
+  iron_pickaxe: GEAR,
+  furnace: GEAR,
+  anvil: GEAR,
+  dark_wood: MATERIAL,
+  mithril_ore: MATERIAL,
+  mithril_bar: MATERIAL,
+  mithril_axe: GEAR,
+  mithril_pickaxe: GEAR,
+  cooked_meat: FOOD,
+  berry_infusion: FOOD,
+  healing_herb: FOOD,
+  wood_sword: GEAR,
+  stone_sword: GEAR,
+  iron_sword: GEAR,
+  mithril_sword: GEAR,
+  meteor_fragment: null,
+  meteor_sword: GEAR,
+  distiller: GEAR,
+  oil: MATERIAL,
+  boss_trophy: null,
+  plane_engine: null,
+  coin: null,
+}
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9
 /** Casillas del inventario: 0–8 son la hotbar y 9–26 la mochila. */

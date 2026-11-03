@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { mulberry32 } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
 import { DROP_PICKUP_DELAY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_RADIUS, STEP } from './constants'
-import { Inventory, type ItemId } from './inventory'
-import { Pickups } from './pickups'
+import { GROUND_TIME, Inventory, KEY_ITEMS, type ItemId } from './inventory'
+import { Pickups, timeLeft } from './pickups'
+import type { SimEventData } from './events'
 
 /** Primer punto de hierba en espiral desde el centro. */
 function grassSpot() {
@@ -226,5 +227,44 @@ describe('objetos en el suelo', () => {
     pickups.toss('stone', 1, spot.x, y, spot.z, 0, 0)
     steps(PICKUP_DELAY + 0.6, { id: 1, inventory: other })
     expect(other.count('stone')).toBe(1)
+  })
+})
+
+describe('tiempo en el suelo', () => {
+  it('cada objeto dice cuánto dura, y lo imprescindible y las monedas no caducan', () => {
+    expect(GROUND_TIME.wood).toBeGreaterThan(0)
+    expect(GROUND_TIME.raw_meat).toBeLessThan(GROUND_TIME.wood!)
+    expect(GROUND_TIME.iron_axe).toBeGreaterThan(GROUND_TIME.wood!)
+    for (const item of [...KEY_ITEMS, 'coin'] as const) expect(GROUND_TIME[item]).toBeNull()
+  })
+
+  it('al pasar su tiempo desaparece, y lo avisa', () => {
+    const events: SimEventData[] = []
+    const pickups = new Pickups([], mulberry32(1), (e) => events.push(e))
+    pickups.drop('raw_meat', 1, spot.x, heightAt(spot.x, spot.z) + 1, spot.z)
+    const far = [{ id: 0, pos: { x: spot.x + 100, y: 0, z: spot.z }, inventory: new Inventory() }]
+    for (let i = 0; i < Math.round((GROUND_TIME.raw_meat! - 1) / STEP); i++) pickups.step(STEP, far)
+    expect(pickups.list).toHaveLength(1)
+    for (let i = 0; i < Math.round(2 / STEP); i++) pickups.step(STEP, far)
+    expect(pickups.list).toHaveLength(0)
+    expect(events.map((e) => e.type)).toContain('pickupExpired')
+  })
+
+  it('lo que suelta un jugador al morir y las monedas no desaparecen nunca', () => {
+    const pickups = new Pickups([], mulberry32(1))
+    const y = heightAt(spot.x, spot.z) + 1
+    pickups.dropPile('wood', 30, spot.x, y, spot.z, true)
+    pickups.drop('coin', 2, spot.x, y, spot.z)
+    pickups.drop('wood', 1, spot.x, y, spot.z)
+    const far = [{ id: 0, pos: { x: spot.x + 100, y: 0, z: spot.z }, inventory: new Inventory() }]
+    for (let i = 0; i < Math.round((GROUND_TIME.wood! + 5) / STEP); i++) pickups.step(STEP, far)
+    expect(pickups.list.map((p) => p.item).sort()).toEqual(['coin', 'coin', 'wood'])
+    expect(pickups.list.find((p) => p.item === 'wood')!.keep).toBe(true)
+  })
+
+  it('el tiempo que queda sirve para avisar antes de que desaparezca', () => {
+    expect(timeLeft({ item: 'wood', age: 100, keep: false })).toBe(GROUND_TIME.wood! - 100)
+    expect(timeLeft({ item: 'wood', age: 100, keep: true })).toBeNull()
+    expect(timeLeft({ item: 'coin', age: 100, keep: false })).toBeNull()
   })
 })

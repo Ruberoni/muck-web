@@ -673,7 +673,7 @@ export class Simulation {
     this.events.emit({ type: 'playerDied', id: slot.id })
     const { pos } = slot.player
     for (const item of slot.inventory.slots) {
-      if (item) this.pickups.dropPile(item, slot.inventory.count(item), pos.x, pos.y + DEATH_DROP_HEIGHT, pos.z)
+      if (item) this.pickups.dropPile(item, slot.inventory.count(item), pos.x, pos.y + DEATH_DROP_HEIGHT, pos.z, true)
     }
     slot.inventory.clear()
     Object.assign(slot.combat, createCombat())

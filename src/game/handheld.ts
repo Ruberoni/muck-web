@@ -333,7 +333,16 @@ export function itemModel(item: ItemId): THREE.Group {
       return ingot(oilGold)
     case 'anvil':
       return anvil()
+    case 'coin':
+      return coin()
   }
+}
+
+/** Una moneda de canto, que se ve girar en el suelo. */
+function coin() {
+  const g = new THREE.Group()
+  g.add(part(new THREE.CylinderGeometry(0.1, 0.1, 0.025, 12).rotateX(Math.PI / 2).translate(0, 0.12, 0), oilGold))
+  return g
 }
 
 /** Antebrazo del codo al puño, y el puño. */

@@ -696,8 +696,8 @@ describe('combate', () => {
   })
 
   it.each([
-    ['golem', ['iron_ore', 'stone', 'stone', 'stone']],
-    ['spirit', ['birch_wood', 'wood', 'wood', 'wood', 'wood']],
+    ['golem', ['coin', 'coin', 'iron_ore', 'stone', 'stone', 'stone']],
+    ['spirit', ['birch_wood', 'coin', 'coin', 'wood', 'wood', 'wood', 'wood']],
   ] as const)('el %s suelta lo suyo al morir', (type, loot) => {
     const { enemy, hold, equip, pickups } = setup(type)
     equip('wood_sword')

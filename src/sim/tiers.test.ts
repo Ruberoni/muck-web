@@ -43,6 +43,7 @@ describe('niveles: daño contra props', () => {
     ['oil', 1, 0, 0, 0, 0, 0, 1],
     ['boss_trophy', 1, 0, 0, 0, 0, 0, 1],
     ['plane_engine', 1, 0, 0, 0, 0, 0, 1],
+    ['coin', 1, 0, 0, 0, 0, 0, 1],
     ['workbench', 1, 0, 0, 0, 0, 0, 1],
     ['furnace', 1, 0, 0, 0, 0, 0, 1],
     ['anvil', 1, 0, 0, 0, 0, 0, 1],
