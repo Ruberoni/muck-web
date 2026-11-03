@@ -14,10 +14,14 @@ interface Gltf {
   accessors: { count: number; min?: number[]; max?: number[] }[]
 }
 
+let parsed: Gltf | null = null
+
+/** El JSON del `.glb`, leído una vez: cada pieza lo consulta. */
 const gltf = (): Gltf => {
+  if (parsed) return parsed
   const file = readFileSync(PATH)
   expect(file.toString('ascii', 0, 4)).toBe('glTF')
-  return JSON.parse(file.toString('utf8', 20, 20 + file.readUInt32LE(12)))
+  return (parsed = JSON.parse(file.toString('utf8', 20, 20 + file.readUInt32LE(12))))
 }
 
 /** La caja y los triángulos de la pieza `name`. */
