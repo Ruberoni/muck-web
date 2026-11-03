@@ -27,8 +27,20 @@ describe('recetas en la pantalla de inventario', () => {
     expect(RECIPE_GROUPS.map((g) => g.title)).toEqual(['Sin estación', 'Mesa de trabajo', 'Yunque'])
     expect(RECIPE_GROUPS.map((g) => g.recipes.map((r) => r.id))).toEqual([
       ['wood_axe', 'wood_pickaxe', 'campfire', 'workbench'],
-      ['wood_sword', 'stone_axe', 'stone_pickaxe', 'stone_sword', 'furnace', 'distiller', 'anvil'],
-      ['iron_axe', 'iron_pickaxe', 'iron_sword', 'mithril_axe', 'mithril_pickaxe', 'mithril_sword', 'meteor_sword'],
+      ['wood_sword', 'stone_axe', 'stone_pickaxe', 'stone_sword', 'wood_shield', 'furnace', 'distiller', 'anvil'],
+      [
+        'iron_axe',
+        'iron_pickaxe',
+        'iron_sword',
+        'mithril_axe',
+        'mithril_pickaxe',
+        'mithril_sword',
+        'meteor_sword',
+        'iron_shield',
+        'crystal_shield',
+        'iron_chestplate',
+        'mithril_chestplate',
+      ],
     ])
   })
 

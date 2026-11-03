@@ -45,6 +45,13 @@ describe('niveles: daño contra props', () => {
     ['plane_engine', 1, 0, 0, 0, 0, 0, 1],
     ['coin', 1, 0, 0, 0, 0, 0, 1],
     ['coal', 1, 0, 0, 0, 0, 0, 1],
+    ['crystal', 1, 0, 0, 0, 0, 0, 1],
+    // El equipo tampoco tala ni pica.
+    ['iron_chestplate', 1, 0, 0, 0, 0, 0, 1],
+    ['mithril_chestplate', 1, 0, 0, 0, 0, 0, 1],
+    ['wood_shield', 1, 0, 0, 0, 0, 0, 1],
+    ['iron_shield', 1, 0, 0, 0, 0, 0, 1],
+    ['crystal_shield', 1, 0, 0, 0, 0, 0, 1],
     ['workbench', 1, 0, 0, 0, 0, 0, 1],
     ['furnace', 1, 0, 0, 0, 0, 0, 1],
     ['anvil', 1, 0, 0, 0, 0, 0, 1],

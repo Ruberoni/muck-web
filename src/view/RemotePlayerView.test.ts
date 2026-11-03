@@ -9,7 +9,7 @@ import { playerColor, RemotePlayerView } from './RemotePlayerView'
 const shown = (id: number, x: number, data: Partial<RemotePlayer> = {}): Shown<RemotePlayer> => ({
   id,
   pose: { x, y: 2, z: 5, yaw: 1, pitch: 0.3 },
-  data: { item: null, health: 100, alive: true, connection: 'present', ping: 0, ...data },
+  data: { item: null, shield: null, blocking: false, health: 100, alive: true, connection: 'present', ping: 0, ...data },
 })
 
 /** Las mallas de un modelo con el color de su cuerpo. */
@@ -127,6 +127,25 @@ describe('RemotePlayerView', () => {
     expect(items()).toBe(1)
     view.update(0.016, [shown(1, 0, { item: null })])
     expect(items()).toBe(0)
+  })
+
+  it('el escudo cuelga a su izquierda, delante al bloquear, y no se ve si no lleva o está muerto', () => {
+    const view = new RemotePlayerView()
+    const shieldOf = () => view.group.children[0].children[1]
+    view.update(0.016, [shown(1, 0, { shield: 'iron_shield' })])
+    const shield = shieldOf()
+    expect(shield).toBeDefined()
+    expect(shield.position.x).toBeLessThan(0)
+    const lowered = shield.position.z
+    view.update(0.016, [shown(1, 0, { shield: 'iron_shield', blocking: true })])
+    expect(shieldOf()).toBe(shield)
+    expect(shield.position.z).toBeLessThan(lowered)
+    view.update(0.016, [shown(1, 0, { shield: 'iron_shield', alive: false })])
+    expect(shieldOf()).toBeUndefined()
+    view.update(0.016, [shown(1, 0, { shield: 'wood_shield' })])
+    expect(shieldOf()).toBeDefined()
+    view.update(0.016, [shown(1, 0)])
+    expect(shieldOf()).toBeUndefined()
   })
 
   it('golpea con su evento y vuelve al reposo; los muertos quedan tumbados', () => {

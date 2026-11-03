@@ -774,6 +774,7 @@ export class Room {
       yaw: cm(player.yaw),
       pitch: cm(player.pitch),
       item: inventory.selectedItem,
+      ...(inventory.equipped.shield ? { shield: inventory.equipped.shield, blocking: player.blocking } : {}),
       health: Math.round(player.health),
       alive,
       connection,

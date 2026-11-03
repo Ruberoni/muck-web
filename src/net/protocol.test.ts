@@ -94,6 +94,8 @@ describe('protocolo', () => {
       { seq: 8, tick: 13, kind: 'drop', slot: 0, all: false },
       { seq: 9, tick: 13, kind: 'station', id: 4, slot: 'input', from: INVENTORY_SIZE - 1, all: true },
       { seq: 10, tick: 13, kind: 'station', id: 0, slot: 'output', from: null, all: false },
+      { seq: 11, tick: 13, kind: 'equip', slot: INVENTORY_SIZE - 1 },
+      { seq: 12, tick: 13, kind: 'unequip', which: 'shield' },
     ]
     const moves = [
       { ...move, n: 4, aim: { kind: 'prop', id: 3 } },
@@ -114,7 +116,7 @@ describe('protocolo', () => {
       { yaw: null },
       { tick: -1 },
       { tick: 1.5 },
-      { buttons: 256 },
+      { buttons: 512 },
       { n: 0 },
       { n: 1000 },
       { aim: { kind: 'tree', id: 1 } },
@@ -142,6 +144,10 @@ describe('protocolo', () => {
       { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', from: INVENTORY_SIZE, all: true },
       { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', all: true },
       { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', from: 0 },
+      { seq: 1, tick: 1, kind: 'equip', slot: INVENTORY_SIZE },
+      { seq: 1, tick: 1, kind: 'equip' },
+      { seq: 1, tick: 1, kind: 'unequip', which: 'legs' },
+      { seq: 1, tick: 1, kind: 'unequip' },
       { seq: 1, tick: 1, kind: 'fly' },
       { seq: 1, kind: 'eat' },
     ]
@@ -220,7 +226,7 @@ describe('snap en el cable', () => {
   const pickup: PickupSnap = { id: 4, pos: { x: 1, y: 2, z: 3 }, grounded: true }
   const inventory: InventoryState = { slots: ['wood', ...Array<null>(INVENTORY_SIZE - 1).fill(null)], counts: { wood: 3 }, selected: 0 }
   const you = (withInventory: boolean): SnapWire['you'] => ({
-    player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, health: 100, hunger: 90, healDelay: 0, regenLeft: 0, regenPerSec: 0 },
+    player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, blocking: false, health: 100, hunger: 90, healDelay: 0, regenLeft: 0, regenPerSec: 0 },
     ...(withInventory ? { inventory: { ...inventory, slots: [...inventory.slots], counts: { ...inventory.counts } } } : {}),
     combat: { cooldown: 0, pendingSwing: false },
     inventoryFull: false,
@@ -248,6 +254,15 @@ describe('snap en el cable', () => {
     expect(enemyTuple(boss)).toHaveLength(7)
     const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), enemies: [enemyTuple(enemy), enemyTuple(boss)] }))
     expect(snap).toMatchObject({ enemies: [enemy, boss] })
+  })
+
+  it('el escudo solo viaja si lo lleva, con si está bloqueando', () => {
+    expect(playerTuple(player)).toHaveLength(11)
+    const guarded: PlayerSnap = { ...player, shield: 'iron_shield', blocking: true }
+    expect(playerTuple(guarded)).toHaveLength(13)
+    const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), players: [playerTuple(player), playerTuple(guarded)] }))
+    expect(snap).toMatchObject({ players: [player, guarded] })
+    expect(snap.type === 'snap' && snap.players[0]).not.toHaveProperty('shield')
   })
 
   it('las tuplas se leen como los objetos de los que salen', () => {

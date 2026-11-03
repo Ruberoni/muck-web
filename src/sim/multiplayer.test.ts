@@ -415,16 +415,21 @@ describe('Simulation con varios jugadores', () => {
     expect(craft('mithril_axe') + craft('mithril_pickaxe')).toBe(2)
     expect(inventory.count('mithril_axe')).toBe(1)
     expect(inventory.count('mithril_pickaxe')).toBe(1)
-    // Se ha pasado por todas las recetas salvo la fogata, el destilador, las espadas y el hacha de madera, que no hacen falta.
+    // Se ha pasado por todas las recetas salvo la fogata, el destilador, las espadas, el hacha de madera, los escudos y los petos, que no hacen falta.
     expect(RECIPE_IDS.filter((id) => !used.has(id))).toEqual([
       'wood_axe',
       'campfire',
       'wood_sword',
       'stone_sword',
+      'wood_shield',
       'distiller',
       'iron_sword',
       'mithril_sword',
       'meteor_sword',
+      'iron_shield',
+      'crystal_shield',
+      'iron_chestplate',
+      'mithril_chestplate',
     ])
     expect(sim.slot(0).player.health).toBeGreaterThan(0)
   })

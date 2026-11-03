@@ -30,6 +30,10 @@ const SPEED_BLEND = 14
 /** Golpe de quien no lleva ninguna herramienta ni arma, comer y colocar, y cuánto dura recibir un golpe. */
 const HURT_SECONDS = 0.4
 const ACTION_CLIP: Record<Exclude<HandAction, 'swing'>, RigAction> = { eat: 'Interact', place: 'Interact' }
+/** El escudo, colgado a la izquierda de cara a fuera; al bloquear, delante del pecho de cara al frente. */
+const SHIELD_SCALE = 1.5
+const SHIELD_DOWN = new THREE.Vector3(-0.42, 0.55, 0)
+const SHIELD_RAISED = new THREE.Vector3(-0.12, 0.8, -0.42)
 
 const isTool = (item: ItemId) => TOOL_DEFS[item] !== undefined
 
@@ -57,6 +61,8 @@ interface Model {
   action: HandAction | null
   actionTime: number
   actionLength: number
+  shield: THREE.Object3D | null
+  shieldItem: ItemId | null
 }
 
 /**
@@ -105,6 +111,7 @@ export class RemotePlayerView {
       object.rotation.set(0, pose.yaw, data.alive || rig ? 0 : Math.PI / 2)
       model.head.rotation.x = pose.pitch
       this.hold(model, data.item)
+      this.wear(model, data.alive ? data.shield : null, data.blocking)
       this.track(model, dt, pose.x, pose.z)
       if (rig) {
         // forward = (-sin(yaw), -cos(yaw)), y su derecha, (cos(yaw), -sin(yaw)).
@@ -164,7 +171,7 @@ export class RemotePlayerView {
     object.add(boxes)
     object.traverse((o) => (o.castShadow = true))
     this.group.add(object)
-    const model: Model = { object, boxes, head, arm, rig: null, skin: null, vx: 0, vz: 0, last: { x, z }, material, held: null, item: null, action: null, actionTime: 0, actionLength: 0 }
+    const model: Model = { object, boxes, head, arm, rig: null, skin: null, vx: 0, vz: 0, last: { x, z }, material, held: null, item: null, action: null, actionTime: 0, actionLength: 0, shield: null, shieldItem: null }
     this.models.set(id, model)
     return model
   }
@@ -175,13 +182,8 @@ export class RemotePlayerView {
     model.material.dispose()
   }
 
-  /** Cambia el objeto de la mano si ha cambiado (un clon que comparte geometría y material). */
-  private hold(model: Model, item: ItemId | null) {
-    if (model.item === item && (item === null || model.held)) return
-    model.held?.removeFromParent()
-    model.item = item
-    model.held = null
-    if (!item) return
+  /** El modelo de `item` a la escala de su mano, hecho una vez: se clona, compartiendo geometría y material. */
+  private template(item: ItemId): THREE.Group {
     let template = this.items.get(item)
     if (!template) {
       template = itemModel(item)
@@ -189,12 +191,39 @@ export class RemotePlayerView {
       template.traverse((o) => (o.castShadow = true))
       this.items.set(item, template)
     }
-    model.held = template.clone()
+    return template
+  }
+
+  /** Cambia el objeto de la mano si ha cambiado (un clon que comparte geometría y material). */
+  private hold(model: Model, item: ItemId | null) {
+    if (model.item === item && (item === null || model.held)) return
+    model.held?.removeFromParent()
+    model.item = item
+    model.held = null
+    if (!item) return
+    model.held = this.template(item).clone()
     if (model.rig) model.rig.hand.add(model.held)
     else {
       model.held.position.set(0, 0, -0.5)
       model.arm.add(model.held)
     }
+  }
+
+  /** Cambia el escudo si ha cambiado y lo pone abajo o arriba. */
+  private wear(model: Model, item: ItemId | null, blocking: boolean) {
+    if (model.shieldItem !== item) {
+      model.shield?.removeFromParent()
+      model.shieldItem = item
+      model.shield = null
+      if (item) {
+        model.shield = this.template(item).clone()
+        model.shield.scale.setScalar(SHIELD_SCALE)
+        model.object.add(model.shield)
+      }
+    }
+    if (!model.shield) return
+    model.shield.position.copy(blocking ? SHIELD_RAISED : SHIELD_DOWN)
+    model.shield.rotation.set(0, blocking ? 0 : Math.PI / 2, 0)
   }
 
   /** El brazo apunta hacia donde mira y, si hay una acción en curso, sigue su pose. */

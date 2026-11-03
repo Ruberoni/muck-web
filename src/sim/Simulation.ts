@@ -38,6 +38,7 @@ import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, scaleProps, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, type Structure, type StructuresState, type StructureSpot } from './structures'
+import { damageTaken, spendGuard } from './equipment'
 import { putInto, takeFrom } from './stations'
 import { hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
@@ -309,17 +310,27 @@ export class Simulation {
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
     const flying = this.structures.flying
     this.enemies.decoy = flying ? { id: PLANE_TARGET, pos: flying, alive: true, radius: flying.radius } : null
-    const hits = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
+    // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
+    const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
     hits.push(...this.worldEvents.step(this.tick, prey, this.clock.phase, this.clock.day, this.clock.eternal))
-    for (const { playerId, damage } of hits) {
+    // Golpe a golpe, por si el escudo para unos y otros no; el aviso, uno por jugador y paso.
+    const taken = new Map<PlayerId, { dmg: number; blocked: number }>()
+    for (const { playerId, damage, from } of hits) {
       if (playerId === PLANE_TARGET) {
         this.hurtPlane(damage)
         continue
       }
-      hurt(this.slot(playerId).player, damage)
-      this.events.emit({ type: 'playerHurt', id: playerId, dmg: damage })
+      const { player, inventory } = this.slot(playerId)
+      const hit = damageTaken(damage, inventory.equipped, player, from)
+      if (hit.blocked > 0) spendGuard(player, hit.blocked)
+      hurt(player, hit.damage)
+      const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0 }
+      sum.dmg += hit.damage
+      sum.blocked += hit.blocked
+      taken.set(playerId, sum)
     }
+    for (const [id, { dmg, blocked }] of taken) this.events.emit({ type: 'playerHurt', id, dmg, ...(blocked > 0 ? { blocked } : {}) })
 
     growBerries(this.world.props, STEP, this.events.emit)
     this.structures.burn(STEP, this.oilUnit, isNight(this.clock.phase))
@@ -692,6 +703,10 @@ export class Simulation {
     const { pos } = slot.player
     for (const item of slot.inventory.slots) {
       if (item) this.pickups.dropPile(item, slot.inventory.count(item), pos.x, pos.y + DEATH_DROP_HEIGHT, pos.z, true)
+    }
+    // Lo puesto también cae.
+    for (const item of Object.values(slot.inventory.equipped)) {
+      if (item) this.pickups.dropPile(item, 1, pos.x, pos.y + DEATH_DROP_HEIGHT, pos.z, true)
     }
     slot.inventory.clear()
     Object.assign(slot.combat, createCombat())

@@ -142,6 +142,10 @@ const PARTS: Record<PropKind, Part[]> = {
     { geometry: rockGeometry, material: material('#6f6c68') },
     { geometry: crystals, material: material('#1c1b1a', { roughness: 0.35 }) },
   ],
+  crystal_ore: [
+    { geometry: rockGeometry, material: material('#6c7080') },
+    { geometry: crystals, material: material('#7ff0ff', { roughness: 0.15, emissive: '#2a9fb0' }) },
+  ],
   bush: [{ geometry: bushGeometry, material: material('#3d7d35') }, ...berryGeometries.map((geometry) => ({ geometry, material: berryMaterial }))],
   healing_herb: [{ geometry: herbGeometry, material: material('#57a85a') }, { geometry: flowerGeometry, material: material('#f2a6d8', { emissive: '#5c2450' }) }],
 }

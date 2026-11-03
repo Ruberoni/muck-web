@@ -55,6 +55,8 @@ export class Input {
   private wheel = 0
   private stepper = new WheelStepper()
   attackHeld = false
+  /** El clic derecho mantenido: bloquea si hay escudo (lo decide Game). */
+  blockHeld = false
   locked = false
 
   constructor(
@@ -86,7 +88,10 @@ export class Input {
     // El clic que inicia o reanuda llega con el juego aún en menú/pausa, así que no cuenta como golpe.
     document.addEventListener('mousedown', (e) => {
       if (!this.callbacks.isPlaying()) return
-      if (e.button === 2) return this.press(RIGHT_CLICK)
+      if (e.button === 2) {
+        this.blockHeld = true
+        return this.press(RIGHT_CLICK)
+      }
       if (e.button !== 0) return
       this.attackHeld = true
       this.press(CLICK)
@@ -97,6 +102,7 @@ export class Input {
     })
     document.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.attackHeld = false
+      if (e.button === 2) this.blockHeld = false
     })
 
     // Solo con el ratón capturado: en menús y pausa la rueda sigue desplazando la página.
@@ -182,6 +188,7 @@ export class Input {
       right: k.has('KeyD'),
       sprint: k.has('ShiftLeft') || k.has('ShiftRight'),
       jump: k.has('Space'),
+      block: this.blockHeld,
     }
   }
 
@@ -191,6 +198,7 @@ export class Input {
     this.wheel = 0
     this.stepper.reset()
     this.attackHeld = false
+    this.blockHeld = false
     this.dx = this.dy = 0
   }
 }

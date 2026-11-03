@@ -59,6 +59,13 @@ describe('teclas a acciones', () => {
     expect(step([RIGHT_CLICK]).actions).toEqual([{ kind: 'eat' }])
   })
 
+  it('con escudo, el clic derecho bloquea en vez de comer, salvo con comida en la mano; F come igual', () => {
+    expect(step([RIGHT_CLICK], { shield: true }).actions).toEqual([])
+    expect(step([RIGHT_CLICK], { shield: true, slots: slots({ 0: 'wood_sword' }) }).actions).toEqual([])
+    expect(step([RIGHT_CLICK], { shield: true, slots: slots({ 0: 'cooked_meat' }) }).actions).toEqual([{ kind: 'eat' }])
+    expect(step(['KeyF'], { shield: true }).actions).toEqual([{ kind: 'eat' }])
+  })
+
   it('Q tira uno de la casilla elegida y Ctrl + Q la pila; con la mano vacía no hace nada', () => {
     const wood = slots({ 2: 'wood' })
     expect(step(['KeyQ'], { slots: wood, selected: 2 }).actions).toEqual([{ kind: 'drop', slot: 2, all: false }])

@@ -7,6 +7,9 @@ import { CRAFT_MANY, RECIPE_GROUPS, recipeStatus, STATION_NAMES } from './recipe
 import type { ActionData } from '../sim/commands'
 import { slotFor, STATION_DEFS, STATION_SLOTS, type StationSlot } from '../sim/stations'
 import type { Structure } from '../sim/structures'
+import { EQUIP_SLOTS, equipSlotOf, type EquipSlot } from '../sim/equipment'
+
+const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { chest: 'Pecho', shield: 'Escudo' }
 
 const STATION_SLOT_NAMES: Record<StationSlot, string> = { input: 'Entrada', fuel: 'Combustible', output: 'Salida' }
 const STATION_HINT = 'Mayúsculas + clic en una casilla: meter la pila · Clic derecho: meter una · Arrastrar a una ranura · Clic en una ranura: sacarla'
@@ -16,7 +19,8 @@ const CLOSE_KEYS: ReadonlySet<string> = new Set([...INVENTORY_KEYS, RECIPES_KEY]
 /** Con la pantalla abierta no hacen nada: no deben pulsar lo que tenga el foco ni llegar al juego. */
 const BLOCKED_KEYS: ReadonlySet<string> = new Set(['Space', 'Enter', 'NumpadEnter'])
 
-const PICK_HINT = 'Clic en una casilla y en otra, o arrastrar: intercambiarlas · 1–9 con el ratón encima: a esa casilla de la hotbar · Q: tirar uno · Ctrl + Q: todos'
+const PICK_HINT =
+  'Clic en una casilla y en otra, o arrastrar: intercambiarlas · 1–9 con el ratón encima: a esa casilla de la hotbar · Q: tirar uno · Ctrl + Q: todos · Mayúsculas + clic en un peto o un escudo, o arrastrarlo a su hueco: ponérselo'
 
 /** La casilla de la hotbar que nombra una tecla (1–9), o null si no es una de ellas. */
 export function hotbarSlotOf(code: string): number | null {
@@ -69,6 +73,7 @@ export class InventoryScreen {
   onclose: (() => void) | null = null
   onescape: (() => void) | null = null
   onstation: ((action: Extract<ActionData, { kind: 'station' }>) => void) | null = null
+  onequip: ((action: Extract<ActionData, { kind: 'equip' | 'unequip' }>) => void) | null = null
   private root: HTMLElement
   private slots: SlotView[] = []
   private recipes: RecipeView[] = []
@@ -87,6 +92,8 @@ export class InventoryScreen {
   private stationTitle: HTMLElement
   private stationSlots = new Map<StationSlot, SlotView>()
   private stationBars: { progress: HTMLElement; burn: HTMLElement; fuelRow: HTMLElement }
+  /** Lo que se lleva puesto: un clic lo quita. */
+  private equipSlots = new Map<EquipSlot, SlotView>()
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'inventory', parent)
@@ -94,12 +101,35 @@ export class InventoryScreen {
     const panel = el('div', 'inventory-panel', this.root)
     const slotsColumn = el('div', 'inventory-slots', panel)
     el('h2', 'title', slotsColumn).textContent = 'Inventario'
+    const equipment = el('div', 'inventory-equipment', slotsColumn)
+    for (const which of EQUIP_SLOTS) {
+      const root = el('div', 'slot equip-slot', equipment)
+      el('span', 'equip-slot-name', root).textContent = EQUIP_SLOT_NAMES[which]
+      root.addEventListener('click', () => {
+        if (!this.inventory?.equipped[which]) return
+        this.picked = null
+        this.onequip?.({ kind: 'unequip', which })
+      })
+      root.addEventListener('dragover', (e) => {
+        if (this.dragged !== null && equipSlotOf(this.inventory?.slots[this.dragged]) === which) e.preventDefault()
+      })
+      root.addEventListener('drop', (e) => {
+        e.preventDefault()
+        const from = this.dragged
+        this.dragged = null
+        if (from !== null && equipSlotOf(this.inventory?.slots[from]) === which) this.onequip?.({ kind: 'equip', slot: from })
+      })
+      this.equipSlots.set(which, { root, icon: el('div', 'icon', root), count: el('span', 'count', root), item: undefined })
+    }
     const backpack = el('div', 'inventory-grid', slotsColumn)
     const hotbar = el('div', 'inventory-grid hotbar-row', slotsColumn)
     for (let i = 0; i < INVENTORY_SIZE; i++) {
       const root = el('div', 'slot', i < SLOT_COUNT ? hotbar : backpack)
       if (i < SLOT_COUNT) el('span', 'key', root).textContent = String(i + 1)
-      root.addEventListener('click', (e) => (e.shiftKey && this.station ? this.toStation(i, true) : this.click(i)))
+      root.addEventListener('click', (e) => {
+        if (e.shiftKey && this.station) this.toStation(i, true)
+        else if (!(e.shiftKey && this.equip(i))) this.click(i)
+      })
       root.addEventListener('contextmenu', () => this.station && this.toStation(i, false))
       root.addEventListener('mouseenter', () => (this.hovered = i))
       root.addEventListener('mouseleave', () => {
@@ -258,6 +288,15 @@ export class InventoryScreen {
     this.stationBars.burn.style.width = `${Math.min(100, (state.burn / 60) * 100)}%`
   }
 
+  /** Se pone lo de la casilla `i` si es un peto o un escudo; devuelve si lo era. */
+  private equip(i: number): boolean {
+    if (!equipSlotOf(this.inventory?.slots[i])) return false
+    this.picked = null
+    this.onequip?.({ kind: 'equip', slot: i })
+    this.render()
+    return true
+  }
+
   /** Mete en la estación abierta lo de la casilla `i`, en la ranura que le toca (la pila con `all`, si no una). */
   private toStation(i: number, all: boolean) {
     const item = this.inventory?.slots[i]
@@ -328,6 +367,14 @@ export class InventoryScreen {
       slot.root.classList.toggle('selected', i === inventory.selected)
       slot.root.classList.toggle('picked', i === this.picked)
     })
+    for (const [which, view] of this.equipSlots) {
+      const item = inventory.equipped[which]
+      if (item === view.item) continue
+      view.item = item
+      view.root.classList.toggle('filled', !!item)
+      view.root.title = item ? `${ITEM_NAMES[item]} · clic: quitárselo` : EQUIP_SLOT_NAMES[which]
+      view.icon.innerHTML = item ? ICONS[item] : ''
+    }
     const picked = this.picked === null ? undefined : inventory.slots[this.picked]
     this.label.textContent =
       picked === undefined ? (this.station ? STATION_HINT : PICK_HINT) : `${picked ? ITEM_NAMES[picked] : 'Casilla vacía'}: clic en otra casilla para intercambiarlas`

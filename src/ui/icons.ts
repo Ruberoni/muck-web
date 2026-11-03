@@ -8,6 +8,10 @@ const pickaxe = (head: string, edge: string) =>
 const sword = (blade: string, edge: string) =>
   `<svg viewBox="0 0 32 32"><polygon points="5,24 8,27 12,23 9,20" fill="#8a5a32"/><polygon points="6,16 16,26 18,24 8,14" fill="#6b4426"/><polygon points="11,18.5 13.5,21 29,6 29,3 26,3" fill="${blade}"/><polygon points="13.5,21 29,6 29,3" fill="${edge}"/></svg>`
 
+const shield = (face: string, rim: string, boss: string) =>
+  `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="${rim}"/><circle cx="16" cy="16" r="10.5" fill="${face}"/><circle cx="16" cy="16" r="3.5" fill="${boss}"/></svg>`
+const chestplate = (metal: string, shade: string) =>
+  `<svg viewBox="0 0 32 32"><path d="M5 8 L11 5 Q16 9 21 5 L27 8 L25 14 L23 13 L23 27 H9 V13 L7 14 Z" fill="${metal}"/><path d="M16 9 V27 H23 V13 L25 14 L27 8 L21 5 Q19 8 16 9" fill="${shade}"/><rect x="10" y="18" width="12" height="2" fill="#5f6670"/></svg>`
 /** Iconos SVG de cada objeto, para la hotbar, la pantalla de inventario y las recetas. */
 export const ICONS: Record<ItemId, string> = {
   wood: `<svg viewBox="0 0 32 32"><rect x="4" y="9" width="24" height="14" rx="3" fill="#8a5a32"/><ellipse cx="26" cy="16" rx="4" ry="7" fill="#d9a86a"/><ellipse cx="26" cy="16" rx="2" ry="3.5" fill="#b07b45"/></svg>`,
@@ -27,6 +31,12 @@ export const ICONS: Record<ItemId, string> = {
   mithril_sword: sword('#8fd0f2', '#4f9cc8'),
   meteor_sword: sword('#ff8a3b', '#c8400f'),
   coal: `<svg viewBox="0 0 32 32"><polygon points="6,20 11,9 21,7 27,15 24,25 12,26" fill="#2a2826"/><polygon points="11,9 21,7 17,15" fill="#46423e"/><polygon points="17,15 27,15 24,25" fill="#1a1918"/></svg>`,
+  crystal: `<svg viewBox="0 0 32 32"><polygon points="16,3 20,12 16,28 12,12" fill="#7ff0ff"/><polygon points="16,3 20,12 16,28" fill="#3cc8dc"/><polygon points="7,11 11,16 9,27 5,17" fill="#a8f6ff"/><polygon points="25,10 27,17 23,27 21,16" fill="#3cc8dc"/></svg>`,
+  wood_shield: shield('#c8955a', '#8a5a32', '#5f6670'),
+  iron_shield: shield('#dfe3e8', '#5f6670', '#9aa3ad'),
+  crystal_shield: shield('#7ff0ff', '#dfe3e8', '#3cc8dc'),
+  iron_chestplate: chestplate('#dfe3e8', '#9aa3ad'),
+  mithril_chestplate: chestplate('#8fd0f2', '#4f9cc8'),
   coin: `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="#d9a632"/><circle cx="16" cy="16" r="8" fill="#ffd23f"/><rect x="14" y="10" width="4" height="12" rx="1" fill="#d9a632"/></svg>`,
   plane_engine: `<svg viewBox="0 0 32 32"><rect x="7" y="10" width="16" height="12" rx="2" fill="#7f8c8d"/><rect x="11" y="6" width="8" height="4" fill="#5c636d"/><rect x="23" y="13" width="4" height="6" fill="#5c636d"/><circle cx="14" cy="16" r="3" fill="#2a2320"/></svg>`,
   boss_trophy: `<svg viewBox="0 0 32 32"><path d="M9 5 H23 V12 A7 7 0 0 1 9 12 Z" fill="#ffd23f"/><rect x="14" y="18" width="4" height="5" fill="#d9a632"/><rect x="10" y="23" width="12" height="4" fill="#8a5a32"/></svg>`,

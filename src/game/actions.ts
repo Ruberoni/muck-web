@@ -1,5 +1,5 @@
 import type { ActionData } from '../sim/commands'
-import { EAT_KEY } from '../sim/constants'
+import { CONSUMABLE_DEFS, EAT_KEY } from '../sim/constants'
 import { cycleSlot, SLOT_COUNT, type ItemId } from '../sim/inventory'
 import { placeableOf } from '../sim/structures'
 import { CLICK, RIGHT_CLICK, withCtrl } from './input'
@@ -12,6 +12,9 @@ export const USE_KEY = 'KeyE'
 export const RECIPES_KEY = 'KeyC'
 /** Tira uno de la casilla elegida; con Ctrl, la pila entera (en la pantalla de inventario, la casilla bajo el ratón). */
 export const DROP_KEY = 'KeyQ'
+
+/** Si lo que se lleva en la mano se come. */
+export const holdsFood = (item: ItemId | null | undefined) => !!item && CONSUMABLE_DEFS[item] !== undefined
 
 /** Qué se quiere ver al abrir la pantalla de inventario. */
 export type InventoryFocus = 'slots' | 'recipes'
@@ -29,6 +32,8 @@ export interface KeyStep {
   clickSwings: boolean
   /** Hay algo cerca que usar: E actúa sobre ello en vez de abrir el inventario. */
   usable?: boolean
+  /** Lleva escudo: el clic derecho bloquea en vez de comer, salvo con comida en la mano. */
+  shield?: boolean
 }
 
 /**
@@ -60,7 +65,7 @@ export function stepActions(queued: readonly ActionData[], k: KeyStep): { action
     if (placeableOf(slots[selected])) actions.push({ kind: 'place' })
     else if (k.clickSwings) actions.push({ kind: 'swing' })
   }
-  if (k.presses.has(EAT_KEY) || k.presses.has(RIGHT_CLICK)) actions.push({ kind: 'eat' })
+  if (k.presses.has(EAT_KEY) || (k.presses.has(RIGHT_CLICK) && !(k.shield && !holdsFood(slots[selected])))) actions.push({ kind: 'eat' })
   if (k.presses.has(DROP_KEY) && slots[selected]) actions.push({ kind: 'drop', slot: selected, all: k.presses.has(withCtrl(DROP_KEY)) })
   const opensInventory = [...INVENTORY_KEYS].some((code) => k.presses.has(code) && !(k.usable && code === USE_KEY))
   const inventory = k.presses.has(RECIPES_KEY) ? 'recipes' : opensInventory ? 'slots' : null

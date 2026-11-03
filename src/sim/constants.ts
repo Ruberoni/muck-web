@@ -100,7 +100,7 @@ export const BERRIES_PER_BUSH = 6
 export const BERRY_REGROW = 15
 
 // Las claves son los tipos de prop: `PropKind` (props.ts) se saca de aquí, así que un tipo nuevo solo se añade aquí.
-export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb' | 'coal_ore', PropDef> = {
+export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb' | 'coal_ore' | 'crystal_ore', PropDef> = {
   // Recolectar lleva tiempo, y el tiempo es lo que falta: mejorar una herramienta es ganarlo.
   tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 16, drop: { item: 'wood', amount: 4 } },
   birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 40, drop: { item: 'birch_wood', amount: 4 } },
@@ -110,6 +110,8 @@ export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_or
   mithril_ore: { name: 'Mena de mithril', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 96, drop: { item: 'mithril_ore', amount: 5 } },
   // El combustible bueno del horno y del destilador: arde cuatro veces más que la madera.
   coal_ore: { name: 'Mena de carbón', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 1, hp: 24, drop: { item: 'coal', amount: 2 } },
+  // En las cimas, junto al mithril: para el escudo de cristal.
+  crystal_ore: { name: 'Mena de cristal', verb: 'picar', family: 'rock', tool: 'pickaxe', tier: 3, hp: 72, drop: { item: 'crystal', amount: 3 } },
   bush: {
     name: 'Arbusto de bayas',
     verb: 'recoger',

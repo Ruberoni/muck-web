@@ -162,8 +162,12 @@ export class GameAudio {
         case 'structurePlaced':
           s.play('place')
           break
+        // Lo que para el escudo suena a metal.
         case 'playerHurt':
-          if (e.id === me) s.play('hurt')
+          if (e.id === me) s.play(e.blocked ? 'clank' : 'hurt')
+          break
+        case 'playerEquipped':
+          if (e.id === me) s.play('place')
           break
         case 'playerAte':
           if (e.id === me) s.play('eat')
@@ -237,7 +241,7 @@ export class GameAudio {
           at(e, REMOTE_HEARING.place, 'place')
           break
         case 'playerHurt':
-          at(e, REMOTE_HEARING.hurt, 'hurt')
+          at(e, REMOTE_HEARING.hurt, e.blocked ? 'clank' : 'hurt')
           break
         case 'playerAte':
           at(e, REMOTE_HEARING.other, 'eat')

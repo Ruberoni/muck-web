@@ -1,7 +1,7 @@
 import { PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import type { Emit } from './events'
-import { createBirchRng, createCoalOreRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
+import { createBirchRng, createCoalOreRng, createCrystalOreRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
 import { biomeAt, BIOME_FLORA } from './world/biomes'
 import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WORLD_SIZE } from './world/terrain'
 
@@ -14,6 +14,7 @@ export const DARKPINE_COUNT = 20
 export const MITHRIL_ORE_COUNT = 16
 export const HERB_COUNT = 30
 export const COAL_ORE_COUNT = 30
+export const CRYSTAL_ORE_COUNT = 12
 /** Las rocas llegan hasta la arena; el resto de lo que crece en el suelo, solo hasta la hierba. */
 const ROCK_MIN_HEIGHT = 0.4
 /** Franjas de altura del terreno (en el centro) de algunos tipos: las de las menas no se solapan entre sí. */
@@ -24,6 +25,8 @@ export const DARKPINE_BAND = { min: 6, max: 9 }
 export const MITHRIL_ORE_BAND = { min: 8.5, max: Infinity }
 /** Entre la pradera y la montaña: se encuentra pronto, con el pico de madera. */
 export const COAL_ORE_BAND = { min: 3, max: 8 }
+/** En las cimas, como el mithril. */
+export const CRYSTAL_ORE_BAND = { min: 8, max: Infinity }
 /** Los tipos que salen después de los arbustos no se colocan a menos de esto (hasta su borde) del punto de aparición. */
 export const SPAWN_EXCLUSION = 8
 /** Intentos por prop de cada tipo: sobran (el test de cantidad exacta lo vigila). */
@@ -223,6 +226,17 @@ export function buildPropPlacements(): PropPlacement[] {
     const ry = coalRng() * Math.PI * 2
     if (y < COAL_ORE_BAND.min || y > COAL_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     return { kind: 'coal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
+  })
+
+  const crystalRng = createCrystalOreRng()
+  scatter(crystalRng, CRYSTAL_ORE_COUNT, (x, z, y) => {
+    const sx = 0.6 + crystalRng() * 0.4
+    const sy = 0.6 + crystalRng() * 0.4
+    const sz = 0.6 + crystalRng() * 0.4
+    const rx = crystalRng() * Math.PI
+    const ry = crystalRng() * Math.PI * 2
+    if (y < CRYSTAL_ORE_BAND.min || y > CRYSTAL_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    return { kind: 'crystal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
   return placements

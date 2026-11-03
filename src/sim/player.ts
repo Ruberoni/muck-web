@@ -19,6 +19,7 @@ import {
   WATER_SPEED_FACTOR,
   WORLD_BOUND_FACTOR,
 } from './constants'
+import { BLOCK_SPEED_FACTOR } from './equipment'
 import { NO_HEALING, type Vitals } from './survival'
 
 export interface Vec3 {
@@ -34,9 +35,11 @@ export interface PlayerInput {
   right: boolean
   sprint: boolean
   jump: boolean
+  /** Bloquear con el escudo (solo llega si se lleva uno). */
+  block: boolean
 }
 
-export const NO_INPUT: PlayerInput = { forward: false, back: false, left: false, right: false, sprint: false, jump: false }
+export const NO_INPUT: PlayerInput = { forward: false, back: false, left: false, right: false, sprint: false, jump: false, block: false }
 
 export interface PlayerEnv {
   heightAt(x: number, z: number): number
@@ -58,6 +61,8 @@ export interface Player extends Vitals {
   exhausted: boolean
   sprintLocked: boolean
   regenDelay: number
+  /** Con el escudo arriba: anda a la mitad, no corre, no golpea y la resistencia no se recupera. */
+  blocking: boolean
 }
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
@@ -80,6 +85,7 @@ export function createPlayer(env: PlayerEnv, x: number, z: number, yaw = 0): Pla
     exhausted: false,
     sprintLocked: false,
     regenDelay: 0,
+    blocking: false,
     health: HEALTH_MAX,
     hunger: HUNGER_MAX,
     ...NO_HEALING,
@@ -125,6 +131,8 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
   player.floating = ground < WATER_LEVEL - FLOAT_DEPTH
 
   if (!input.sprint) player.sprintLocked = false
+  // Agotado, el escudo baja hasta recuperarse.
+  player.blocking = input.block && !player.exhausted
 
   // Dirección local normalizada (la diagonal no es más rápida), rotada por el yaw.
   let mx = (input.right ? 1 : 0) - (input.left ? 1 : 0)
@@ -141,11 +149,11 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
   const wz = -mx * sin + mz * cos
 
   const canSprint = !player.exhausted && !player.sprintLocked
-  const sprinting = player.grounded && moving && input.sprint && canSprint && !player.inWater
+  const sprinting = player.grounded && moving && input.sprint && canSprint && !player.inWater && !player.blocking
   let spent = false
 
   if (player.grounded) {
-    const speed = (sprinting ? SPRINT_SPEED : WALK_SPEED) * (player.inWater ? WATER_SPEED_FACTOR : 1)
+    const speed = (sprinting ? SPRINT_SPEED : WALK_SPEED) * (player.inWater ? WATER_SPEED_FACTOR : 1) * (player.blocking ? BLOCK_SPEED_FACTOR : 1)
     vel.x = wx * speed
     vel.z = wz * speed
   }
@@ -173,7 +181,7 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
 
   if (spent) player.regenDelay = STAMINA_REGEN_DELAY
   else if (player.regenDelay > 0) player.regenDelay = Math.max(0, player.regenDelay - dt)
-  else player.stamina = Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN_PER_SEC * dt)
+  else if (!player.blocking) player.stamina = Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN_PER_SEC * dt)
 
   if (player.exhausted && player.stamina >= STAMINA_RECOVER_THRESHOLD) player.exhausted = false
 

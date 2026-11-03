@@ -52,4 +52,5 @@ export const BIOME_FLORA: Record<PropKind, Record<Biome, number>> = {
   mithril_ore: { beach: 0, meadow: 0, forest: 0, mountain: 1 },
   healing_herb: { beach: 0, meadow: 0.15, forest: 1, mountain: 0 },
   coal_ore: { beach: 0, meadow: 0.4, forest: 0.3, mountain: 1 },
+  crystal_ore: { beach: 0, meadow: 0, forest: 0, mountain: 1 },
 }

@@ -1,3 +1,5 @@
+import { equipSlotOf, noEquipment, type EquipSlot, type Equipped } from './equipment'
+
 export type ItemId =
   | 'wood'
   | 'stone'
@@ -36,6 +38,12 @@ export type ItemId =
   | 'plane_engine'
   | 'coin'
   | 'coal'
+  | 'crystal'
+  | 'iron_chestplate'
+  | 'mithril_chestplate'
+  | 'wood_shield'
+  | 'iron_shield'
+  | 'crystal_shield'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -74,6 +82,12 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   boss_trophy: 'Trofeo de jefe',
   coin: 'Moneda',
   coal: 'Carbón',
+  crystal: 'Cristal',
+  iron_chestplate: 'Peto de hierro',
+  mithril_chestplate: 'Peto de mithril',
+  wood_shield: 'Escudo de madera',
+  iron_shield: 'Escudo de hierro',
+  crystal_shield: 'Escudo de cristal',
   plane_engine: 'Motor del avión',
 }
 
@@ -122,6 +136,12 @@ export const GROUND_TIME: Record<ItemId, number | null> = {
   plane_engine: null,
   coin: null,
   coal: MATERIAL,
+  crystal: MATERIAL,
+  iron_chestplate: GEAR,
+  mithril_chestplate: GEAR,
+  wood_shield: GEAR,
+  iron_shield: GEAR,
+  crystal_shield: GEAR,
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9
@@ -136,6 +156,8 @@ export interface InventoryState {
   slots: (ItemId | null)[]
   counts: Partial<Record<ItemId, number>>
   selected: number
+  /** Lo que lleva puesto (las partidas de antes no lo traen). */
+  equipped?: Equipped
 }
 
 export class Inventory {
@@ -147,6 +169,8 @@ export class Inventory {
   readonly slots: (ItemId | null)[]
   /** Casilla de la hotbar elegida. */
   selected = 0
+  /** Lo que lleva puesto: no ocupa casillas ni cuenta en `count`. */
+  equipped: Equipped = noEquipment()
   private listeners: (() => void)[] = []
 
   /** `size` solo cambia en las pruebas, para llenarlo con pocos objetos. */
@@ -186,6 +210,7 @@ export class Inventory {
     this.counts.clear()
     this.slots.fill(null)
     this.selected = 0
+    this.equipped = noEquipment()
     this.emit()
   }
 
@@ -205,6 +230,39 @@ export class Inventory {
     this.slots[from] = this.slots[to]
     this.slots[to] = item
     this.emit()
+    return true
+  }
+
+  /**
+   * Se pone lo de la casilla `index` en su hueco del equipo; lo que llevaba ahí vuelve al inventario (a esa misma
+   * casilla, si se ha quedado vacía). Devuelve false, sin tocar nada, si no se pone o no hay sitio para lo que se quita.
+   */
+  equip(index: number): boolean {
+    const item = this.slots[index]
+    const slot = equipSlotOf(item)
+    if (!item || !slot || this.equipped[slot] === item) return false
+    const worn = this.equipped[slot]
+    const last = this.count(item) === 1
+    if (worn && !last && !this.canAdd(worn)) return false
+    this.equipped[slot] = item
+    if (last) {
+      this.counts.delete(item)
+      this.slots[index] = null
+    } else this.counts.set(item, this.count(item) - 1)
+    if (worn) {
+      if (!this.counts.has(worn)) this.slots[last ? index : this.slots.indexOf(null)] = worn
+      this.counts.set(worn, this.count(worn) + 1)
+    }
+    this.emit()
+    return true
+  }
+
+  /** Se quita lo del hueco `slot` al inventario; false si no lleva nada o no cabe. */
+  unequip(slot: EquipSlot): boolean {
+    const worn = this.equipped[slot]
+    if (!worn || !this.canAdd(worn)) return false
+    this.equipped[slot] = null
+    this.add(worn, 1)
     return true
   }
 
@@ -233,7 +291,7 @@ export class Inventory {
   }
 
   save(): InventoryState {
-    return { slots: [...this.slots], counts: this.toJSON(), selected: this.selected }
+    return { slots: [...this.slots], counts: this.toJSON(), selected: this.selected, equipped: { ...this.equipped } }
   }
 
   /** Solo avisa si el contenido cambia: el cliente en red copia el suyo del servidor 20 veces por segundo. */
@@ -242,12 +300,13 @@ export class Inventory {
     this.counts = new Map(Object.entries(state.counts) as [ItemId, number][])
     for (let i = 0; i < this.slots.length; i++) this.slots[i] = state.slots[i] ?? null
     this.selected = state.selected
+    this.equipped = { ...noEquipment(), ...state.equipped }
     if (this.key() !== before) this.emit()
   }
 
   /** Casillas, recuentos y selección como texto, para comparar (sin depender del orden del Map). */
   private key(): string {
-    return JSON.stringify([this.slots, this.slots.map((item) => (item ? this.count(item) : 0)), this.selected])
+    return JSON.stringify([this.slots, this.slots.map((item) => (item ? this.count(item) : 0)), this.selected, this.equipped])
   }
 
   private emit() {

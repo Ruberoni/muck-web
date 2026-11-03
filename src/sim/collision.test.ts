@@ -47,7 +47,7 @@ describe('resolveCircle', () => {
     const grid = gridOf(trunk)
     const env: PlayerEnv = { heightAt: () => 5, collide: (p) => resolveCircle(p, R, grid) }
     const player = createPlayer(env, 0, 0)
-    for (let i = 0; i < 60; i++) stepPlayer(player, { forward: true, back: false, left: false, right: false, sprint: true, jump: false }, env, 1 / 60)
+    for (let i = 0; i < 60; i++) stepPlayer(player, { forward: true, back: false, left: false, right: false, sprint: true, jump: false, block: false }, env, 1 / 60)
     expect(player.pos.z).toBeGreaterThan(trunk.z)
     expect(dist(player.pos, trunk)).toBeGreaterThanOrEqual(trunk.radius + R - EPS)
   })

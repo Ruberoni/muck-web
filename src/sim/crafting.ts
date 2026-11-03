@@ -29,6 +29,11 @@ export type RecipeId =
   | 'iron_sword'
   | 'mithril_sword'
   | 'meteor_sword'
+  | 'wood_shield'
+  | 'iron_shield'
+  | 'crystal_shield'
+  | 'iron_chestplate'
+  | 'mithril_chestplate'
   | 'distiller'
 
 export interface Recipe {
@@ -37,11 +42,6 @@ export interface Recipe {
   cost: { item: ItemId; amount: number }[]
   /** Estructura que hay que tener cerca (la fogata también cuenta como estación); null, en cualquier sitio. */
   station: StructureKind | null
-  /**
-   * Segundos que trabaja la estación: se carga, se puede ir uno y lo terminado queda junto a ella para quien pase. Sin
-   * esto se fabrica al momento y va al inventario.
-   */
-  time?: number
 }
 
 // El orden solo sirve para la UI: es el de la columna de recetas de la pantalla de inventario.
@@ -54,6 +54,7 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'stone_axe', result: 'stone_axe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
   { id: 'stone_pickaxe', result: 'stone_pickaxe', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 5 }], station: 'workbench' },
   { id: 'stone_sword', result: 'stone_sword', cost: [{ item: 'wood', amount: 3 }, { item: 'stone', amount: 2 }], station: 'workbench' },
+  { id: 'wood_shield', result: 'wood_shield', cost: [{ item: 'wood', amount: 8 }], station: 'workbench' },
   { id: 'furnace', result: 'furnace', cost: [{ item: 'stone', amount: 12 }, { item: 'wood', amount: 4 }], station: 'workbench' },
   { id: 'distiller', result: 'distiller', cost: [{ item: 'wood', amount: 8 }, { item: 'stone', amount: 4 }], station: 'workbench' },
   { id: 'anvil', result: 'anvil', cost: [{ item: 'iron_bar', amount: 4 }, { item: 'stone', amount: 6 }], station: 'workbench' },
@@ -64,6 +65,10 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'mithril_pickaxe', result: 'mithril_pickaxe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_sword', result: 'mithril_sword', cost: [{ item: 'mithril_bar', amount: 2 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'meteor_sword', result: 'meteor_sword', cost: [{ item: 'meteor_fragment', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
+  { id: 'iron_shield', result: 'iron_shield', cost: [{ item: 'iron_bar', amount: 4 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
+  { id: 'crystal_shield', result: 'crystal_shield', cost: [{ item: 'crystal', amount: 4 }, { item: 'iron_bar', amount: 2 }], station: 'anvil' },
+  { id: 'iron_chestplate', result: 'iron_chestplate', cost: [{ item: 'iron_bar', amount: 6 }], station: 'anvil' },
+  { id: 'mithril_chestplate', result: 'mithril_chestplate', cost: [{ item: 'mithril_bar', amount: 6 }], station: 'anvil' },
 ]
 
 const BY_ID = new Map<string, Recipe>(RECIPES.map((r) => [r.id, r]))

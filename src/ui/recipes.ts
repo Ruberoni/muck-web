@@ -123,6 +123,9 @@ export function sendableActions(actions: readonly ActionData[], inventory: Inven
   return actions.filter((action) => {
     // Hoy mover no cambia si cabe lo fabricado, pero se aplica igual para seguir a la simulación al pie de la letra.
     if (action.kind === 'move') scratch.move(action.from, action.to)
+    // Ponerse algo puede liberar una casilla, y quitárselo, ocuparla.
+    if (action.kind === 'equip') scratch.equip(action.slot)
+    if (action.kind === 'unequip') scratch.unequip(action.which)
     // Lo tirado antes en el mismo paso ya no está para fabricar.
     if (action.kind === 'drop') {
       const item = scratch.slots[action.slot]

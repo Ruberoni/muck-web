@@ -34,3 +34,5 @@ export const createMithrilOreRng = () => mulberry32(WORLD_SEED ^ 0xd3a2646c)
 export const createHerbRng = () => mulberry32(WORLD_SEED ^ 0x7a3d91e5)
 // El carbón, detrás de todo lo anterior: no mueve sus ids ni sus posiciones.
 export const createCoalOreRng = () => mulberry32(WORLD_SEED ^ 0x3c6ef372)
+// El cristal, detrás del carbón.
+export const createCrystalOreRng = () => mulberry32(WORLD_SEED ^ 0x7f4a7c15)

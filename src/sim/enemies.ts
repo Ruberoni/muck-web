@@ -116,6 +116,8 @@ export const PLANE_TARGET: PlayerId = -1
 export interface EnemyDamage {
   playerId: PlayerId
   damage: number
+  /** De dónde viene el golpe: el escudo solo para lo que llega de frente. */
+  from: { x: number; z: number }
 }
 
 /** Los enemigos como datos, para guardar y restaurar la partida. */
@@ -231,9 +233,7 @@ export class Enemies {
       const target = this.decoy && isCommon(e.type) ? this.decoy : this.chooseTarget(e, prey, dt)
       if (!this.chase(e, target, dt) || !target) continue
       const dealt = isCommon(e.type) ? Math.round(ENEMY_DEFS[e.type].damage * this.scaling.damage) : ENEMY_DEFS[e.type].damage
-      const hurt = damage.find((d) => d.playerId === target.id)
-      if (hurt) hurt.damage += dealt
-      else damage.push({ playerId: target.id, damage: dealt })
+      damage.push({ playerId: target.id, damage: dealt, from: { x: e.pos.x, z: e.pos.z } })
     }
     this.separate(prey)
     return damage

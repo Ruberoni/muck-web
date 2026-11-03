@@ -29,6 +29,13 @@ const TRAIL_START = 0.2
 const TRAIL_PEAK = 0.4
 const TRAIL_END = 0.75
 const TRAIL_OPACITY = 0.4
+// El escudo, abajo a la izquierda; al bloquear, delante y al centro, tapando parte de la vista.
+const SHIELD_REST = new THREE.Vector3(-0.58, -0.56, -0.62)
+const SHIELD_REST_ROTATION = new THREE.Euler(0.1, 0.6, 0.15)
+const SHIELD_UP = new THREE.Vector3(-0.3, -0.45, -0.62)
+const SHIELD_UP_ROTATION = new THREE.Euler(0, 0.1, 0)
+/** Con qué rapidez sube y baja. */
+const SHIELD_RATE = 14
 
 export interface HandPose {
   rx: number
@@ -99,6 +106,8 @@ const oreVein = new THREE.MeshStandardMaterial({ color: '#c8743a', flatShading: 
 const mithrilRock = mat('#6c7080')
 const mithrilVein = new THREE.MeshStandardMaterial({ color: '#4fb3f0', flatShading: true, metalness: 0.4, roughness: 0.4 })
 const coalLump = new THREE.MeshStandardMaterial({ color: '#1c1b1a', flatShading: true, roughness: 0.35 })
+const crystalGlass = new THREE.MeshStandardMaterial({ color: '#7ff0ff', emissive: '#2a9fb0', emissiveIntensity: 0.5, flatShading: true, roughness: 0.15 })
+const plank = mat('#a8743f')
 // Lo del meteorito brilla un poco por sí mismo, como su roca.
 const meteorHead = new THREE.MeshStandardMaterial({ color: '#ff7a2f', emissive: '#c8400f', emissiveIntensity: 0.6, flatShading: true })
 const meteorRock = mat('#3b322d')
@@ -259,6 +268,40 @@ function oreChunk(rock: THREE.Material, vein: THREE.Material) {
   return g
 }
 
+/** Unos cristales alargados que salen de un mismo punto. */
+function crystalCluster() {
+  const g = new THREE.Group()
+  const shard = (h: number, rz: number, rx: number) => new THREE.OctahedronGeometry(0.04, 0).scale(1, h, 1).rotateZ(rz).rotateX(rx).translate(0, 0.06, 0)
+  g.add(part(mergeGeometries([shard(2.6, 0, 0), shard(1.8, 0.5, 0.2), shard(1.6, -0.45, -0.3)]), crystalGlass))
+  return g
+}
+
+/** Un escudo redondo de cara a −Z: la cara, el borde y el refuerzo del centro. */
+function shield(face: THREE.Material, rim: THREE.Material, boss: THREE.Material) {
+  const g = new THREE.Group()
+  // La cara asoma por los dos lados del borde: por detrás también se ve de qué es.
+  g.add(part(new THREE.CylinderGeometry(0.19, 0.19, 0.025, 10).rotateX(Math.PI / 2).translate(0, 0.17, 0), rim))
+  g.add(part(new THREE.CylinderGeometry(0.165, 0.165, 0.035, 10).rotateX(Math.PI / 2).translate(0, 0.17, 0), face))
+  g.add(part(new THREE.SphereGeometry(0.045, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(-Math.PI / 2).translate(0, 0.17, -0.017), boss))
+  // El asa, detrás.
+  g.add(part(new THREE.BoxGeometry(0.03, 0.12, 0.025).translate(0, 0.17, 0.03), handle))
+  return g
+}
+
+/** Un peto: el pecho y las hombreras. */
+function chestplate(metal: THREE.Material) {
+  const g = new THREE.Group()
+  const pieces = [
+    new THREE.BoxGeometry(0.2, 0.22, 0.09).translate(0, 0.13, 0),
+    new THREE.BoxGeometry(0.08, 0.05, 0.11).translate(-0.12, 0.22, 0),
+    new THREE.BoxGeometry(0.08, 0.05, 0.11).translate(0.12, 0.22, 0),
+  ]
+  g.add(part(mergeGeometries(pieces), metal))
+  // El cuello, hundido.
+  g.add(part(new THREE.BoxGeometry(0.08, 0.03, 0.095).translate(0, 0.235, 0), darkIron))
+  return g
+}
+
 /** Modelo de un objeto a escala de la mano (también se usa, escalado, para los objetos en el suelo). */
 export function itemModel(item: ItemId): THREE.Group {
   switch (item) {
@@ -338,6 +381,18 @@ export function itemModel(item: ItemId): THREE.Group {
       return coin()
     case 'coal':
       return oreChunk(coalLump, coalLump)
+    case 'crystal':
+      return crystalCluster()
+    case 'wood_shield':
+      return shield(plank, handle, darkIron)
+    case 'iron_shield':
+      return shield(ironHead, darkIron, ironHead)
+    case 'crystal_shield':
+      return shield(crystalGlass, ironHead, crystalGlass)
+    case 'iron_chestplate':
+      return chestplate(ironHead)
+    case 'mithril_chestplate':
+      return chestplate(mithrilHead)
   }
 }
 
@@ -384,6 +439,11 @@ export class Handheld {
   private ambient = new THREE.AmbientLight('#ffffff', MIN_AMBIENT)
   private light = new THREE.DirectionalLight()
   private pose: HandPose = { rx: 0, rz: 0, x: 0, y: 0, z: 0 }
+  /** El escudo puesto, en la mano izquierda, y cuánto está levantado (0 a 1). */
+  private shield = new THREE.Group()
+  private shieldItem: ItemId | null = null
+  private shieldUp = 0
+  private blocking = false
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(HAND_FOV, aspect, 0.01, 10)
@@ -401,7 +461,24 @@ export class Handheld {
     this.trail.position.set(0.1, -0.22, -0.85)
     this.trail.rotation.set(-0.5, 0, 0.1)
     this.trail.visible = false
-    this.scene.add(this.hemi, this.ambient, this.light, this.root, this.trail)
+    this.shield.scale.setScalar(0.9)
+    this.scene.add(this.hemi, this.ambient, this.light, this.root, this.trail, this.shield)
+  }
+
+  /** El escudo que se lleva puesto (null: ninguno) y si está arriba. */
+  setShield(item: ItemId | null, blocking: boolean) {
+    this.blocking = item !== null && blocking
+    if (item === this.shieldItem) return
+    this.shieldItem = item
+    this.shield.clear()
+    if (!item) return
+    let model = this.models.get(item)
+    if (!model) {
+      model = itemModel(item)
+      this.models.set(item, model)
+    }
+    // Un clon: el mismo objeto puede estar a la vez en la mano derecha.
+    this.shield.add(model.clone())
   }
 
   setAspect(aspect: number) {
@@ -473,6 +550,17 @@ export class Handheld {
 
     this.root.position.set(REST.x + pose.x + bobX, REST.y + pose.y + bobY - drop, REST.z + pose.z)
     this.root.rotation.set(REST_ROTATION.x + pose.rx, REST_ROTATION.y, REST_ROTATION.z + pose.rz)
+
+    this.shieldUp = THREE.MathUtils.damp(this.shieldUp, this.blocking ? 1 : 0, SHIELD_RATE, dt)
+    const up = smooth(this.shieldUp)
+    this.shield.position.lerpVectors(SHIELD_REST, SHIELD_UP, up)
+    this.shield.position.x += bobX * 0.6
+    this.shield.position.y += bobY * 0.6
+    this.shield.rotation.set(
+      THREE.MathUtils.lerp(SHIELD_REST_ROTATION.x, SHIELD_UP_ROTATION.x, up),
+      THREE.MathUtils.lerp(SHIELD_REST_ROTATION.y, SHIELD_UP_ROTATION.y, up),
+      THREE.MathUtils.lerp(SHIELD_REST_ROTATION.z, SHIELD_UP_ROTATION.z, up),
+    )
 
     if (sky) {
       this.hemi.color.copy(sky.hemi.color)

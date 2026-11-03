@@ -61,6 +61,14 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
       case 'move':
         actor.inventory.move(action.from, action.to)
         break
+      case 'equip': {
+        const item = actor.inventory.slots[action.slot]
+        if (item && actor.inventory.equip(action.slot)) emit({ type: 'playerEquipped', id: actor.id, item })
+        break
+      }
+      case 'unequip':
+        if (actor.inventory.unequip(action.which)) emit({ type: 'playerEquipped', id: actor.id, item: null })
+        break
       case 'craft':
         craftRecipe(actor, action.recipe, world, emit)
         break
@@ -110,14 +118,16 @@ export function dropFromSlot(actor: Actor, slot: number, all: boolean, emit: Emi
   return { item, amount }
 }
 
-/** Orienta al jugador como dice su `Move` (sin él, mira a donde miraba) y lo mueve un paso. */
+/** Orienta al jugador como dice su `Move` (sin él, mira a donde miraba) y lo mueve un paso. Solo bloquea con escudo. */
 export function movePlayer(actor: Actor, command: PlayerCommands | undefined, env: PlayerEnv) {
   const { player } = actor
   if (command) {
     player.yaw = command.move.yaw
     player.pitch = command.move.pitch
   }
-  stepPlayer(player, buttonsInput(command?.move.buttons ?? 0), env, STEP)
+  const input = buttonsInput(command?.move.buttons ?? 0)
+  input.block &&= actor.inventory.equipped.shield !== null
+  stepPlayer(player, input, env, STEP)
 }
 
 /**
@@ -126,9 +136,11 @@ export function movePlayer(actor: Actor, command: PlayerCommands | undefined, en
  */
 export function useHands(actor: Actor, intent: Intent): { swing: boolean; place: boolean } {
   const placing = placeableOf(actor.inventory.selectedItem) !== null
-  if (placing) actor.combat.pendingSwing = false
-  const swing = startSwing(actor.combat, STEP, !placing && intent.attack, !placing && intent.swing, actor.inventory.selectedItem)
-  return { swing, place: placing && intent.place }
+  // Con el escudo arriba no se golpea ni se coloca, y no queda ningún golpe pendiente para cuando baje.
+  const busy = placing || actor.player.blocking
+  if (busy) actor.combat.pendingSwing = false
+  const swing = startSwing(actor.combat, STEP, !busy && intent.attack, !busy && intent.swing, actor.inventory.selectedItem)
+  return { swing, place: placing && !actor.player.blocking && intent.place }
 }
 
 /**

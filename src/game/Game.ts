@@ -36,7 +36,7 @@ import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { CameraShake } from './shake'
 import { Input, RIGHT_CLICK } from './input'
-import { stepActions, USE_KEY, type InventoryFocus } from './actions'
+import { holdsFood, stepActions, USE_KEY, type InventoryFocus } from './actions'
 import { acceptsKeys, afterLockChange, inGame, showsCrosshair, type GameState } from './states'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput, type Vec3 } from '../sim/player'
@@ -202,6 +202,7 @@ export class Game {
     this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
     this.hud.inventory.ondrop = (slot, all) => this.queueAction({ kind: 'drop', slot, all })
     this.hud.inventory.onstation = (action) => this.queueAction(action)
+    this.hud.inventory.onequip = (action) => this.queueAction(action)
     this.hud.inventory.oncraft = (recipe, times) => {
       for (let i = 0; i < times; i++) this.queueAction({ kind: 'craft', recipe })
     }
@@ -558,6 +559,9 @@ export class Game {
       events = this.session.step({ buttons: 0, yaw, pitch }, sendable(this.queued.splice(0)))
     } else {
       const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
+      // El clic derecho mantenido bloquea con el escudo puesto, salvo con comida en la mano (entonces come).
+      const shield = inventory.equipped.shield !== null
+      input.block &&= shield && !holdsFood(inventory.selectedItem)
       const presses = this.openStation(this.input.takePresses(), player.pos, yaw)
       const usable = usableNear(this.sim.structures.list, player.pos) !== null
       const { actions, inventory: openInventory } = stepActions(this.queued.splice(0), {
@@ -567,6 +571,7 @@ export class Game {
         slots: inventory.slots,
         clickSwings: this.attackOverride === null,
         usable,
+        shield,
       })
       // El chat no se abre a la vez que el inventario.
       if (!openInventory) this.chatKey(presses)
@@ -1000,6 +1005,7 @@ export class Game {
     this.updateAmbient(dt)
 
     this.handheld.setItem(slot.inventory.selectedItem)
+    this.handheld.setShield(slot.inventory.equipped.shield, p.blocking)
     this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
     this.renderer.clear()
     this.renderer.render(this.scene, this.camera)

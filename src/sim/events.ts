@@ -54,7 +54,10 @@ export type SimEventData =
   | { type: 'playerPlaced'; id: PlayerId; item: ItemId }
   /** Ha tirado `amount` de `item` (el objeto del suelo llega en su `pickupSpawn`). */
   | { type: 'playerDropped'; id: PlayerId; item: ItemId; amount: number }
-  | { type: 'playerHurt'; id: PlayerId; dmg: number }
+  /** Se ha puesto `item` (null: se ha quitado algo). */
+  | { type: 'playerEquipped'; id: PlayerId; item: ItemId | null }
+  /** `blocked`: lo que ha parado el escudo (sin él, nada). */
+  | { type: 'playerHurt'; id: PlayerId; dmg: number; blocked?: number }
   | { type: 'playerDied'; id: PlayerId }
   | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }
   /** Todos muertos (o, en solitario, sin vidas): a los pocos segundos se acaba la partida (`matchEnded`). */

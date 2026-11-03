@@ -1,4 +1,5 @@
-import type { Action, ActionData, Move } from '../sim/commands'
+import { ALL_BUTTONS, type Action, type ActionData, type Move } from '../sim/commands'
+import { EQUIP_SLOTS, type EquipSlot } from '../sim/equipment'
 import { ENEMY_DEFS, ENEMY_TYPES, MAX_PITCH, type EnemyType } from '../sim/constants'
 import { isRecipeId } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
@@ -17,7 +18,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 44
+export const PROTOCOL_VERSION = 45
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -171,6 +172,9 @@ export interface PlayerSnap {
   connection: Connection
   /** El último RTT que contó (ms); 0 si aún no ha dicho ninguno. */
   ping: number
+  /** El escudo que lleva puesto, si lleva, y si lo tiene arriba. */
+  shield?: ItemId
+  blocking?: boolean
 }
 
 export interface EnemySnap {
@@ -312,26 +316,21 @@ export interface SnapWire extends Omit<Snap, 'you' | 'players' | 'enemies' | 'mo
   movingPickups: PickupTuple[]
 }
 
-/** `[id, x, y, z, yaw, pitch, item, health, vivo (1/0), ausente (1/0), ping]`: solo van los que están en el mundo. */
-export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number]
+/**
+ * `[id, x, y, z, yaw, pitch, item, health, vivo (1/0), ausente (1/0), ping, escudo?, bloqueando (1/0)?]`: solo van los
+ * que están en el mundo, y los dos últimos solo si lleva escudo.
+ */
+export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number, ItemId?, (0 | 1)?]
 /** `[id, x, z, yaw, hp, tipo, maxHp]`, con `tipo` el índice en ENEMY_TYPES. `maxHp` solo va si no es la de su tipo (los jefes). */
 export type EnemyTuple = [number, number, number, number, number, number, number?]
 /** `[id, x, y, z, en el suelo (1/0)]` */
 export type PickupTuple = [number, number, number, number, 0 | 1]
 
-export const playerTuple = (p: PlayerSnap): PlayerTuple => [
-  p.id,
-  p.pos.x,
-  p.pos.y,
-  p.pos.z,
-  p.yaw,
-  p.pitch,
-  p.item,
-  p.health,
-  p.alive ? 1 : 0,
-  p.connection === 'absent' ? 1 : 0,
-  p.ping,
-]
+export function playerTuple(p: PlayerSnap): PlayerTuple {
+  const tuple: PlayerTuple = [p.id, p.pos.x, p.pos.y, p.pos.z, p.yaw, p.pitch, p.item, p.health, p.alive ? 1 : 0, p.connection === 'absent' ? 1 : 0, p.ping]
+  if (p.shield) tuple.push(p.shield, p.blocking ? 1 : 0)
+  return tuple
+}
 export function enemyTuple(e: EnemySnap): EnemyTuple {
   const tuple: EnemyTuple = [e.id, e.pos.x, e.pos.z, e.yaw, e.hp, ENEMY_TYPES.indexOf(e.type)]
   if (e.maxHp !== ENEMY_DEFS[e.type].hp) tuple.push(e.maxHp)
@@ -360,7 +359,7 @@ export class ServerDecoder {
         return {
           ...msg,
           you: { ...msg.you, inventory },
-          players: msg.players.map(([id, x, y, z, yaw, pitch, item, health, alive, absent, ping]) => ({
+          players: msg.players.map(([id, x, y, z, yaw, pitch, item, health, alive, absent, ping, shield, blocking]) => ({
             id,
             pos: { x, y, z },
             yaw,
@@ -370,6 +369,7 @@ export class ServerDecoder {
             alive: alive === 1,
             connection: absent === 1 ? 'absent' : 'present',
             ping,
+            ...(shield ? { shield, blocking: blocking === 1 } : {}),
           })),
           enemies: msg.enemies.map(([id, x, z, yaw, hp, index, maxHp]) => {
             const type = ENEMY_TYPES[index]
@@ -486,7 +486,7 @@ function parseCmds(raw: Obj): Cmds | null {
 }
 
 function parseMove(m: unknown): MoveMsg | null {
-  if (!isObj(m) || !isInt(m.tick, 0, Number.MAX_SAFE_INTEGER) || !isInt(m.buttons, 0, 255)) return null
+  if (!isObj(m) || !isInt(m.tick, 0, Number.MAX_SAFE_INTEGER) || !isInt(m.buttons, 0, ALL_BUTTONS)) return null
   if (!isFiniteNum(m.yaw) || !isFiniteNum(m.pitch) || Math.abs(m.pitch) > MAX_PITCH + 1e-9) return null
   if (m.n !== undefined && !isInt(m.n, 1, MAX_MOVE_REPEAT)) return null
   const move: MoveMsg = { tick: m.tick, buttons: m.buttons, yaw: m.yaw, pitch: m.pitch }
@@ -517,6 +517,14 @@ function parseAction(a: unknown): Action | null {
     case 'move':
       if (!isInt(a.from, 0, INVENTORY_SIZE - 1) || !isInt(a.to, 0, INVENTORY_SIZE - 1)) return null
       data = { kind: 'move', from: a.from, to: a.to }
+      break
+    case 'equip':
+      if (!isInt(a.slot, 0, INVENTORY_SIZE - 1)) return null
+      data = { kind: 'equip', slot: a.slot }
+      break
+    case 'unequip':
+      if (!EQUIP_SLOTS.includes(a.which as EquipSlot)) return null
+      data = { kind: 'unequip', which: a.which as EquipSlot }
       break
     case 'drop':
       if (!isInt(a.slot, 0, INVENTORY_SIZE - 1) || typeof a.all !== 'boolean') return null

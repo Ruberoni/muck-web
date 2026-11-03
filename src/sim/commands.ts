@@ -1,10 +1,14 @@
 import type { RecipeId } from './crafting'
+import type { EquipSlot } from './equipment'
 import type { StationSlot } from './stations'
 import type { TargetRef } from './events'
 import type { PlayerInput } from './player'
 
 /** Botones de un `Move`, como bits. `Attack` es el clic mantenido y `Use`, la tecla de uso mantenida. */
-export const Btn = { Fwd: 1, Back: 2, Left: 4, Right: 8, Sprint: 16, Jump: 32, Attack: 64, Use: 128 } as const
+/** `Block`: el clic derecho mantenido con un escudo puesto. */
+export const Btn = { Fwd: 1, Back: 2, Left: 4, Right: 8, Sprint: 16, Jump: 32, Attack: 64, Use: 128, Block: 256 } as const
+/** Todos los botones a la vez: el mayor valor válido de `buttons`. */
+export const ALL_BUTTONS = 511
 
 /** Lo que el jugador mantiene durante un tick: botones y orientación (absoluta). */
 export interface Move {
@@ -25,7 +29,8 @@ export interface Move {
  * queda pendiente hasta que acabe. `place` coloca lo que se tiene en la mano (la fogata). `move` intercambia dos
  * casillas del inventario (hotbar o mochila). `drop` tira al suelo una unidad de una casilla (o la pila, con `all`).
  * `station` mete en la ranura `slot` de la estación `id` lo de la casilla `from` (una unidad, o la pila con `all`) o, sin
- * `from`, saca al inventario lo que haya en esa ranura.
+ * `from`, saca al inventario lo que haya en esa ranura. `equip` se pone la pieza de equipo de la casilla `slot` y
+ * `unequip` se quita al inventario la del hueco `which`.
  */
 export type ActionData =
   | { kind: 'swing' }
@@ -34,6 +39,8 @@ export type ActionData =
   | { kind: 'move'; from: number; to: number }
   | { kind: 'drop'; slot: number; all: boolean }
   | { kind: 'station'; id: number; slot: StationSlot; from: number | null; all: boolean }
+  | { kind: 'equip'; slot: number }
+  | { kind: 'unequip'; which: EquipSlot }
   | { kind: 'eat' }
   | { kind: 'place' }
 
@@ -55,7 +62,8 @@ export function inputButtons(input: PlayerInput, attack: boolean, use = false): 
     (input.sprint ? Btn.Sprint : 0) |
     (input.jump ? Btn.Jump : 0) |
     (attack ? Btn.Attack : 0) |
-    (use ? Btn.Use : 0)
+    (use ? Btn.Use : 0) |
+    (input.block ? Btn.Block : 0)
   )
 }
 
@@ -68,6 +76,7 @@ export function buttonsInput(buttons: number): PlayerInput {
     right: (buttons & Btn.Right) !== 0,
     sprint: (buttons & Btn.Sprint) !== 0,
     jump: (buttons & Btn.Jump) !== 0,
+    block: (buttons & Btn.Block) !== 0,
   }
 }
 

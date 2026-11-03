@@ -453,6 +453,33 @@ describe('el espejo de NetClient', () => {
     }
   })
 
+  it('ponerse un escudo se predice, y los demás lo ven en su mano y saben si bloquea', () => {
+    const { room, time, connect } = setup()
+    const { client: a } = connect('a', 'create')
+    const { client: b } = connect('b')
+    run(time, 1000, [[a, idle], [b, idle]])
+    room.sim!.slot(a.id).inventory.add('iron_shield', 1)
+    run(time, 500, [[a, idle], [b, idle]])
+    // Lo que da el servidor por su cuenta no se predice: desde aquí, sí.
+    resetStats(a)
+    let sent = false
+    const equip: Script = () => {
+      const actions: ActionData[] = sent ? [] : [{ kind: 'equip', slot: 0 }]
+      sent = true
+      return { buttons: Btn.Block, yaw: 0, pitch: 0, actions }
+    }
+    run(time, 100, [[a, equip], [b, idle]])
+    // La predicción ya lo lleva puesto y bloquea, antes de que conteste el servidor.
+    expect(a.sim!.slot(a.id).inventory.equipped.shield).toBe('iron_shield')
+    expect(a.sim!.slot(a.id).player.blocking).toBe(true)
+    run(time, 1000, [[a, equip], [b, idle]])
+    expect(room.sim!.slot(a.id).inventory.equipped.shield).toBe('iron_shield')
+    expect(b.shownPlayers.find((p) => p.id === a.id)!.data).toMatchObject({ shield: 'iron_shield', blocking: true })
+    run(time, 1000, [[a, idle], [b, idle]])
+    expect(b.shownPlayers.find((p) => p.id === a.id)!.data).toMatchObject({ shield: 'iron_shield', blocking: false })
+    expect(a.predictor!.stats.corrections).toBe(0)
+  })
+
   it('la tumba: el espejo sabe cuándo se abre, y quien entra después también', () => {
     const { room, time, connect } = setup()
     const { client } = connect('a', 'create')
