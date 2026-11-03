@@ -35,6 +35,7 @@ export type ItemId =
   | 'boss_trophy'
   | 'plane_engine'
   | 'coin'
+  | 'coal'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -72,6 +73,7 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   oil: 'Aceite',
   boss_trophy: 'Trofeo de jefe',
   coin: 'Moneda',
+  coal: 'Carbón',
   plane_engine: 'Motor del avión',
 }
 
@@ -119,6 +121,7 @@ export const GROUND_TIME: Record<ItemId, number | null> = {
   boss_trophy: null,
   plane_engine: null,
   coin: null,
+  coal: MATERIAL,
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

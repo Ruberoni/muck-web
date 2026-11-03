@@ -9,7 +9,8 @@ import type { Pickup } from '../sim/pickups'
 import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
-import { stationNear, stationWithRoom, structureSpot } from '../sim/structures'
+import { stationNear, structureSpot } from '../sim/structures'
+import { copyStation } from '../sim/stations'
 import { isNight } from '../sim/world/daycycle'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
 import { InterpBuffer, Interpolator, PresentationQueue, type Shown } from './interp'
@@ -399,7 +400,6 @@ export class NetClient {
           canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, sim.obstacles).valid,
           // Como en la simulación: las estaciones del espejo, con el mismo alcance.
           nearStation: (kind, pos) => stationNear(sim.structures.list, kind, pos, STATION_RANGE),
-          hasRoom: (kind, pos) => stationWithRoom(sim.structures.list, kind, pos, STATION_RANGE) !== null,
         })
         this.predictor.start(msg.serverTick, msg.you)
         this.clock.sync(now, msg.serverTick, msg)
@@ -600,12 +600,11 @@ export class NetClient {
       case 'nightLit':
         sim.threat.load(e.threat)
         break
-      case 'stationQueued':
-        sim.structures.byId(e.id)?.jobs.push({ recipe: e.recipe, time: e.time, left: e.time })
+      case 'stationChanged': {
+        const structure = sim.structures.byId(e.id)
+        if (structure) structure.station = copyStation(e.station)
         break
-      case 'stationDone':
-        sim.structures.byId(e.id)?.jobs.shift()
-        break
+      }
       case 'graveOpened': {
         const structure = sim.structures.byId(e.id)
         if (structure) structure.opened = true

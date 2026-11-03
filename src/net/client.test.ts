@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Room, MemoryStorage, ABSENT_MS } from '../../server/room'
 import { Btn, type ActionData } from '../sim/commands'
 import { EYE_HEIGHT, MAX_PITCH } from '../sim/constants'
-import { RECIPE_IDS, recipeById } from '../sim/crafting'
+import { RECIPE_IDS } from '../sim/crafting'
+import { putInto } from '../sim/stations'
 import { aimPose } from '../sim/interaction'
 import { quickProps } from '../sim/quickProps'
 import { mulberry32 } from '../sim/random'
@@ -422,29 +423,34 @@ describe('el espejo de NetClient', () => {
     expect(b.match).toMatchObject({ phase: 'lobby', result: { end: 'surrendered' } })
   })
 
-  it('el espejo sigue la cola de las estaciones y la obra, y quien reconecta las recibe', () => {
+  it('el espejo sigue lo que hay en las estaciones y la obra, y quien reconecta las recibe', () => {
     const { room, time, connect } = setup()
     const { client } = connect('a', 'create')
     run(time, 1000, [[client, idle]])
     const sim = room.sim!
     const slot = sim.slot(client.id)
     const furnace = sim.structures.place(structureSpot(slot.player.pos, 0, 0.8, sim.obstacles), 'furnace')!
-    sim.structures.enqueue(furnace, recipeById('iron_bar')!, 15)
+    putInto('furnace', furnace.station!, 'input', 'iron_ore', 2)
+    putInto('furnace', furnace.station!, 'fuel', 'wood', 1)
     const lighthouse = sim.structures.place(structureSpot(slot.player.pos, Math.PI, 1.8, sim.obstacles), 'lighthouse')!
     slot.inventory.add('stone', 5)
     sim.structures.deliver(lighthouse, slot.inventory, sim.rules)
     run(time, 500, [[client, idle]])
     const mirror = client.sim!.structures
-    expect(mirror.byId(furnace.id)!.jobs).toMatchObject([{ recipe: 'iron_bar', time: 15 }])
-    expect(mirror.byId(furnace.id)!.jobs[0].left).toBeLessThan(15)
+    // Al coger la madera avisa: el espejo ve el mineral, el combustible gastado y la barra que avanza.
+    expect(mirror.byId(furnace.id)!.station).toMatchObject({ input: { item: 'iron_ore', amount: 2 }, fuel: null, output: null, time: 15 })
+    expect(mirror.byId(furnace.id)!.station!.progress).toBeGreaterThan(0)
     expect(mirror.byId(lighthouse.id)!.build).toEqual(lighthouse.build)
 
     const { client: late } = connect('b')
     run(time, 500, [[client, idle], [late, idle]])
     expect(late.sim!.structures.byId(lighthouse.id)!.build).toEqual(lighthouse.build)
-    expect(late.sim!.structures.byId(furnace.id)!.jobs).toHaveLength(1)
+    expect(late.sim!.structures.byId(furnace.id)!.station).toMatchObject({ input: { item: 'iron_ore', amount: 2 } })
     run(time, 16_000, [[client, idle], [late, idle]])
-    expect(mirror.byId(furnace.id)!.jobs).toEqual([])
+    // Sin más madera se queda con un lingote hecho y el otro mineral esperando.
+    for (const c of [client, late]) {
+      expect(c.sim!.structures.byId(furnace.id)!.station).toMatchObject({ input: { item: 'iron_ore', amount: 1 }, output: { item: 'iron_bar', amount: 1 } })
+    }
   })
 
   it('la tumba: el espejo sabe cuándo se abre, y quien entra después también', () => {

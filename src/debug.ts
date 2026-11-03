@@ -256,6 +256,8 @@ export function installDebug(game: Game) {
       return game.state
     },
     structures: () => sim().structures.list.map(({ id, kind, x, y, z }) => ({ id, kind, x, y, z })),
+    /** Lo que hay en las ranuras de una estación de procesar (fogata, horno, destilador). */
+    station: (id: number) => sim().structures.byId(id)?.station ?? null,
     /**
      * Coloca una estructura `kind` delante de (x, z) mirando a `yaw`, sin gastar materiales; sin (x, z), delante del
      * jugador, y sin `yaw`, hacia donde mira. Devuelve si se pudo (con un jugador).

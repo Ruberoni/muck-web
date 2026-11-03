@@ -1,4 +1,5 @@
 import type { RecipeId } from './crafting'
+import type { StationSlot } from './stations'
 import type { TargetRef } from './events'
 import type { PlayerInput } from './player'
 
@@ -23,6 +24,8 @@ export interface Move {
  * `swing` es un golpe pedido (un clic, aunque sea más corto que un tick): si el cooldown no ha acabado,
  * queda pendiente hasta que acabe. `place` coloca lo que se tiene en la mano (la fogata). `move` intercambia dos
  * casillas del inventario (hotbar o mochila). `drop` tira al suelo una unidad de una casilla (o la pila, con `all`).
+ * `station` mete en la ranura `slot` de la estación `id` lo de la casilla `from` (una unidad, o la pila con `all`) o, sin
+ * `from`, saca al inventario lo que haya en esa ranura.
  */
 export type ActionData =
   | { kind: 'swing' }
@@ -30,6 +33,7 @@ export type ActionData =
   | { kind: 'craft'; recipe: RecipeId }
   | { kind: 'move'; from: number; to: number }
   | { kind: 'drop'; slot: number; all: boolean }
+  | { kind: 'station'; id: number; slot: StationSlot; from: number | null; all: boolean }
   | { kind: 'eat' }
   | { kind: 'place' }
 

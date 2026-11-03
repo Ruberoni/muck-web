@@ -23,14 +23,12 @@ describe('recetas en la pantalla de inventario', () => {
     expect(listed).toHaveLength(RECIPES.length)
     expect(new Set(listed)).toEqual(new Set(RECIPES))
     expect(RECIPE_GROUPS.every((g) => g.recipes.length > 0 && g.recipes.every((r) => r.station === g.station))).toBe(true)
-    expect(RECIPE_GROUPS.map((g) => g.title)).toEqual(['Sin estación', 'Fogata', 'Mesa de trabajo', 'Horno', 'Yunque', 'Destilador'])
+    // La fogata, el horno y el destilador ya no tienen recetas: procesan lo que se mete en sus ranuras.
+    expect(RECIPE_GROUPS.map((g) => g.title)).toEqual(['Sin estación', 'Mesa de trabajo', 'Yunque'])
     expect(RECIPE_GROUPS.map((g) => g.recipes.map((r) => r.id))).toEqual([
       ['wood_axe', 'wood_pickaxe', 'campfire', 'workbench'],
-      ['cooked_meat', 'berry_infusion'],
       ['wood_sword', 'stone_axe', 'stone_pickaxe', 'stone_sword', 'furnace', 'distiller', 'anvil'],
-      ['iron_bar', 'mithril_bar'],
       ['iron_axe', 'iron_pickaxe', 'iron_sword', 'mithril_axe', 'mithril_pickaxe', 'mithril_sword', 'meteor_sword'],
-      ['oil'],
     ])
   })
 
@@ -60,14 +58,9 @@ describe('recetas en la pantalla de inventario', () => {
     const seen: unknown[] = []
     recipeStatus(inventoryWith({ stone: 1 }), atWorkbench, { nearStation: (kind, pos) => (seen.push([kind, pos]), false) }, { x: 1, y: 2, z: 3 })
     expect(seen).toEqual([['workbench', { x: 1, y: 2, z: 3 }]])
-    // El horno y el yunque, con su nombre.
-    expect(recipeStatus(inventoryWith({ iron_ore: 1, wood: 1 }), recipe('iron_bar'), NO_STATIONS, POS).reason).toBe('Necesitas un horno cerca')
-    expect(recipeStatus(inventoryWith({ raw_meat: 1 }), recipe('cooked_meat'), NO_STATIONS, POS).reason).toBe('Necesitas una fogata cerca')
+    // El yunque, con su nombre.
     expect(recipeStatus(inventoryWith({ iron_bar: 3 }), recipe('iron_pickaxe'), NO_STATIONS, POS).reason).toBe(
       'Faltan 2 madera de abedul · Necesitas un yunque cerca',
-    )
-    expect(recipeStatus(inventoryWith({ mithril_ore: 1, wood: 1 }), recipe('mithril_bar'), NO_STATIONS, POS).reason).toBe(
-      'Falta 1 madera · Necesitas un horno cerca',
     )
     expect(recipeStatus(inventoryWith({ mithril_bar: 3, dark_wood: 2 }), recipe('mithril_axe'), NEAR_ALL, POS).available).toBe(true)
   })

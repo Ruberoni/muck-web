@@ -31,7 +31,7 @@ function clearSpot(clearance: number) {
   throw new Error('sin hueco libre')
 }
 
-const spot = clearSpot(8)
+const spot = clearSpot(7)
 
 /** Tipos de los eventos, sin los que no interesan en cada prueba. */
 const types = (events: SimEventData[], ignore: string[] = []) => events.map((e) => e.type).filter((t) => !ignore.includes(t))

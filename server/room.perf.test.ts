@@ -61,6 +61,7 @@ function busyRoom({ base = false } = {}) {
     }
   }
 
+  const furnace = base ? sim.structures.list.find((s) => s.kind === 'furnace') : undefined
   let turn = 0
   const run = () => {
     turn++
@@ -71,7 +72,9 @@ function busyRoom({ base = false } = {}) {
       const yaw = (turn * 0.05 + i) % (Math.PI * 2)
       const buttons = Btn.Fwd | (turn % 4 === 0 ? Btn.Attack : 0) | (i % 2 ? Btn.Sprint : 0)
       const tick = sim.tick + 1
-      const actions: Cmds['actions'] = base ? [{ kind: 'craft', recipe: 'iron_bar', seq: turn, tick }] : []
+      // Con la base, cada uno echa mineral al horno: un aviso de estación por vuelta, el caso más cargado.
+      const ore = slot.inventory.slots.indexOf('iron_ore')
+      const actions: Cmds['actions'] = furnace ? [{ kind: 'station', id: furnace.id, slot: 'input', from: ore, all: false, seq: turn, tick }] : []
       const cmds: Cmds = { type: 'cmds', t: time.now(), moves: [{ tick, n: 3, buttons, yaw, pitch: 0 }], actions }
       room.message(conns[i], JSON.stringify(cmds))
     }

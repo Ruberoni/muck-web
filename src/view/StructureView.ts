@@ -427,8 +427,8 @@ export class StructureView {
   }
 
   /** La barra de lo que está haciendo o de cómo va la obra, si hay algo que enseñar. */
-  private showProgress(model: StructureModel, { jobs, build }: Structure) {
-    const job = jobs[0]
+  private showProgress(model: StructureModel, { station, build }: Structure) {
+    const job = station && station.time > 0 ? station : undefined
     if (model.stages && build) model.stages.forEach((stage, i) => (stage.visible = build.phase > i))
     if (model.ruin && build) model.ruin.visible = build.phase < 2
     const building = build && build.progress < 1
@@ -447,7 +447,7 @@ export class StructureView {
       model.progress = { back, fill }
     }
     model.progress.back.visible = model.progress.fill.visible = job !== undefined || !!building
-    const done = job ? 1 - job.left / job.time : (build?.progress ?? 0)
+    const done = job ? job.progress / job.time : (build?.progress ?? 0)
     model.progress.fill.scale.set(Math.max(0.01, BAR_WIDTH * done) * scale, 0.12 * scale, 1)
   }
 

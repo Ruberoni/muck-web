@@ -157,26 +157,21 @@ describe('Simulation', () => {
     expect(inventory.count('raw_meat')).toBe(1)
   })
 
-  it('junto a una fogata se cocina, y mientras uno se va: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
+  it('en una fogata se cocina sola, sin combustible: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
     const sim = solo(1)
     const { inventory, player } = sim.slot(0)
     inventory.add('raw_meat', 2)
     inventory.add('berry', 4)
-    // Sin fogata cerca no se puede.
-    step(sim, { actions: [{ kind: 'craft', recipe: 'cooked_meat' }] })
-    expect(inventory.count('raw_meat')).toBe(2)
-
-    sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.campfire.radius, [sim.world.grid, sim.structures.grid]), 'campfire')
-    const events = step(sim, { actions: [{ kind: 'craft', recipe: 'cooked_meat' }, { kind: 'craft', recipe: 'berry_infusion' }] })
-    expect(events).toContainEqual(expect.objectContaining({ type: 'playerCrafted', recipe: 'cooked_meat' }))
-    expect(inventory.toJSON()).toEqual({ raw_meat: 1 })
-    // Lo terminado queda junto a la fogata, y lo recoge quien pase.
-    for (let i = 0; i < Math.round(25 / STEP) + 1; i++) step(sim)
-    for (let i = 0; i < 300 && sim.pickups.list.length; i++) {
-      const { pos } = sim.pickups.list[0]
-      sim.teleport(0, pos.x, pos.z, 0, 0)
-      step(sim)
-    }
+    const fire = sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.campfire.radius, [sim.world.grid, sim.structures.grid]), 'campfire')!
+    const tend = (slot: 'input' | 'output', from: number | null, all: boolean) => step(sim, { actions: [{ kind: 'station', id: fire.id, slot, from, all }] })
+    // Una carne a la entrada: la fogata solo tiene una, así que las bayas esperan a que acabe.
+    expect(tend('input', inventory.slots.indexOf('raw_meat'), false).map((e) => e.type)).toContain('stationChanged')
+    expect(inventory.toJSON()).toEqual({ raw_meat: 1, berry: 4 })
+    for (let i = 0; i < Math.round(10 / STEP) + 1; i++) step(sim)
+    tend('output', null, true)
+    tend('input', inventory.slots.indexOf('berry'), true)
+    for (let i = 0; i < Math.round(15 / STEP) + 1; i++) step(sim)
+    tend('output', null, true)
     expect(inventory.toJSON()).toEqual({ raw_meat: 1, cooked_meat: 1, berry_infusion: 1 })
 
     const cooked = CONSUMABLE_DEFS.cooked_meat!

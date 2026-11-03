@@ -6,6 +6,7 @@ import { resolveCircle } from './collision'
 import { PLACE_DISTANCE, PLAYER_RADIUS, STATION_RANGE } from './constants'
 import type { SimEventData } from './events'
 import type { ItemId } from './inventory'
+import { newStation } from './stations'
 
 const world = createPropWorld()
 const RADIUS = STRUCTURE_DEFS.campfire.radius
@@ -152,7 +153,7 @@ describe('estructuras en general', () => {
     const mirror = new Structures()
     mirror.add({ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3 })
     mirror.add({ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3 })
-    expect(mirror.list).toEqual([{ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3, radius: RADIUS, alive: true, jobs: [] }])
+    expect(mirror.list).toEqual([{ id: 4, kind: 'campfire', x: 1, y: 5, z: 2, rotY: 0.3, radius: RADIUS, alive: true, station: newStation() }])
     expect(mirror.save().nextId).toBe(5)
     expect(resolveCircle({ x: 1.1, z: 2 }, PLAYER_RADIUS, mirror.grid)).toBe(true)
   })

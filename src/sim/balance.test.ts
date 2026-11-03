@@ -6,6 +6,7 @@ import { bossScale, enemyCapFor, spawnChance } from './enemies'
 import type { ItemId } from './inventory'
 import type { MatchRules } from './match'
 import { generatePropPlacements, type PropKind } from './props'
+import { FUEL_SECONDS, STATION_DEFS } from './stations'
 import type { StructureKind } from './structures'
 import { attackDamage, swingCooldown } from './tiers'
 
@@ -33,14 +34,31 @@ const SHARED: readonly RecipeId[] = ['workbench', 'furnace', 'anvil']
 
 type Amounts = Partial<Record<ItemId, number>>
 
-/** Lo que cuesta `recipe` en materiales que se recogen, deshaciendo los lingotes en mineral y madera. */
-function rawCost(recipe: RecipeId, into: Amounts = {}, times = 1): Amounts {
-  for (const { item, amount } of recipeById(recipe)!.cost) {
-    if (recipeById(item as RecipeId)) rawCost(item as RecipeId, into, amount * times)
-    else into[item] = (into[item] ?? 0) + amount * times
+/** Lo que cuesta sacar una unidad de `item` de una estación: lo que se mete y la madera que arde mientras (null si no sale de ninguna). */
+function processCost(item: ItemId): Amounts | null {
+  for (const def of Object.values(STATION_DEFS)) {
+    const process = def!.processes.find((p) => p.output === item)
+    if (process) return { [process.input]: process.amount, ...(def!.fuel ? { wood: process.time / FUEL_SECONDS.wood! } : {}) }
   }
+  return null
+}
+
+/** Suma `amount` de `item` en materiales que se recogen: deshace las recetas y lo que sale de las estaciones. */
+function addRaw(item: ItemId, amount: number, into: Amounts) {
+  const process = processCost(item)
+  if (recipeById(item as RecipeId)) rawCost(item as RecipeId, into, amount)
+  else if (process) for (const [input, n] of Object.entries(process) as [ItemId, number][]) addRaw(input, n * amount, into)
+  else into[item] = (into[item] ?? 0) + amount
+}
+
+/** Lo que cuesta `recipe` en materiales que se recogen, deshaciendo los lingotes en mineral y madera (la del horno, en fracciones). */
+function rawCost(recipe: RecipeId, into: Amounts = {}, times = 1): Amounts {
+  for (const { item, amount } of recipeById(recipe)!.cost) addRaw(item, amount * times, into)
   return into
 }
+
+/** Redondeado hacia arriba: la madera del horno sale en fracciones. */
+const whole = (amounts: Amounts): Amounts => Object.fromEntries(Object.entries(amounts).map(([item, n]) => [item, Math.ceil(n! - 1e-9)]))
 
 /** Lo que dan todos los árboles y rocas de la isla (no vuelven); lo que se recoge poco a poco no cuenta. */
 function supply(): Amounts {
@@ -57,9 +75,9 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     const need: Amounts = {}
     for (const r of PER_PLAYER) rawCost(r, need, MAX_PLAYERS)
     for (const r of SHARED) rawCost(r, need)
-    expect(need).toEqual({ wood: 293, stone: 93, iron_ore: 49, birch_wood: 30, mithril_ore: 40, dark_wood: 30 })
+    expect(whole(need)).toEqual({ wood: 280, stone: 93, iron_ore: 49, birch_wood: 30, mithril_ore: 40, dark_wood: 30 })
     const have = supply()
-    expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 80, dark_wood: 80 })
+    expect(have).toEqual({ wood: 720, stone: 180, iron_ore: 120, birch_wood: 160, mithril_ore: 80, dark_wood: 80, coal: 60 })
     // Sobra de todo: el faro, el tótem y el avión también tiran de lo mismo.
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })
@@ -71,10 +89,9 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     expect(need.dark_wood).toBeLessThanOrEqual(supply().dark_wood!)
   })
 
-  it('un jugador solo rompe unos 19 árboles, 11 rocas, 5 menas de hierro, 2 de mithril, 2 abedules y 2 pinos oscuros', () => {
-    const need: Amounts = {}
-    for (const r of [...PER_PLAYER, ...SHARED]) rawCost(r, need)
-    expect(need).toEqual({ wood: 73, stone: 33, iron_ore: 13, birch_wood: 6, mithril_ore: 8, dark_wood: 6 })
+  it('un jugador solo rompe unos 18 árboles, 11 rocas, 5 menas de hierro, 2 de mithril, 2 abedules y 2 pinos oscuros', () => {
+    const need = whole([...PER_PLAYER, ...SHARED].reduce((into, r) => rawCost(r, into), {} as Amounts))
+    expect(need).toEqual({ wood: 71, stone: 33, iron_ore: 13, birch_wood: 6, mithril_ore: 8, dark_wood: 6 })
     const kinds = Object.keys(PROP_DEFS) as PropKind[]
     const props = Object.fromEntries(
       (Object.keys(need) as ItemId[]).map((item) => {
@@ -82,7 +99,7 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
         return [kind, Math.ceil(need[item]! / PROP_DEFS[kind].drop.amount)]
       }),
     )
-    expect(props).toEqual({ tree: 19, rock: 11, iron_ore: 5, birch: 2, mithril_ore: 2, darkpine: 2 })
+    expect(props).toEqual({ tree: 18, rock: 11, iron_ore: 5, birch: 2, mithril_ore: 2, darkpine: 2 })
   })
 })
 
@@ -101,10 +118,7 @@ const LEVELS = [
 /** Lo que cuesta construir `kind` entero, deshaciendo los lingotes en mineral y madera. */
 function buildRaw(kind: StructureKind, rules: MatchRules, into: Amounts = {}) {
   BUILD_DEFS[kind]!.phases.forEach((_, phase) => {
-    for (const { item, amount } of phaseCost(kind, phase, rules)) {
-      if (recipeById(item as RecipeId)) rawCost(item as RecipeId, into, amount)
-      else into[item] = (into[item] ?? 0) + amount
-    }
+    for (const { item, amount } of phaseCost(kind, phase, rules)) addRaw(item, amount, into)
   })
   return into
 }

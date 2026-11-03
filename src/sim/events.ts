@@ -1,4 +1,5 @@
 import type { EnemyType, HitEfficacy } from './constants'
+import type { StationState } from './stations'
 import type { RecipeId } from './crafting'
 import type { BuildState } from './builds'
 import type { ChargeState } from './enemies'
@@ -31,8 +32,7 @@ export type SimEventData =
   | { type: 'pickupCollected'; id: number; by: PlayerId }
   | { type: 'structurePlaced'; id: number; kind: StructureKind; x: number; y: number; z: number; rotY: number; by: PlayerId }
   /** Una estación tiene un trabajo más en cola, o ha terminado el primero (lo hecho llega en su `pickupSpawn`). */
-  | { type: 'stationQueued'; id: number; recipe: RecipeId; time: number }
-  | { type: 'stationDone'; id: number }
+  | { type: 'stationChanged'; id: number; station: StationState }
   /** Ha cambiado el fuego de un faro. */
   | { type: 'fireChanged'; id: number; fire: LighthouseFire }
   /** Han entregado materiales a una construcción. `finished`: la fase que ha acabado, si ha acabado alguna. */

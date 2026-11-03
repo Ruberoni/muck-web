@@ -2,7 +2,7 @@ import type { ActionData } from '../sim/commands'
 import { canCraft, craft, RECIPES, recipeById, type CraftWorld, type Recipe } from '../sim/crafting'
 import { Inventory, ITEM_NAMES, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
-import { stationNear, stationWithRoom, type Structure, type StructureKind } from '../sim/structures'
+import { stationNear, type Structure, type StructureKind } from '../sim/structures'
 
 /** Cuántas veces fabrica Mayúsculas + clic (cada una es una acción `craft`, en el mismo paso). */
 export const CRAFT_MANY = 5
@@ -16,10 +16,9 @@ export const CLIENT_STATION_RANGE = 3.3
 /** El mundo de fabricar tal como lo ve el cliente: las estaciones de `structures()` con el alcance con margen. */
 export const clientCraftWorld = (structures: () => readonly Structure[]): CraftWorld => ({
   nearStation: (kind, pos) => stationNear(structures(), kind, pos, CLIENT_STATION_RANGE),
-  hasRoom: (kind, pos) => stationWithRoom(structures(), kind, pos, CLIENT_STATION_RANGE) !== null,
 })
 
-const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque', lighthouse: 'Faro', distiller: 'Destilador', totem: 'Tótem', plane: 'Avión', grave: 'Tumba' }
+export const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque', lighthouse: 'Faro', distiller: 'Destilador', totem: 'Tótem', plane: 'Avión', grave: 'Tumba' }
 const STATION_NEEDED: Record<StructureKind, string> = {
   campfire: 'Necesitas una fogata cerca',
   workbench: 'Necesitas una mesa de trabajo cerca',
@@ -30,6 +29,35 @@ const STATION_NEEDED: Record<StructureKind, string> = {
   totem: 'Necesitas un tótem cerca',
   plane: 'Necesitas el avión cerca',
   grave: 'Necesitas la tumba cerca',
+}
+
+/** Estaciones que se abren con clic derecho: las de procesar muestran sus ranuras; la mesa y el yunque, sus recetas. */
+const OPENABLE: ReadonlySet<StructureKind> = new Set(['campfire', 'furnace', 'distiller', 'workbench', 'anvil'])
+/** Medio ángulo del cono de la mirada dentro del que se abre (en horizontal). */
+const AIM_COS = Math.cos((40 * Math.PI) / 180)
+
+/**
+ * La estación que se tiene delante para abrirla: a `range` o menos de su borde y dentro del cono de la mirada (`yaw`),
+ * la más centrada. Pegado a ella, cualquier dirección vale.
+ */
+export function aimedStation(structures: readonly Structure[], pos: Vec3, yaw: number, range: number): Structure | null {
+  // forward = (-sin(yaw), -cos(yaw))
+  const fx = -Math.sin(yaw)
+  const fz = -Math.cos(yaw)
+  let best: Structure | null = null
+  let bestCos = -Infinity
+  for (const s of structures) {
+    if (!OPENABLE.has(s.kind)) continue
+    const dx = s.x - pos.x
+    const dz = s.z - pos.z
+    const distance = Math.hypot(dx, dz)
+    if (distance - s.radius > range) continue
+    const cos = distance < s.radius + 0.5 ? 1 : (dx * fx + dz * fz) / distance
+    if (cos < AIM_COS || cos <= bestCos) continue
+    best = s
+    bestCos = cos
+  }
+  return best
 }
 
 export interface RecipeGroup {
@@ -48,10 +76,8 @@ export const RECIPE_GROUPS: readonly RecipeGroup[] = ([null, 'campfire', 'workbe
  * cliente (`world`, que mira las estaciones con algo de margen para no acabar en una corrección en el borde).
  */
 export const canCraftHere = (inventory: Inventory, recipe: Recipe, world: CraftWorld, pos: Vec3) =>
-  (recipe.station === null || world.nearStation(recipe.station, pos)) && !queueFull(recipe, world, pos) && canCraft(inventory, recipe)
+  (recipe.station === null || world.nearStation(recipe.station, pos)) && canCraft(inventory, recipe)
 
-/** Lo hace una estación y no le cabe un trabajo más. */
-const queueFull = (recipe: Recipe, world: CraftWorld, pos: Vec3) => recipe.time !== undefined && recipe.station !== null && world.hasRoom?.(recipe.station, pos) === false
 
 export interface CostStatus {
   item: ItemId
@@ -79,7 +105,6 @@ export function recipeStatus(inventory: Inventory, recipe: Recipe, world: CraftW
     reasons.push(`${one ? 'Falta' : 'Faltan'} ${missing.map((c) => `${c.amount - c.have} ${lower(c.item)}`).join(' y ')}`)
   }
   if (recipe.station !== null && !world.nearStation(recipe.station, pos)) reasons.push(STATION_NEEDED[recipe.station])
-  else if (queueFull(recipe, world, pos)) reasons.push('Cola llena')
   // Con todo lo demás en orden, solo queda que no quepa (hoy no puede pasar: hay más casillas que tipos).
   if (!reasons.length && !canCraft(inventory, recipe)) reasons.push('Inventario lleno')
   return { available: !reasons.length, reason: reasons.length ? reasons.join(' · ') : null, cost }

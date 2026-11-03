@@ -92,6 +92,8 @@ describe('protocolo', () => {
       { seq: 6, tick: 12, kind: 'move', from: 0, to: INVENTORY_SIZE - 1 },
       { seq: 7, tick: 12, kind: 'drop', slot: INVENTORY_SIZE - 1, all: true },
       { seq: 8, tick: 13, kind: 'drop', slot: 0, all: false },
+      { seq: 9, tick: 13, kind: 'station', id: 4, slot: 'input', from: INVENTORY_SIZE - 1, all: true },
+      { seq: 10, tick: 13, kind: 'station', id: 0, slot: 'output', from: null, all: false },
     ]
     const moves = [
       { ...move, n: 4, aim: { kind: 'prop', id: 3 } },
@@ -134,6 +136,12 @@ describe('protocolo', () => {
       { seq: 1, tick: 1, kind: 'drop', slot: -1, all: false },
       { seq: 1, tick: 1, kind: 'drop', slot: 0 },
       { seq: 1, tick: 1, kind: 'drop', slot: 0, all: 1 },
+      { seq: 1, tick: 1, kind: 'station', id: -1, slot: 'input', from: 0, all: true },
+      { seq: 1, tick: 1, kind: 'station', id: 1.5, slot: 'input', from: 0, all: true },
+      { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'oven', from: 0, all: true },
+      { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', from: INVENTORY_SIZE, all: true },
+      { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', all: true },
+      { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', from: 0 },
       { seq: 1, tick: 1, kind: 'fly' },
       { seq: 1, kind: 'eat' },
     ]

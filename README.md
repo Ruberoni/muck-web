@@ -34,7 +34,8 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Espacio** | saltar (gasta stamina) |
 | **Shift** | correr (gasta stamina) |
 | **Clic izquierdo** | golpear; mantenerlo repite el golpe |
-| **Clic derecho** o **F** | comer lo que se lleva en la mano; si no es comida, una baya. Junto a la barra de hambre se ve qué se comerá |
+| **Clic derecho** | mirando a una fogata, un horno o un destilador, abrir sus ranuras; mirando a la mesa de trabajo o al yunque, sus recetas (a unos 3 m o menos). Si no se mira a ninguna, comer como con **F** |
+| **F** | comer lo que se lleva en la mano; si no es comida, una baya. Junto a la barra de hambre se ve qué se comerá |
 | **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo) |
 | **Q** | tirar uno de lo que se tiene en la mano; **Ctrl + Q**, todos. En la pantalla de inventario, la casilla que está bajo el ratón |
 | **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra, o arrastrar una sobre otra, para intercambiarlas, y con el ratón encima de una casilla, **1–9** la intercambia con esa casilla de la hotbar, como en Minecraft. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
@@ -42,7 +43,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Clic izquierdo** con la fogata o una estación (mesa de trabajo, horno o yunque) en la mano | colocarla |
 | **Esc** | pausa |
 
-Recolectar lleva tiempo, y mejorar una herramienta es ganarlo. Los árboles dan 4 de madera y se talan con 16 golpes a mano, 8 con el hacha de madera y 2 con la de mithril. Las rocas dan 3 de piedra y no se pueden picar a mano: hacen falta 10 golpes con el pico de madera y 2 con el de mithril. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Sobre todo en el bosque, entre 3 y 6 m de altura, crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +4 madera de abedul, y en la montaña (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +3 mineral de hierro. Entre 6 y 9 m crecen también 20 pinos oscuros, más grandes y de copa casi negra, que piden un hacha de hierro (3 golpes; 2 con la de mithril) y dan +4 madera oscura, y en las cimas (desde 8,5 m) hay 16 menas de mithril, pequeñas y con cristales azules, que piden un pico de hierro (3 golpes; 2 con el de mithril) y dan +5 mineral de mithril. Los minerales se funden en el horno; la madera de abedul sirve para las herramientas de hierro y la oscura para las de mithril (ver [Crafteo](#crafteo)). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Sobre todo en el bosque crecen 30 hierbas curativas, matas pequeñas con flores rosas: un clic recoge la flor (+1 hierba curativa) y vuelve a salir a los 90 s. Los árboles y las rocas (también abedules, pinos oscuros y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo. Para hacer sitio, **Q** tira uno de la mano y **Ctrl + Q** la pila entera: sale hacia delante como un montón en el suelo, que quien lo tiró no puede recoger durante 2 s (los demás, sí). Lo que hay en el suelo no dura para siempre: la comida desaparece a los 3 minutos, los materiales a los 5 y las herramientas, armas y estaciones a los 10, parpadeando sus últimos 10 s (`GROUND_TIME` en `src/sim/inventory.ts`). Las monedas, los fragmentos de meteorito, los trofeos, las piezas del avión y todo lo que suelta un jugador al morir no desaparecen nunca.
+Recolectar lleva tiempo, y mejorar una herramienta es ganarlo. Los árboles dan 4 de madera y se talan con 16 golpes a mano, 8 con el hacha de madera y 2 con la de mithril. Las rocas dan 3 de piedra y no se pueden picar a mano: hacen falta 10 golpes con el pico de madera y 2 con el de mithril. Si se golpea algo sin la herramienta que pide, suena metálico, tiembla y no pasa nada; al apuntarle se ve en gris lo que hace falta ("Roca · necesita pico de madera"). Sobre todo en el bosque, entre 3 y 6 m de altura, crecen 40 abedules de tronco blanco, que solo caen con un hacha de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +4 madera de abedul, y en la montaña (entre 6 y 8,5 m) hay 40 menas de hierro, rocas con vetas anaranjadas que solo se pican con un pico de piedra (3 golpes), de hierro (2) o de mithril (1) y dan +3 mineral de hierro. Entre 6 y 9 m crecen también 20 pinos oscuros, más grandes y de copa casi negra, que piden un hacha de hierro (3 golpes; 2 con la de mithril) y dan +4 madera oscura, y en las cimas (desde 8,5 m) hay 16 menas de mithril, pequeñas y con cristales azules, que piden un pico de hierro (3 golpes; 2 con el de mithril) y dan +5 mineral de mithril. Entre la pradera y la montaña (de 3 a 8 m) hay 30 menas de carbón, rocas con cristales negros que se pican con el pico de madera y dan +2 carbón, el combustible bueno del horno y del destilador. Los minerales se funden en el horno; la madera de abedul sirve para las herramientas de hierro y la oscura para las de mithril (ver [Crafteo](#crafteo)). Cada arbusto tiene 6 bayas a la vista: cada clic arranca una (+1 baya) y el arbusto se queda aunque esté vacío. Las bayas que faltan vuelven de una en una, una cada 15 s, así que un arbusto vacío se llena en 90 s. Sobre todo en el bosque crecen 30 hierbas curativas, matas pequeñas con flores rosas: un clic recoge la flor (+1 hierba curativa) y vuelve a salir a los 90 s. Los árboles y las rocas (también abedules, pinos oscuros y menas) no vuelven. La madera, la piedra y los minerales caen al suelo al talar o picar y se recogen pasando por encima (de cerca se acercan solas); las bayas van directas al inventario. Lo nuevo ocupa la primera casilla libre de la hotbar y, si está llena, de la mochila (18 casillas más); si no queda sitio, se queda en el suelo. Para hacer sitio, **Q** tira uno de la mano y **Ctrl + Q** la pila entera: sale hacia delante como un montón en el suelo, que quien lo tiró no puede recoger durante 2 s (los demás, sí). Lo que hay en el suelo no dura para siempre: la comida desaparece a los 3 minutos, los materiales a los 5 y las herramientas, armas y estaciones a los 10, parpadeando sus últimos 10 s (`GROUND_TIME` en `src/sim/inventory.ts`). Las monedas, los fragmentos de meteorito, los trofeos, las piezas del avión y todo lo que suelta un jugador al morir no desaparecen nunca.
 
 El objeto de la casilla seleccionada se ve en la mano derecha (o el puño, si está vacía) y se balancea al andar. Cada golpe tiene su animación, también al aire, y mantener el clic golpea una vez cada 0,4 s aunque no haya nada delante; comer y colocar la fogata o una estación también se animan.
 
@@ -55,23 +56,28 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | — | hacha o pico de madera | 5 madera |
 | — | fogata | 6 madera + 3 piedra |
 | — | mesa de trabajo | 10 madera |
-| fogata | carne asada | 1 carne cruda |
-| fogata | infusión de bayas | 4 bayas |
 | mesa de trabajo | espada de madera | 5 madera |
 | mesa de trabajo | hacha o pico de piedra | 3 madera + 5 piedra |
 | mesa de trabajo | espada de piedra | 3 madera + 2 piedra |
 | mesa de trabajo | horno | 12 piedra + 4 madera |
+| mesa de trabajo | destilador | 8 madera + 4 piedra |
 | mesa de trabajo | yunque | 4 lingotes de hierro + 6 piedra |
-| horno | lingote de hierro | 1 mineral de hierro + 1 madera |
-| horno | lingote de mithril | 1 mineral de mithril + 2 madera |
 | yunque | hacha, pico o espada de hierro | 3 lingotes de hierro + 2 madera de abedul |
 | yunque | hacha o pico de mithril | 3 lingotes de mithril + 2 madera oscura |
 | yunque | espada de mithril | 2 lingotes de mithril + 2 madera oscura |
 | yunque | espada de meteorito | 3 fragmentos de meteorito + 2 madera oscura |
 
-Fundir y cocinar no son instantáneos, pero tampoco hay que quedarse delante: la estación se carga y trabaja sola (hierro 15 s, mithril 25 s, carne 10 s, infusión 15 s), con una cola de 5 trabajos y una barra encima. Lo terminado sale al suelo junto a ella y lo puede recoger cualquiera. Una estación rinde lo mismo con 1 o con 5 jugadores. La dificultad alarga por igual recolectar y las estaciones.
+Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un yunque cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas.
 
-Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un horno cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas. Fundir y cocinar son instantáneos: cada clic junto al horno convierte un mineral en un lingote, y junto a una fogata, una carne cruda en una asada.
+Fundir, cocinar y destilar no son recetas: se hacen en las ranuras de la estación, como en un horno de Minecraft (ver [Estaciones](#estaciones)).
+
+| Estación | Entrada | Salida | Tiempo por unidad |
+| --- | --- | --- | --- |
+| horno | 1 mineral de hierro | 1 lingote de hierro | 15 s |
+| horno | 1 mineral de mithril | 1 lingote de mithril | 25 s |
+| fogata | 1 carne cruda | 1 carne asada | 10 s |
+| fogata | 4 bayas | 1 infusión de bayas | 15 s |
+| destilador | 1 carne cruda | 1 aceite | 60 s |
 
 Las herramientas de hierro hacen 6 de daño a lo de su familia y son las que abren el pino oscuro y la mena de mithril. Las de mithril, las mejores, hacen 12: nada pide mithril, pero tumban abedules y menas de hierro de un golpe, y pinos oscuros y menas de mithril de dos.
 
@@ -88,7 +94,9 @@ Las espadas son las armas para pelear: no talan ni pican, golpean cada 0,25 s (l
 
 ## Estaciones
 
-La mesa de trabajo, el horno y el yunque se colocan como la fogata, con vista previa, y quedan de frente al jugador. Las recetas de cada estación se fabrican a unos 3 m o menos de su borde (3,3 m), de cualquiera de ese tipo: son permanentes y en una sala las comparten todos. No se pueden atravesar, salen en el minimapa con un cuadrado (marrón la mesa, gris el horno, azul el yunque) y desaparecen al reiniciarse la isla. El horno tiene fuego en la boca, pero no ilumina como la fogata.
+La mesa de trabajo, el horno y el yunque se colocan como la fogata, con vista previa, y quedan de frente al jugador. Las recetas de cada estación se fabrican a unos 3 m o menos de su borde (3,3 m), de cualquiera de ese tipo: son permanentes y en una sala las comparten todos.
+
+La fogata, el horno y el destilador procesan: **clic derecho** mirándolos abre el inventario con sus tres ranuras en lugar de las recetas. **Entrada**, lo que se procesa; **combustible**, lo que arde (el horno y el destilador: 1 madera arde 15 s y 1 carbón, 60 s; la fogata ya es fuego y no lo necesita); y **salida**, lo que sale. Para meter algo: **Mayúsculas + clic** en una casilla mete la pila entera en la ranura que le toca, **clic derecho** mete una, y también se puede arrastrar la casilla a una ranura. Un clic en una ranura la saca al inventario. Cada ranura guarda hasta 99. La estación trabaja sola mientras tenga entrada, sitio en la salida y algo ardiendo, y solo gasta combustible mientras procesa; una barra enseña cómo va la unidad actual y otra lo que le queda a lo que arde. Las ranuras son de la estación, no de quien las llenó: cualquiera puede meter y sacar, y se guardan con la partida. Una estación rinde lo mismo con 1 o con 5 jugadores. La dificultad alarga por igual recolectar y lo que tardan las estaciones. No se pueden atravesar, salen en el minimapa con un cuadrado (marrón la mesa, gris el horno, azul el yunque) y desaparecen al reiniciarse la isla. El horno tiene fuego en la boca, pero no ilumina como la fogata.
 
 ## Fogata
 
@@ -163,7 +171,7 @@ El faro y el tótem ya están en la isla desde el principio, en ruinas, y no se 
 
 Con el faro acabado, <kbd>E</kbd> carga el aceite que se lleve (guarda hasta 10) y, si no se lleva, lo enciende o lo apaga, a cualquier hora; sin aceite no enciende, y el aviso lo dice. Una unidad da 30 s de luz, y cada campana un 10 % menos. Si arde al menos dos tercios de una noche, cuenta como iluminada: en una noche normal los mobs no suman ese 5 % de vida, y en la Noche Eterna no suben con la campana. De día arde y gasta, pero no cuenta; no hace falta tenerlo siempre encendido, sino elegir qué noches se compran. Encendido, sus dos haces barren la isla, la noche se aclara y la niebla de la Noche Eterna se abre en toda ella, sea cual sea su tamaño. Quien muera de noche con el faro encendido reaparece en él a los 60 s; apagado, al amanecer o en la siguiente campana, en el punto inicial.
 
-El aceite se hace en el destilador (se fabrica en la mesa de trabajo) con 1 carne cruda y 2 de madera, en 60 s: compite con la comida, y un destilador no basta para una noche.
+El aceite se hace en el destilador (se fabrica en la mesa de trabajo): 1 carne cruda en la entrada da 1 aceite en 60 s, con 4 de madera o 1 carbón ardiendo. Compite con la comida, y un destilador no basta para una noche.
 
 El tótem se repara igual, en tres fases: la última pide 3 fragmentos de meteorito por jugador y un trofeo, que sueltan los jefes de noche. Manteniendo <kbd>E</kbd> 3 s se activa, sin vuelta atrás: los mobs dan el segundo salto (vida ×1,5, daño ×1,3, velocidad ×1,1). Se puede activar cuando se quiera, incluso antes de la Noche Eterna. Pronto evita que sigan subiendo mientras se espera, pero pilla con menos equipo.
 

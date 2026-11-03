@@ -5,8 +5,8 @@ import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from './world/terrain'
 import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { Inventory, ItemId } from './inventory'
-import { MAX_JOBS, OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
-import type { Recipe, RecipeId } from './crafting'
+import { OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
+import { copyStation, newStation, STATION_DEFS, stepStation, type StationState } from './stations'
 import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
@@ -63,21 +63,14 @@ export interface PlaneState {
   heat: number
 }
 
-/** Un trabajo en la cola de una estación. */
-export interface StationJob {
-  recipe: RecipeId
-  /** Segundos que tarda en total y los que le quedan: solo avanza el primero de la cola. */
-  time: number
-  left: number
-}
-
 export interface Structure extends Collider {
   id: number
   kind: StructureKind
   y: number
   /** Giro del modelo: cada estructura distinta, sin depender de cuántas haya. */
   rotY: number
-  jobs: StationJob[]
+  /** Lo que hay dentro de una estación de procesar (horno, destilador, fogata). */
+  station?: StationState
   /** Lo que se construye entre todos (BUILD_DEFS). */
   build?: BuildState
   fire?: LighthouseFire
@@ -112,11 +105,12 @@ const buildOf = (kind: StructureKind) => ({
   ...(BUILD_DEFS[kind] ? { build: newBuild() } : {}),
   ...(kind === 'lighthouse' ? { fire: { oil: 0, burning: false, left: 0, lit: 0 } } : {}),
   ...(kind === 'plane' ? { plane: { hp: PLANE_HP, running: false, heat: 0 } } : {}),
+  ...(STATION_DEFS[kind] ? { station: newStation() } : {}),
 })
 
 const copyStructure = (s: Structure): Structure => ({
   ...s,
-  jobs: s.jobs.map((job) => ({ ...job })),
+  ...(s.station ? { station: copyStation(s.station) } : {}),
   ...(s.build ? { build: copyBuild(s.build) } : {}),
   ...(s.fire ? { fire: { ...s.fire } } : {}),
   ...(s.plane ? { plane: { ...s.plane } } : {}),
@@ -154,19 +148,6 @@ export function stationNear(structures: readonly Structure[], kind: StructureKin
   return structures.some((s) => s.kind === kind && Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius <= range)
 }
 
-/** La estación más cercana de ese tipo al alcance, con hueco en su cola; null si no hay. */
-export function stationWithRoom(structures: readonly Structure[], kind: StructureKind, pos: Vec3, range: number): Structure | null {
-  let best: Structure | null = null
-  let bestDistance = Infinity
-  for (const s of structures) {
-    const distance = Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius
-    if (s.kind !== kind || distance > range || s.jobs.length >= MAX_JOBS || distance >= bestDistance) continue
-    best = s
-    bestDistance = distance
-  }
-  return best
-}
-
 /** Estructuras colocadas (fogatas y estaciones) y su rejilla de colisión. Las dibuja StructureView. */
 export class Structures {
   readonly list: Structure[] = []
@@ -184,23 +165,17 @@ export class Structures {
     const id = this.nextId++
     const { radius, facesPlacer } = STRUCTURE_DEFS[kind]
     const rotY = facesPlacer ? yaw : id * 1.3
-    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY, radius, alive: true, jobs: [], ...buildOf(kind) }
+    const structure: Structure = { id, kind, x: spot.x, y: spot.y, z: spot.z, rotY, radius, alive: true, ...buildOf(kind) }
     this.insert(structure)
     this.emit({ type: 'structurePlaced', id, kind, x: structure.x, y: structure.y, z: structure.z, rotY: structure.rotY, by })
     return structure
   }
 
   /** Añade una estructura ya colocada en otra parte (el espejo del cliente, con lo que dice `structurePlaced`). */
-  add(structure: Omit<Structure, 'radius' | 'alive' | 'jobs'>) {
+  add(structure: Omit<Structure, 'radius' | 'alive'>) {
     if (this.list.some((s) => s.id === structure.id)) return
-    this.insert({ ...structure, radius: STRUCTURE_DEFS[structure.kind].radius, alive: true, jobs: [], ...buildOf(structure.kind) })
+    this.insert({ ...structure, radius: STRUCTURE_DEFS[structure.kind].radius, alive: true, ...buildOf(structure.kind) })
     this.nextId = Math.max(this.nextId, structure.id + 1)
-  }
-
-  /** Pone un trabajo en la cola de una estación; `time`: lo que tarda en esta partida. */
-  enqueue(structure: Structure, recipe: Recipe, time: number) {
-    structure.jobs.push({ recipe: recipe.id, time, left: time })
-    this.emit({ type: 'stationQueued', id: structure.id, recipe: recipe.id, time })
   }
 
   /** Entrega a una construcción lo que falte de `inventory`. */
@@ -281,23 +256,20 @@ export class Structures {
     this.emit({ type: 'fireChanged', id: structure.id, fire: { ...structure.fire! } })
   }
 
-  /** Paso fijo: cada estación trabaja en lo primero de su cola. `done`: ha terminado esa receta. */
-  step(dt: number, done: (structure: Structure, recipe: RecipeId) => void) {
-    for (const s of this.list) {
-      const job = s.jobs[0]
-      if (!job) continue
-      job.left -= dt
-      if (job.left > 1e-9) continue
-      s.jobs.shift()
-      this.emit({ type: 'stationDone', id: s.id })
-      done(s, job.recipe)
-    }
+  /** Paso fijo: cada estación procesa lo que tiene. `factor`: lo que tarda el trabajo en esta partida. */
+  step(dt: number, factor: number) {
+    for (const s of this.list) if (s.station && stepStation(s.kind, s.station, dt, factor)) this.stationChanged(s)
   }
 
-  /** La copia del cliente: avanza las barras; quitar el trabajo lo dice su `stationDone`, y el faro, su `fireChanged`. */
+  /** Avisa de lo que hay ahora en una estación: el cliente lo copia tal cual. */
+  stationChanged(structure: Structure) {
+    this.emit({ type: 'stationChanged', id: structure.id, station: copyStation(structure.station!) })
+  }
+
+  /** La copia del cliente: avanza las barras; lo que hay en las estaciones lo dice su `stationChanged`, y el faro, su `fireChanged`. */
   follow(dt: number, night: boolean) {
     for (const s of this.list) {
-      if (s.jobs[0]) s.jobs[0].left = Math.max(0, s.jobs[0].left - dt)
+      if (s.station && s.station.time > 0) s.station.progress = Math.min(s.station.time, s.station.progress + dt)
       if (s.plane?.running) s.plane.heat += dt
       if (!s.fire?.burning) continue
       s.fire.left = Math.max(0, s.fire.left - dt)
@@ -322,7 +294,8 @@ export class Structures {
 
   load(state: StructuresState) {
     this.clear()
-    for (const s of state.list) this.insert(copyStructure(s))
+    // Las guardadas antes de las ranuras traen las estaciones vacías.
+    for (const s of state.list) this.insert(copyStructure(STATION_DEFS[s.kind] && !s.station ? { ...s, station: newStation() } : s))
     this.nextId = state.nextId
   }
 

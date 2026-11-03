@@ -5,6 +5,8 @@ import {
   BIRCH_BAND,
   BIRCH_COUNT,
   buildPropPlacements,
+  COAL_ORE_BAND,
+  COAL_ORE_COUNT,
   createPropWorld,
   DARKPINE_BAND,
   DARKPINE_COUNT,
@@ -32,6 +34,7 @@ const BANDED = [
   { kind: 'iron_ore', count: IRON_ORE_COUNT, band: IRON_ORE_BAND, slope: MAX_SLOPE * 1.5 },
   { kind: 'darkpine', count: DARKPINE_COUNT, band: DARKPINE_BAND, slope: MAX_SLOPE },
   { kind: 'mithril_ore', count: MITHRIL_ORE_COUNT, band: MITHRIL_ORE_BAND, slope: MAX_SLOPE * 1.5 },
+  { kind: 'coal_ore', count: COAL_ORE_COUNT, band: COAL_ORE_BAND, slope: MAX_SLOPE * 1.5 },
 ] as const
 
 const gridOf = (placements: readonly PropPlacement[]) => {
@@ -54,10 +57,10 @@ describe('colocación de props', () => {
     expect(Object.isFrozen(placements[0])).toBe(true)
   })
 
-  it('el id es el índice: árboles, rocas, arbustos y después abedules, menas de hierro, pinos oscuros, menas de mithril y hierbas', () => {
+  it('el id es el índice: árboles, rocas, arbustos y después abedules, menas de hierro, pinos oscuros, menas de mithril, hierbas y carbón', () => {
     expect(placements.every((p, i) => p.id === i)).toBe(true)
     const kinds = placements.map((p) => p.kind)
-    const order = ['tree', 'rock', 'bush', 'birch', 'iron_ore', 'darkpine', 'mithril_ore', 'healing_herb']
+    const order = ['tree', 'rock', 'bush', 'birch', 'iron_ore', 'darkpine', 'mithril_ore', 'healing_herb', 'coal_ore']
     for (let i = 1; i < kinds.length; i++) expect(order.indexOf(kinds[i])).toBeGreaterThanOrEqual(order.indexOf(kinds[i - 1]))
     for (const kind of order) expect(kinds).toContain(kind)
     expect(kinds.slice(0, ORIGINAL_COUNT).every((k) => k === 'tree' || k === 'rock' || k === 'bush')).toBe(true)
@@ -91,7 +94,7 @@ describe('colocación de props', () => {
   it('sale exactamente el mismo número de cada tipo, sea cual sea su bioma', () => {
     const counts: Record<string, number> = {}
     for (const { kind } of placements) counts[kind] = (counts[kind] ?? 0) + 1
-    expect(counts).toEqual({ tree: 180, rock: 60, bush: 45, birch: 40, iron_ore: 40, darkpine: 20, mithril_ore: 16, healing_herb: HERB_COUNT })
+    expect(counts).toEqual({ tree: 180, rock: 60, bush: 45, birch: 40, iron_ore: 40, darkpine: 20, mithril_ore: 16, healing_herb: HERB_COUNT, coal_ore: COAL_ORE_COUNT })
   })
 
   it('el punto de aparición es pradera llana: se puede colocar algo en cualquier dirección', () => {

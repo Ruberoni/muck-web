@@ -2,7 +2,7 @@ import type { PlayerCommands } from './commands'
 import { isBuilt, usableNear } from './builds'
 import { findLandmarks } from './landmarks'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
-import { recipeById, type CraftWorld, type RecipeId } from './crafting'
+import type { CraftWorld, RecipeId } from './crafting'
 import {
   DEATH_DROP_HEIGHT,
   ENEMY_DEFS,
@@ -34,10 +34,11 @@ import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, workFactor, type MatchEnd, typ
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
 import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
-import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent } from './playerTick'
+import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent, type StationOp } from './playerTick'
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, scaleProps, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
-import { placeableOf, stationNear, stationWithRoom, Structures, structureSpot, type Structure, type StructuresState, type StructureSpot } from './structures'
+import { placeableOf, stationNear, Structures, structureSpot, type Structure, type StructuresState, type StructureSpot } from './structures'
+import { putInto, takeFrom } from './stations'
 import { hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight, NIGHT_LENGTH } from './world/daycycle'
@@ -50,7 +51,6 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 /** Altura sobre los pies desde la que sale lo que tira un jugador. */
 const TOSS_HEIGHT = 1.2
 /** Altura sobre el suelo desde la que sale lo que termina una estación. */
-const STATION_DROP_HEIGHT = 1.4
 /** Intentos de encontrar dónde cae el avión o dónde va la tumba. */
 const CRASH_ATTEMPTS = 20
 /** Altura sobre el suelo desde la que sale una roca lanzada. */
@@ -167,11 +167,6 @@ export class Simulation {
   /** Las estaciones para fabricar son las estructuras colocadas. */
   private readonly craftWorld: CraftWorld = {
     nearStation: (kind, pos) => stationNear(this.structures.list, kind, pos, STATION_RANGE),
-    hasRoom: (kind, pos) => stationWithRoom(this.structures.list, kind, pos, STATION_RANGE) !== null,
-    enqueue: (recipe, pos) => {
-      const station = recipe.station && stationWithRoom(this.structures.list, recipe.station, pos, STATION_RANGE)
-      if (station) this.structures.enqueue(station, recipe, recipe.time! * workFactor(this.rules))
-    },
   }
 
   constructor(seed: number, placements: readonly PropPlacement[] = generatePropPlacements()) {
@@ -329,10 +324,7 @@ export class Simulation {
     growBerries(this.world.props, STEP, this.events.emit)
     this.structures.burn(STEP, this.oilUnit, isNight(this.clock.phase))
     this.warmPlane(living)
-    this.structures.step(STEP, (station, recipe) => {
-      const { x, y, z } = station
-      this.pickups.drop(recipeById(recipe)!.result, 1, x, y + STATION_DROP_HEIGHT, z)
-    })
+    this.structures.step(STEP, workFactor(this.rules))
     for (const slot of living) {
       const intent = intents.get(slot)!
       // Desde la posición simulada (no interpolada): golpear no depende del framerate. En red, el cliente
@@ -344,6 +336,7 @@ export class Simulation {
       if (hands.swing) this.interaction.strike(slot)
       if (hands.place) this.place(slot)
       for (const { item, amount } of intent.drops) this.toss(slot, item, amount)
+      for (const op of intent.stations) this.tendStation(slot, op)
     }
     // Lo que rompió o mató otro jugador en este paso deja de ser objetivo de los demás.
     for (const slot of living) if (slot.target && !slot.target.alive) slot.target = null
@@ -599,6 +592,31 @@ export class Simulation {
     for (let i = 0; i < CRASH_ATTEMPTS && !spot; i++) spot = this.worldEvents.findSpot(around)
     const { x, z } = spot ?? { x: this.spawnCenter.x + 12, z: this.spawnCenter.z }
     this.structures.place({ x, y: heightAt(x, z), z, valid: true }, 'grave')
+  }
+
+  /**
+   * Mete en una ranura de una estación lo de una casilla, o saca al inventario lo de la ranura. Hay que estar a su
+   * alcance. Lo que no cabe en el inventario se queda en la estación.
+   */
+  private tendStation(slot: PlayerSlot, { id, slot: target, from, all }: StationOp) {
+    const structure = this.structures.byId(id)
+    const { pos } = slot.player
+    if (!structure?.station || Math.hypot(structure.x - pos.x, structure.z - pos.z) - structure.radius > STATION_RANGE) return
+    const { inventory } = slot
+    const station = structure.station
+    if (from === null) {
+      const stack = station[target]
+      if (!stack || !inventory.canAdd(stack.item)) return
+      takeFrom(station, target)
+      inventory.add(stack.item, stack.amount)
+    } else {
+      const item = inventory.slots[from]
+      if (!item) return
+      const moved = putInto(structure.kind, station, target, item, all ? inventory.count(item) : 1)
+      if (!moved) return
+      inventory.remove(item, moved)
+    }
+    this.structures.stationChanged(structure)
   }
 
   /** Averiado se repara; reparado se arranca. */

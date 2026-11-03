@@ -11,6 +11,8 @@ import { createPropWorld, generatePropPlacements, type PropData } from './props'
 import { quickProps } from './quickProps'
 import { mulberry32 } from './random'
 import { Simulation } from './Simulation'
+import { FUEL_SECONDS, processOf } from './stations'
+import type { Structure } from './structures'
 import { DAY_FRACTION } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
 
@@ -57,20 +59,25 @@ function stepAll(sim: Simulation, commands: Record<PlayerId, Command> = {}) {
   return sim.step(map)
 }
 
-/** Espera a que las estaciones acaben y pasa el jugador `id` por encima de lo que han soltado. */
-function collectFromStations(sim: Simulation, id: PlayerId = 0) {
-  const { player } = sim.slot(id)
-  const stay = () => Object.assign(player, { health: 100, hunger: 100 })
-  while (sim.structures.list.some((s) => s.jobs.length)) {
-    stay()
+/**
+ * El jugador `id` mete `amount` de `input` en la estación `station` y la madera justa para procesarlo, espera a que acabe
+ * y saca lo que ha salido. Devuelve cuántas unidades ha sacado (0 si no ha podido meter nada).
+ */
+function useStation(sim: Simulation, station: Structure, input: ItemId, amount: number, id: PlayerId = 0) {
+  const { player, inventory } = sim.slot(id)
+  const process = processOf(station.kind, input)!
+  const wood = Math.ceil((amount * process.time) / process.amount / FUEL_SECONDS.wood!)
+  const put = (item: ItemId, slot: 'input' | 'fuel', times: number): ActionData[] =>
+    Array.from({ length: times }, () => ({ kind: 'station', id: station.id, slot, from: inventory.slots.indexOf(item), all: false }))
+  stepAll(sim, { [id]: { actions: [...put(input, 'input', amount), ...(station.station!.fuel === null && wood ? put('wood', 'fuel', wood) : [])] } })
+  if (!station.station!.input) return 0
+  for (let t = 0; t < 100_000 && station.station!.input && station.station!.input.amount >= process.amount; t++) {
+    Object.assign(player, { health: 100, hunger: 100 })
     stepAll(sim)
   }
-  for (let t = 0; t < 600 && sim.pickups.list.length; t++) {
-    stay()
-    const piece = sim.pickups.list[0]
-    sim.teleport(id, piece.pos.x, piece.pos.z, 0, 0)
-    stepAll(sim)
-  }
+  const out = station.station!.output?.amount ?? 0
+  stepAll(sim, { [id]: { actions: [{ kind: 'station', id: station.id, slot: 'output', from: null, all: true }] } })
+  return out
 }
 
 /** Pone al jugador delante del prop mirándolo, en un sitio libre que cumpla `also`; devuelve su orientación. */
@@ -100,7 +107,7 @@ function clearSpot(clearance: number) {
   throw new Error('sin hueco libre')
 }
 
-const spot = clearSpot(8)
+const spot = clearSpot(7)
 
 describe('Simulation con varios jugadores', () => {
   it('el primero aparece en el punto de aparición y los demás en un anillo alrededor; reset los devuelve ahí', () => {
@@ -277,20 +284,14 @@ describe('Simulation con varios jugadores', () => {
     sim.teleport(0, spot.x, spot.z, 0, 0)
 
     // Sin estaciones no sale nada de lo nuevo.
-    expect(craft(0, 'furnace') + craft(0, 'iron_bar')).toBe(0)
+    expect(craft(0, 'furnace')).toBe(0)
     expect(craft(0, 'workbench')).toBe(1)
     expect(place('workbench', 0)).toHaveLength(1)
     expect(craft(0, 'furnace')).toBe(1)
-    // El horno, a la izquierda y de frente: admite cinco a la cola y trabaja solo.
+    // El horno, a la izquierda y de frente: con mineral y madera dentro trabaja solo.
     expect(place('furnace', Math.PI / 2)).toEqual([expect.objectContaining({ kind: 'furnace', rotY: Math.PI / 2, by: 0 })])
-    expect(craft(0, 'iron_bar', 5) + craft(0, 'iron_bar', 5)).toBe(5)
-    expect(sim.structures.list[1].jobs).toHaveLength(5)
-    expect(inventory.count('iron_bar')).toBe(0)
-    collectFromStations(sim)
-    sim.teleport(0, spot.x, spot.z, 0, 0)
-    expect(craft(0, 'iron_bar', 5)).toBe(2)
-    collectFromStations(sim)
-    sim.teleport(0, spot.x, spot.z, 0, 0)
+    const furnace = sim.structures.list[1]
+    expect(useStation(sim, furnace, 'iron_ore', 7)).toBe(7)
     expect(inventory.toJSON()).toMatchObject({ iron_bar: 7, stone: 6, birch_wood: 4 })
     expect(inventory.count('iron_ore')).toBe(0)
     expect(inventory.count('wood')).toBe(0)
@@ -311,15 +312,14 @@ describe('Simulation con varios jugadores', () => {
     other.add('iron_bar', 3)
     other.add('birch_wood', 2)
     sim.teleport(1, anvil.x, anvil.z + anvil.radius + STATION_RANGE + 1, 0, 0)
-    expect(craft(1, 'iron_bar') + craft(1, 'iron_axe')).toBe(0)
+    expect(useStation(sim, furnace, 'iron_ore', 1, 1) + craft(1, 'iron_axe')).toBe(0)
     sim.teleport(1, anvil.x, anvil.z + anvil.radius + STATION_RANGE - 0.5, 0, 0)
     expect(craft(1, 'iron_axe')).toBe(1)
     // Ahí el horno aún queda lejos; en el centro del claro, no.
-    expect(craft(1, 'iron_bar')).toBe(0)
+    expect(useStation(sim, furnace, 'iron_ore', 1, 1)).toBe(0)
     sim.teleport(1, spot.x, spot.z, 0, 0)
-    expect(craft(1, 'iron_bar')).toBe(1)
-    expect(other.toJSON()).toEqual({ iron_axe: 1 })
-    expect(sim.structures.list[1].jobs).toHaveLength(1)
+    expect(useStation(sim, furnace, 'iron_ore', 1, 1)).toBe(1)
+    expect(other.toJSON()).toEqual({ iron_axe: 1, iron_bar: 1 })
   })
 
   it('el pico de hierro rompe una mena de hierro en 2 golpes', () => {
@@ -399,12 +399,8 @@ describe('Simulation con varios jugadores', () => {
     gather('iron_ore', 10, 'stone_pickaxe')
     gather('birch', 4, 'stone_axe')
     atSpot()
-    expect(craft('iron_bar', 5)).toBe(5)
-    collectFromStations(sim)
-    atSpot()
-    expect(craft('iron_bar', 5)).toBe(5)
-    collectFromStations(sim)
-    atSpot()
+    const furnace = sim.structures.list.find((s) => s.kind === 'furnace')!
+    expect(useStation(sim, furnace, 'iron_ore', 10)).toBe(10)
     expect(craft('anvil')).toBe(1)
     expect(place('anvil', Math.PI)).toHaveLength(1)
     atSpot()
@@ -415,16 +411,11 @@ describe('Simulation con varios jugadores', () => {
     gather('darkpine', 4, 'iron_axe')
     gather('tree', 12, 'iron_axe')
     atSpot()
-    expect(craft('mithril_bar', 5)).toBe(5)
-    collectFromStations(sim)
-    atSpot()
-    expect(craft('mithril_bar')).toBe(1)
-    collectFromStations(sim)
-    atSpot()
+    expect(useStation(sim, furnace, 'mithril_ore', 6)).toBe(6)
     expect(craft('mithril_axe') + craft('mithril_pickaxe')).toBe(2)
     expect(inventory.count('mithril_axe')).toBe(1)
     expect(inventory.count('mithril_pickaxe')).toBe(1)
-    // Se ha pasado por todas las recetas salvo la fogata, cocinar, las espadas y el hacha de madera, que no hacen falta.
+    // Se ha pasado por todas las recetas salvo la fogata, el destilador, las espadas y el hacha de madera, que no hacen falta.
     expect(RECIPE_IDS.filter((id) => !used.has(id))).toEqual([
       'wood_axe',
       'campfire',
@@ -434,9 +425,6 @@ describe('Simulation con varios jugadores', () => {
       'iron_sword',
       'mithril_sword',
       'meteor_sword',
-      'cooked_meat',
-      'berry_infusion',
-      'oil',
     ])
     expect(sim.slot(0).player.health).toBeGreaterThan(0)
   })

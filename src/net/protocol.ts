@@ -10,13 +10,14 @@ import type { PropPlacement } from '../sim/props'
 import { STRUCTURE_KINDS, type StructureKind } from '../sim/structures'
 import type { Connection, SimState } from '../sim/Simulation'
 import { isSkin } from './skins'
+import { STATION_SLOTS, type StationSlot } from '../sim/stations'
 
 /**
  * Versión del protocolo y de la simulación. Se sube a mano cuando cambia cualquiera de los dos: el servidor
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 43
+export const PROTOCOL_VERSION = 44
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -520,6 +521,11 @@ function parseAction(a: unknown): Action | null {
     case 'drop':
       if (!isInt(a.slot, 0, INVENTORY_SIZE - 1) || typeof a.all !== 'boolean') return null
       data = { kind: 'drop', slot: a.slot, all: a.all }
+      break
+    case 'station':
+      if (!isInt(a.id, 0, Number.MAX_SAFE_INTEGER) || !STATION_SLOTS.includes(a.slot as StationSlot) || typeof a.all !== 'boolean') return null
+      if (a.from !== null && !isInt(a.from, 0, INVENTORY_SIZE - 1)) return null
+      data = { kind: 'station', id: a.id, slot: a.slot as StationSlot, from: a.from as number | null, all: a.all }
       break
     case 'craft':
       if (!isRecipeId(a.recipe)) return null

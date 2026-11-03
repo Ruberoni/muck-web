@@ -3,7 +3,13 @@ import type { CraftWorld, Recipe, RecipeId } from '../sim/crafting'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
 import { ICONS } from './icons'
-import { CRAFT_MANY, RECIPE_GROUPS, recipeStatus } from './recipes'
+import { CRAFT_MANY, RECIPE_GROUPS, recipeStatus, STATION_NAMES } from './recipes'
+import type { ActionData } from '../sim/commands'
+import { slotFor, STATION_DEFS, STATION_SLOTS, type StationSlot } from '../sim/stations'
+import type { Structure } from '../sim/structures'
+
+const STATION_SLOT_NAMES: Record<StationSlot, string> = { input: 'Entrada', fuel: 'Combustible', output: 'Salida' }
+const STATION_HINT = 'Mayúsculas + clic en una casilla: meter la pila · Clic derecho: meter una · Arrastrar a una ranura · Clic en una ranura: sacarla'
 
 /** Teclas que cierran la pantalla y vuelven a jugar: las que la abren (Tab, E y C). */
 const CLOSE_KEYS: ReadonlySet<string> = new Set([...INVENTORY_KEYS, RECIPES_KEY])
@@ -62,6 +68,7 @@ export class InventoryScreen {
   oncraft: ((recipe: RecipeId, times: number) => void) | null = null
   onclose: (() => void) | null = null
   onescape: (() => void) | null = null
+  onstation: ((action: Extract<ActionData, { kind: 'station' }>) => void) | null = null
   private root: HTMLElement
   private slots: SlotView[] = []
   private recipes: RecipeView[] = []
@@ -74,6 +81,12 @@ export class InventoryScreen {
   private hovered: number | null = null
   /** La casilla que se está arrastrando. */
   private dragged: number | null = null
+  /** La estación abierta: sus ranuras sustituyen a las recetas. */
+  private station: Structure | null = null
+  private stationColumn: HTMLElement
+  private stationTitle: HTMLElement
+  private stationSlots = new Map<StationSlot, SlotView>()
+  private stationBars: { progress: HTMLElement; burn: HTMLElement; fuelRow: HTMLElement }
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'inventory', parent)
@@ -86,7 +99,8 @@ export class InventoryScreen {
     for (let i = 0; i < INVENTORY_SIZE; i++) {
       const root = el('div', 'slot', i < SLOT_COUNT ? hotbar : backpack)
       if (i < SLOT_COUNT) el('span', 'key', root).textContent = String(i + 1)
-      root.addEventListener('click', () => this.click(i))
+      root.addEventListener('click', (e) => (e.shiftKey && this.station ? this.toStation(i, true) : this.click(i)))
+      root.addEventListener('contextmenu', () => this.station && this.toStation(i, false))
       root.addEventListener('mouseenter', () => (this.hovered = i))
       root.addEventListener('mouseleave', () => {
         if (this.hovered === i) this.hovered = null
@@ -142,6 +156,34 @@ export class InventoryScreen {
     }
     el('p', 'hint', this.recipesColumn).textContent = `Clic: fabricar · Mayúsculas + clic: hasta ${CRAFT_MANY}`
 
+    this.stationColumn = el('div', 'inventory-station', panel)
+    this.stationColumn.hidden = true
+    this.stationTitle = el('h2', 'title', this.stationColumn)
+    const machine = el('div', 'station-machine', this.stationColumn)
+    const progressTrack = el('div', 'station-bar', machine)
+    const fuelRow = el('div', 'station-fuel', this.stationColumn)
+    const burnTrack = el('div', 'station-bar burn', fuelRow)
+    for (const slot of STATION_SLOTS) {
+      const parent = slot === 'fuel' ? fuelRow : machine
+      const root = document.createElement('div')
+      root.className = 'slot station-slot'
+      parent.insertBefore(root, slot === 'output' ? null : slot === 'fuel' ? burnTrack : progressTrack)
+      el('span', 'station-slot-name', root).textContent = STATION_SLOT_NAMES[slot]
+      root.addEventListener('click', () => this.station && this.onstation?.({ kind: 'station', id: this.station.id, slot, from: null, all: true }))
+      root.addEventListener('dragover', (e) => {
+        if (this.dragged !== null) e.preventDefault()
+      })
+      root.addEventListener('drop', (e) => {
+        e.preventDefault()
+        const from = this.dragged
+        this.dragged = null
+        if (from !== null && this.station && this.inventory?.slots[from]) this.onstation?.({ kind: 'station', id: this.station.id, slot, from, all: true })
+      })
+      this.stationSlots.set(slot, { root, icon: el('div', 'icon', root), count: el('span', 'count', root), item: undefined })
+    }
+    this.stationBars = { progress: el('div', 'fill', progressTrack), burn: el('div', 'fill', burnTrack), fuelRow }
+    el('p', 'hint', this.stationColumn).textContent = STATION_HINT
+
     el('p', 'hint inventory-keys', panel).textContent = 'Tab, E o C: volver al juego · Esc: pausa'
     // Con el ratón suelto el clic derecho abriría el menú del navegador.
     this.root.addEventListener('contextmenu', (e) => e.preventDefault())
@@ -185,6 +227,45 @@ export class InventoryScreen {
       view.reason.textContent = status.reason ?? ''
       view.reason.hidden = !status.reason
     }
+  }
+
+  /**
+   * La estación abierta (o null): con una de procesar se ven sus ranuras en vez de las recetas. Se llama cada frame con
+   * la pantalla abierta, con la estación tal como está ahora.
+   */
+  setStation(station: Structure | null) {
+    const showing = station?.station ? station : null
+    if (showing?.id !== this.station?.id) this.dragged = null
+    this.station = showing
+    this.stationColumn.hidden = !showing
+    this.recipesColumn.hidden = !!showing
+    if (!showing?.station) return
+    this.stationTitle.textContent = STATION_NAMES[showing.kind]
+    const { station: state } = showing
+    for (const [slot, view] of this.stationSlots) {
+      const stack = state[slot]
+      const item = stack?.item ?? null
+      if (item !== view.item) {
+        view.item = item
+        view.root.classList.toggle('filled', !!item)
+        view.root.title = item ? ITEM_NAMES[item] : STATION_SLOT_NAMES[slot]
+        view.icon.innerHTML = item ? ICONS[item] : ''
+      }
+      view.count.textContent = stack ? String(stack.amount) : ''
+    }
+    this.stationBars.fuelRow.hidden = !STATION_DEFS[showing.kind]?.fuel
+    this.stationBars.progress.style.width = `${state.time > 0 ? Math.min(100, (state.progress / state.time) * 100) : 0}%`
+    this.stationBars.burn.style.width = `${Math.min(100, (state.burn / 60) * 100)}%`
+  }
+
+  /** Mete en la estación abierta lo de la casilla `i`, en la ranura que le toca (la pila con `all`, si no una). */
+  private toStation(i: number, all: boolean) {
+    const item = this.inventory?.slots[i]
+    const target = item && this.station ? slotFor(this.station.kind, item) : null
+    if (!target || !this.station) return
+    this.picked = null
+    this.onstation?.({ kind: 'station', id: this.station.id, slot: target, from: i, all })
+    this.render()
   }
 
   setInventory(inventory: Inventory) {
@@ -249,6 +330,6 @@ export class InventoryScreen {
     })
     const picked = this.picked === null ? undefined : inventory.slots[this.picked]
     this.label.textContent =
-      picked === undefined ? PICK_HINT : `${picked ? ITEM_NAMES[picked] : 'Casilla vacía'}: clic en otra casilla para intercambiarlas`
+      picked === undefined ? (this.station ? STATION_HINT : PICK_HINT) : `${picked ? ITEM_NAMES[picked] : 'Casilla vacía'}: clic en otra casilla para intercambiarlas`
   }
 }

@@ -26,6 +26,7 @@ export const ICONS: Record<ItemId, string> = {
   iron_sword: sword('#dfe3e8', '#9aa3ad'),
   mithril_sword: sword('#8fd0f2', '#4f9cc8'),
   meteor_sword: sword('#ff8a3b', '#c8400f'),
+  coal: `<svg viewBox="0 0 32 32"><polygon points="6,20 11,9 21,7 27,15 24,25 12,26" fill="#2a2826"/><polygon points="11,9 21,7 17,15" fill="#46423e"/><polygon points="17,15 27,15 24,25" fill="#1a1918"/></svg>`,
   coin: `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="#d9a632"/><circle cx="16" cy="16" r="8" fill="#ffd23f"/><rect x="14" y="10" width="4" height="12" rx="1" fill="#d9a632"/></svg>`,
   plane_engine: `<svg viewBox="0 0 32 32"><rect x="7" y="10" width="16" height="12" rx="2" fill="#7f8c8d"/><rect x="11" y="6" width="8" height="4" fill="#5c636d"/><rect x="23" y="13" width="4" height="6" fill="#5c636d"/><circle cx="14" cy="16" r="3" fill="#2a2320"/></svg>`,
   boss_trophy: `<svg viewBox="0 0 32 32"><path d="M9 5 H23 V12 A7 7 0 0 1 9 12 Z" fill="#ffd23f"/><rect x="14" y="18" width="4" height="5" fill="#d9a632"/><rect x="10" y="23" width="12" height="4" fill="#8a5a32"/></svg>`,

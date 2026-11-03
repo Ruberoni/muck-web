@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { HEALTH_MAX, MAX_JOBS, STATION_RANGE, STEP } from './constants'
+import { HEALTH_MAX, STATION_RANGE, STEP } from './constants'
 import { Simulation } from './Simulation'
 import { structureSpot } from './structures'
 import { canCraft, craft, isRecipeId, RECIPE_IDS, RECIPES } from './crafting'
 import { Inventory, type ItemId } from './inventory'
+import { newStation, type StationSlot } from './stations'
 
 const recipe = (result: ItemId) => RECIPES.find((r) => r.result === result)!
 
@@ -62,7 +63,7 @@ describe('crafteo', () => {
   })
 })
 
-describe('estaciones con tiempo', () => {
+describe('estaciones con ranuras en la partida', () => {
   const setup = (difficulty: 'normal' | 'hard' = 'normal') => {
     const sim = new Simulation(1)
     sim.addPlayer(0)
@@ -72,12 +73,14 @@ describe('estaciones con tiempo', () => {
     inventory.add('iron_ore', 9)
     inventory.add('wood', 9)
     const furnace = sim.structures.place(structureSpot(player.pos, 0, 0.8, sim.obstacles), 'furnace')!
-    const smelt = (times = 1) => {
-      let seq = sim.slot(0).appliedSeq
+    const tend = (who: number, ...ops: { slot: StationSlot; from: number | null; all: boolean }[]) => {
+      let seq = sim.slot(who).appliedSeq
       const tick = sim.tick + 1
-      const actions = Array.from({ length: times }, () => ({ kind: 'craft' as const, recipe: 'iron_bar' as const, seq: ++seq, tick }))
-      return sim.step(new Map([[0, { move: { tick, buttons: 0, yaw: 0, pitch: 0 }, actions }]]))
+      const actions = ops.map((op) => ({ kind: 'station' as const, id: furnace.id, ...op, seq: ++seq, tick }))
+      return sim.step(new Map([[who, { move: { tick, buttons: 0, yaw: 0, pitch: 0 }, actions }]]))
     }
+    const slotOf = (item: ItemId) => inventory.slots.indexOf(item)
+    const load = () => tend(0, { slot: 'input', from: slotOf('iron_ore'), all: true }, { slot: 'fuel', from: slotOf('wood'), all: false })
     const wait = (seconds: number) => {
       const list = []
       for (let i = 0; i < Math.round(seconds / STEP); i++) {
@@ -86,43 +89,56 @@ describe('estaciones con tiempo', () => {
       }
       return list
     }
-    return { sim, player, inventory, furnace, smelt, wait }
+    return { sim, player, inventory, furnace, tend, load, wait }
   }
 
-  it('gasta los ingredientes al cargar, trabaja sola y lo terminado sale junto a ella, para cualquiera', () => {
-    const { sim, inventory, furnace, smelt, wait } = setup()
-    expect(smelt()).toContainEqual(expect.objectContaining({ type: 'stationQueued', id: furnace.id, recipe: 'iron_bar', time: 15 }))
-    expect(inventory.toJSON()).toMatchObject({ iron_ore: 8, wood: 8 })
-    expect(inventory.count('iron_bar')).toBe(0)
-    expect(wait(14.9).some((e) => e.type === 'stationDone')).toBe(false)
-    const done = wait(0.2)
-    expect(done).toContainEqual(expect.objectContaining({ type: 'stationDone', id: furnace.id }))
-    expect(done).toContainEqual(expect.objectContaining({ type: 'pickupSpawn', item: 'iron_bar' }))
-    expect(sim.pickups.list.map((p) => p.item)).toEqual(['iron_bar'])
+  it('se carga desde el inventario, trabaja sola y lo terminado se queda en la salida', () => {
+    const { inventory, furnace, load, wait } = setup()
+    expect(load()).toContainEqual(expect.objectContaining({ type: 'stationChanged', id: furnace.id }))
+    expect(inventory.toJSON()).toEqual({ wood: 8 })
+    expect(furnace.station!.input).toEqual({ item: 'iron_ore', amount: 9 })
+    expect(furnace.station!.fuel).toEqual({ item: 'wood', amount: 1 })
+    // Al empezar coge la madera, y la ranura de combustible se vacía.
+    expect(wait(STEP)).toContainEqual(expect.objectContaining({ type: 'stationChanged', id: furnace.id }))
+    expect(furnace.station!.fuel).toBeNull()
+    expect(furnace.station!.burn).toBeGreaterThan(0)
+    expect(wait(14.8).some((e) => e.type === 'stationChanged')).toBe(false)
+    expect(furnace.station!.output).toBeNull()
+    expect(wait(0.3)).toContainEqual(expect.objectContaining({ type: 'stationChanged', id: furnace.id }))
+    expect(furnace.station!.output).toEqual({ item: 'iron_bar', amount: 1 })
+    // Sin más madera se para.
+    wait(20)
+    expect(furnace.station!.output!.amount).toBe(1)
   })
 
-  it('tiene una cola de 5, y solo avanza el primero', () => {
-    const { furnace, smelt, wait } = setup()
-    smelt(MAX_JOBS + 2)
-    expect(furnace.jobs).toHaveLength(MAX_JOBS)
-    wait(16)
-    expect(furnace.jobs).toHaveLength(MAX_JOBS - 1)
-    expect(furnace.jobs[0].left).toBeCloseTo(14, 1)
-    expect(furnace.jobs[1].left).toBe(15)
+  it('cualquiera saca la salida a su inventario', () => {
+    const { sim, furnace, load, wait, tend } = setup()
+    load()
+    wait(15.1)
+    const other = sim.slot(1)
+    sim.teleport(1, furnace.x + 1.5, furnace.z, 0, 0)
+    tend(1, { slot: 'output', from: null, all: true })
+    expect(other.inventory.count('iron_bar')).toBe(1)
+    expect(furnace.station!.output).toBeNull()
   })
 
-  it('lejos no se puede cargar', () => {
-    const { sim, furnace, smelt } = setup()
+  it('lo que no va a una ranura no se mete, y lejos no se toca', () => {
+    const { sim, inventory, furnace, tend } = setup()
+    tend(0, { slot: 'input', from: inventory.slots.indexOf('wood'), all: true })
+    expect(furnace.station!.input).toBeNull()
+    expect(inventory.count('wood')).toBe(9)
     sim.teleport(0, furnace.x + STATION_RANGE + 2, furnace.z, 0, 0)
     sim.step(new Map())
-    smelt()
-    expect(furnace.jobs).toEqual([])
+    tend(0, { slot: 'input', from: inventory.slots.indexOf('iron_ore'), all: true })
+    expect(furnace.station!.input).toBeNull()
+    expect(inventory.count('iron_ore')).toBe(9)
   })
 
   it('la dificultad alarga el trabajo: las estaciones y lo que se rompe', () => {
-    const { sim, furnace, smelt } = setup('hard')
-    smelt()
-    expect(furnace.jobs[0].time).toBeCloseTo((15 * 55) / 45, 6)
+    const { sim, furnace, load, wait } = setup('hard')
+    load()
+    wait(1)
+    expect(furnace.station!.time).toBeCloseTo((15 * 55) / 45, 6)
     const tree = sim.world.props.find((p) => p.kind === 'tree')!
     expect(tree.maxHp).toBe(Math.ceil((16 * 55) / 45))
     expect(tree.hp).toBe(tree.maxHp)
@@ -130,12 +146,20 @@ describe('estaciones con tiempo', () => {
     expect(bush.maxHp).toBe(6)
   })
 
-  it('la cola se guarda con la partida', () => {
-    const { sim, furnace, smelt, wait } = setup()
-    smelt(2)
+  it('lo que hay dentro se guarda con la partida', () => {
+    const { sim, furnace, load, wait } = setup()
+    load()
     wait(3)
     const copy = Simulation.fromJSON(JSON.parse(JSON.stringify(sim.toJSON())))
-    expect(copy.structures.list[0].jobs).toEqual(furnace.jobs)
-    expect(copy.structures.list[0].jobs).not.toBe(furnace.jobs)
+    expect(copy.structures.list[0].station).toEqual(furnace.station)
+    expect(copy.structures.list[0].station).not.toBe(furnace.station)
+  })
+
+  it('una partida guardada sin ranuras las recibe vacías', () => {
+    const { sim } = setup()
+    const saved = JSON.parse(JSON.stringify(sim.toJSON()))
+    for (const s of saved.structures.list) delete s.station
+    const copy = Simulation.fromJSON(saved)
+    expect(copy.structures.list[0].station).toEqual(newStation())
   })
 })

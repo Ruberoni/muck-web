@@ -30,16 +30,16 @@ import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
-import { clientCraftWorld, sendableActions } from '../ui/recipes'
+import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
 import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { CameraShake } from './shake'
-import { Input } from './input'
+import { Input, RIGHT_CLICK } from './input'
 import { stepActions, USE_KEY, type InventoryFocus } from './actions'
 import { acceptsKeys, afterLockChange, inGame, showsCrosshair, type GameState } from './states'
 import { loadSettings, saveSettings, type Settings } from './settings'
-import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput } from '../sim/player'
+import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput, type Vec3 } from '../sim/player'
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import { LocalSession, type Session } from '../net/session'
 import type { NetSession } from '../net/netSession'
@@ -161,6 +161,8 @@ export class Game {
   private worldVersion = -1
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
   private retrying = false
+  /** La estación cuyas ranuras enseña la pantalla de inventario (null: las recetas). */
+  private openStationId: number | null = null
   private projected = new THREE.Vector3()
   /** El `generation` de la sesión en red que ya refleja la vista (sube al reconectar). */
   private netGeneration = 0
@@ -199,6 +201,7 @@ export class Game {
     this.hud.net.onsay = (text) => this.net?.client.say(text)
     this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
     this.hud.inventory.ondrop = (slot, all) => this.queueAction({ kind: 'drop', slot, all })
+    this.hud.inventory.onstation = (action) => this.queueAction(action)
     this.hud.inventory.oncraft = (recipe, times) => {
       for (let i = 0; i < times; i++) this.queueAction({ kind: 'craft', recipe })
     }
@@ -311,6 +314,7 @@ export class Game {
     else this.net?.suspend()
     this.state = state
     this.hud.inventory.setOpen(state === 'inventory')
+    if (state !== 'inventory') this.openStationId = null
     this.hud.showOverlay(overlayFor(state), this.net !== null)
     this.onchange?.()
   }
@@ -382,6 +386,21 @@ export class Game {
    * Abre la pantalla de inventario con las casillas o las recetas a la vista y suelta el ratón; jugando, y con un
    * jugador o en una sala.
    */
+  /**
+   * Clic derecho con una estación delante: la abre en vez de comer. Las de procesar enseñan sus ranuras; la mesa y el
+   * yunque, sus recetas. Devuelve las pulsaciones que quedan.
+   */
+  private openStation(presses: ReadonlySet<string>, pos: Vec3, yaw: number): ReadonlySet<string> {
+    if (!presses.has(RIGHT_CLICK) || this.state !== 'playing') return presses
+    const station = aimedStation(this.sim.structures.list, pos, yaw, CLIENT_STATION_RANGE)
+    if (!station) return presses
+    this.openStationId = station.station ? station.id : null
+    this.openInventory(station.station ? 'slots' : 'recipes')
+    const left = new Set(presses)
+    left.delete(RIGHT_CLICK)
+    return left
+  }
+
   openInventory(focus: InventoryFocus = 'slots') {
     if (this.state !== 'playing') return
     // Con el estado ya en `inventory`, soltar el ratón no pasa a pausa.
@@ -539,7 +558,7 @@ export class Game {
       events = this.session.step({ buttons: 0, yaw, pitch }, sendable(this.queued.splice(0)))
     } else {
       const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
-      const presses = this.input.takePresses()
+      const presses = this.openStation(this.input.takePresses(), player.pos, yaw)
       const usable = usableNear(this.sim.structures.list, player.pos) !== null
       const { actions, inventory: openInventory } = stepActions(this.queued.splice(0), {
         presses,
@@ -946,7 +965,14 @@ export class Game {
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules, sim.threat.state.totem))
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
-    if (this.state === 'inventory') this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
+    if (this.state === 'inventory') {
+      this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
+      // Lejos de la estación abierta (o si ya no está) se vuelve a las recetas.
+      const station = this.openStationId === null ? undefined : this.sim.structures.byId(this.openStationId)
+      const near = station && Math.hypot(station.x - p.pos.x, station.z - p.pos.z) - station.radius <= CLIENT_STATION_RANGE
+      if (!near) this.openStationId = null
+      this.hud.inventory.setStation(near ? station : null)
+    }
     this.hud.setClock(clockTexts(sim.clock))
     const boss = enemies.list.find((e) => ENEMY_DEFS[e.type].boss)
     const { banner, tonight } = this.bossWatch.update(sim.clock.day, boss?.type ?? null)

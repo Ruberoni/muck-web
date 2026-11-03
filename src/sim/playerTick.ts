@@ -1,4 +1,4 @@
-import { buttonsInput, Btn, type PlayerCommands } from './commands'
+import { buttonsInput, Btn, type ActionData, type PlayerCommands } from './commands'
 import { CONSUMABLE_DEFS, STEP } from './constants'
 import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
@@ -35,7 +35,11 @@ export interface Intent {
   eat: boolean
   /** Lo tirado en este paso, ya fuera del inventario: la simulación lo deja en el suelo (la predicción no). */
   drops: { item: ItemId; amount: number }[]
+  /** Lo que mete o saca de las estaciones: lo hace la simulación, que tiene las estaciones (la predicción no). */
+  stations: StationOp[]
 }
+
+export type StationOp = Omit<Extract<ActionData, { kind: 'station' }>, 'kind'>
 
 /**
  * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla, mover casillas, fabricar y tirar en el
@@ -44,7 +48,7 @@ export interface Intent {
 export function applyActions(actor: Actor, command: PlayerCommands | undefined, world: CraftWorld, emit: Emit): Intent {
   const move = command?.move
   const buttons = move?.buttons ?? 0
-  const intent: Intent = { aim: move?.aim, attack: (buttons & Btn.Attack) !== 0, use: (buttons & Btn.Use) !== 0, swing: false, place: false, eat: false, drops: [] }
+  const intent: Intent = { aim: move?.aim, attack: (buttons & Btn.Attack) !== 0, use: (buttons & Btn.Use) !== 0, swing: false, place: false, eat: false, drops: [], stations: [] }
   if (!command) return intent
   for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
     if (action.seq <= actor.appliedSeq) continue
@@ -59,6 +63,9 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
         break
       case 'craft':
         craftRecipe(actor, action.recipe, world, emit)
+        break
+      case 'station':
+        intent.stations.push({ id: action.id, slot: action.slot, from: action.from, all: action.all })
         break
       case 'drop': {
         const dropped = dropFromSlot(actor, action.slot, action.all, emit)
@@ -88,10 +95,7 @@ export function craftRecipe(actor: Actor, id: RecipeId, world: CraftWorld, emit:
   if (!recipe) return false
   const { pos } = actor.player
   if (recipe.station !== null && !world.nearStation(recipe.station, pos)) return false
-  const timed = recipe.time !== undefined
-  if (timed && recipe.station !== null && world.hasRoom?.(recipe.station, pos) === false) return false
   if (!craft(actor.inventory, recipe)) return false
-  if (timed) world.enqueue?.(recipe, pos)
   emit({ type: 'playerCrafted', id: actor.id, recipe: id })
   return true
 }

@@ -365,6 +365,16 @@
 .inventory .slot:hover { background: rgb(255 255 255 / 0.12); }
 .inventory .slot.picked { border-color: #7fd3ff; box-shadow: 0 0 0 2px #7fd3ff; }
 .inventory .slot.dragging { opacity: 0.45; }
+.inventory-station { display: grid; gap: 10px; align-content: start; min-width: 260px; }
+.inventory-station[hidden], .inventory-recipes[hidden] { display: none; }
+.station-machine, .station-fuel { display: flex; align-items: center; gap: 10px; }
+.station-machine .station-bar { flex: 1; }
+.station-fuel .station-bar { width: 120px; }
+.station-bar { height: 10px; border-radius: 5px; background: rgb(255 255 255 / 0.15); overflow: hidden; }
+.station-bar .fill { height: 100%; width: 0; background: #ffb13b; }
+.station-bar.burn .fill { background: #ff6a3d; }
+.station-slot { cursor: pointer; }
+.station-slot .station-slot-name { position: absolute; top: -16px; left: 0; font-size: 10px; opacity: 0.7; white-space: nowrap; }
 
 .overlay {
   position: fixed;

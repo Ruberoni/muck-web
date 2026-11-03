@@ -1,7 +1,7 @@
 import { PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import type { Emit } from './events'
-import { createBirchRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
+import { createBirchRng, createCoalOreRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
 import { biomeAt, BIOME_FLORA } from './world/biomes'
 import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WORLD_SIZE } from './world/terrain'
 
@@ -13,6 +13,7 @@ export const IRON_ORE_COUNT = 40
 export const DARKPINE_COUNT = 20
 export const MITHRIL_ORE_COUNT = 16
 export const HERB_COUNT = 30
+export const COAL_ORE_COUNT = 30
 /** Las rocas llegan hasta la arena; el resto de lo que crece en el suelo, solo hasta la hierba. */
 const ROCK_MIN_HEIGHT = 0.4
 /** Franjas de altura del terreno (en el centro) de algunos tipos: las de las menas no se solapan entre sí. */
@@ -21,6 +22,8 @@ export const IRON_ORE_BAND = { min: 6, max: 8.5 }
 export const DARKPINE_BAND = { min: 6, max: 9 }
 /** Las cimas. */
 export const MITHRIL_ORE_BAND = { min: 8.5, max: Infinity }
+/** Entre la pradera y la montaña: se encuentra pronto, con el pico de madera. */
+export const COAL_ORE_BAND = { min: 3, max: 8 }
 /** Los tipos que salen después de los arbustos no se colocan a menos de esto (hasta su borde) del punto de aparición. */
 export const SPAWN_EXCLUSION = 8
 /** Intentos por prop de cada tipo: sobran (el test de cantidad exacta lo vigila). */
@@ -209,6 +212,17 @@ export function buildPropPlacements(): PropPlacement[] {
     const rotation = herbRng() * Math.PI * 2
     if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || slopeAt(x, z) > MAX_SLOPE) return null
     return { kind: 'healing_herb', x, y: y - 0.02, z, radius: HERB_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
+  })
+
+  const coalRng = createCoalOreRng()
+  scatter(coalRng, COAL_ORE_COUNT, (x, z, y) => {
+    const sx = 0.8 + coalRng() * 0.6
+    const sy = 0.6 + coalRng() * 0.4
+    const sz = 0.8 + coalRng() * 0.6
+    const rx = coalRng() * Math.PI
+    const ry = coalRng() * Math.PI * 2
+    if (y < COAL_ORE_BAND.min || y > COAL_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    return { kind: 'coal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
   return placements

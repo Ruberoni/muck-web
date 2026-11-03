@@ -44,7 +44,7 @@ function clearSpot(clearance: number) {
   throw new Error('sin hueco libre')
 }
 
-const spot = clearSpot(8)
+const spot = clearSpot(7)
 const dist = (e: EnemyData, p: { x: number; z: number }) => Math.hypot(e.pos.x - p.x, e.pos.z - p.z)
 
 describe('enemigos nocturnos', () => {
@@ -299,10 +299,15 @@ describe('jefes', () => {
   it('sale una vez, a los 20 s de anochecer y a 30–40 m, sin contar para el tope', () => {
     step(DUSK, 3)
     expect(bosses()).toHaveLength(0)
-    for (let i = 0; i < 60; i++) step(BOSS_PHASE, 3)
+    // Se mide nada más salir: luego camina hacia el jugador.
+    for (let i = 0; i < 60 && !bosses().length; i++) step(BOSS_PHASE, 3)
     expect(bosses()).toHaveLength(1)
     const [boss] = bosses()
-    expect(Math.hypot(boss.prev.x - player.x, boss.prev.z - player.z)).toBeGreaterThanOrEqual(29)
+    const distance = Math.hypot(boss.prev.x - player.x, boss.prev.z - player.z)
+    expect(distance).toBeGreaterThanOrEqual(29.5)
+    expect(distance).toBeLessThanOrEqual(40.5)
+    for (let i = 0; i < 60; i++) step(BOSS_PHASE, 3)
+    expect(bosses()).toHaveLength(1)
     expect(enemies.list.filter((e) => e.type === 'goblin').length).toBeGreaterThan(0)
     // Muerto no vuelve a salir esa noche, ni al recargar la partida.
     enemies.hit(boss, boss.hp, player, 0)
