@@ -37,7 +37,7 @@ Haz clic en la pantalla para empezar (captura el ratón).
 | **Clic derecho** o **F** | comer lo que se lleva en la mano; si no es comida, una baya. Junto a la barra de hambre se ve qué se comerá |
 | **1–9** o **rueda del ratón** | elegir casilla de la hotbar (la rueda da la vuelta al pasar del extremo) |
 | **Q** | tirar uno de lo que se tiene en la mano; **Ctrl + Q**, todos. En la pantalla de inventario, la casilla que está bajo el ratón |
-| **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra para intercambiarlas. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
+| **Tab** o **E** | abrir o cerrar el inventario: la mochila (18 casillas) y la hotbar; clic en una casilla y en otra, o arrastrar una sobre otra, para intercambiarlas, y con el ratón encima de una casilla, **1–9** la intercambia con esa casilla de la hotbar, como en Minecraft. El ratón queda suelto y la partida sigue; **C** también cierra y **Esc** cierra y pausa |
 | **C** | abrir el inventario con las recetas a la vista: clic en una receta la fabrica y **Mayúsculas + clic**, hasta 5 |
 | **Clic izquierdo** con la fogata o una estación (mesa de trabajo, horno o yunque) en la mano | colocarla |
 | **Esc** | pausa |

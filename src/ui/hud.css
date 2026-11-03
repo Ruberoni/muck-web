@@ -364,6 +364,7 @@
 .inventory .slot { cursor: pointer; }
 .inventory .slot:hover { background: rgb(255 255 255 / 0.12); }
 .inventory .slot.picked { border-color: #7fd3ff; box-shadow: 0 0 0 2px #7fd3ff; }
+.inventory .slot.dragging { opacity: 0.45; }
 
 .overlay {
   position: fixed;

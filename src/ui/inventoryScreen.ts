@@ -10,7 +10,16 @@ const CLOSE_KEYS: ReadonlySet<string> = new Set([...INVENTORY_KEYS, RECIPES_KEY]
 /** Con la pantalla abierta no hacen nada: no deben pulsar lo que tenga el foco ni llegar al juego. */
 const BLOCKED_KEYS: ReadonlySet<string> = new Set(['Space', 'Enter', 'NumpadEnter'])
 
-const PICK_HINT = 'Clic en una casilla y en otra para intercambiarlas · Q: tirar uno · Ctrl + Q: todos'
+const PICK_HINT = 'Clic en una casilla y en otra, o arrastrar: intercambiarlas · 1–9 con el ratón encima: a esa casilla de la hotbar · Q: tirar uno · Ctrl + Q: todos'
+
+/** La casilla de la hotbar que nombra una tecla (1–9), o null si no es una de ellas. */
+export function hotbarSlotOf(code: string): number | null {
+  const match = /^Digit([1-9])$/.exec(code)
+  return match && Number(match[1]) <= SLOT_COUNT ? Number(match[1]) - 1 : null
+}
+
+/** Si intercambiar dos casillas cambia algo: no si es la misma, ni si las dos tienen lo mismo (dos vacías). */
+export const changesSlots = (slots: readonly (ItemId | null)[], from: number, to: number) => from !== to && (slots[from] ?? null) !== (slots[to] ?? null)
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement) => {
   const node = document.createElement(tag)
@@ -40,7 +49,8 @@ interface RecipeView {
 /**
  * Pantalla de inventario (Tab o E; C la abre con las recetas a la vista). A la izquierda, la mochila (2 × 9) encima
  * de la hotbar (1 × 9): un clic elige una casilla y otro en otra las intercambia (`onmove`, que en el juego es la
- * acción `move`); Q tira uno de la casilla bajo el ratón y Ctrl + Q la pila (`ondrop`, la acción `drop`). A la derecha, todas las recetas por estación, con lo que falta en rojo y el motivo si no se puede:
+ * acción `move`), y lo mismo arrastrando una sobre otra; con el ratón encima de una, 1–9 la intercambia con esa casilla de
+ * la hotbar, como en Minecraft. Q tira uno de la casilla bajo el ratón y Ctrl + Q la pila (`ondrop`, la acción `drop`). A la derecha, todas las recetas por estación, con lo que falta en rojo y el motivo si no se puede:
  * un clic fabrica una y Mayúsculas + clic, hasta CRAFT_MANY (`oncraft`; el juego solo manda las que su predicción da
  * por buenas). Las filas no son enfocables, para que Espacio o Enter no repitan una receta. Abierta tiene su propio
  * teclado: Tab, E y C cierran (`onclose`, que recaptura el ratón dentro del propio evento, que cuenta como gesto del
@@ -60,8 +70,10 @@ export class InventoryScreen {
   private inventory: Inventory | null = null
   /** La casilla elegida con el primer clic, a la espera del segundo. */
   private picked: number | null = null
-  /** La casilla bajo el ratón: la que tira Q. */
+  /** La casilla bajo el ratón: la que tira Q y la que mueven los números. */
   private hovered: number | null = null
+  /** La casilla que se está arrastrando. */
+  private dragged: number | null = null
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'inventory', parent)
@@ -78,6 +90,29 @@ export class InventoryScreen {
       root.addEventListener('mouseenter', () => (this.hovered = i))
       root.addEventListener('mouseleave', () => {
         if (this.hovered === i) this.hovered = null
+      })
+      root.addEventListener('dragstart', (e) => {
+        if (!this.inventory?.slots[i]) return e.preventDefault()
+        this.dragged = i
+        this.picked = null
+        e.dataTransfer?.setData('text/plain', String(i))
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+        root.classList.add('dragging')
+      })
+      // Sin esto el navegador no deja soltar encima.
+      root.addEventListener('dragover', (e) => {
+        if (this.dragged !== null) e.preventDefault()
+      })
+      root.addEventListener('drop', (e) => {
+        e.preventDefault()
+        const from = this.dragged
+        this.dragged = null
+        if (from !== null) this.move(from, i)
+      })
+      root.addEventListener('dragend', () => {
+        this.dragged = null
+        root.classList.remove('dragging')
+        this.render()
       })
       this.slots.push({ root, icon: el('div', 'icon', root), count: el('span', 'count', root), item: undefined })
     }
@@ -164,6 +199,12 @@ export class InventoryScreen {
       if (!e.repeat) this.onclose?.()
     } else if (e.code === 'Escape') {
       if (!e.repeat) this.onescape?.()
+    } else if (hotbarSlotOf(e.code) !== null) {
+      e.preventDefault()
+      const from = this.hovered
+      if (e.repeat || from === null) return
+      this.picked = null
+      this.move(from, hotbarSlotOf(e.code)!)
     } else if (e.code === DROP_KEY) {
       const slot = this.hovered
       if (e.repeat || slot === null || !this.inventory?.slots[slot]) return
@@ -180,8 +221,13 @@ export class InventoryScreen {
   private click(i: number) {
     const from = this.picked
     this.picked = from === null ? i : null
-    // Dos vacías no cambian nada: no se manda.
-    if (from !== null && from !== i && this.inventory && this.inventory.slots[from] !== this.inventory.slots[i]) this.onmove?.(from, i)
+    if (from !== null) this.move(from, i)
+    else this.render()
+  }
+
+  /** Intercambia dos casillas si cambia algo: lo que no cambia no se manda. */
+  private move(from: number, to: number) {
+    if (this.inventory && changesSlots(this.inventory.slots, from, to)) this.onmove?.(from, to)
     this.render()
   }
 
@@ -195,6 +241,7 @@ export class InventoryScreen {
         slot.root.classList.toggle('filled', !!item)
         slot.root.title = item ? ITEM_NAMES[item] : ''
         slot.icon.innerHTML = item ? ICONS[item] : ''
+        slot.root.draggable = !!item
       }
       slot.count.textContent = item ? String(inventory.count(item)) : ''
       slot.root.classList.toggle('selected', i === inventory.selected)
