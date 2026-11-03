@@ -2,8 +2,9 @@ import { PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import type { Emit } from './events'
 import { createBirchRng, createCoalOreRng, createCrystalOreRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
-import { biomeAt, BIOME_FLORA } from './world/biomes'
-import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WORLD_SIZE } from './world/terrain'
+import { BIOME_FLORA } from './world/biomes'
+import { DEFAULT_ISLAND, type Island } from './world/island'
+import { MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, WORLD_SIZE } from './world/terrain'
 
 const TREE_COUNT = 180
 const ROCK_COUNT = 60
@@ -60,6 +61,20 @@ export const BUSH_LIFT = 0.45
 
 export type PropKind = keyof typeof PROP_DEFS
 
+/** Cuántos hay de cada tipo en toda isla: el bioma decide dónde salen, no cuántos (islands.ts comprueba que quepan). */
+export const PROP_COUNTS: Record<PropKind, number> = {
+  tree: TREE_COUNT,
+  rock: ROCK_COUNT,
+  bush: BUSH_COUNT,
+  birch: BIRCH_COUNT,
+  iron_ore: IRON_ORE_COUNT,
+  darkpine: DARKPINE_COUNT,
+  mithril_ore: MITHRIL_ORE_COUNT,
+  healing_herb: HERB_COUNT,
+  coal_ore: COAL_ORE_COUNT,
+  crystal_ore: CRYSTAL_ORE_COUNT,
+}
+
 /**
  * Dónde está y cómo es cada prop de la isla; no cambia durante la partida.
  * La transformación es la de un Object3D: posición, giro (Euler XYZ, sin Z) y escala.
@@ -96,24 +111,31 @@ export interface PropData extends PropPlacement, PropState {
   maxHp: number
 }
 
-let cached: readonly PropPlacement[] | null = null
+/** Las últimas islas calculadas, por semilla: la de siempre, la de la partida y poco más. */
+const cached = new Map<number, readonly PropPlacement[]>()
+const CACHED_ISLANDS = 4
 
 /**
- * Los props de la isla, calculados una vez: los comparten todas las salas, la simulación y los tests, así que
- * son de solo lectura (congelados).
+ * Los props de la isla `island` (sin ella, la de siempre), calculados una vez: los comparten la simulación, la vista y
+ * los tests, así que son de solo lectura (congelados).
  */
-export function generatePropPlacements(): readonly PropPlacement[] {
-  if (!cached) cached = Object.freeze(buildPropPlacements().map((p) => Object.freeze(p)))
-  return cached
+export function generatePropPlacements(island: Island = DEFAULT_ISLAND): readonly PropPlacement[] {
+  let placements = cached.get(island.seed)
+  if (!placements) {
+    placements = Object.freeze(buildPropPlacements(island).map((p) => Object.freeze(p)))
+    if (cached.size >= CACHED_ISLANDS) cached.delete(cached.keys().next().value!)
+    cached.set(island.seed, placements)
+  }
+  return placements
 }
 
 /**
- * Coloca los props de la isla (determinista por WORLD_SEED). Cada tipo tiene su stream y sale en orden: árboles,
+ * Coloca los props de la isla `island` (determinista por su semilla). Cada tipo tiene su stream y sale en orden: árboles,
  * rocas y arbustos, que deciden el punto de aparición, y después el resto, que se queda lejos de él. El bioma de cada
  * sitio (BIOME_FLORA) decide si un intento arraiga, pero no cuántos hay: se sigue hasta colocarlos todos.
  * Sin memoizar: generatePropPlacements es la de uso normal.
  */
-export function buildPropPlacements(): PropPlacement[] {
+export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacement[] {
   const placements: PropPlacement[] = []
   const grid = new SpatialGrid<Collider>()
   let spawn: { x: number; z: number } | null = null
@@ -124,11 +146,11 @@ export function buildPropPlacements(): PropPlacement[] {
       const r = Math.sqrt(rng()) * WORLD_SIZE * 0.45
       const x = Math.cos(angle) * r
       const z = Math.sin(angle) * r
-      const y = heightAt(x, z)
+      const y = island.heightAt(x, z)
       // `sample` y la tirada consumen siempre lo mismo del stream, se acepte o no: el resto de intentos no depende de ello.
       const placement = sample(x, z, y)
       const roll = rng()
-      if (!placement || roll >= BIOME_FLORA[placement.kind][biomeAt(x, z, y)]) continue
+      if (!placement || roll >= BIOME_FLORA[placement.kind][island.biomeAt(x, z, y)]) continue
       if (spawn && Math.hypot(x - spawn.x, z - spawn.z) - placement.radius < SPAWN_EXCLUSION) continue
       if (overlaps(grid, x, z, placement.radius)) continue
       placements.push({ id: placements.length, ...placement })
@@ -137,67 +159,67 @@ export function buildPropPlacements(): PropPlacement[] {
     }
   }
 
-  const treeRng = createTreeRng()
+  const treeRng = createTreeRng(island.seed)
   scatter(treeRng, TREE_COUNT, (x, z, y) => {
     const scale = 0.8 + treeRng() * 0.6
     const rotation = treeRng() * Math.PI * 2
-    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || slopeAt(x, z) > MAX_SLOPE) return null
+    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
     return { kind: 'tree', x, y: y - 0.1, z, radius: TRUNK_BOTTOM_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
-  const rockRng = createRockRng()
+  const rockRng = createRockRng(island.seed)
   scatter(rockRng, ROCK_COUNT, (x, z, y) => {
     const sx = 0.8 + rockRng() * 1.4
     const sy = 0.5 + rockRng() * 0.7
     const sz = 0.8 + rockRng() * 1.4
     const rx = rockRng() * Math.PI
     const ry = rockRng() * Math.PI * 2
-    if (y < ROCK_MIN_HEIGHT || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < ROCK_MIN_HEIGHT || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     // Algo hundidas para que no parezcan apoyadas en un punto. El icosaedro tiene radio 1:
     // max(sx, sz) cubre sus vértices en XZ.
     return { kind: 'rock', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
-  const bushRng = createBushRng()
+  const bushRng = createBushRng(island.seed)
   scatter(bushRng, BUSH_COUNT, (x, z, y) => {
     const scale = 0.8 + bushRng() * 0.4
     const rotation = bushRng() * Math.PI * 2
-    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || slopeAt(x, z) > MAX_SLOPE) return null
+    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
     return { kind: 'bush', x, y: y - 0.05, z, radius: BUSH_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
   // Los demás no se acercan al punto de aparición que dan estos.
-  spawn = findSpawn(grid)
+  spawn = findSpawn(grid, island)
 
-  const birchRng = createBirchRng()
+  const birchRng = createBirchRng(island.seed)
   scatter(birchRng, BIRCH_COUNT, (x, z, y) => {
     const scale = 0.9 + birchRng() * 0.4
     const rotation = birchRng() * Math.PI * 2
-    if (y < BIRCH_BAND.min || y > BIRCH_BAND.max || slopeAt(x, z) > MAX_SLOPE) return null
+    if (y < BIRCH_BAND.min || y > BIRCH_BAND.max || island.slopeAt(x, z) > MAX_SLOPE) return null
     return { kind: 'birch', x, y: y - 0.1, z, radius: TRUNK_BOTTOM_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
-  const oreRng = createIronOreRng()
+  const oreRng = createIronOreRng(island.seed)
   scatter(oreRng, IRON_ORE_COUNT, (x, z, y) => {
     const sx = 0.8 + oreRng() * 0.8
     const sy = 0.6 + oreRng() * 0.5
     const sz = 0.8 + oreRng() * 0.8
     const rx = oreRng() * Math.PI
     const ry = oreRng() * Math.PI * 2
-    if (y < IRON_ORE_BAND.min || y > IRON_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < IRON_ORE_BAND.min || y > IRON_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     // Como las rocas: algo hundidas, y max(sx, sz) cubre los vértices del icosaedro en XZ.
     return { kind: 'iron_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
-  const pineRng = createDarkpineRng()
+  const pineRng = createDarkpineRng(island.seed)
   scatter(pineRng, DARKPINE_COUNT, (x, z, y) => {
     const scale = 1.2 + pineRng() * 0.4
     const rotation = pineRng() * Math.PI * 2
-    if (y < DARKPINE_BAND.min || y > DARKPINE_BAND.max || slopeAt(x, z) > MAX_SLOPE) return null
+    if (y < DARKPINE_BAND.min || y > DARKPINE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE) return null
     return { kind: 'darkpine', x, y: y - 0.1, z, radius: TRUNK_BOTTOM_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
-  const mithrilRng = createMithrilOreRng()
+  const mithrilRng = createMithrilOreRng(island.seed)
   scatter(mithrilRng, MITHRIL_ORE_COUNT, (x, z, y) => {
     // Más pequeñas que las de hierro: caben más en las cimas.
     const sx = 0.6 + mithrilRng() * 0.4
@@ -205,37 +227,37 @@ export function buildPropPlacements(): PropPlacement[] {
     const sz = 0.6 + mithrilRng() * 0.4
     const rx = mithrilRng() * Math.PI
     const ry = mithrilRng() * Math.PI * 2
-    if (y < MITHRIL_ORE_BAND.min || y > MITHRIL_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < MITHRIL_ORE_BAND.min || y > MITHRIL_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     return { kind: 'mithril_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
-  const herbRng = createHerbRng()
+  const herbRng = createHerbRng(island.seed)
   scatter(herbRng, HERB_COUNT, (x, z, y) => {
     const scale = 0.9 + herbRng() * 0.4
     const rotation = herbRng() * Math.PI * 2
-    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || slopeAt(x, z) > MAX_SLOPE) return null
+    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
     return { kind: 'healing_herb', x, y: y - 0.02, z, radius: HERB_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
-  const coalRng = createCoalOreRng()
+  const coalRng = createCoalOreRng(island.seed)
   scatter(coalRng, COAL_ORE_COUNT, (x, z, y) => {
     const sx = 0.8 + coalRng() * 0.6
     const sy = 0.6 + coalRng() * 0.4
     const sz = 0.8 + coalRng() * 0.6
     const rx = coalRng() * Math.PI
     const ry = coalRng() * Math.PI * 2
-    if (y < COAL_ORE_BAND.min || y > COAL_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < COAL_ORE_BAND.min || y > COAL_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     return { kind: 'coal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
-  const crystalRng = createCrystalOreRng()
+  const crystalRng = createCrystalOreRng(island.seed)
   scatter(crystalRng, CRYSTAL_ORE_COUNT, (x, z, y) => {
     const sx = 0.6 + crystalRng() * 0.4
     const sy = 0.6 + crystalRng() * 0.4
     const sz = 0.6 + crystalRng() * 0.4
     const rx = crystalRng() * Math.PI
     const ry = crystalRng() * Math.PI * 2
-    if (y < CRYSTAL_ORE_BAND.min || y > CRYSTAL_ORE_BAND.max || slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < CRYSTAL_ORE_BAND.min || y > CRYSTAL_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
     return { kind: 'crystal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
@@ -254,7 +276,7 @@ function overlaps(grid: SpatialGrid<Collider>, x: number, z: number, radius: num
  * Punto de aparición: en espiral desde el centro, el primero con hierba, llano y sin props cerca. Lo que se coloca
  * después de él queda a más de SPAWN_EXCLUSION, así que no lo mueve.
  */
-export function findSpawn(grid: SpatialGrid<Collider>) {
+export function findSpawn(grid: SpatialGrid<Collider>, island: Island = DEFAULT_ISLAND) {
   const isClear = (x: number, z: number) => {
     for (const prop of grid.query(x, z, SPAWN_CLEARANCE + grid.maxRadius)) {
       if (Math.hypot(prop.x - x, prop.z - z) - prop.radius < SPAWN_CLEARANCE) return false
@@ -264,16 +286,16 @@ export function findSpawn(grid: SpatialGrid<Collider>) {
   const isFlat = (x: number, z: number) => {
     for (let i = 0; i < 8; i++) {
       const angle = (i / 8) * Math.PI * 2
-      if (slopeAt(x + Math.cos(angle) * SPAWN_FLAT_RADIUS, z + Math.sin(angle) * SPAWN_FLAT_RADIUS) > SPAWN_FLAT_SLOPE) return false
+      if (island.slopeAt(x + Math.cos(angle) * SPAWN_FLAT_RADIUS, z + Math.sin(angle) * SPAWN_FLAT_RADIUS) > SPAWN_FLAT_SLOPE) return false
     }
-    return slopeAt(x, z) <= SPAWN_FLAT_SLOPE
+    return island.slopeAt(x, z) <= SPAWN_FLAT_SLOPE
   }
   for (let i = 0; i < 4000; i++) {
     const angle = i * 0.5
     const r = angle * 0.4
     const x = Math.cos(angle) * r
     const z = Math.sin(angle) * r
-    const h = heightAt(x, z)
+    const h = island.heightAt(x, z)
     if (h > SAND_LEVEL + 0.3 && h < ROCK_LEVEL && isClear(x, z) && isFlat(x, z)) return { x, z }
   }
   return { x: 0, z: 0 }

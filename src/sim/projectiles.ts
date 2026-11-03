@@ -1,7 +1,8 @@
 import type { Collider, SpatialGrid } from './collision'
 import { EYE_HEIGHT, GRAVITY, PLAYER_RADIUS, STEP } from './constants'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
-import { heightAt, WATER_LEVEL } from './world/terrain'
+import { WATER_LEVEL } from './world/terrain'
+import { DEFAULT_ISLAND, type Island } from './world/island'
 
 type Vec3 = { x: number; y: number; z: number }
 
@@ -84,10 +85,11 @@ export class Projectiles {
   readonly list: Projectile[] = []
   private nextId = 0
 
-  /** `grids`: obstáculos con los que chocan (props, estructuras…). */
+  /** `grids`: obstáculos con los que chocan (props, estructuras…). `island`: el suelo contra el que se paran. */
   constructor(
     private grids: SpatialGrid<Collider>[] = [],
     private emit: Emit = NO_EMIT,
+    private island: Island = DEFAULT_ISLAND,
   ) {}
 
   /** Lanza un proyectil en el tick `tick`. */
@@ -115,7 +117,7 @@ export class Projectiles {
     for (const p of [...this.list]) {
       this.move(p, tick)
       const target = players.find((player) => player.alive && hitsPlayer(p, player))
-      const end = target ? 'player' : this.hitsObstacle(p) ? 'obstacle' : hitsGround(p) ? 'ground' : (tick - p.tick) * STEP >= PROJECTILE_DEFS[p.kind].life ? 'expired' : null
+      const end = target ? 'player' : this.hitsObstacle(p) ? 'obstacle' : hitsGround(this.island, p) ? 'ground' : (tick - p.tick) * STEP >= PROJECTILE_DEFS[p.kind].life ? 'expired' : null
       if (!end) continue
       this.remove(p.id)
       this.emit({ type: 'projectileHit', id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, end })
@@ -128,7 +130,7 @@ export class Projectiles {
   follow(tick: number) {
     for (const p of this.list) {
       this.move(p, tick)
-      p.pos.y = Math.max(p.pos.y, groundAt(p.pos))
+      p.pos.y = Math.max(p.pos.y, groundAt(this.island, p.pos))
     }
   }
 
@@ -141,7 +143,7 @@ export class Projectiles {
 
   private hitsObstacle(p: Projectile): boolean {
     const { x, y, z } = p.pos
-    if (y - heightAt(x, z) > OBSTACLE_HEIGHT) return false
+    if (y - this.island.heightAt(x, z) > OBSTACLE_HEIGHT) return false
     const { radius } = PROJECTILE_DEFS[p.kind]
     return this.grids.some((grid) => {
       for (const other of grid.query(x, z, radius + grid.maxRadius)) {
@@ -168,9 +170,9 @@ export class Projectiles {
   }
 }
 
-const groundAt = ({ x, z }: Vec3) => Math.max(heightAt(x, z), WATER_LEVEL)
+const groundAt = (island: Island, { x, z }: Vec3) => Math.max(island.heightAt(x, z), WATER_LEVEL)
 
-const hitsGround = (p: Projectile) => p.pos.y <= groundAt(p.pos)
+const hitsGround = (island: Island, p: Projectile) => p.pos.y <= groundAt(island, p.pos)
 
 function hitsPlayer(p: Projectile, { pos }: ProjectileTarget): boolean {
   const { radius } = PROJECTILE_DEFS[p.kind]

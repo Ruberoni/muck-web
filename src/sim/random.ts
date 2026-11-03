@@ -19,20 +19,21 @@ export function mulberry32(seed: number): Rng {
   return rng
 }
 
-// Streams independientes: cambiar el terreno no reordena los props y viceversa.
-export const createTerrainRng = () => mulberry32(WORLD_SEED)
+// Streams independientes de la semilla de cada isla (sin ella, la de siempre): cambiar el terreno no reordena los props
+// y viceversa.
+export const createTerrainRng = (seed = WORLD_SEED) => mulberry32(seed)
 // El bioma va aparte de los props: cambiar cómo se reparten no cambia los biomas.
-export const createBiomeRng = () => mulberry32(WORLD_SEED ^ 0x4cf5ad43)
+export const createBiomeRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x4cf5ad43)
 // Un stream por tipo de prop, en el orden en que se colocan (props.ts).
-export const createTreeRng = () => mulberry32(WORLD_SEED ^ 0x9e3779b9)
-export const createRockRng = () => mulberry32(WORLD_SEED ^ 0x2545f491)
-export const createBushRng = () => mulberry32(WORLD_SEED ^ 0x85ebca6b)
-export const createBirchRng = () => mulberry32(WORLD_SEED ^ 0xc2b2ae35)
-export const createIronOreRng = () => mulberry32(WORLD_SEED ^ 0x27d4eb2f)
-export const createDarkpineRng = () => mulberry32(WORLD_SEED ^ 0x165667b1)
-export const createMithrilOreRng = () => mulberry32(WORLD_SEED ^ 0xd3a2646c)
-export const createHerbRng = () => mulberry32(WORLD_SEED ^ 0x7a3d91e5)
+export const createTreeRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x9e3779b9)
+export const createRockRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x2545f491)
+export const createBushRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x85ebca6b)
+export const createBirchRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0xc2b2ae35)
+export const createIronOreRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x27d4eb2f)
+export const createDarkpineRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x165667b1)
+export const createMithrilOreRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0xd3a2646c)
+export const createHerbRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x7a3d91e5)
 // El carbón, detrás de todo lo anterior: no mueve sus ids ni sus posiciones.
-export const createCoalOreRng = () => mulberry32(WORLD_SEED ^ 0x3c6ef372)
+export const createCoalOreRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x3c6ef372)
 // El cristal, detrás del carbón.
-export const createCrystalOreRng = () => mulberry32(WORLD_SEED ^ 0x7f4a7c15)
+export const createCrystalOreRng = (seed = WORLD_SEED) => mulberry32(seed ^ 0x7f4a7c15)

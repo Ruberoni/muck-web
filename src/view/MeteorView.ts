@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { METEOR_BLAST, METEOR_RADIUS, STEP } from '../sim/constants'
-import { heightAt } from '../sim/world/terrain'
+import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
+import type { Terrain } from '../sim/world/terrain'
 import type { Meteor } from '../sim/worldEvents'
 
 /** Metros por segundo a los que cae: del cielo y un poco de lado, para que se vea venir. */
@@ -39,12 +40,12 @@ const coreMaterial = new THREE.MeshStandardMaterial({ color: '#4a403a', emissive
 const burstMaterial = new THREE.MeshBasicMaterial({ color: '#ffb347', transparent: true, depthWrite: false })
 
 /** Un disco sobre el terreno en (x, z), que se desvanece hacia el borde. */
-function groundDisc(x: number, z: number, radius: number) {
+function groundDisc(terrain: Terrain, x: number, z: number, radius: number) {
   const positions: number[] = []
   const colors: number[] = []
   const index: number[] = []
   const vertex = (dx: number, dz: number, alpha: number) => {
-    positions.push(x + dx, heightAt(x + dx, z + dz) + DISC_LIFT, z + dz)
+    positions.push(x + dx, terrain.heightAt(x + dx, z + dz) + DISC_LIFT, z + dz)
     colors.push(1, 1, 1, alpha)
   }
   vertex(0, 0, 1)
@@ -76,6 +77,8 @@ function groundDisc(x: number, z: number, radius: number) {
  * no `landed`: en red, el evento llega antes de que el render llegue a él.
  */
 export class MeteorView {
+  /** El suelo donde se dibuja la quemadura: el de la partida. */
+  island: Island = DEFAULT_ISLAND
   readonly group = new THREE.Group()
   private fireball = new THREE.Group()
   private rock = new THREE.Mesh(rockGeometry, rockMaterial)
@@ -134,7 +137,7 @@ export class MeteorView {
     const { x, y, z } = meteor
     this.rock.position.set(x, y + METEOR_RADIUS * ROCK_RISE, z)
     this.burst.position.set(x, y + 1, z)
-    this.scorch = new THREE.Mesh(groundDisc(x, z, SCORCH_RADIUS), scorchMaterial)
+    this.scorch = new THREE.Mesh(groundDisc(this.island, x, z, SCORCH_RADIUS), scorchMaterial)
     this.scorch.receiveShadow = true
     this.warning = new THREE.Mesh(this.scorch.geometry, warningMaterial)
     this.group.add(this.scorch, this.warning)

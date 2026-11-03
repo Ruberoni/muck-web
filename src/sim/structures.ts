@@ -1,7 +1,8 @@
 import { BUILD_DEFS, copyBuild, deliver, newBuild, type BuildState } from './builds'
 import { LIGHTHOUSE_RADIUS, TOTEM_RADIUS } from './landmarks'
 import type { MatchRules } from './match'
-import { heightAt, MAX_SLOPE, slopeAt, WATER_LEVEL } from './world/terrain'
+import { MAX_SLOPE, WATER_LEVEL } from './world/terrain'
+import { DEFAULT_ISLAND, type Island } from './world/island'
 import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { Inventory, ItemId } from './inventory'
@@ -126,15 +127,16 @@ export function structureSpot(
   radius: number,
   blockers: SpatialGrid<Collider>[],
   out: StructureSpot = { x: 0, y: 0, z: 0, valid: false },
+  island: Island = DEFAULT_ISLAND,
 ): StructureSpot {
   // forward = (-sin(yaw), -cos(yaw))
   const distance = Math.max(PLACE_DISTANCE, radius + PLACE_GAP)
   out.x = pos.x - Math.sin(yaw) * distance
   out.z = pos.z - Math.cos(yaw) * distance
-  out.y = heightAt(out.x, out.z)
+  out.y = island.heightAt(out.x, out.z)
   out.valid =
     out.y > MIN_GROUND &&
-    slopeAt(out.x, out.z) <= MAX_SLOPE &&
+    island.slopeAt(out.x, out.z) <= MAX_SLOPE &&
     blockers.every((grid) => !overlaps(grid, out.x, out.z, radius))
   return out
 }

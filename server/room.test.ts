@@ -241,6 +241,35 @@ describe('Room por partidas', () => {
     expect(room.sim!.result).toBeNull()
   })
 
+  it('con islas al azar, cada partida es en otra, la que recibe cada uno en su state, y se guarda con la sala', () => {
+    let seeds = 0
+    const storage = new MemoryStorage()
+    const time = new ManualTime(1_000_000)
+    const deps = { storage, clock: time, scheduler: time, random: { token: () => String(++seeds), seed: () => ++seeds }, randomIslands: true }
+    const room = new Room(CODE, deps)
+    const a = new Client(room, time, 'a')
+    a.hello('create')
+    time.advance(0)
+    const first = room.sim!.island.seed
+    expect(a.welcome.island).toBe(first)
+    a.send({ type: 'start', difficulty: 'normal' })
+    time.advance(0)
+    const island = room.sim!.island.seed
+    expect(island).not.toBe(first)
+    const state = a.of('state').at(-1)!
+    expect(state.island).toEqual({ seed: island, placements: room.sim!.world.placements })
+    // El siguiente estado ya no la repite.
+    a.send({ type: 'resync' })
+    time.advance(0)
+    expect(a.of('state').at(-1)!.island).toBeUndefined()
+    play(time, 200, [[a]])
+    a.transport.close()
+    time.advance(0)
+    const restored = new Room(CODE, deps)
+    expect(restored.sim!.island.seed).toBe(island)
+    expect(restored.sim!.world.placements).toEqual(room.sim!.world.placements)
+  })
+
   it('la fase sobrevive a guardar la sala', () => {
     const { time, storage, a, b } = lobby()
     a.send({ type: 'start', difficulty: 'normal' })
@@ -276,7 +305,8 @@ describe('Room', () => {
     join(a, b)
     expect(a.welcome.id).toBe(0)
     expect(b.welcome.id).toBe(1)
-    expect(b.welcome.placements).toHaveLength(room.placements.length)
+    expect(b.welcome.placements).toHaveLength(room.sim!.world.placements.length)
+    expect(b.welcome.island).toBe(room.sim!.island.seed)
     expect(a.of('join')).toEqual([{ type: 'join', id: 1, name: 'Ana', skin: 1 }])
 
     const sim = room.sim!

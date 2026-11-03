@@ -1,4 +1,4 @@
-import { forestness, mountainness } from '../sim/world/biomes'
+import type { Biomes } from '../sim/world/biomes'
 import { ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from '../sim/world/terrain'
 
 export type Rgb = [number, number, number]
@@ -28,10 +28,10 @@ const mix = (a: Rgb, b: Rgb, t: number): Rgb => {
 }
 
 /** Cuánto hay de bosque y de montaña en (x, z), de 0 a 1: pasan de un bioma a otro poco a poco, sin un corte. */
-export function biomeBlend(x: number, z: number, h: number) {
+export function biomeBlend(island: Biomes, x: number, z: number, h: number) {
   return {
-    forest: smoothstep(-FOREST_BLEND, FOREST_BLEND, forestness(x, z)),
-    mountain: smoothstep(-MOUNTAIN_BLEND, MOUNTAIN_BLEND, mountainness(x, z, h)),
+    forest: smoothstep(-FOREST_BLEND, FOREST_BLEND, island.forestness(x, z)),
+    mountain: smoothstep(-MOUNTAIN_BLEND, MOUNTAIN_BLEND, island.mountainness(x, z, h)),
   }
 }
 

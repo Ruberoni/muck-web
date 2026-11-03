@@ -1,10 +1,11 @@
 import type * as THREE from 'three'
-import { heightAt, WORLD_SIZE } from '../sim/world/terrain'
+import { DEFAULT_ISLAND } from '../sim/world/island'
+import { WORLD_SIZE, type Terrain } from '../sim/world/terrain'
 
 const SAMPLE_GRID = 16
 
 /** FNV-1a sobre las transformaciones de los props y una rejilla de muestras de heightAt. */
-export function computeWorldHash(instances: THREE.InstancedMesh[]): string {
+export function computeWorldHash(instances: THREE.InstancedMesh[], terrain: Terrain = DEFAULT_ISLAND): string {
   let hash = 0x811c9dc5
   const feed = (values: Float32Array) => {
     const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
@@ -17,7 +18,7 @@ export function computeWorldHash(instances: THREE.InstancedMesh[]): string {
   const step = WORLD_SIZE / SAMPLE_GRID
   for (let i = 0; i < SAMPLE_GRID; i++) {
     for (let j = 0; j < SAMPLE_GRID; j++) {
-      samples[i * SAMPLE_GRID + j] = heightAt(-WORLD_SIZE / 2 + i * step, -WORLD_SIZE / 2 + j * step)
+      samples[i * SAMPLE_GRID + j] = terrain.heightAt(-WORLD_SIZE / 2 + i * step, -WORLD_SIZE / 2 + j * step)
     }
   }
   feed(samples)

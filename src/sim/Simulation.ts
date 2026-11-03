@@ -43,7 +43,8 @@ import { putInto, takeFrom } from './stations'
 import { hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight, NIGHT_LENGTH } from './world/daycycle'
-import { heightAt } from './world/terrain'
+import { createIsland, DEFAULT_ISLAND, type Island } from './world/island'
+import { WORLD_SEED } from './random'
 import { WorldEvents, type WorldEventsState } from './worldEvents'
 
 /** Los jugadores que no son el primero aparecen en un anillo a esta distancia del punto de aparición. */
@@ -98,6 +99,8 @@ export interface PlayerSlotState {
 
 /** Todo lo que cambia durante la partida, como datos (ver Simulation.toJSON). */
 export interface SimState {
+  /** La semilla de la isla: de ella salen el terreno y los props. */
+  island: number
   tick: number
   worldStartTick: number
   rng: number
@@ -133,24 +136,28 @@ const copyPlayer = (p: Player): Player => ({ ...p, pos: { ...p.pos }, prev: { ..
  * deciden qué hacer entonces; volver a jugar es `startMatch`.
  */
 export class Simulation {
-  readonly world: PropWorld
+  // Lo que sale de la isla cambia con ella (`startMatch` con otra): no hay que guardarse estas referencias.
+  /** El suelo: terreno y biomas. */
+  island!: Island
+  /** Los props, que salen de la isla. */
+  world!: PropWorld
   readonly clock = new DayClock()
   /** Lo colocado: fogatas y estaciones. Bloquea a jugadores, enemigos y objetos del suelo. */
   readonly structures: Structures
-  readonly enemies: Enemies
-  readonly pickups: Pickups
-  readonly projectiles: Projectiles
-  readonly worldEvents: WorldEvents
+  enemies!: Enemies
+  pickups!: Pickups
+  projectiles!: Projectiles
+  worldEvents!: WorldEvents
   /** Cuánto han subido los mobs. */
   readonly threat = new Threat()
   /** Lo que ocupa sitio en la isla: props, estructuras y la roca del meteorito. */
-  readonly obstacles: SpatialGrid<Collider>[]
-  readonly interaction: Interaction
+  obstacles!: SpatialGrid<Collider>[]
+  interaction!: Interaction
   /** Todos los jugadores con hueco en la isla, también los `gone`. Se añaden con `addPlayer`. */
   readonly players = new Map<PlayerId, PlayerSlot>()
   readonly env: PlayerEnv
   /** Punto de aparición: el primer jugador aparece aquí y los demás en un anillo alrededor. */
-  readonly spawnCenter: { x: number; z: number }
+  spawnCenter!: { x: number; z: number }
   /** Cómo acabó la partida; null mientras se juega. */
   result: MatchResult | null = null
   /** Azar de la simulación (enemigos, objetos que caen). */
@@ -170,27 +177,45 @@ export class Simulation {
     nearStation: (kind, pos) => stationNear(this.structures.list, kind, pos, STATION_RANGE),
   }
 
-  constructor(seed: number, placements: readonly PropPlacement[] = generatePropPlacements()) {
+  /** `seed`: el azar de la partida. `island`: dónde se juega (sin ella, la de siempre); sus props salen de ella si no se dan. */
+  constructor(seed: number, placements?: readonly PropPlacement[], island: Island = DEFAULT_ISLAND) {
     this.rng = mulberry32(seed)
+    this.structures = new Structures(this.events.emit)
+    // El mismo objeto con cualquier isla: la predicción del cliente se lo guarda.
+    this.env = {
+      heightAt: (x, z) => this.island.heightAt(x, z),
+      collide: (pos) => this.obstacles.reduce((touched, grid) => resolveCircle(pos, PLAYER_RADIUS, grid) || touched, false),
+    }
+    this.build(island, placements ?? generatePropPlacements(island))
+  }
+
+  /** Pasa a otra isla, vacía (sin estructuras ni enemigos), con los mismos jugadores: el cliente, con la que dice el servidor. */
+  useIsland(island: Island, placements: readonly PropPlacement[] = generatePropPlacements(island)) {
+    this.build(island, placements)
+  }
+
+  /**
+   * Lo que sale de la isla: sus props y lo que choca con ellos o mira el suelo, vacío. Los jugadores se quedan, con su
+   * punto de aparición en la isla nueva (`reset` los lleva a él).
+   */
+  private build(island: Island, placements: readonly PropPlacement[]) {
+    this.island = island
     const world = createPropWorld(placements)
     this.world = world
     const { emit } = this.events
-    this.structures = new Structures(emit)
+    this.structures.clear()
     this.worldEvents = new WorldEvents([world.grid, this.structures.grid], this.rng, emit, {
       // Pegado a la roca, en lo que queda libre de props alrededor de ella.
       spawn: (x, z, players) => this.enemies.spawnAt(x + METEOR_RADIUS + ENEMY_DEFS.guardian.radius + 0.1, z, 'guardian', players).id,
       alive: (id) => this.enemies.list.some((e) => e.id === id),
-    })
+    }, island)
     this.obstacles = [world.grid, this.structures.grid, this.worldEvents.grid]
-    this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage))
-    this.pickups = new Pickups(this.obstacles, this.rng, emit)
-    this.projectiles = new Projectiles(this.obstacles, emit)
-    this.interaction = new Interaction(world, this.pickups, this.enemies, emit)
-    this.env = {
-      heightAt,
-      collide: (pos) => this.obstacles.reduce((touched, grid) => resolveCircle(pos, PLAYER_RADIUS, grid) || touched, false),
-    }
-    this.spawnCenter = findSpawn(world.grid)
+    this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage), island)
+    this.pickups = new Pickups(this.obstacles, this.rng, emit, island)
+    this.projectiles = new Projectiles(this.obstacles, emit, island)
+    this.interaction = new Interaction(world, this.pickups, this.enemies, emit, island)
+    this.spawnCenter = findSpawn(world.grid, island)
+    for (const slot of this.players.values()) slot.spawn = this.spawnPoint(slot.id)
   }
 
   /** Con quién y a qué dificultad se juega: las fija `startMatch`. */
@@ -376,8 +401,12 @@ export class Simulation {
     return this.worldStartTick + Math.round(this.clock.nextMorning / STEP)
   }
 
-  /** Empieza una partida con estas reglas, sobre la isla recién restaurada. */
-  startMatch(rules: MatchRules) {
+  /**
+   * Empieza una partida con estas reglas, sobre la isla recién restaurada o en `island` (con sus props, o los que salen
+   * de ella). El tick, el azar y los jugadores siguen.
+   */
+  startMatch(rules: MatchRules, island?: Island, placements?: readonly PropPlacement[]) {
+    if (island && island !== this.island) this.build(island, placements ?? generatePropPlacements(island))
     this.rules = rules
     this.reset()
   }
@@ -440,7 +469,7 @@ export class Simulation {
 
   /** Lanza una roca desde (x, z), a la altura del pecho, hacia el jugador `id`. */
   throwRock(x: number, z: number, id: PlayerId) {
-    this.launchRock({ x, y: heightAt(x, z) + THROW_HEIGHT, z }, id, ENEMY_DEFS.thrower.damage)
+    this.launchRock({ x, y: this.island.heightAt(x, z) + THROW_HEIGHT, z }, id, ENEMY_DEFS.thrower.damage)
   }
 
   /** Una roca hacia donde está ahora el jugador `id`. */
@@ -464,6 +493,7 @@ export class Simulation {
   /** Estado completo como datos JSON (sin referencias a la simulación): basta con él y la isla para seguir. */
   toJSON(): SimState {
     return {
+      island: this.island.seed,
       tick: this.tick,
       worldStartTick: this.worldStartTick,
       rng: this.rng.state,
@@ -500,9 +530,9 @@ export class Simulation {
     }
   }
 
-  /** Simulación a partir de `toJSON()`, sobre la misma isla. */
+  /** Simulación a partir de `toJSON()`, sobre la misma isla (sus props, si no se dan, salen de su semilla). */
   static fromJSON(state: SimState, placements?: readonly PropPlacement[]): Simulation {
-    const sim = new Simulation(0, placements)
+    const sim = new Simulation(0, placements, createIsland(state.island ?? WORLD_SEED))
     sim.load(state)
     return sim
   }
@@ -577,7 +607,7 @@ export class Simulation {
     let spot: { x: number; z: number } | null = null
     for (let i = 0; i < CRASH_ATTEMPTS && !spot; i++) spot = this.worldEvents.findSpot(around)
     const { x, z } = spot ?? this.spawnCenter
-    const plane = this.structures.place({ x, y: heightAt(x, z), z, valid: true }, 'plane')!
+    const plane = this.structures.place({ x, y: this.island.heightAt(x, z), z, valid: true }, 'plane')!
     this.events.emit({ type: 'planeCrashed', id: plane.id, x, z })
   }
 
@@ -590,9 +620,9 @@ export class Simulation {
 
   /** Lo que ya viene puesto en la isla: el faro y el tótem no se fabrican, se reparan llevando materiales. */
   private placeLandmarks() {
-    const { lighthouse, totem } = findLandmarks(this.world.grid, this.spawnCenter)
-    this.structures.place({ ...lighthouse, y: heightAt(lighthouse.x, lighthouse.z), valid: true }, 'lighthouse')
-    this.structures.place({ ...totem, y: heightAt(totem.x, totem.z), valid: true }, 'totem')
+    const { lighthouse, totem } = findLandmarks(this.world.grid, this.spawnCenter, this.island)
+    this.structures.place({ ...lighthouse, y: this.island.heightAt(lighthouse.x, lighthouse.z), valid: true }, 'lighthouse')
+    this.structures.place({ ...totem, y: this.island.heightAt(totem.x, totem.z), valid: true }, 'totem')
     this.placeGrave()
   }
 
@@ -602,7 +632,7 @@ export class Simulation {
     let spot: { x: number; z: number } | null = null
     for (let i = 0; i < CRASH_ATTEMPTS && !spot; i++) spot = this.worldEvents.findSpot(around)
     const { x, z } = spot ?? { x: this.spawnCenter.x + 12, z: this.spawnCenter.z }
-    this.structures.place({ x, y: heightAt(x, z), z, valid: true }, 'grave')
+    this.structures.place({ x, y: this.island.heightAt(x, z), z, valid: true }, 'grave')
   }
 
   /**
@@ -746,7 +776,7 @@ export class Simulation {
     const item = slot.inventory.selectedItem
     const def = placeableOf(item)
     if (!item || !def) return
-    const spot = structureSpot(slot.player.pos, slot.player.yaw, def.radius, this.obstacles, this.spot)
+    const spot = structureSpot(slot.player.pos, slot.player.yaw, def.radius, this.obstacles, this.spot, this.island)
     if (!this.structures.place(spot, def.kind, slot.id, slot.player.yaw)) return
     this.events.emit({ type: 'playerPlaced', id: slot.id, item })
     slot.inventory.remove(item, 1)

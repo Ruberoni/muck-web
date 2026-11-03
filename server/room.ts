@@ -26,7 +26,8 @@ import { STRUCTURE_DEFS, structureSpot } from '../src/sim/structures'
 import { STEP } from '../src/sim/constants'
 import type { PlayerId, SimEvent } from '../src/sim/events'
 import { DEFAULT_RULES, type Difficulty, type MatchResult, type MatchRules } from '../src/sim/match'
-import { generatePropPlacements, type PropPlacement } from '../src/sim/props'
+import { pickIsland } from '../src/sim/islands'
+import { DEFAULT_ISLAND } from '../src/sim/world/island'
 import { Simulation, type PlayerSlot, type SimState } from '../src/sim/Simulation'
 import { autoSkin } from '../src/net/skins'
 
@@ -77,6 +78,8 @@ export interface RoomDeps {
   dev?: boolean
   /** Sin lobby: se juega desde el primer `hello` y se puede entrar a mitad. Para los tests que prueban la red, no la sala. */
   quickStart?: boolean
+  /** Cada isla nueva y cada partida, en una isla al azar (`random.seed`). Sin esto (los tests), siempre la de siempre. */
+  randomIslands?: boolean
 }
 
 export class MemoryStorage implements Storage {
@@ -142,6 +145,8 @@ interface Seat {
   ping: number
   /** El último inventario que se le mandó (JSON): un `snap` solo lo lleva si ha cambiado. */
   sentInventory: string
+  /** La semilla de la última isla que se le mandó: un `state` solo la lleva si es otra. */
+  sentIsland: number | null
   lastChatAt: number
   bucket: number
   bucketAt: number
@@ -174,7 +179,6 @@ interface RoomBlob {
 export class Room {
   /** null: la sala no tiene isla (no se ha creado o se ha borrado). */
   sim: Simulation | null = null
-  readonly placements: readonly PropPlacement[]
   private seats = new Map<string, Seat>()
   /** Sockets abiertos: con su hueco o, hasta el `hello`, sin él. */
   private conns = new Map<Conn, Seat | null>()
@@ -201,7 +205,6 @@ export class Room {
     readonly code: string,
     private deps: RoomDeps,
   ) {
-    this.placements = generatePropPlacements()
     this.phase = deps.quickStart ? 'playing' : 'lobby'
     this.restore()
   }
@@ -318,6 +321,7 @@ export class Room {
     seat.lastT = msg.t
     const own = you(this.slotOf(seat))
     seat.sentInventory = JSON.stringify(own.inventory)
+    seat.sentIsland = sim.island.seed
     this.send(conn, {
       type: 'welcome',
       id: seat.id,
@@ -326,7 +330,8 @@ export class Room {
       held: 0,
       serverTick: sim.tick,
       worldStartTick: sim.startTick,
-      placements: this.placements,
+      island: sim.island.seed,
+      placements: sim.world.placements,
       state: this.worldState(seat.id),
       you: own,
       match: this.matchInfo(),
@@ -349,7 +354,8 @@ export class Room {
       this.seats.delete(other.token)
       sim.removePlayer(other.id)
     }
-    sim.startMatch({ players: this.connected().length, difficulty })
+    // Cada partida en una isla nueva: el `state` que reciben todos al arrancar el bucle la lleva.
+    sim.startMatch({ players: this.connected().length, difficulty }, this.island())
     // En el lobby no llegan `cmds`: la cuenta de ausentes empieza ahora.
     const now = this.deps.clock.now()
     for (const other of this.connected()) {
@@ -468,7 +474,7 @@ export class Room {
       case 'placeStructure': {
         const { pos, yaw } = slot.player
         const from = msg.x !== undefined && msg.z !== undefined ? { x: msg.x, z: msg.z } : pos
-        const spot = structureSpot(from, msg.yaw ?? yaw, STRUCTURE_DEFS[msg.kind].radius, sim.obstacles)
+        const spot = structureSpot(from, msg.yaw ?? yaw, STRUCTURE_DEFS[msg.kind].radius, sim.obstacles, undefined, sim.island)
         sim.structures.place(spot, msg.kind, seat.id, msg.yaw ?? yaw)
         break
       }
@@ -672,7 +678,7 @@ export class Room {
     try {
       const blob = JSON.parse(raw) as RoomBlob
       if (blob?.schema !== PROTOCOL_VERSION) throw new Error('isla de otra versión')
-      const sim = Simulation.fromJSON(blob.sim, this.placements)
+      const sim = Simulation.fromJSON(blob.sim)
       // Nadie está conectado hasta que vuelva (con `hello`) o la plataforma devuelva su socket (`adopt`).
       for (const slot of sim.players.values()) sim.setConnection(slot.id, 'gone')
       for (const { token, id, name, skin, lastSeen } of blob.seats) {
@@ -695,9 +701,14 @@ export class Room {
     this.scheduleAlarm()
   }
 
+  /** La isla de una partida: al azar (pero jugable) o, en los tests, la de siempre. */
+  private island() {
+    return this.deps.randomIslands ? pickIsland(this.deps.random.seed()) : DEFAULT_ISLAND
+  }
+
   /** Una isla nueva, a la espera de que empiece la partida (con `quickStart`, ya en marcha). */
   private newSimulation() {
-    const sim = new Simulation(this.deps.random.seed(), this.placements)
+    const sim = new Simulation(this.deps.random.seed(), undefined, this.island())
     if (this.deps.quickStart) sim.rules = QUICK_RULES
     return sim
   }
@@ -742,7 +753,9 @@ export class Room {
     const sim = this.sim!
     const own = you(this.slotOf(seat))
     seat.sentInventory = JSON.stringify(own.inventory)
-    return { tick: sim.tick, worldStartTick: sim.startTick, state: this.worldState(seat.id), you: own }
+    const island = seat.sentIsland === sim.island.seed ? {} : { island: { seed: sim.island.seed, placements: sim.world.placements } }
+    seat.sentIsland = sim.island.seed
+    return { ...island, tick: sim.tick, worldStartTick: sim.startTick, state: this.worldState(seat.id), you: own }
   }
 
   /** Su `you` para un `snap`: sin la orientación ni `prev`, y sin el inventario si no ha cambiado desde el último enviado. */
@@ -850,6 +863,7 @@ function blankSeat(token: string, id: PlayerId, name: string, skin: number, slot
     slack: 0,
     ping: 0,
     sentInventory: '',
+    sentIsland: null,
     lastChatAt: -Infinity,
     bucket: BURST,
     bucketAt: 0,

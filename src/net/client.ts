@@ -9,6 +9,7 @@ import type { Pickup } from '../sim/pickups'
 import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
+import { createIsland } from '../sim/world/island'
 import { stationNear, structureSpot } from '../sim/structures'
 import { copyStation } from '../sim/stations'
 import { isNight } from '../sim/world/daycycle'
@@ -392,7 +393,7 @@ export class NetClient {
       case 'welcome': {
         this.id = msg.id
         this.token = msg.token
-        const sim = new Simulation(0, msg.placements)
+        const sim = new Simulation(0, msg.placements, createIsland(msg.island))
         const slot = sim.addPlayer(msg.id)
         sim.rules = msg.match.rules
         this.sim = sim
@@ -400,7 +401,7 @@ export class NetClient {
         this.applyWorld(msg.state)
         this.predictor = new Predictor(slot, {
           env: sim.env,
-          canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, sim.obstacles).valid,
+          canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, sim.obstacles, undefined, sim.island).valid,
           // Como en la simulación: las estaciones del espejo, con el mismo alcance.
           nearStation: (kind, pos) => stationNear(sim.structures.list, kind, pos, STATION_RANGE),
         })
@@ -442,6 +443,8 @@ export class NetClient {
         break
       case 'state':
         if (!this.sim) break
+        // Una partida nueva en otra isla: el espejo pasa a ella antes de cargar lo que hay.
+        if (msg.island) this.sim.useIsland(createIsland(msg.island.seed), msg.island.placements)
         this.applyWorld(msg.state)
         this.predictor!.reconcile(msg.tick, msg.you)
         this.clock.sync(now, msg.tick)

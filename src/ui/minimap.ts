@@ -1,5 +1,6 @@
 import { ENEMY_DEFS, type EnemyType } from '../sim/constants'
-import { heightAt, WORLD_SIZE } from '../sim/world/terrain'
+import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
+import { WORLD_SIZE } from '../sim/world/terrain'
 import type { StructureKind } from '../sim/structures'
 import { biomeBlend, DEEP, terrainColor } from '../world/ground'
 
@@ -92,8 +93,8 @@ export function teammateMark(dx: number, dz: number, yaw: number, viewYaw: numbe
   return { x: p.x, y: p.y, angle, far }
 }
 
-/** Textura de la isla vista desde arriba, con -Z (norte) hacia arriba. Se genera una vez. */
-function renderIsland(): HTMLCanvasElement {
+/** Textura de la isla vista desde arriba, con -Z (norte) hacia arriba. Se genera una vez por isla. */
+function renderIsland(island: Island): HTMLCanvasElement {
   const size = Math.round(WORLD_SIZE * TEXELS_PER_UNIT)
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = size
@@ -104,10 +105,10 @@ function renderIsland(): HTMLCanvasElement {
     for (let i = 0; i < size; i++) {
       const x = -WORLD_SIZE / 2 + (i + 0.5) * unit
       const z = -WORLD_SIZE / 2 + (j + 0.5) * unit
-      const h = heightAt(x, z)
+      const h = island.heightAt(x, z)
       // Pendiente aproximada: mismo umbral que la malla (normal.y < 0.8 ⇔ pendiente > 0.75).
-      const slope = Math.hypot(heightAt(x + unit, z) - h, heightAt(x, z + unit) - h) / unit
-      const [r, g, b] = terrainColor(h, slope > 0.75, biomeBlend(x, z, h))
+      const slope = Math.hypot(island.heightAt(x + unit, z) - h, island.heightAt(x, z + unit) - h) / unit
+      const [r, g, b] = terrainColor(h, slope > 0.75, biomeBlend(island, x, z, h))
       const k = (j * size + i) * 4
       image.data[k] = r
       image.data[k + 1] = g
@@ -124,17 +125,25 @@ export class Minimap {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private island: HTMLCanvasElement
+  private shown: Island = DEFAULT_ISLAND
   /** Lado del canvas en píxeles CSS; se actualiza al cambiar el tamaño de la ventana. */
   private size = 0
   private dpr = 1
   private p = { x: 0, y: 0 }
+
+  /** Pinta otra isla (la de una partida nueva). */
+  setIsland(island: Island) {
+    if (island === this.shown) return
+    this.shown = island
+    this.island = renderIsland(island)
+  }
 
   constructor(parent: HTMLElement) {
     this.canvas = document.createElement('canvas')
     this.canvas.className = 'minimap'
     parent.appendChild(this.canvas)
     this.ctx = this.canvas.getContext('2d')!
-    this.island = renderIsland()
+    this.island = renderIsland(DEFAULT_ISLAND)
     this.resize()
     window.addEventListener('resize', () => this.resize())
   }

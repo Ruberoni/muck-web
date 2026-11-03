@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { heightAt } from '../sim/world/terrain'
+import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
 import { ENEMY_BODY_LIFT, ENEMY_BODY_RADIUS, ENEMY_BODY_SCALE } from '../sim/aim'
 import { ENEMY_DEFS, type EnemyType, type HitEfficacy } from '../sim/constants'
 import type { ChargeState, EnemyData } from '../sim/enemies'
@@ -154,6 +154,8 @@ interface EnemyModel {
  * los eventos; el bote, de si se mueve.
  */
 export class EnemyView {
+  /** El suelo sobre el que andan: el de la partida. */
+  island: Island = DEFAULT_ISLAND
   readonly group = new THREE.Group()
   private models = new Map<number, EnemyModel>()
   private seen = new Set<number>()
@@ -267,7 +269,7 @@ export class EnemyView {
     // Al atacar se lanza un poco hacia delante.
     const lunge = Math.sin((Math.PI * model.lunge) / LUNGE_TIME) * 0.35
     const o = model.object
-    o.position.set(x + Math.sin(yaw) * lunge, heightAt(x, z) + bob, z + Math.cos(yaw) * lunge)
+    o.position.set(x + Math.sin(yaw) * lunge, this.island.heightAt(x, z) + bob, z + Math.cos(yaw) * lunge)
     o.rotation.y = yaw
     // Muere encogiéndose y hundiéndose.
     const s = model.dying === null ? 1 : Math.max(0, model.dying / DEATH_TIME)

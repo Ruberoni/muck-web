@@ -4,7 +4,7 @@ import { INVENTORY_SIZE, SLOT_COUNT, type ItemId } from './sim/inventory'
 import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
-import { heightAt, WATER_LEVEL } from './sim/world/terrain'
+import { WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH, type EnemyType } from './sim/constants'
 import type { PropKind } from './sim/props'
 import { enemyAimHeight } from './sim/enemies'
@@ -35,7 +35,7 @@ export function installDebug(game: Game) {
   const player = () => game.slot.player
   const inventory = () => game.slot.inventory
   // Se calcula antes de que el jugador toque nada: es la huella del mundo generado.
-  const worldHash = computeWorldHash(islandMeshes(game.propView))
+  const worldHash = computeWorldHash(islandMeshes(game.propView), game.sim.island)
   // Lo mismo para los props de los niveles, que van en sus propios meshes (abedules y menas de hierro).
   const levelPropsHash = computeWorldHash([...game.propView.byKind.birch, ...game.propView.byKind.iron_ore])
   // Y los del mithril (pinos oscuros y menas de mithril), que van detrás sin cambiar el anterior.
@@ -203,14 +203,14 @@ export function installDebug(game: Game) {
       const { world } = sim()
       const prop = world.props[propId]
       const isFree = (x: number, z: number) => {
-        if (heightAt(x, z) < WATER_LEVEL - WADE_DEPTH) return false
+        if (sim().island.heightAt(x, z) < WATER_LEVEL - WADE_DEPTH) return false
         for (const other of world.grid.query(x, z, PLAYER_RADIUS + world.grid.maxRadius)) {
           if (other.alive && Math.hypot(other.x - x, other.z - z) < other.radius + PLAYER_RADIUS) return false
         }
         return true
       }
       const pose = aimPose(prop, isFree)
-      const eyeY = Math.max(heightAt(pose.x, pose.z), WATER_LEVEL - FLOAT_DEPTH) + EYE_HEIGHT
+      const eyeY = Math.max(sim().island.heightAt(pose.x, pose.z), WATER_LEVEL - FLOAT_DEPTH) + EYE_HEIGHT
       const moved = game.teleport(pose.x, pose.z, pose.yaw, Math.atan2(pose.aimY - eyeY, pose.horizontal))
       if (moved) return moved.then(() => frames()).then(targetPropId)
       sim().interaction.updateTarget(slot())
@@ -274,7 +274,7 @@ export function installDebug(game: Game) {
       return dev(op, () => {
         const s = sim()
         const from = x !== undefined && z !== undefined ? { x, z } : player().pos
-        const spot = structureSpot(from, yaw ?? player().yaw, STRUCTURE_DEFS[kind].radius, [s.world.grid, s.structures.grid])
+        const spot = structureSpot(from, yaw ?? player().yaw, STRUCTURE_DEFS[kind].radius, [s.world.grid, s.structures.grid], undefined, s.island)
         return s.structures.place(spot, kind, slot().id, yaw ?? player().yaw) !== null
       })
     },
@@ -309,7 +309,7 @@ export function installDebug(game: Game) {
       const p = player()
       const dx = e.pos.x - p.pos.x
       const dz = e.pos.z - p.pos.z
-      const dy = heightAt(e.pos.x, e.pos.z) + enemyAimHeight(e.type) - (p.pos.y + EYE_HEIGHT)
+      const dy = sim().island.heightAt(e.pos.x, e.pos.z) + enemyAimHeight(e.type) - (p.pos.y + EYE_HEIGHT)
       const yaw = Math.atan2(-dx, -dz)
       const pitch = Math.atan2(dy, Math.hypot(dx, dz))
       // En red solo cambia la mirada, que es del cliente: el objetivo sale del siguiente paso.
@@ -323,7 +323,10 @@ export function installDebug(game: Game) {
       return slot().target === e
     },
     hand: () => ({ item: game.handheld.item, action: game.handheld.action }),
-    heightAt,
+    /** La altura del suelo de la isla de la partida. */
+    heightAt: (x: number, z: number) => sim().island.heightAt(x, z),
+    /** La semilla de la isla de la partida. */
+    island: () => sim().island.seed,
     clock: () => ({ day: sim().clock.day, phase: sim().clock.phase }),
     /** Salta a una hora del día actual (0 = amanecer, redondeada al tick) y renderiza. */
     setPhase: (phase: number) =>

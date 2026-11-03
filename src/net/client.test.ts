@@ -20,11 +20,13 @@ import { LaggyTransport, ManualTime, type Lag } from './transport'
 const CODE = 'K7QX2'
 const FRAME_MS = 16
 
-/** Sala con reloj manual y un cliente en red con 100 ms ± 30 de latencia en cada sentido. */
-function setup(quickStart = true) {
+/** Sala con reloj manual y un cliente en red con 100 ms ± 30 de latencia en cada sentido. Con `randomIslands`, cada isla al azar. */
+function setup(quickStart = true, randomIslands = false) {
   const time = new ManualTime(1_000_000)
   let tokens = 0
-  const room = new Room(CODE, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed: () => 7 }, dev: true, quickStart })
+  let islands = 6
+  const seed = randomIslands ? () => ++islands : () => 7
+  const room = new Room(CODE, { storage: new MemoryStorage(), clock: time, scheduler: time, random: { token: () => `tok${++tokens}`, seed }, dev: true, quickStart, randomIslands })
   let seeds = 0
   const connect = (tab: string, intent: 'create' | 'join' = 'join', lag: Lag = { latency: 100, jitter: 30, rng: mulberry32(++seeds) }, token?: string) => {
     const transport = new LaggyTransport(room, time, lag)
@@ -396,6 +398,28 @@ describe('el espejo de NetClient', () => {
     expect(sim.projectiles.list).toEqual([])
     expect(client.sim!.projectiles.list).toEqual([])
     expect(late.sim!.projectiles.list).toEqual([])
+  })
+
+  it('cada partida es en otra isla, y todos los espejos pasan a ella con sus props', () => {
+    const { room, time, connect } = setup(false, true)
+    const { client: a } = connect('a', 'create')
+    const { client: b } = connect('b')
+    time.advance(500)
+    const lobby = room.sim!.island.seed
+    expect(a.sim!.island.seed).toBe(lobby)
+    expect(a.sim!.world.placements).toEqual(room.sim!.world.placements)
+    a.start('normal')
+    run(time, 1500, [[a, idle], [b, idle]])
+    const { island, world, structures } = room.sim!
+    expect(island.seed).not.toBe(lobby)
+    for (const c of [a, b]) {
+      expect(c.sim!.island.seed).toBe(island.seed)
+      expect(c.sim!.world.placements).toEqual(world.placements)
+      expect(c.sim!.structures.list.map((s) => [s.kind, s.x, s.z])).toEqual(structures.list.map((s) => [s.kind, s.x, s.z]))
+      // En el punto de aparición de la isla nueva.
+      const { pos } = c.sim!.slot(c.id).player
+      expect(Math.hypot(pos.x - room.sim!.slot(c.id).player.pos.x, pos.z - room.sim!.slot(c.id).player.pos.z)).toBeLessThan(0.5)
+    }
   })
 
   it('el lobby: se espera sin predecir, y al empezar el espejo recibe las reglas', () => {

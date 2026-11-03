@@ -27,8 +27,10 @@ import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
 import { sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
-import { biomeAt, BIOME_NAMES } from '../sim/world/biomes'
-import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import { BIOME_NAMES } from '../sim/world/biomes'
+import type { Island } from '../sim/world/island'
+import { createTerrain } from '../world/terrain'
+import { WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
@@ -140,6 +142,9 @@ export class Game {
 
   private sky: Sky
   private water: THREE.Mesh
+  /** La malla de la isla que se ve, y cuál es: cambia con la de la partida (`syncIsland`). */
+  private terrain: THREE.Mesh
+  private shownIsland: Island
   private acc = 0
   private lastTime: number | null = null
   private renderPos = { x: 0, y: 0, z: 0 }
@@ -193,7 +198,9 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(this.settings.fov, window.innerWidth / window.innerHeight, 0.1, 600)
     this.camera.rotation.order = 'YXZ'
 
-    const { scene, sky, water } = createScene()
+    const { scene, sky, water, terrain } = createScene(this.sim.island)
+    this.terrain = terrain
+    this.shownIsland = this.sim.island
     this.scene = scene
     this.sky = sky
     this.water = water
@@ -828,7 +835,7 @@ export class Game {
 
     this.audio.remoteSteps(
       shown.map(({ id, pose, data }) => {
-        const ground = heightAt(pose.x, pose.z)
+        const ground = this.sim.island.heightAt(pose.x, pose.z)
         return { id, x: pose.x, z: pose.z, grounded: pose.y - ground < REMOTE_GROUNDED, inWater: ground < WATER_LEVEL, alive: data.alive }
       }),
       this.listener(),
@@ -880,6 +887,25 @@ export class Game {
    * del servidor: las locales no valen, porque `heightAt` difiere en los últimos bits entre motores (la `y` siempre, y
    * con props cerca de un umbral, hasta qué prop lleva cada id). Por eso no se compara: se rehace siempre.
    */
+  /**
+   * Si la partida es en otra isla (una nueva en solitario, o la que manda la sala), la vista pasa a ella: el terreno, el
+   * minimapa, los props y la decoración, y el suelo de enemigos y meteoritos.
+   */
+  private syncIsland() {
+    const { island } = this.sim
+    if (island !== this.shownIsland) {
+      this.shownIsland = island
+      this.scene.remove(this.terrain)
+      this.terrain.geometry.dispose()
+      ;(this.terrain.material as THREE.Material).dispose()
+      this.terrain = createTerrain(island)
+      this.scene.add(this.terrain)
+      this.hud.minimap.setIsland(island)
+      this.enemyView.island = this.meteorView.island = island
+    }
+    if (this.propView.placements !== this.sim.world.placements) this.propView = this.buildPropView(this.propView)
+  }
+
   private buildPropView(old: PropView | null): PropView {
     const view = new PropView(this.sim.world.placements)
     if (old) {
@@ -895,7 +921,7 @@ export class Game {
         this.scene.remove(this.decor.group)
         this.decor.dispose()
       }
-      this.decor = new DecorView(this.nature, this.sim.world.placements)
+      this.decor = new DecorView(this.nature, this.sim.world.placements, this.sim.island)
       this.scene.add(this.decor.group)
     }
     return view
@@ -933,6 +959,7 @@ export class Game {
   }
 
   private render(alpha: number, dt: number, time: number) {
+    this.syncIsland()
     const { sim, slot, net } = this
     const { structures, enemies } = sim
     const p = slot.player
@@ -977,7 +1004,7 @@ export class Game {
     updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.eternalFog(), this.lighthouseGlow)
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
-    const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot) : null
+    const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot, sim.island) : null
     this.structureView.setGhost(placing && spot && { kind: placing.kind, spot, yaw: look.yaw })
 
     this.hud.setHealth(p.health, HEALTH_MAX, p.regenLeft)
@@ -1013,7 +1040,7 @@ export class Game {
     const shown = enemies.list.find((e) => ENEMY_DEFS[e.type].light) ?? boss
     this.hud.setBoss(shown ? { name: ENEMY_DEFS[shown.type].name, hp: shown.hp, maxHp: shown.maxHp } : null)
     if (this.state === 'playing') {
-      const entered = this.biomeNotice.update(biomeAt(p.pos.x, p.pos.z), dt)
+      const entered = this.biomeNotice.update(sim.island.biomeAt(p.pos.x, p.pos.z), dt)
       if (entered) this.hud.showBiome(BIOME_NAMES[entered])
     }
     this.hud.minimap.draw({
@@ -1047,7 +1074,7 @@ export class Game {
     const yaw = this.spectatorYaw
     const x = pose.x + Math.sin(yaw) * SPECTATOR_BACK
     const z = pose.z + Math.cos(yaw) * SPECTATOR_BACK
-    const y = Math.max(pose.y + EYE_HEIGHT + SPECTATOR_UP, heightAt(x, z) + 0.6, WATER_LEVEL + 0.6)
+    const y = Math.max(pose.y + EYE_HEIGHT + SPECTATOR_UP, this.sim.island.heightAt(x, z) + 0.6, WATER_LEVEL + 0.6)
     this.renderPos.x = pose.x
     this.renderPos.y = pose.y
     this.renderPos.z = pose.z

@@ -1,6 +1,6 @@
 import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes } from './aim'
 import { resetProp, startRegrow, type PropData, type PropWorld } from './props'
-import { heightAt } from './world/terrain'
+import { DEFAULT_ISLAND, type Island } from './world/island'
 import { NO_EMIT, type Emit, type PlayerId, type TargetRef } from './events'
 import { ENEMY_DEFS, PROP_DEFS, REACH, SWEEP_TARGETS, type PropFamily } from './constants'
 import { enemyAimHeight, type Enemies, type EnemyData } from './enemies'
@@ -59,6 +59,7 @@ export class Interaction {
     private pickups: Pickups,
     private enemies?: Enemies,
     private emit: Emit = NO_EMIT,
+    private island: Island = DEFAULT_ISLAND,
   ) {
     this.hitboxes = createPropHitboxes(world.placements)
   }
@@ -66,7 +67,7 @@ export class Interaction {
   /** Lo que tiene delante el jugador (el centro de su pantalla), a su alcance, desde su posición y su mirada. */
   updateTarget(fighter: Fighter) {
     aimRay(fighter.player, this.ray)
-    fighter.target = pickTarget(this.ray, this.world.grid, this.hitboxes, this.enemies?.list ?? [])
+    fighter.target = pickTarget(this.ray, this.world.grid, this.hitboxes, this.enemies?.list ?? [], undefined, this.island)
   }
 
   /**
@@ -86,7 +87,7 @@ export class Interaction {
 
   private enemyInReach(fighter: Fighter, enemy: EnemyData, slack: number) {
     const { x, z } = enemy.pos
-    return this.inReach(fighter, x, heightAt(x, z) + enemyAimHeight(enemy.type), z, ENEMY_DEFS[enemy.type].radius + slack)
+    return this.inReach(fighter, x, this.island.heightAt(x, z) + enemyAimHeight(enemy.type), z, ENEMY_DEFS[enemy.type].radius + slack)
   }
 
   /** Si (x, y, z) está a como mucho REACH + `radius` de los ojos y a menos de 60° de la mirada. */
@@ -166,7 +167,7 @@ export class Interaction {
     const def = ENEMY_DEFS[enemy.type]
     for (const { item, amount } of def.loot) {
       const scale = item === 'coin' ? enemy.lootScale * enemy.coinScale : enemy.lootScale
-      this.pickups.drop(item, Math.round(amount * scale), x, heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
+      this.pickups.drop(item, Math.round(amount * scale), x, this.island.heightAt(x, z) + ENEMY_DROP_HEIGHT, z)
     }
     return true
   }

@@ -2,8 +2,9 @@ import * as THREE from 'three'
 import { SpatialGrid, type Collider } from '../sim/collision'
 import type { PropPlacement } from '../sim/props'
 import { mulberry32 } from '../sim/random'
-import { biomeAt, type Biome } from '../sim/world/biomes'
-import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import type { Biome } from '../sim/world/biomes'
+import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
+import { MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 import { biomeBlend, terrainColor } from '../world/ground'
 import type { NatureModels } from './nature'
 
@@ -48,7 +49,7 @@ export interface DecorItem {
  * Dónde va la decoración de la isla, con una semilla fija: en su bioma, por encima del agua (la de colores, también de
  * la arena), sin pendientes fuertes ni encima de los props. Sin colisión ni nada en la simulación.
  */
-export function scatterDecor(placements: readonly PropPlacement[], seed = DECOR_SEED): DecorItem[][][] {
+export function scatterDecor(placements: readonly PropPlacement[], island: Island = DEFAULT_ISLAND, seed = DECOR_SEED): DecorItem[][][] {
   const rng = mulberry32(seed)
   const props = new SpatialGrid<Collider>()
   for (const { x, z, radius } of placements) props.insert({ x, z, radius, alive: true })
@@ -62,9 +63,9 @@ export function scatterDecor(placements: readonly PropPlacement[], seed = DECOR_
       const s = def.scale[0] + rng() * (def.scale[1] - def.scale[0])
       const turn = rng() * Math.PI * 2
       const chance = rng()
-      const y = heightAt(x, z)
-      if (y < WATER_LEVEL + 0.1 || y > ROCK_LEVEL || slopeAt(x, z) > MAX_SLOPE) continue
-      if (chance >= (def.biomes[biomeAt(x, z, y)] ?? 0)) continue
+      const y = island.heightAt(x, z)
+      if (y < WATER_LEVEL + 0.1 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) continue
+      if (chance >= (def.biomes[island.biomeAt(x, z, y)] ?? 0)) continue
       if ([...props.query(x, z, PROP_GAP + props.maxRadius)].some((p) => Math.hypot(p.x - x, p.z - z) < p.radius + PROP_GAP)) continue
       placed++
       dummy.position.set(x, y - 0.03, z)
@@ -73,7 +74,7 @@ export function scatterDecor(placements: readonly PropPlacement[], seed = DECOR_
       dummy.updateMatrix()
       let color: THREE.Color | null = null
       if (def.ground) {
-        const [r, g, b] = terrainColor(y, false, biomeBlend(x, z, y))
+        const [r, g, b] = terrainColor(y, false, biomeBlend(island, x, z, y))
         // Algo más clara que el suelo, para que se vea.
         color = new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace).multiplyScalar(y < SAND_LEVEL ? 1 : 1.15)
       }
@@ -93,8 +94,8 @@ export class DecorView {
   private material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true })
   private from: { x: number; z: number } | null = null
 
-  constructor(models: NatureModels, placements: readonly PropPlacement[]) {
-    scatterDecor(placements).forEach((byModel, d) => {
+  constructor(models: NatureModels, placements: readonly PropPlacement[], island: Island = DEFAULT_ISLAND) {
+    scatterDecor(placements, island).forEach((byModel, d) => {
       DECOR[d].models.forEach((name, m) => {
         const geometry = models.get(name)
         const items = byModel[m]

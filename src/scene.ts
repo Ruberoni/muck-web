@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createSkyState, sampleSky } from './world/daycycle'
+import type { Island } from './sim/world/island'
 import { createTerrain, createWater } from './world/terrain'
 
 const SUN_DISTANCE = 150
@@ -23,7 +24,8 @@ const LIGHTHOUSE_HEMI = 1.1
 const LIGHTHOUSE_TINT = new THREE.Color('#ffe9a8')
 
 /** Escena con el terreno, el agua y el cielo. Los props los añade Game, con las colocaciones de su sesión. */
-export function createScene() {
+/** La escena con la isla `island` (la malla del terreno se cambia con otra isla: ver Game). */
+export function createScene(island: Island) {
   const scene = new THREE.Scene()
   const background = new THREE.Color()
   scene.background = background
@@ -49,12 +51,12 @@ export function createScene() {
   sun.shadow.normalBias = 0.02
   scene.add(sun, sun.target)
 
-  const terrain = createTerrain()
+  const terrain = createTerrain(island)
   const water = createWater()
   scene.add(terrain, water)
 
   const sky = { background, fog, hemi, sun }
-  return { scene, sky, water }
+  return { scene, sky, water, terrain }
 }
 
 export type Sky = ReturnType<typeof createScene>['sky']

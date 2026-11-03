@@ -12,9 +12,9 @@ import {
   STEP,
 } from './constants'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
-import { biomeAt } from './world/biomes'
+import { DEFAULT_ISLAND, type Island } from './world/island'
 import { isNight } from './world/daycycle'
-import { heightAt, MAX_SLOPE, slopeAt } from './world/terrain'
+import { MAX_SLOPE } from './world/terrain'
 
 const SPOT_ATTEMPTS = 24
 
@@ -61,9 +61,9 @@ export interface WorldEventsState {
 }
 
 /** Hierba y poco inclinado: ni en la playa ni en la montaña. */
-function isGrass(x: number, z: number) {
-  const biome = biomeAt(x, z)
-  return (biome === 'meadow' || biome === 'forest') && slopeAt(x, z) <= MAX_SLOPE
+function isGrass(island: Island, x: number, z: number) {
+  const biome = island.biomeAt(x, z)
+  return (biome === 'meadow' || biome === 'forest') && island.slopeAt(x, z) <= MAX_SLOPE
 }
 
 /**
@@ -84,6 +84,7 @@ export class WorldEvents {
     private rng: () => number = Math.random,
     private emit: Emit = NO_EMIT,
     private guardians: MeteorGuardian = NO_GUARDIAN,
+    private island: Island = DEFAULT_ISLAND,
   ) {}
 
   /**
@@ -122,7 +123,7 @@ export class WorldEvents {
       const angle = this.rng() * Math.PI * 2
       const r = METEOR_SPAWN_MIN + this.rng() * (METEOR_SPAWN_MAX - METEOR_SPAWN_MIN)
       const pos = { x: around.pos.x + Math.cos(angle) * r, z: around.pos.z + Math.sin(angle) * r }
-      if (!isGrass(pos.x, pos.z)) continue
+      if (!isGrass(this.island, pos.x, pos.z)) continue
       const { x, z } = pos
       if (!this.grids.some((grid) => resolveCircle(pos, METEOR_BLAST, grid))) return { x, z }
     }
@@ -133,7 +134,7 @@ export class WorldEvents {
   fall(tick: number, x: number, z: number) {
     if (this.meteor) this.clearMeteor()
     this.fallPhase = null
-    const y = heightAt(x, z)
+    const y = this.island.heightAt(x, z)
     const landTick = tick + Math.round(METEOR_WARNING / STEP)
     this.add({ x, y, z, landTick })
     this.emit({ type: 'meteorIncoming', x, y, z, landTick })

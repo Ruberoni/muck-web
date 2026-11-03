@@ -226,7 +226,8 @@ export class PropView {
   private berries: Int8Array
   private destroyed: Uint8Array
   private scratch = new THREE.Matrix4()
-  private placements: readonly PropPlacement[]
+  /** Las colocaciones de las que sale (Game la rehace si la isla cambia). */
+  readonly placements: readonly PropPlacement[]
   /** Con los modelos: los meshes que se han añadido, qué versión se ve de cada prop y desde dónde se miró. */
   private modelMeshes: THREE.InstancedMesh[] = []
   private modelMaterials: THREE.Material[] = []

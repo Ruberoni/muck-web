@@ -1,6 +1,6 @@
 import type { Collider, SpatialGrid } from './collision'
-import { biomeAt } from './world/biomes'
-import { heightAt, MAX_SLOPE, slopeAt, WORLD_SIZE } from './world/terrain'
+import { DEFAULT_ISLAND, type Island } from './world/island'
+import { MAX_SLOPE, WORLD_SIZE } from './world/terrain'
 
 /** Radios de lo que ya viene puesto en la isla: los usan la colisión y la búsqueda de sitio. */
 export const LIGHTHOUSE_RADIUS = 6.2
@@ -26,12 +26,12 @@ const isClear = (grid: SpatialGrid<Collider>, x: number, z: number, radius: numb
 }
 
 /** El sitio de mayor `score` con `radius` metros libres; `score` devuelve null donde no vale. */
-function bestSpot(grid: SpatialGrid<Collider>, radius: number, score: (x: number, z: number) => number | null): Spot | null {
+function bestSpot(island: Island, grid: SpatialGrid<Collider>, radius: number, score: (x: number, z: number) => number | null): Spot | null {
   let best: Spot | null = null
   let bestScore = -Infinity
   for (let x = -SEARCH_RADIUS; x <= SEARCH_RADIUS; x += SEARCH_STEP) {
     for (let z = -SEARCH_RADIUS; z <= SEARCH_RADIUS; z += SEARCH_STEP) {
-      if (Math.hypot(x, z) > SEARCH_RADIUS || slopeAt(x, z) > MAX_SLOPE) continue
+      if (Math.hypot(x, z) > SEARCH_RADIUS || island.slopeAt(x, z) > MAX_SLOPE) continue
       const value = score(x, z)
       if (value === null || value <= bestScore || !isClear(grid, x, z, radius + CLEARANCE)) continue
       best = { x, z }
@@ -45,16 +45,16 @@ function bestSpot(grid: SpatialGrid<Collider>, radius: number, score: (x: number
  * Dónde están el faro y el tótem, los mismos en toda partida de esta isla: el faro en lo más alto que quede libre, para
  * verse desde todas partes, y el tótem en bosque o pradera, lo más lejos posible del faro y del punto de aparición.
  */
-export function findLandmarks(grid: SpatialGrid<Collider>, spawn: Spot): { lighthouse: Spot; totem: Spot } {
+/** `found`: si hay sitio para los dos; si no, quedan junto al punto de aparición (una isla así no se juega, ver islands.ts). */
+export function findLandmarks(grid: SpatialGrid<Collider>, spawn: Spot, island: Island = DEFAULT_ISLAND): { lighthouse: Spot; totem: Spot; found: boolean } {
   const fromSpawn = (x: number, z: number) => Math.hypot(x - spawn.x, z - spawn.z)
-  const lighthouse = bestSpot(grid, LIGHTHOUSE_RADIUS, (x, z) => (fromSpawn(x, z) < LIGHTHOUSE_RADIUS + SPAWN_GAP ? null : heightAt(x, z))) ?? {
-    x: spawn.x + LIGHTHOUSE_RADIUS + SPAWN_GAP,
-    z: spawn.z,
-  }
-  const totem = bestSpot(grid, TOTEM_RADIUS, (x, z) => {
-    const biome = biomeAt(x, z)
+  const lighthouseSpot = bestSpot(island, grid, LIGHTHOUSE_RADIUS, (x, z) => (fromSpawn(x, z) < LIGHTHOUSE_RADIUS + SPAWN_GAP ? null : island.heightAt(x, z)))
+  const lighthouse = lighthouseSpot ?? { x: spawn.x + LIGHTHOUSE_RADIUS + SPAWN_GAP, z: spawn.z }
+  const totemSpot = bestSpot(island, grid, TOTEM_RADIUS, (x, z) => {
+    const biome = island.biomeAt(x, z)
     if (biome !== 'forest' && biome !== 'meadow') return null
     return Math.min(fromSpawn(x, z), Math.hypot(x - lighthouse.x, z - lighthouse.z))
-  }) ?? { x: spawn.x - TOTEM_RADIUS - SPAWN_GAP, z: spawn.z }
-  return { lighthouse, totem }
+  })
+  const totem = totemSpot ?? { x: spawn.x - TOTEM_RADIUS - SPAWN_GAP, z: spawn.z }
+  return { lighthouse, totem, found: lighthouseSpot !== null && totemSpot !== null }
 }

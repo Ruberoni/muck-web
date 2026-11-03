@@ -1,7 +1,8 @@
 import { MOB_MAX_SPEED, NO_SCALING, type MobScaling } from './threat'
-import { biomeAt, type Biome } from './world/biomes'
+import type { Biome } from './world/biomes'
+import { DEFAULT_ISLAND, type Island } from './world/island'
 import { DAY_FRACTION, DAY_LENGTH, isNight } from './world/daycycle'
-import { heightAt, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
+import { WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import {
@@ -179,7 +180,7 @@ export function spawnType(roll: number, day: number, biome: Biome): EnemyType {
 }
 
 /** No se mueve a agua profunda: si el jugador nada lejos de la orilla, lo esperan en ella. */
-const walkable = (x: number, z: number) => heightAt(x, z) >= WATER_LEVEL - WADE_DEPTH
+const walkable = (island: Island, x: number, z: number) => island.heightAt(x, z) >= WATER_LEVEL - WADE_DEPTH
 
 /** Enemigos: aparecen de noche y siguen hasta que los matan. Aparición, persecución, ataque y golpes recibidos. */
 export class Enemies {
@@ -195,12 +196,16 @@ export class Enemies {
   /** Lo que atrae a todos los mobs comunes, en vez de los jugadores: el avión con el motor en marcha. */
   decoy: EnemyPrey | null = null
 
-  /** `grids`: obstáculos que rodean (props, estructuras…). `throwRock`: lo que vuela va por los proyectiles de la partida. */
+  /**
+   * `grids`: obstáculos que rodean (props, estructuras…). `throwRock`: lo que vuela va por los proyectiles de la partida.
+   * `island`: el suelo, que dice dónde se puede andar y aparecer.
+   */
   constructor(
     private grids: SpatialGrid<Collider>[],
     private rng: () => number = Math.random,
     private emit: Emit = NO_EMIT,
     private throwRock: ThrowRock = () => {},
+    private island: Island = DEFAULT_ISLAND,
   ) {}
 
   /**
@@ -216,7 +221,7 @@ export class Enemies {
         if (prey.length && count < enemyCapFor(day, players.length)) {
           // Por turnos: cada aparición elige a un jugador vivo distinto.
           const around = prey[this.spawnTurn++ % prey.length]
-          this.trySpawn(around, prey, ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX, (x, z) => spawnType(this.rng(), day, biomeAt(x, z)))
+          this.trySpawn(around, prey, ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX, (x, z) => spawnType(this.rng(), day, this.island.biomeAt(x, z)))
         }
         this.spawnTimer = spawnIntervalFor(players.length) * this.scaling.spawnInterval
       }
@@ -397,7 +402,7 @@ export class Enemies {
       c.state = 'idle'
       this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
       this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
-      this.throwRock({ x: e.pos.x, y: heightAt(e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, damage)
+      this.throwRock({ x: e.pos.x, y: this.island.heightAt(e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, damage)
       return
     }
     if (c.cooldown <= 1e-9 && dist <= def.range) {
@@ -414,8 +419,8 @@ export class Enemies {
   /** Cada eje por separado, para que resbale por la orilla en vez de pararse. */
   private move(e: EnemyData, mx: number, mz: number) {
     const { x, z } = e.pos
-    if (walkable(e.pos.x + mx, e.pos.z)) e.pos.x += mx
-    if (walkable(e.pos.x, e.pos.z + mz)) e.pos.z += mz
+    if (walkable(this.island, e.pos.x + mx, e.pos.z)) e.pos.x += mx
+    if (walkable(this.island, e.pos.x, e.pos.z + mz)) e.pos.z += mz
     const r = Math.hypot(e.pos.x, e.pos.z)
     if (r > BOUND) {
       e.pos.x *= BOUND / r
@@ -427,7 +432,7 @@ export class Enemies {
   /** Lo saca de los props; si eso lo empuja al agua profunda, vuelve a (x, z). */
   private settle(e: EnemyData, x: number, z: number) {
     for (const grid of this.grids) resolveCircle(e.pos, ENEMY_DEFS[e.type].radius, grid)
-    if (!walkable(e.pos.x, e.pos.z)) {
+    if (!walkable(this.island, e.pos.x, e.pos.z)) {
       e.pos.x = x
       e.pos.z = z
     }
@@ -480,7 +485,7 @@ export class Enemies {
       const r = min + this.rng() * (max - min)
       const x = around.pos.x + Math.cos(angle) * r
       const z = around.pos.z + Math.sin(angle) * r
-      if (Math.hypot(x, z) > BOUND || heightAt(x, z) < WATER_LEVEL + 0.2) continue
+      if (Math.hypot(x, z) > BOUND || this.island.heightAt(x, z) < WATER_LEVEL + 0.2) continue
       if (prey.some((p) => p !== around && Math.hypot(p.pos.x - x, p.pos.z - z) < min)) continue
       const type = pick(x, z)
       const pos = { x, z }

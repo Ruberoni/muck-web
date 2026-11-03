@@ -18,7 +18,8 @@ import {
   TRUNK_TOP_RADIUS,
   type PropPlacement,
 } from './props'
-import { heightAt } from './world/terrain'
+import { DEFAULT_ISLAND } from './world/island'
+import type { Terrain } from './world/terrain'
 
 // Cuerpo del enemigo: un icosaedro estirado sobre el suelo, y el modelo entero escalado (ENEMY_DEFS[tipo].scale).
 // Los cuernos, los pies y los ojos son detalles de la vista y no cuentan para apuntar.
@@ -175,10 +176,10 @@ export function createPropHitboxes(placements: readonly PropPlacement[]): PropHi
 }
 
 /** Hitbox de un enemigo de tipo `type` en (x, z) mirando a `yaw`, sobre el suelo: sin el bote al andar ni la embestida. */
-export function enemyHitbox(x: number, z: number, yaw: number, type: EnemyType, out?: Hitbox): Hitbox {
+export function enemyHitbox(x: number, z: number, yaw: number, type: EnemyType, out?: Hitbox, terrain: Terrain = DEFAULT_ISLAND): Hitbox {
   const box = out ?? { x, y: 0, z, cosX: 1, sinX: 0, cosY: 1, sinY: 0, sx: 1, sy: 1, sz: 1, parts: ENEMY_SHAPE }
   box.x = x
-  box.y = heightAt(x, z)
+  box.y = terrain.heightAt(x, z)
   box.z = z
   box.cosY = Math.cos(yaw)
   box.sinY = Math.sin(yaw)
@@ -247,6 +248,7 @@ export function pickTarget<P extends Collider & { id: number }, E extends { aliv
   hitboxes: PropHitboxes,
   enemies: Iterable<E>,
   far = REACH,
+  terrain: Terrain = DEFAULT_ISLAND,
 ): P | E | null {
   let best: P | E | null = null
   let bestDistance = far
@@ -260,7 +262,7 @@ export function pickTarget<P extends Collider & { id: number }, E extends { aliv
   }
   for (const enemy of enemies) {
     if (!enemy.alive) continue
-    const d = rayDistance(ray, enemyHitbox(enemy.pos.x, enemy.pos.z, enemy.yaw, enemy.type, ENEMY_BOX))
+    const d = rayDistance(ray, enemyHitbox(enemy.pos.x, enemy.pos.z, enemy.yaw, enemy.type, ENEMY_BOX, terrain))
     if (d <= bestDistance) {
       best = enemy
       bestDistance = d

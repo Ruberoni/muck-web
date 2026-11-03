@@ -1,4 +1,5 @@
-import { heightAt, WATER_LEVEL } from './world/terrain'
+import { WATER_LEVEL } from './world/terrain'
+import { DEFAULT_ISLAND, type Island } from './world/island'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import { DROP_PICKUP_DELAY, GRAVITY, PICKUP_DELAY, PICKUP_MAGNET, PICKUP_MAGNET_SPEED, PICKUP_RADIUS } from './constants'
@@ -71,15 +72,15 @@ const copyPickup = (p: Pickup): Pickup => ({ ...p, pos: { ...p.pos }, prev: { ..
 const SHORE_STEP = 2
 const SHORE_RANGE = 300
 const SHORE_ANGLES = 16
-const groundAt = (x: number, z: number) => Math.max(heightAt(x, z), WATER_LEVEL)
+const groundAt = (island: Island, x: number, z: number) => Math.max(island.heightAt(x, z), WATER_LEVEL)
 
 /** La tierra más cercana a (x, z), buscando en anillos. */
-function shoreNear(x: number, z: number): { x: number; z: number } {
+function shoreNear(island: Island, x: number, z: number): { x: number; z: number } {
   for (let r = SHORE_STEP; r < SHORE_RANGE; r += SHORE_STEP) {
     for (let i = 0; i < SHORE_ANGLES; i++) {
       const angle = (i / SHORE_ANGLES) * Math.PI * 2
       const spot = { x: x + Math.cos(angle) * r, z: z + Math.sin(angle) * r }
-      if (heightAt(spot.x, spot.z) > WATER_LEVEL + 0.2) return spot
+      if (island.heightAt(spot.x, spot.z) > WATER_LEVEL + 0.2) return spot
     }
   }
   return { x: 0, z: 0 }
@@ -93,11 +94,12 @@ export class Pickups {
   readonly list: Pickup[] = []
   private nextId = 0
 
-  /** `grids`: obstáculos de los que se apartan al caer (props, estructuras…). */
+  /** `grids`: obstáculos de los que se apartan al caer (props, estructuras…). `island`: el suelo donde caen. */
   constructor(
     private grids: SpatialGrid<Collider>[] = [],
     private rng: () => number = Math.random,
     private emit: Emit = NO_EMIT,
+    private island: Island = DEFAULT_ISLAND,
   ) {}
 
   /** Suelta `amount` piezas de una unidad de `item` desde (x, y, z), repartidas alrededor. */
@@ -202,7 +204,7 @@ export class Pickups {
       const move = Math.min(PICKUP_MAGNET_SPEED * dt, claim.d)
       p.pos.x += ((c.pos.x - p.pos.x) / claim.d) * move
       p.pos.z += ((c.pos.z - p.pos.z) / claim.d) * move
-      p.pos.y = groundAt(p.pos.x, p.pos.z)
+      p.pos.y = groundAt(this.island, p.pos.x, p.pos.z)
     }
     return results
   }
@@ -213,15 +215,15 @@ export class Pickups {
     p.pos.y += p.vel.y * dt
     p.pos.z += p.vel.z * dt
     for (const grid of this.grids) resolveCircle(p.pos, RADIUS, grid)
-    const ground = groundAt(p.pos.x, p.pos.z)
+    const ground = groundAt(this.island, p.pos.x, p.pos.z)
     if (p.pos.y > ground) return
     p.pos.y = ground
     p.vel.x = p.vel.y = p.vel.z = 0
     p.grounded = true
     // Lo imprescindible no se pierde en el agua: aparece en la orilla.
-    if (heightAt(p.pos.x, p.pos.z) < WATER_LEVEL && KEY_ITEMS.includes(p.item)) {
-      Object.assign(p.pos, shoreNear(p.pos.x, p.pos.z))
-      p.pos.y = groundAt(p.pos.x, p.pos.z)
+    if (this.island.heightAt(p.pos.x, p.pos.z) < WATER_LEVEL && KEY_ITEMS.includes(p.item)) {
+      Object.assign(p.pos, shoreNear(this.island, p.pos.x, p.pos.z))
+      p.pos.y = groundAt(this.island, p.pos.x, p.pos.z)
     }
   }
 

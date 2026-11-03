@@ -1,17 +1,18 @@
 import * as THREE from 'three'
-import { heightAt, WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
+import type { Island } from '../sim/world/island'
+import { WATER_LEVEL, WORLD_SIZE } from '../sim/world/terrain'
 import { biomeBlend, terrainColor } from './ground'
 
 const SEGMENTS = 80
 
-export function createTerrain(): THREE.Mesh {
+export function createTerrain(island: Island): THREE.Mesh {
   const indexed = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, SEGMENTS, SEGMENTS)
   // Rotar la geometría (no el mesh) para que cada vértice quede en (x, z) del mundo.
   indexed.rotateX(-Math.PI / 2)
 
   const pos = indexed.attributes.position
   for (let i = 0; i < pos.count; i++) {
-    pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)))
+    pos.setY(i, island.heightAt(pos.getX(i), pos.getZ(i)))
   }
 
   // No indexada: cada triángulo tiene sus propios vértices y un único color.
@@ -29,7 +30,7 @@ export function createTerrain(): THREE.Mesh {
     const avgY = (position.getY(i) + position.getY(i + 1) + position.getY(i + 2)) / 3
     const avgZ = (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3
     const steep = normal.getY(i) < 0.8
-    const [r, g, b] = terrainColor(avgY, steep, biomeBlend(avgX, avgZ, avgY))
+    const [r, g, b] = terrainColor(avgY, steep, biomeBlend(island, avgX, avgZ, avgY))
     color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
 
     for (let v = 0; v < 3; v++) color.toArray(colors, (i + v) * 3)
