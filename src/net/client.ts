@@ -125,6 +125,12 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
 const MAX_SPAN = 6
 /** Muerto (espectador): `cmds` a 1 Hz, para no contar como ausente y que el mundo siga hasta que reaparezca (§5.2). */
 export const SPECTATOR_SEND_MS = 1000
+/**
+ * Sin frames más que esto (la ventana tapada sin llegar a ocultarse, un cuelgue), al volver no se predice el hueco: es lo
+ * que tarda la sala en dar a alguien por ausente (ABSENT_MS, server/room.ts) y, si paró por eso, no recupera ese tiempo;
+ * el cliente quedaría tan por delante que dejaría de enviar. Con huecos más cortos (un frame por segundo) se pone al día.
+ */
+export const STALL_MS = 2000
 
 const sameAim = (a: TargetRef | null | undefined, b: TargetRef | null | undefined) => a === b || (!!a && !!b && a.kind === b.kind && a.id === b.id)
 const sameMove = (a: Omit<Move, 'tick'>, b: Omit<Move, 'tick'>) => a.buttons === b.buttons && a.yaw === b.yaw && a.pitch === b.pitch
@@ -264,9 +270,15 @@ export class NetClient {
   /** Ticks que hay que predecir ahora con `step`; 0 sin conexión, en pausa o esperando el estado. */
   advance(): number {
     const now = this.time.now()
+    const gap = this.lastFrame > 0 ? now - this.lastFrame : 0
     this.predictor?.decay(now - this.lastFrame)
     this.lastFrame = now
     if (!this.active) return 0
+    // Como al volver de la pausa: lo de antes del parón se descarta y se espera al estado completo.
+    if (gap > STALL_MS) {
+      this.resync()
+      return 0
+    }
     const predictor = this.predictor!
     const due = this.clock.advance(now)
     // Los que el reloj se salta los rellena la predicción; los ya predichos (tras adoptar un estado) no se repiten.
@@ -342,6 +354,10 @@ export class NetClient {
   wake() {
     if (!this.suspended) return
     this.suspended = false
+    this.resync()
+  }
+
+  private resync() {
     if (this.state !== 'online') return
     this.awaitingState = true
     this.presentation.clear()

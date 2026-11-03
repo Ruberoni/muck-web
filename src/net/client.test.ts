@@ -505,6 +505,39 @@ describe('el espejo de NetClient', () => {
     expect(a.predictor!.stats.corrections).toBe(0)
   })
 
+  it('tras un parón de frames sin pausa (la ventana tapada) pide el estado y sigue, en vez de adelantarse y atascarse', () => {
+    const { room, time, connect } = setup()
+    const { client, transport } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const resyncs: string[] = []
+    const send = transport.send.bind(transport)
+    transport.send = (data) => {
+      if (data.includes('"resync"')) resyncs.push(data)
+      send(data)
+    }
+    // Sin frames y sin `suspend`: el servidor lo da por ausente y para el bucle.
+    time.advance(10_000)
+    expect(room.sim!.slot(client.id).connection).toBe('absent')
+    run(time, 3000, [[client, idle]])
+    expect(resyncs).toHaveLength(1)
+    expect(room.sim!.slot(client.id).connection).toBe('present')
+    // Va justo por delante del servidor, no los diez segundos del parón.
+    expect(client.predictor!.tick - room.sim!.tick).toBeLessThan(40)
+    const reconciled = client.predictor!.stats.reconciled
+    run(time, 2000, [[client, idle]])
+    expect(client.predictor!.stats.reconciled).toBeGreaterThan(reconciled + 20)
+    // Con un frame cada segundo (la pestaña frenada) no pide nada: se pone al día y sigue presente.
+    for (let i = 0; i < 6; i++) {
+      time.advance(1000)
+      const ticks = client.advance()
+      for (let t = 0; t < ticks; t++) client.step(idle(client.predictor!.tick + 1))
+      client.flush()
+      client.render()
+    }
+    expect(resyncs).toHaveLength(1)
+    expect(room.sim!.slot(client.id).connection).toBe('present')
+  })
+
   it('el pez: los espejos saben a quién ronda y cuándo se va, y quien entra después también', () => {
     const { room, time, connect } = setup()
     const { client: a } = connect('a', 'create')
