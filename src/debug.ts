@@ -263,6 +263,12 @@ export function installDebug(game: Game) {
       if (!valid(from) || !valid(to)) throw new Error(`casillas fuera de rango: ${from}, ${to}`)
       game.queueAction({ kind: 'move', from, to })
     },
+    /** Se pone el peto o el escudo de la casilla `slot` (en red, lo manda como cualquier acción). */
+    equip: (slot: number) => game.queueAction({ kind: 'equip', slot }),
+    /** Se quita lo del hueco `which` al inventario. */
+    unequip: (which: 'chest' | 'shield') => game.queueAction({ kind: 'unequip', which }),
+    /** Lo que lleva puesto. */
+    equipped: () => ({ ...inventory().equipped }),
     /** Tira uno de la casilla `slot` del inventario (0–8 hotbar, 9–26 mochila), o la pila entera con `all` (Q y Ctrl + Q). */
     drop: (slot: number, all = false) => {
       // En red, una casilla fuera de rango hace que la sala expulse al jugador.
