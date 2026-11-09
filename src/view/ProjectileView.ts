@@ -8,12 +8,15 @@ const geometries: Record<ProjectileKind, THREE.BufferGeometry> = {
   boulder: new THREE.IcosahedronGeometry(PROJECTILE_DEFS.boulder.radius, 0),
   // Un trasgo hecho una bola, dando vueltas.
   goblin: new THREE.IcosahedronGeometry(PROJECTILE_DEFS.goblin.radius, 0).scale(1, 1.2, 0.9),
+  // Una esquirla de cristal, alargada.
+  shard: new THREE.OctahedronGeometry(PROJECTILE_DEFS.shard.radius, 0).scale(0.7, 0.7, 1.8),
 }
 // Un poco de emisivo para que se vea venir de noche.
 const materials: Record<ProjectileKind, THREE.Material> = {
   rock: new THREE.MeshStandardMaterial({ color: '#8a877c', emissive: '#3a3226', flatShading: true }),
   boulder: new THREE.MeshStandardMaterial({ color: '#6f6a5e', emissive: '#4a2410', flatShading: true }),
   goblin: new THREE.MeshStandardMaterial({ color: '#9558bd', emissive: '#2b1240', flatShading: true }),
+  shard: new THREE.MeshStandardMaterial({ color: '#bfe8ff', emissive: '#3a8fc4', flatShading: true }),
 }
 
 /** Lo que vuela. Sigue la lista de la simulación en cada frame: crea el modelo de los nuevos y quita los que ya no están. */

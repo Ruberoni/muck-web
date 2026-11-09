@@ -11,7 +11,7 @@ const PULSE = 6
 /** Segundos que se ve el golpe de una zona al caer. */
 const BURST_TIME = 0.35
 
-const COLORS: Record<HazardLook, string> = { stomp: '#ffb13b', rock: '#ff3b2f', fire: '#ff6a1f', light: '#fff2b0', crystal: '#9fd8ff' }
+const COLORS: Record<HazardLook, string> = { stomp: '#ffb13b', rock: '#ff3b2f', fire: '#ff6a1f', light: '#fff2b0', crystal: '#2fb4ff' }
 
 const discGeometry = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2)
 const ringGeometry = new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2)

@@ -27,6 +27,7 @@ import {
   ENEMY_TYPES,
   PLAYER_RADIUS,
   SHELL_RESIST,
+  SHELL_BROKEN_PACE,
   SPAWN_WARN,
   SPECIAL_GAP,
   STEP,
@@ -415,7 +416,7 @@ export class Enemies {
     if (!ready) return false
     s.id = ready.id
     s.time = ready.windup
-    s.cooldowns[ready.id] = ready.cooldown
+    s.cooldowns[ready.id] = ready.cooldown * (ENEMY_DEFS[e.type].shell && e.shell <= 0 ? SHELL_BROKEN_PACE : 1)
     this.emit({ type: 'enemyCharge', id: e.id, state: ready.look })
     this.emit({ type: 'enemySpecial', id: e.id, attack: ready.id })
     return true

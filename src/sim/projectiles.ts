@@ -7,7 +7,7 @@ import { DEFAULT_ISLAND, type Island } from './world/island'
 type Vec3 = { x: number; y: number; z: number }
 
 /** La roca del lanzarrocas; la roca gorda, que estalla al caer; y el trasgo que lanza el gigante, que se levanta. */
-export type ProjectileKind = 'rock' | 'boulder' | 'goblin'
+export type ProjectileKind = 'rock' | 'boulder' | 'goblin' | 'shard'
 /** Con qué chocó un proyectil; `expired` si se le acabó el tiempo sin tocar nada. */
 export type ProjectileEnd = 'player' | 'obstacle' | 'ground' | 'expired'
 
@@ -16,6 +16,7 @@ export const PROJECTILE_DEFS: Record<ProjectileKind, { radius: number; life: num
   rock: { radius: 0.3, life: 5 },
   boulder: { radius: 0.6, life: 6 },
   goblin: { radius: 0.45, life: 6 },
+  shard: { radius: 0.25, life: 4 },
 }
 
 /** Lo que pasa donde acaba un proyectil (la roca gorda estalla, el trasgo se levanta): lo hace la simulación. */

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { DAZED_DAMAGE, ENEMY_DEFS, SPECIAL_GAP, STEP } from './constants'
+import { DAZED_DAMAGE, ENEMY_DEFS, SHELL_BROKEN_PACE, SPECIAL_GAP, STEP } from './constants'
 import { Enemies } from './enemies'
 import { Hazards, ticks } from './hazards'
 import { mulberry32 } from './random'
 import type { SimEventData } from './events'
+import { Simulation } from './Simulation'
 
 const at = (x: number, z: number, grounded = true) => ({ id: 0, pos: { x, z }, alive: true, grounded })
 
@@ -62,5 +63,87 @@ describe('los peligros de los jefes', () => {
     }
     expect(specials).toEqual(['stomp'])
     expect(events.some((e) => e.type === 'enemySpecial')).toBe(true)
+  })
+})
+
+describe('los ataques del guardián y del Coloso', () => {
+  /** Un jefe a `distance` metros del jugador, quieto: hasta su primer ataque especial; devuelve cuál y lo que deja. */
+  const first = (type: 'guardian' | 'colossus', distance: number) => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player } = sim.slot(0)
+    const boss = sim.enemies.spawnAt(player.pos.x + distance, player.pos.z, type)
+    let attack: string | null = null
+    for (let i = 0; i < ticks(4) && !attack; i++) {
+      Object.assign(player, { health: 100 })
+      for (const e of sim.step(new Map())) if (e.type === 'enemySpecial') attack = e.attack
+    }
+    const def = ENEMY_DEFS[type].specials!.find((s) => s.id === attack)!
+    for (let i = 0; i < ticks(def.windup) + 1; i++) sim.step(new Map())
+    return { sim, boss, player, attack, hazards: sim.hazards.list, projectiles: sim.projectiles.list }
+  }
+
+  it('el guardián, pegado, suelta un anillo de fuego que se esquiva saltando', () => {
+    const { attack, hazards } = first('guardian', 2.5)
+    expect(attack).toBe('fireRing')
+    expect(hazards).toHaveLength(1)
+    expect(hazards[0]).toMatchObject({ look: 'fire', ring: { speed: expect.any(Number) } })
+  })
+
+  it('el guardián, de lejos, prende tres charcos alrededor del jugador que queman a pulsos', () => {
+    const { attack, hazards, player } = first('guardian', 10)
+    expect(attack).toBe('burningGround')
+    expect(hazards).toHaveLength(3)
+    for (const h of hazards) {
+      expect(h).toMatchObject({ look: 'fire', pulse: ticks(0.5) })
+      expect(Math.hypot(h.x - player.pos.x, h.z - player.pos.z)).toBeLessThan(6)
+      expect((h.endTick - h.hitTick) * STEP).toBeCloseTo(5)
+    }
+  })
+
+  it('el Coloso, pegado, avisa y estalla a su alrededor', () => {
+    const { attack, hazards, boss } = first('colossus', 2.5)
+    expect(attack).toBe('pulse')
+    expect(hazards).toHaveLength(1)
+    expect(hazards[0]).toMatchObject({ look: 'crystal', x: boss.pos.x, z: boss.pos.z })
+    expect(hazards[0].hitTick).toBeGreaterThan(hazards[0].startTick)
+  })
+
+  it('el Coloso levanta una fila de pilares hacia el jugador, uno tras otro', () => {
+    const { attack, hazards, boss, player } = first('colossus', 10)
+    expect(attack).toBe('pillars')
+    expect(hazards).toHaveLength(6)
+    const toward = Math.atan2(player.pos.z - boss.pos.z, player.pos.x - boss.pos.x)
+    for (let i = 0; i < hazards.length; i++) {
+      const h = hazards[i]
+      expect(Math.atan2(h.z - boss.pos.z, h.x - boss.pos.x)).toBeCloseTo(toward, 1)
+      if (i) expect(h.hitTick).toBeGreaterThan(hazards[i - 1].hitTick)
+    }
+  })
+
+  it('el Coloso lanza un abanico de cinco esquirlas, la del centro hacia el jugador', () => {
+    const { attack, projectiles } = first('colossus', 18)
+    expect(attack).toBe('shardFan')
+    expect(projectiles.filter((p) => p.kind === 'shard')).toHaveLength(5)
+  })
+
+  it('el haz de luz apunta 2 s y cae donde estaba el jugador al acabar, 0,8 s después', () => {
+    const { attack, hazards, player } = first('colossus', 26)
+    expect(attack).toBe('lightBeam')
+    expect(hazards).toHaveLength(1)
+    expect(hazards[0]).toMatchObject({ look: 'light' })
+    expect(Math.hypot(hazards[0].x - player.pos.x, hazards[0].z - player.pos.z)).toBeLessThan(0.01)
+    expect((hazards[0].hitTick - hazards[0].startTick) * STEP).toBeCloseTo(0.8, 1)
+  })
+
+  it('con la coraza rota, el Coloso repite antes', () => {
+    const cooldownAfter = (broken: boolean) => {
+      const enemies = new Enemies([], mulberry32(1), undefined, undefined, undefined, () => {})
+      const boss = enemies.spawnAt(0, 0, 'colossus')
+      if (broken) boss.shell = 0
+      enemies.step(STEP, [{ id: 0, pos: { x: 2.5, z: 0 }, alive: true }], 0.3, 1)
+      return boss.special.cooldowns.pulse!
+    }
+    expect(cooldownAfter(true) / cooldownAfter(false)).toBeCloseTo(SHELL_BROKEN_PACE, 2)
   })
 })

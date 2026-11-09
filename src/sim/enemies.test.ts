@@ -600,6 +600,8 @@ describe('guardián', () => {
   beforeEach(() => {
     enemies = new Enemies([], mulberry32(7))
     guardian = enemies.spawnAt(spot.x, spot.z, 'guardian')
+    // Cómo se mueve y pega: sus ataques especiales se prueban en hazards.test.ts.
+    guardian.special.gap = 1e9
     player = { x: spot.x + aggro + 5, z: spot.z }
   })
 

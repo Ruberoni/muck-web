@@ -77,6 +77,37 @@ const BOULDER_SPEED = 9
 const BOULDER_DAMAGE = 25
 const BOULDER_BLAST = 3
 const BOULDER_BLAST_DAMAGE = 15
+const FIRE_RING_RADIUS = 9
+const FIRE_RING_SPEED = 8
+const FIRE_RING_WIDTH = 1.4
+const FIRE_RING_DAMAGE = 18
+const LIGHTNING_RADIUS = 1.6
+const LIGHTNING_WARNING = 0.9
+const LIGHTNING_DAMAGE = 25
+const BURN_POOLS = 3
+const BURN_RADIUS = 2.2
+const BURN_WARNING = 0.8
+const BURN_TIME = 5
+const BURN_EVERY = 0.5
+const BURN_DAMAGE = 4
+const PULSE_RADIUS = 4.5
+const PULSE_WARNING = 0.5
+const PULSE_DAMAGE = 25
+const PILLARS = 6
+const PILLAR_FIRST = 2
+const PILLAR_SPACING = 2.2
+const PILLAR_RADIUS = 1.3
+const PILLAR_WARNING = 0.7
+const PILLAR_DELAY = 0.12
+const PILLAR_DAMAGE = 20
+const SHARDS = 5
+/** Ángulo entre la primera y la última esquirla del abanico. */
+const SHARD_SPREAD = 1
+const SHARD_SPEED = 16
+const SHARD_DAMAGE = 12
+const BEAM_RADIUS = 2.2
+const BEAM_WARNING = 0.8
+const BEAM_DAMAGE = 35
 /** Lo que se aparta el puesto del mercader del faro y del tótem (desde su borde). */
 const MERCHANT_GAP = 25
 /** Altura sobre el suelo desde la que sale una roca lanzada. */
@@ -566,6 +597,57 @@ export class Simulation {
       case 'boulder': {
         const from = { x, y: floor + 3.2, z }
         this.projectiles.launch(this.tick, 'boulder', from, aimedVelocity(from, aim(0.3), BOULDER_SPEED), BOULDER_DAMAGE)
+        break
+      }
+      case 'fireRing':
+        this.hazards.add({ look: 'fire', x, z, radius: FIRE_RING_RADIUS, startTick: this.tick, hitTick: this.tick, damage: FIRE_RING_DAMAGE, ring: { speed: FIRE_RING_SPEED, width: FIRE_RING_WIDTH } })
+        break
+      case 'lightning':
+      case 'lightBeam': {
+        // Donde está al acabar el aviso: el que se queda quieto se lo come.
+        const beam = id === 'lightBeam'
+        const warning = beam ? BEAM_WARNING : LIGHTNING_WARNING
+        this.hazards.add({ look: 'light', x: target.pos.x, z: target.pos.z, radius: beam ? BEAM_RADIUS : LIGHTNING_RADIUS, startTick: this.tick, hitTick: this.tick + ticks(warning), damage: beam ? BEAM_DAMAGE : LIGHTNING_DAMAGE })
+        break
+      }
+      case 'burningGround':
+        // Uno donde está y los demás alrededor, repartidos: arden BURN_TIME segundos y queman cada BURN_EVERY.
+        for (let i = 0; i < BURN_POOLS; i++) {
+          const angle = this.rng() * Math.PI * 2
+          const r = i === 0 ? 0 : 3 + this.rng() * 2
+          const hitTick = this.tick + ticks(BURN_WARNING)
+          const at = { x: target.pos.x + Math.cos(angle) * r, z: target.pos.z + Math.sin(angle) * r }
+          this.hazards.add({ look: 'fire', ...at, radius: BURN_RADIUS, startTick: this.tick, hitTick, endTick: hitTick + ticks(BURN_TIME), pulse: ticks(BURN_EVERY), damage: BURN_DAMAGE })
+        }
+        break
+      case 'pulse':
+        this.hazards.add({ look: 'crystal', x, z, radius: PULSE_RADIUS, startTick: this.tick, hitTick: this.tick + ticks(PULSE_WARNING), damage: PULSE_DAMAGE })
+        break
+      case 'pillars': {
+        // En fila hacia donde está, uno tras otro desde el Coloso: se esquiva de lado.
+        const dx = target.pos.x - x
+        const dz = target.pos.z - z
+        const length = Math.hypot(dx, dz) || 1
+        for (let i = 0; i < PILLARS; i++) {
+          const d = PILLAR_FIRST + i * PILLAR_SPACING
+          const hitTick = this.tick + ticks(PILLAR_WARNING + i * PILLAR_DELAY)
+          this.hazards.add({ look: 'crystal', x: x + (dx / length) * d, z: z + (dz / length) * d, radius: PILLAR_RADIUS, startTick: this.tick, hitTick, damage: PILLAR_DAMAGE })
+        }
+        break
+      }
+      case 'shardFan': {
+        // Cinco abiertas en abanico, la del centro hacia el jugador: entre dos hay hueco.
+        const from = { x, y: floor + 2.4, z }
+        const to = aim(0.9)
+        const dx = to.x - x
+        const dz = to.z - z
+        for (let i = 0; i < SHARDS; i++) {
+          const a = (i / (SHARDS - 1) - 0.5) * SHARD_SPREAD
+          const cos = Math.cos(a)
+          const sin = Math.sin(a)
+          const point = { x: x + dx * cos - dz * sin, y: to.y, z: z + dx * sin + dz * cos }
+          this.projectiles.launch(this.tick, 'shard', from, aimedVelocity(from, point, SHARD_SPEED), SHARD_DAMAGE)
+        }
         break
       }
     }

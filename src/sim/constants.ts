@@ -248,7 +248,18 @@ export interface RangedDef {
 }
 
 /** Los ataques especiales de los jefes (los hace la simulación con `onSpecial`, enemies.ts). */
-export type SpecialId = 'stomp' | 'tossGoblin' | 'rockRain' | 'boulder'
+export type SpecialId =
+  | 'stomp'
+  | 'tossGoblin'
+  | 'rockRain'
+  | 'boulder'
+  | 'fireRing'
+  | 'lightning'
+  | 'burningGround'
+  | 'pulse'
+  | 'pillars'
+  | 'shardFan'
+  | 'lightBeam'
 
 /**
  * Un ataque especial: a `min`–`max` metros del jugador avisa `windup` segundos (con la pose `look`), ataca y queda
@@ -267,6 +278,8 @@ export interface SpecialDef {
 
 /** Segundos entre el final de un ataque especial y el principio del siguiente, sea cual sea. */
 export const SPECIAL_GAP = 2.5
+/** Con la coraza rota, las esperas de los ataques especiales se quedan en esto: el Coloso se enfada. */
+export const SHELL_BROKEN_PACE = 0.75
 
 /** Guarda un sitio: se despierta con un jugador a `aggro` metros y persigue mientras siga a menos de `leash` de ese sitio. */
 export interface GuardDef {
@@ -480,6 +493,14 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     loot: [{ item: 'meteor_fragment', amount: 3 }, { item: 'coin', amount: 5 }],
     cost: 6,
     guard: { aggro: 15, leash: 25 },
+    specials: [
+      // Anillo de fuego: una onda lenta de 9 m que se esquiva saltando.
+      { id: 'fireRing', min: 0, max: 6, windup: 0.9, cooldown: 10, recover: 1.4, look: 'crouch' },
+      // Suelo ardiente: tres charcos alrededor del jugador que queman 5 s.
+      { id: 'burningGround', min: 3, max: 18, windup: 1, cooldown: 12, recover: 1.3, look: 'aim' },
+      // Rayo: marca donde estás y cae a los 0,9 s.
+      { id: 'lightning', min: 4, max: 20, windup: 0.8, cooldown: 7, recover: 1, look: 'aim' },
+    ],
   },
   // Jefe de luz: casi no recibe daño hasta que un pico le rompe la coraza. Guarda el motor del avión.
   colossus: {
@@ -505,6 +526,16 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     loot: [{ item: 'plane_engine', amount: 1 }, { item: 'coin', amount: 20 }],
     cost: 10,
     light: true,
+    specials: [
+      // Pulso: si estás pegado a él, un estallido de 4,5 m a su alrededor.
+      { id: 'pulse', min: 0, max: 4, windup: 0.7, cooldown: 8, recover: 1.2, look: 'crouch' },
+      // Pilares: una fila de cristales que brotan del suelo, uno tras otro, hacia el jugador.
+      { id: 'pillars', min: 3, max: 16, windup: 0.9, cooldown: 10, recover: 1.3, look: 'crouch' },
+      // Abanico de esquirlas: cinco, abiertas; se esquiva entre dos o de lado.
+      { id: 'shardFan', min: 5, max: 20, windup: 0.9, cooldown: 9, recover: 1.1, look: 'aim' },
+      // Haz de luz: te apunta 2 s, marca donde estás y cae a los 0,8 s.
+      { id: 'lightBeam', min: 0, max: 30, windup: 2, cooldown: 15, recover: 1.6, look: 'aim' },
+    ],
   },
   // Al final: el orden es el índice en el cable. Sale en manada (DOG_PACK), más rápido que andar y más lento que correr:
   // obliga a gastar resistencia para escapar. Poca vida y mordiscos flojos pero seguidos.
