@@ -122,6 +122,8 @@ const fat = mat('#f0d6c8')
 const mug = mat('#d9cdb8')
 const herbLeaf = mat('#57a85a')
 const herbFlower = mat('#f2a6d8')
+const mintLeaf = mat('#7fd18a')
+const mintTip = mat('#bff2ff')
 
 const part = (geometry: THREE.BufferGeometry, material: THREE.Material) => new THREE.Mesh(geometry, material)
 
@@ -174,10 +176,10 @@ function meatCut(flesh: THREE.Material) {
   return g
 }
 
-function herb() {
+function herb(leaf = herbLeaf, flower = herbFlower) {
   const g = new THREE.Group()
-  g.add(part(new THREE.IcosahedronGeometry(0.08, 0).scale(1, 0.7, 1).translate(0, 0.09, 0), herbLeaf))
-  g.add(part(new THREE.IcosahedronGeometry(0.04, 0).translate(0, 0.17, 0), herbFlower))
+  g.add(part(new THREE.IcosahedronGeometry(0.08, 0).scale(1, 0.7, 1).translate(0, 0.09, 0), leaf))
+  g.add(part(new THREE.IcosahedronGeometry(0.04, 0).translate(0, 0.17, 0), flower))
   return g
 }
 
@@ -355,6 +357,8 @@ export function itemModel(item: ItemId): THREE.Group {
       return infusion()
     case 'healing_herb':
       return herb()
+    case 'mint':
+      return herb(mintLeaf, mintTip)
     case 'campfire':
       return campfireBundle()
     case 'workbench':

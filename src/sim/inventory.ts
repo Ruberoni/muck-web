@@ -45,6 +45,7 @@ export type ItemId =
   | 'iron_shield'
   | 'crystal_shield'
   | 'dry_wood'
+  | 'mint'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -90,6 +91,7 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   iron_shield: 'Escudo de hierro',
   crystal_shield: 'Escudo de cristal',
   dry_wood: 'Madera seca',
+  mint: 'Menta silvestre',
   plane_engine: 'Motor del avión',
 }
 
@@ -145,6 +147,7 @@ export const GROUND_TIME: Record<ItemId, number | null> = {
   iron_shield: GEAR,
   crystal_shield: GEAR,
   dry_wood: MATERIAL,
+  mint: FOOD,
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

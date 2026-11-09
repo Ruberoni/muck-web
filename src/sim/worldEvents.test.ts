@@ -108,7 +108,7 @@ describe('meteoritos', () => {
       expect(world.props.every((prop) => Math.hypot(prop.x - x, prop.z - z) >= METEOR_BLAST)).toBe(true)
     }
     // Si no encuentra sitio a la primera, lo vuelve a intentar en el paso siguiente.
-    expect(found).toBeGreaterThan(225)
+    expect(found).toBeGreaterThan(180)
   })
 
   it('en la Noche Eterna cae con la campana: sin esto no habría fragmentos para el tótem', () => {

@@ -6,10 +6,12 @@ import {
   HEALTH_REGEN_PER_SEC,
   HUNGER_DRAIN_PER_SEC,
   HUNGER_MAX,
+  CONSUMABLE_DEFS,
+  STAMINA_MAX,
   STARVE_DAMAGE_PER_SEC,
   STEP,
 } from './constants'
-import { eat, hurt, isDead, NO_HEALING, stepSurvival, type Vitals } from './survival'
+import { eat, guardFactor, hurt, isDead, NO_HEALING, speedFactor, stepSurvival, type Vitals } from './survival'
 
 const vitals = (health: number, hunger: number): Vitals => ({ health, hunger, ...NO_HEALING })
 
@@ -139,5 +141,28 @@ describe('supervivencia', () => {
     hurt(v, 30)
     expect(v.health).toBe(0)
     expect(isDead(v)).toBe(true)
+  })
+
+  it('la menta llena la resistencia, quita el agotamiento y deja correr sin gastar un rato', () => {
+    const v = { ...vitals(HEALTH_MAX, HUNGER_MAX), stamina: 0, exhausted: true, sprintLocked: true }
+    expect(eat(v, CONSUMABLE_DEFS.mint!)).toBe(true)
+    expect(v.stamina).toBe(STAMINA_MAX)
+    expect(v.exhausted).toBe(false)
+    expect(v.sprintLocked).toBe(false)
+    expect(v.breathLeft).toBe(20)
+    run(v, 21)
+    expect(v.breathLeft).toBe(0)
+  })
+
+  it('los efectos de velocidad y de piedra duran lo suyo y vuelven a 1', () => {
+    const v = vitals(HEALTH_MAX, HUNGER_MAX)
+    expect(eat(v, { food: 0, speed: { factor: 1.3, seconds: 5 }, guard: { factor: 0.7, seconds: 3 } })).toBe(true)
+    expect(speedFactor(v)).toBe(1.3)
+    expect(guardFactor(v)).toBe(0.7)
+    run(v, 4)
+    expect(guardFactor(v)).toBe(1)
+    expect(speedFactor(v)).toBe(1.3)
+    run(v, 2)
+    expect(speedFactor(v)).toBe(1)
   })
 })

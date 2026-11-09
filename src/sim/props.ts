@@ -1,7 +1,7 @@
 import { PROP_DEFS } from './constants'
 import { SpatialGrid, type Collider } from './collision'
 import type { Emit } from './events'
-import { createBirchRng, createCoalOreRng, createCrystalOreRng, createDeadTreeRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
+import { createBirchRng, createCoalOreRng, createCrystalOreRng, createDeadTreeRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMintRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
 import { BIOME_FLORA } from './world/biomes'
 import { DEFAULT_ISLAND, type Island } from './world/island'
 import { lift, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeLimit, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
@@ -17,6 +17,7 @@ export const HERB_COUNT = 30
 export const COAL_ORE_COUNT = 30
 export const CRYSTAL_ORE_COUNT = 12
 export const DEADTREE_COUNT = 24
+export const MINT_COUNT = 30
 /** Las rocas llegan hasta la arena; el resto de lo que crece en el suelo, solo hasta la hierba. */
 const ROCK_MIN_HEIGHT = 0.4
 /**
@@ -88,6 +89,7 @@ export const PROP_COUNTS: Record<PropKind, number> = {
   coal_ore: COAL_ORE_COUNT,
   crystal_ore: CRYSTAL_ORE_COUNT,
   deadtree: DEADTREE_COUNT,
+  mint: MINT_COUNT,
 }
 
 /**
@@ -299,6 +301,15 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
     // También en la arena, a diferencia de los vivos.
     if (y < WATER_LEVEL + 0.4 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
     return { kind: 'deadtree', x, y: y - 0.1, z, radius: TRUNK_BOTTOM_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
+  })
+
+  // La última: no mueve los ids ni las posiciones de lo anterior.
+  const mintRng = createMintRng(island.seed)
+  scatter(mintRng, counts.mint, (x, z, y) => {
+    const scale = 0.9 + mintRng() * 0.4
+    const rotation = mintRng() * Math.PI * 2
+    if (y < SAND_LEVEL + 0.3 || y > ROCK_LEVEL || island.slopeAt(x, z) > MAX_SLOPE) return null
+    return { kind: 'mint', x, y: y - 0.02, z, radius: HERB_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
   return placements

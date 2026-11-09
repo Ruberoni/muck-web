@@ -45,6 +45,14 @@ export interface ConsumableDef {
   heal?: number
   /** Curación poco a poco: se suma a la natural, sigue aunque se reciba daño y otra solo renueva el tiempo. */
   regen?: { perSec: number; seconds: number }
+  /** Resistencia que devuelve al momento. */
+  stamina?: number
+  /** Segundos en los que correr y saltar no gastan resistencia (el escudo sí). Otra solo renueva el tiempo. */
+  breath?: number
+  /** Segundos con la velocidad multiplicada por `factor`. */
+  speed?: { factor: number; seconds: number }
+  /** Segundos con el daño recibido multiplicado por `factor` (menos de 1). */
+  guard?: { factor: number; seconds: number }
 }
 
 export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
@@ -54,6 +62,8 @@ export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
   cooked_meat: { food: 45, heal: 15 },
   berry_infusion: { food: 0, regen: { perSec: 2, seconds: 20 } },
   healing_herb: { food: 0, heal: 25 },
+  // Llena la resistencia y deja correr sin gastarla: con varias seguidas se corre sin parar.
+  mint: { food: 0, stamina: STAMINA_MAX, breath: 20 },
 }
 
 export const MOUSE_SENSITIVITY = 0.002
@@ -100,7 +110,7 @@ export const BERRIES_PER_BUSH = 6
 export const BERRY_REGROW = 15
 
 // Las claves son los tipos de prop: `PropKind` (props.ts) se saca de aquí, así que un tipo nuevo solo se añade aquí.
-export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb' | 'coal_ore' | 'crystal_ore' | 'deadtree', PropDef> = {
+export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_ore' | 'mithril_ore' | 'bush' | 'healing_herb' | 'coal_ore' | 'crystal_ore' | 'deadtree' | 'mint', PropDef> = {
   // Recolectar lleva tiempo, y el tiempo es lo que falta: mejorar una herramienta es ganarlo.
   tree: { name: 'Árbol', verb: 'talar', family: 'tree', tool: 'axe', tier: 0, hp: 16, drop: { item: 'wood', amount: 4 } },
   birch: { name: 'Abedul', verb: 'talar', family: 'tree', tool: 'axe', tier: 2, hp: 40, drop: { item: 'birch_wood', amount: 4 } },
@@ -133,6 +143,17 @@ export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_or
     hp: 1,
     drop: { item: 'healing_herb', amount: 1 },
     harvest: { regrow: 90, empty: 'ya recogida' },
+  },
+  // Como la hierba curativa, en la pradera: devuelve la resistencia.
+  mint: {
+    name: 'Menta silvestre',
+    verb: 'recoger',
+    family: 'herb',
+    tool: null,
+    tier: 0,
+    hp: 1,
+    drop: { item: 'mint', amount: 1 },
+    harvest: { regrow: 60, empty: 'ya recogida' },
   },
 }
 

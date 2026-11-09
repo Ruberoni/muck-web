@@ -20,7 +20,7 @@ import {
   WORLD_BOUND_FACTOR,
 } from './constants'
 import { BLOCK_SPEED_FACTOR } from './equipment'
-import { NO_HEALING, type Vitals } from './survival'
+import { NO_HEALING, speedFactor, type Vitals } from './survival'
 
 export interface Vec3 {
   x: number
@@ -155,22 +155,25 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
   let spent = false
 
   if (player.grounded) {
-    const speed = (sprinting ? SPRINT_SPEED : WALK_SPEED) * (player.inWater ? WATER_SPEED_FACTOR : 1) * (player.blocking ? BLOCK_SPEED_FACTOR : 1)
+    const speed = (sprinting ? SPRINT_SPEED : WALK_SPEED) * (player.inWater ? WATER_SPEED_FACTOR : 1) * (player.blocking ? BLOCK_SPEED_FACTOR : 1) * speedFactor(player)
     vel.x = wx * speed
     vel.z = wz * speed
   }
 
-  if (sprinting) {
+  // Con aliento (la menta, la poción de aguante) correr y saltar no gastan resistencia.
+  const free = player.breathLeft > 0
+  if (sprinting && !free) {
     player.stamina -= SPRINT_COST_PER_SEC * dt
     spent = true
   }
 
   let jumped = false
-  if (input.jump && player.grounded && !player.floating && player.stamina >= JUMP_COST) {
+  if (input.jump && player.grounded && !player.floating && (free || player.stamina >= JUMP_COST)) {
     vel.y = JUMP_VELOCITY
-    player.stamina -= JUMP_COST
+    if (!free) player.stamina -= JUMP_COST
     player.grounded = false
-    spent = jumped = true
+    jumped = true
+    if (!free) spent = true
   }
 
   if (player.stamina <= 0) {

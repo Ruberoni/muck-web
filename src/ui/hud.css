@@ -204,6 +204,10 @@
 
 .next-food svg { width: 100%; height: 100%; display: block; }
 
+/* Debajo de las barras: lo que dura cada efecto (menta, pociones). */
+.effects { font-size: 12px; font-weight: 600; color: #bff2ff; text-shadow: 0 1px 2px rgb(0 0 0 / 0.7); }
+.effects[hidden] { display: none; }
+
 /* La hotbar centrada mide 9 casillas de 56 (52 + borde) y 8 huecos de 6,
    unos 552 px; con las barras (16 + 220 + margen) a cada lado hacen falta
    unos 1050 px. Por debajo, las barras suben por encima de las casillas. */

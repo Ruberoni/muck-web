@@ -10,6 +10,7 @@ import {
   CRYSTAL_ORE_BAND,
   CRYSTAL_ORE_COUNT,
   DEADTREE_COUNT,
+  MINT_COUNT,
   createPropWorld,
   DARKPINE_BAND,
   DARKPINE_COUNT,
@@ -61,10 +62,10 @@ describe('colocación de props', () => {
     expect(Object.isFrozen(placements[0])).toBe(true)
   })
 
-  it('el id es el índice: árboles, rocas, arbustos y después abedules, menas de hierro, pinos oscuros, menas de mithril, hierbas, carbón, cristal y árboles muertos', () => {
+  it('el id es el índice: árboles, rocas, arbustos y después abedules, menas de hierro, pinos oscuros, menas de mithril, hierbas, carbón, cristal, árboles muertos y menta', () => {
     expect(placements.every((p, i) => p.id === i)).toBe(true)
     const kinds = placements.map((p) => p.kind)
-    const order = ['tree', 'rock', 'bush', 'birch', 'iron_ore', 'darkpine', 'mithril_ore', 'healing_herb', 'coal_ore', 'crystal_ore', 'deadtree']
+    const order = ['tree', 'rock', 'bush', 'birch', 'iron_ore', 'darkpine', 'mithril_ore', 'healing_herb', 'coal_ore', 'crystal_ore', 'deadtree', 'mint']
     for (let i = 1; i < kinds.length; i++) expect(order.indexOf(kinds[i])).toBeGreaterThanOrEqual(order.indexOf(kinds[i - 1]))
     for (const kind of order) expect(kinds).toContain(kind)
     expect(kinds.slice(0, ORIGINAL_COUNT).every((k) => k === 'tree' || k === 'rock' || k === 'bush')).toBe(true)
@@ -98,7 +99,7 @@ describe('colocación de props', () => {
   it('sale exactamente el mismo número de cada tipo, sea cual sea su bioma', () => {
     const counts: Record<string, number> = {}
     for (const { kind } of placements) counts[kind] = (counts[kind] ?? 0) + 1
-    expect(counts).toEqual({ tree: 180, rock: 60, bush: 45, birch: 40, iron_ore: 40, darkpine: 20, mithril_ore: 16, healing_herb: HERB_COUNT, coal_ore: COAL_ORE_COUNT, crystal_ore: CRYSTAL_ORE_COUNT, deadtree: DEADTREE_COUNT })
+    expect(counts).toEqual({ tree: 180, rock: 60, bush: 45, birch: 40, iron_ore: 40, darkpine: 20, mithril_ore: 16, healing_herb: HERB_COUNT, coal_ore: COAL_ORE_COUNT, crystal_ore: CRYSTAL_ORE_COUNT, deadtree: DEADTREE_COUNT, mint: MINT_COUNT })
   })
 
   it('el punto de aparición es pradera llana: se puede colocar algo en cualquier dirección', () => {

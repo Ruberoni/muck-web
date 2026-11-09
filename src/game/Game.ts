@@ -1046,6 +1046,7 @@ export class Game {
     this.hud.setHealth(p.health, HEALTH_MAX, p.regenLeft)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
+    this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft })
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)
     // Se va antes de tiempo si ya se lleva en la mano lo que hacía falta.
     const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)

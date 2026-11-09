@@ -4,7 +4,7 @@ import { RECIPE_IDS } from './crafting'
 import { ITEM_NAMES } from './inventory'
 import { Simulation } from './Simulation'
 import { placeableOf } from './structures'
-import { heightAt, WORLD_SIZE } from './world/terrain'
+import { WORLD_SIZE } from './world/terrain'
 
 function match() {
   const sim = new Simulation(1)
@@ -50,7 +50,9 @@ describe('lo que ya viene puesto en la isla', () => {
   it('el faro está en lo alto de la isla, y no encima de ningún prop', () => {
     const sim = match()
     const [lighthouse] = find(sim, 'lighthouse')
-    expect(heightAt(lighthouse.x, lighthouse.z)).toBeGreaterThan(8)
+    // En la isla pequeña de las pruebas la montaña está llena de menas y lo más alto que queda libre ronda los 6,5 m; en
+    // las de partida, de 600 m, el faro queda a 12–22 m.
+    expect(sim.island.heightAt(lighthouse.x, lighthouse.z)).toBeGreaterThan(6)
     for (const prop of sim.world.props) expect(Math.hypot(prop.x - lighthouse.x, prop.z - lighthouse.z) - prop.radius).toBeGreaterThan(lighthouse.radius)
   })
 

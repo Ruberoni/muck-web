@@ -41,7 +41,7 @@ import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, type Structure, type StructuresState, type StructureSpot } from './structures'
 import { damageTaken, spendGuard } from './equipment'
 import { putInto, takeFrom } from './stations'
-import { hurt, isDead } from './survival'
+import { guardFactor, hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight, NIGHT_LENGTH } from './world/daycycle'
 import { createIsland, DEFAULT_ISLAND, inLake, type Island } from './world/island'
@@ -372,9 +372,11 @@ export class Simulation {
       const { player, inventory } = this.slot(playerId)
       const hit = damageTaken(damage, inventory.equipped, player, from)
       if (hit.blocked > 0) spendGuard(player, hit.blocked)
-      hurt(player, hit.damage)
+      // La poción de piedra quita una parte de lo que pasa del escudo y el peto.
+      const dealt = hit.damage * guardFactor(player)
+      hurt(player, dealt)
       const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0 }
-      sum.dmg += hit.damage
+      sum.dmg += dealt
       sum.blocked += hit.blocked
       taken.set(playerId, sum)
     }

@@ -226,7 +226,7 @@ describe('snap en el cable', () => {
   const pickup: PickupSnap = { id: 4, pos: { x: 1, y: 2, z: 3 }, grounded: true }
   const inventory: InventoryState = { slots: ['wood', ...Array<null>(INVENTORY_SIZE - 1).fill(null)], counts: { wood: 3 }, selected: 0 }
   const you = (withInventory: boolean): SnapWire['you'] => ({
-    player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, blocking: false, health: 100, hunger: 90, healDelay: 0, regenLeft: 0, regenPerSec: 0 },
+    player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, blocking: false, health: 100, hunger: 90, healDelay: 0, regenLeft: 0, regenPerSec: 0, breathLeft: 0, speedLeft: 0, speedMul: 1, guardLeft: 0, guardMul: 1 },
     ...(withInventory ? { inventory: { ...inventory, slots: [...inventory.slots], counts: { ...inventory.counts } } } : {}),
     combat: { cooldown: 0, pendingSwing: false },
     inventoryFull: false,

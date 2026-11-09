@@ -69,6 +69,7 @@ export class Hud {
   private staminaBar: HTMLElement
   private staminaFill: HTMLElement
   private food: HTMLElement
+  private effects: HTMLElement
   private prompt: HTMLElement
   private day: HTMLElement
   private biome: HTMLElement
@@ -87,7 +88,7 @@ export class Hud {
   private results: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
   readonly panel: HTMLElement
-  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', clock: '', tonight: '', light: '', boss: '' }
+  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', effects: '', clock: '', tonight: '', light: '', boss: '' }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
@@ -115,6 +116,7 @@ export class Hud {
     this.staminaBar = el('div', 'bar stamina', bars)
     this.staminaFill = el('div', 'fill', this.staminaBar)
     this.food = el('div', 'next-food', bars)
+    this.effects = el('div', 'effects', bars)
     this.food.hidden = true
 
     const dock = el('div', 'dock', root)
@@ -179,6 +181,20 @@ export class Hud {
     this.last.hunger = v
     this.hungerFill.style.transform = `scaleX(${v / max})`
     this.hungerBar.classList.toggle('starving', v === 0)
+  }
+
+  /** Los efectos con tiempo que siguen en marcha (aliento, rapidez, piedra), con los segundos que les quedan. */
+  setEffects(effects: { breath: number; speed: number; guard: number }) {
+    const parts = [
+      effects.breath > 0 ? `Aliento ${Math.ceil(effects.breath)} s` : '',
+      effects.speed > 0 ? `Rapidez ${Math.ceil(effects.speed)} s` : '',
+      effects.guard > 0 ? `Piedra ${Math.ceil(effects.guard)} s` : '',
+    ].filter(Boolean)
+    const text = parts.join(' · ')
+    if (text === this.last.effects) return
+    this.last.effects = text
+    this.effects.textContent = text
+    this.effects.hidden = !text
   }
 
   setStamina(value: number, max: number, exhausted: boolean) {

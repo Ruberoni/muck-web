@@ -154,6 +154,8 @@ const PARTS: Record<PropKind, Part[]> = {
   ],
   bush: [{ geometry: bushGeometry, material: material('#3d7d35') }, ...berryGeometries.map((geometry) => ({ geometry, material: berryMaterial }))],
   healing_herb: [{ geometry: herbGeometry, material: material('#57a85a') }, { geometry: flowerGeometry, material: material('#f2a6d8', { emissive: '#5c2450' }) }],
+  // Verde claro con hojas azuladas: se distingue de la hierba curativa de lejos.
+  mint: [{ geometry: herbGeometry, material: material('#7fd18a') }, { geometry: flowerGeometry, material: material('#bff2ff', { emissive: '#1f5560' }) }],
 }
 
 /**
@@ -197,7 +199,7 @@ function bandAt(distance: number, band: number): 0 | 1 | 2 {
 const variantOf = (id: number, variants: number) => ((Math.imul(id, 2654435761) >>> 0) % variants)
 
 /** Desde qué pieza es lo que se recoge (se oculta al recogerlo): las bayas del arbusto y la flor de la hierba. */
-const FIRST_FRUIT: Partial<Record<PropKind, number>> = { bush: 1, healing_herb: 1 }
+const FIRST_FRUIT: Partial<Record<PropKind, number>> = { bush: 1, healing_herb: 1, mint: 1 }
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0)
 const WOBBLE_AMOUNT = 0.12
