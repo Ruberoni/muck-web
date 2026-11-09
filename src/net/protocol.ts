@@ -18,7 +18,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 55
+export const PROTOCOL_VERSION = 56
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -581,6 +581,10 @@ function parseAction(a: unknown): Action | null {
       if (!isInt(a.id, 0, Number.MAX_SAFE_INTEGER) || !STATION_SLOTS.includes(a.slot as StationSlot) || typeof a.all !== 'boolean') return null
       if (a.from !== null && !isInt(a.from, 0, INVENTORY_SIZE - 1)) return null
       data = { kind: 'station', id: a.id, slot: a.slot as StationSlot, from: a.from as number | null, all: a.all }
+      break
+    case 'shop':
+      if (!isInt(a.id, 0, Number.MAX_SAFE_INTEGER) || (a.op !== 'buy' && a.op !== 'sell') || !(Object.keys(ITEM_NAMES) as unknown[]).includes(a.item)) return null
+      data = { kind: 'shop', id: a.id, op: a.op, item: a.item as ItemId }
       break
     case 'craft':
       if (!isRecipeId(a.recipe)) return null

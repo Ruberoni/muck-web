@@ -247,6 +247,39 @@ function buildGrave(m: MaterialFor, shadows: boolean): StructureModel {
   return { root, flame: null, beam }
 }
 
+// El puesto del mercader: postes, un toldo a rayas, el mostrador y el mercader detrás.
+const merchantPostGeometry = new THREE.CylinderGeometry(0.08, 0.1, 2.6, 6)
+const merchantRoofGeometry = new THREE.ConeGeometry(2.4, 1.1, 6)
+const merchantCounterGeometry = new THREE.BoxGeometry(2.4, 0.9, 0.7)
+const merchantBodyGeometry = new THREE.CylinderGeometry(0.3, 0.38, 1.1, 7)
+const merchantHeadGeometry = new THREE.IcosahedronGeometry(0.24, 1)
+const merchantHatGeometry = new THREE.ConeGeometry(0.32, 0.5, 7)
+const merchantCrateGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6)
+const merchantRoofMaterial = new THREE.MeshStandardMaterial({ color: '#8e3fb8', flatShading: true })
+const merchantRobeMaterial = new THREE.MeshStandardMaterial({ color: '#3f2a6b', flatShading: true })
+const merchantSkinMaterial = new THREE.MeshStandardMaterial({ color: '#d9a77a', flatShading: true })
+// La linterna del puesto: se ve de noche, para encontrarlo.
+const merchantLampMaterial = new THREE.MeshBasicMaterial({ color: '#ffd866' })
+const merchantLampGeometry = new THREE.OctahedronGeometry(0.16, 0)
+
+/** Puesto del mercader: un toldo morado con su linterna, el mostrador y el mercader, que mira hacia +Z. */
+function buildMerchant(m: MaterialFor, shadows: boolean): StructureModel {
+  const root = new THREE.Group()
+  const mesh = piece(root, m, shadows)
+  for (const [x, z] of [[-1.1, 0.6], [1.1, 0.6], [-1.1, -0.9], [1.1, -0.9]]) mesh(merchantPostGeometry, logMaterial, x, 1.3, z)
+  mesh(merchantRoofGeometry, merchantRoofMaterial, 0, 3.1, -0.15)
+  mesh(merchantCounterGeometry, plankMaterial, 0, 0.45, 0.55)
+  mesh(merchantBodyGeometry, merchantRobeMaterial, 0, 0.55, -0.35)
+  mesh(merchantHeadGeometry, merchantSkinMaterial, 0, 1.35, -0.35)
+  mesh(merchantHatGeometry, merchantRoofMaterial, 0, 1.75, -0.35)
+  mesh(merchantCrateGeometry, plankMaterial, -1.6, 0.3, -0.4, 0.3)
+  mesh(merchantCrateGeometry, plankMaterial, 1.6, 0.3, -0.6, -0.2)
+  const lamp = new THREE.Mesh(merchantLampGeometry, m(merchantLampMaterial))
+  lamp.position.set(1.1, 2.4, 0.75)
+  root.add(lamp)
+  return { root, flame: null }
+}
+
 /** Destilador: una caldera de madera con su alambique. */
 function buildDistiller(m: MaterialFor, shadows: boolean): StructureModel {
   const root = new THREE.Group()
@@ -318,6 +351,7 @@ const MODELS: Record<StructureKind, (m: MaterialFor, shadows: boolean) => Struct
   totem: buildTotem,
   plane: buildPlane,
   grave: buildGrave,
+  merchant: buildMerchant,
 }
 
 const own: MaterialFor = (material) => material

@@ -80,6 +80,7 @@ const PLACE_PROMPT: Record<StructureKind, string> = {
   totem: '',
   plane: '',
   grave: '',
+  merchant: '',
   workbench: 'Clic para colocar la mesa de trabajo',
   furnace: 'Clic para colocar el horno',
   anvil: 'Clic para colocar el yunque',
@@ -228,6 +229,7 @@ export class Game {
     this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
     this.hud.inventory.ondrop = (slot, all) => this.queueAction({ kind: 'drop', slot, all })
     this.hud.inventory.onstation = (action) => this.queueAction(action)
+    this.hud.inventory.onshop = (action) => this.queueAction(action)
     this.hud.inventory.onequip = (action) => this.queueAction(action)
     this.hud.inventory.oncraft = (recipe, times) => {
       for (let i = 0; i < times; i++) this.queueAction({ kind: 'craft', recipe })
@@ -424,8 +426,9 @@ export class Game {
     if (!presses.has(RIGHT_CLICK) || this.state !== 'playing') return presses
     const station = aimedStation(this.sim.structures.list, pos, yaw, CLIENT_STATION_RANGE)
     if (!station) return presses
-    this.openStationId = station.station ? station.id : null
-    this.openInventory(station.station ? 'slots' : 'recipes')
+    const opens = station.station !== undefined || station.shop !== undefined
+    this.openStationId = opens ? station.id : null
+    this.openInventory(opens ? 'slots' : 'recipes')
     const left = new Set(presses)
     left.delete(RIGHT_CLICK)
     return left
@@ -745,6 +748,14 @@ export class Game {
         case 'mobsRose':
           if (e.trait) this.hud.showBanner(`Campana · Los mobs suben: ${TRAIT_NAMES[e.trait]}`)
           break
+        case 'mobsForgot':
+          this.hud.showBanner(e.trait ? `Amuleto · Los mobs olvidan: ${TRAIT_NAMES[e.trait]}` : 'Amuleto · No había nada que olvidar')
+          break
+        case 'mobsCalmed':
+          for (const spot of e.spots) this.smokeView.puff(spot.x, spot.z)
+          this.hud.showBanner('Incienso · Los mobs se deshacen en humo')
+          this.sound.play('spawnPuff')
+          break
         case 'meteorIncoming':
           this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
           this.audio.meteorIncoming()
@@ -1059,6 +1070,7 @@ export class Game {
     else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules, sim.threat.state.totem))
+    else if (!slot.target && nearestProcessor(structures.list, p.pos, CLIENT_STATION_RANGE)?.shop) this.hud.setPrompt('Mercader — E para comprar y vender')
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') {
       this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
@@ -1066,7 +1078,7 @@ export class Game {
       const station = this.openStationId === null ? undefined : this.sim.structures.byId(this.openStationId)
       const near = station && Math.hypot(station.x - p.pos.x, station.z - p.pos.z) - station.radius <= CLIENT_STATION_RANGE
       if (!near) this.openStationId = null
-      this.hud.inventory.setStation(near ? station : null)
+      this.hud.inventory.setStation(near ? station : null, this.sim.threat.canForget)
     }
     this.hud.setClock(clockTexts(sim.clock))
     const boss = enemies.list.find((e) => ENEMY_DEFS[e.type].boss)

@@ -305,6 +305,39 @@ function chestplate(metal: THREE.Material) {
   return g
 }
 
+const glass = new THREE.MeshStandardMaterial({ color: '#dff4ff', transparent: true, opacity: 0.45, flatShading: true })
+const cork = mat('#a87a4a')
+const POTION_COLORS = { healing_potion: '#e0443a', speed_potion: '#f2c94c', stamina_potion: '#5fd18a', stone_potion: '#8a877c' } as const
+const potionLiquid = Object.fromEntries(Object.entries(POTION_COLORS).map(([item, color]) => [item, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.25, flatShading: true })]))
+const incenseStick = mat('#5a3a1c')
+const incenseTip = new THREE.MeshBasicMaterial({ color: '#ff7a1f' })
+const amuletGold = new THREE.MeshStandardMaterial({ color: '#d8b04a', flatShading: true, metalness: 0.3, roughness: 0.5 })
+const amuletGem = new THREE.MeshStandardMaterial({ color: '#9fd8ff', emissive: '#1e4a66', flatShading: true })
+
+/** Un frasco redondo con su líquido y su corcho. */
+function potion(item: keyof typeof POTION_COLORS) {
+  const g = new THREE.Group()
+  g.add(part(new THREE.IcosahedronGeometry(0.07, 1).translate(0, 0.07, 0), potionLiquid[item]))
+  g.add(part(new THREE.IcosahedronGeometry(0.085, 1).translate(0, 0.07, 0), glass))
+  g.add(part(new THREE.CylinderGeometry(0.025, 0.03, 0.07, 6).translate(0, 0.17, 0), glass))
+  g.add(part(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 6).translate(0, 0.215, 0), cork))
+  return g
+}
+
+function incense() {
+  const g = new THREE.Group()
+  g.add(part(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 5).translate(0, 0.15, 0), incenseStick))
+  g.add(part(new THREE.OctahedronGeometry(0.02, 0).translate(0, 0.31, 0), incenseTip))
+  return g
+}
+
+function amulet() {
+  const g = new THREE.Group()
+  g.add(part(new THREE.TorusGeometry(0.07, 0.012, 5, 10).translate(0, 0.12, 0), amuletGold))
+  g.add(part(new THREE.OctahedronGeometry(0.04, 0).translate(0, 0.12, 0), amuletGem))
+  return g
+}
+
 /** Modelo de un objeto a escala de la mano (también se usa, escalado, para los objetos en el suelo). */
 export function itemModel(item: ItemId): THREE.Group {
   switch (item) {
@@ -359,6 +392,15 @@ export function itemModel(item: ItemId): THREE.Group {
       return herb()
     case 'mint':
       return herb(mintLeaf, mintTip)
+    case 'healing_potion':
+    case 'speed_potion':
+    case 'stamina_potion':
+    case 'stone_potion':
+      return potion(item)
+    case 'calm_incense':
+      return incense()
+    case 'forget_amulet':
+      return amulet()
     case 'campfire':
       return campfireBundle()
     case 'workbench':

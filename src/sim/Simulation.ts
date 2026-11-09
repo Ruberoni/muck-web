@@ -24,6 +24,7 @@ import {
   RESPAWN_LIGHTHOUSE_DELAY,
   RESPAWN_SHIELD,
   ROCK_SPEED,
+  CONSUMABLE_DEFS,
   STATION_RANGE,
   STEP,
 } from './constants'
@@ -35,7 +36,8 @@ import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, workFactor, type MatchEnd, typ
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
 import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
-import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent, type StationOp } from './playerTick'
+import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent, type StationOp, type TradeOp } from './playerTick'
+import { trade } from './merchant'
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, scaleProps, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, type Structure, type StructuresState, type StructureSpot } from './structures'
@@ -57,6 +59,8 @@ const TOSS_HEIGHT = 1.2
 /** Altura sobre el suelo desde la que sale lo que termina una estación. */
 /** Intentos de encontrar dónde cae el avión o dónde va la tumba. */
 const CRASH_ATTEMPTS = 20
+/** Lo que se aparta el puesto del mercader del faro y del tótem (desde su borde). */
+const MERCHANT_GAP = 25
 /** Altura sobre el suelo desde la que sale una roca lanzada. */
 const THROW_HEIGHT = 1.5
 
@@ -398,6 +402,7 @@ export class Simulation {
       if (hands.place) this.place(slot)
       for (const { item, amount } of intent.drops) this.toss(slot, item, amount)
       for (const op of intent.stations) this.tendStation(slot, op)
+      for (const op of intent.trades) this.trade(slot, op)
     }
     // Lo que rompió o mató otro jugador en este paso deja de ser objetivo de los demás.
     for (const slot of living) if (slot.target && !slot.target.alive) slot.target = null
@@ -406,7 +411,11 @@ export class Simulation {
     living.forEach((slot, i) => (slot.inventoryFull = collected[i].full))
 
     for (const slot of living) {
-      finishPlayerTick(slot, intents.get(slot)!, this.events.emit)
+      finishPlayerTick(slot, intents.get(slot)!, (e) => {
+        this.events.emit(e)
+        // Lo que se toma y hace algo en el mundo (el incienso, el amuleto) lo hace aquí, no quien lo toma.
+        if (e.type === 'playerAte') this.worldEffect(CONSUMABLE_DEFS[e.item]?.world)
+      })
       if (isDead(slot.player)) this.die(slot)
     }
     if (this.gameOverAt === null && this.result === null && present.length > 0 && present.every((s) => !s.alive && this.outOfLives(s))) {
@@ -652,6 +661,39 @@ export class Simulation {
     this.structures.place({ ...lighthouse, y: this.island.heightAt(lighthouse.x, lighthouse.z), valid: true }, 'lighthouse')
     this.structures.place({ ...totem, y: this.island.heightAt(totem.x, totem.z), valid: true }, 'totem')
     this.placeGrave()
+    // El último: no mueve las ids ni el sitio de lo anterior.
+    this.placeMerchant()
+  }
+
+  /** El puesto del mercader: en hierba, a 40–70 m del punto de aparición, lejos del faro y del tótem. */
+  private placeMerchant() {
+    const around = [{ id: 0, pos: this.spawnCenter, alive: true }]
+    const far = (x: number, z: number) => this.structures.list.every((s) => s.kind === 'grave' || Math.hypot(s.x - x, s.z - z) > s.radius + MERCHANT_GAP)
+    let spot: { x: number; z: number } | null = null
+    for (let i = 0; i < CRASH_ATTEMPTS * 2 && !spot; i++) {
+      const found = this.worldEvents.findSpot(around)
+      if (found && far(found.x, found.z)) spot = found
+    }
+    const { x, z } = spot ?? { x: this.spawnCenter.x - 14, z: this.spawnCenter.z }
+    this.structures.place({ x, y: this.island.heightAt(x, z), z, valid: true }, 'merchant')
+  }
+
+  /** Comprar o vender en el puesto del mercader, a su alcance. */
+  private trade(slot: PlayerSlot, { id, op, item }: TradeOp) {
+    const structure = this.structures.byId(id)
+    const { pos } = slot.player
+    if (!structure?.shop || Math.hypot(structure.x - pos.x, structure.z - pos.z) - structure.radius > STATION_RANGE) return
+    const available = item !== 'forget_amulet' || this.threat.canForget
+    const before = structure.shop.bought[item] ?? 0
+    if (!trade(structure.shop, slot.inventory, { op, item }, available)) return
+    this.events.emit({ type: 'playerTraded', id: slot.id, op, item })
+    if ((structure.shop.bought[item] ?? 0) !== before) this.events.emit({ type: 'shopChanged', id: structure.id, bought: { ...structure.shop.bought } })
+  }
+
+  /** Lo que hace en el mundo algo que se toma: calmar a los mobs comunes u olvidar el último rasgo. */
+  private worldEffect(effect: 'calm' | 'forget' | undefined) {
+    if (effect === 'calm') this.events.emit({ type: 'mobsCalmed', spots: this.enemies.calmAll() })
+    if (effect === 'forget') this.events.emit({ type: 'mobsForgot', trait: this.threat.forget(), threat: this.threat.save() })
   }
 
   /** La tumba de la isla: dormida hasta que se active el tótem, pero se puede encontrar antes. */

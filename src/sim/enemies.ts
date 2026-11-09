@@ -635,6 +635,18 @@ export class Enemies {
     this.list.splice(this.list.indexOf(e), 1)
   }
 
+  /** El incienso de calma: los comunes vivos y los anunciados desaparecen, sin botín. Devuelve dónde estaban. */
+  calmAll(): { x: number; z: number }[] {
+    const spots = this.pending.map(({ x, z }) => ({ x, z }))
+    this.pending = []
+    for (const e of [...this.list]) {
+      if (!isCommon(e.type)) continue
+      spots.push({ x: e.pos.x, z: e.pos.z })
+      this.kill(e)
+    }
+    return spots
+  }
+
   /** Reinicio de partida: sin enemigos y con la próxima aparición inmediata al anochecer. */
   reset() {
     for (const e of [...this.list]) this.kill(e)

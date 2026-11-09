@@ -1,6 +1,7 @@
 import type { RecipeId } from './crafting'
 import type { EquipSlot } from './equipment'
 import type { StationSlot } from './stations'
+import type { ItemId } from './inventory'
 import type { TargetRef } from './events'
 import type { PlayerInput } from './player'
 
@@ -39,6 +40,8 @@ export type ActionData =
   | { kind: 'move'; from: number; to: number }
   | { kind: 'drop'; slot: number; all: boolean }
   | { kind: 'station'; id: number; slot: StationSlot; from: number | null; all: boolean }
+  /** Comprar o vender en el puesto del mercader `id` (merchant.ts). */
+  | { kind: 'shop'; id: number; op: 'buy' | 'sell'; item: ItemId }
   | { kind: 'equip'; slot: number }
   | { kind: 'unequip'; which: EquipSlot }
   | { kind: 'eat' }

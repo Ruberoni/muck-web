@@ -46,6 +46,12 @@ export type ItemId =
   | 'crystal_shield'
   | 'dry_wood'
   | 'mint'
+  | 'healing_potion'
+  | 'speed_potion'
+  | 'stamina_potion'
+  | 'stone_potion'
+  | 'calm_incense'
+  | 'forget_amulet'
 
 export const ITEM_NAMES: Record<ItemId, string> = {
   wood: 'Madera',
@@ -92,6 +98,12 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   crystal_shield: 'Escudo de cristal',
   dry_wood: 'Madera seca',
   mint: 'Menta silvestre',
+  healing_potion: 'Poción de curación',
+  speed_potion: 'Poción de velocidad',
+  stamina_potion: 'Poción de aguante',
+  stone_potion: 'Poción de piedra',
+  calm_incense: 'Incienso de calma',
+  forget_amulet: 'Amuleto del olvido',
   plane_engine: 'Motor del avión',
 }
 
@@ -148,6 +160,12 @@ export const GROUND_TIME: Record<ItemId, number | null> = {
   crystal_shield: GEAR,
   dry_wood: MATERIAL,
   mint: FOOD,
+  healing_potion: GEAR,
+  speed_potion: GEAR,
+  stamina_potion: GEAR,
+  stone_potion: GEAR,
+  calm_incense: GEAR,
+  forget_amulet: GEAR,
 }
 // Casillas de la hotbar: una tecla numérica por casilla (1–9).
 export const SLOT_COUNT = 9

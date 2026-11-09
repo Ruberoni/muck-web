@@ -75,7 +75,7 @@ export function eat(v: Vitals & Partial<Breath>, def: ConsumableDef): boolean {
   const feeds = def.food > 0 && v.hunger < HUNGER_MAX
   const heals = v.health < HEALTH_MAX && (def.heal !== undefined || def.regen !== undefined)
   const rests = def.stamina !== undefined && v.stamina !== undefined && v.stamina < STAMINA_MAX
-  const effect = def.breath !== undefined || def.speed !== undefined || def.guard !== undefined
+  const effect = def.breath !== undefined || def.speed !== undefined || def.guard !== undefined || def.world !== undefined
   if (!feeds && !heals && !rests && !effect) return false
   if (def.stamina !== undefined && v.stamina !== undefined) {
     v.stamina = Math.min(STAMINA_MAX, v.stamina + def.stamina)

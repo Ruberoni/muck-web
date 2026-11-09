@@ -8,8 +8,10 @@ import type { ActionData } from '../sim/commands'
 import { slotFor, STATION_DEFS, STATION_SLOTS, stationStall, type StationSlot } from '../sim/stations'
 import type { Structure } from '../sim/structures'
 import { EQUIP_SLOTS, equipSlotOf, type EquipSlot } from '../sim/equipment'
+import { buyProblem, OFFERS, priceOf, PURCHASES, sellProblem } from '../sim/merchant'
 
 const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { chest: 'Pecho', shield: 'Escudo' }
+const PURCHASE_ITEMS = Object.keys(PURCHASES) as ItemId[]
 
 const STATION_SLOT_NAMES: Record<StationSlot, string> = { input: 'Entrada', fuel: 'Combustible', output: 'Salida' }
 const STATION_HINT = 'Clic en una casilla: meter la pila · Clic derecho: meter una · Arrastrar a una ranura · Clic en una ranura: sacarla'
@@ -74,6 +76,7 @@ export class InventoryScreen {
   onescape: (() => void) | null = null
   onstation: ((action: Extract<ActionData, { kind: 'station' }>) => void) | null = null
   onequip: ((action: Extract<ActionData, { kind: 'equip' | 'unequip' }>) => void) | null = null
+  onshop: ((action: Extract<ActionData, { kind: 'shop' }>) => void) | null = null
   private root: HTMLElement
   private slots: SlotView[] = []
   private recipes: RecipeView[] = []
@@ -96,6 +99,15 @@ export class InventoryScreen {
   private stationStall: HTMLElement
   /** Lo que se lleva puesto: un clic lo quita. */
   private equipSlots = new Map<EquipSlot, SlotView>()
+  /** El puesto del mercader abierto: su tienda sustituye a las recetas. */
+  private shop: Structure | null = null
+  private shopColumn!: HTMLElement
+  private shopCoins!: HTMLElement
+  private shopList!: HTMLElement
+  private shopTabs!: { buy: HTMLElement; sell: HTMLElement }
+  private shopMode: 'buy' | 'sell' = 'buy'
+  /** Lo que enseña ahora la tienda, como texto (para no rehacerla si no cambia). */
+  private shopKey = ''
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'inventory', parent)
@@ -218,7 +230,9 @@ export class InventoryScreen {
     this.stationStall = el('p', 'station-stall', this.stationColumn)
     el('p', 'hint', this.stationColumn).textContent = STATION_HINT
 
-    el('p', 'hint inventory-keys', panel).textContent = 'Tab, E o C: volver al juego · Esc: pausa'
+    this.buildShop(panel)
+
+    el('p', 'hint inventory-keys', panel).textContent = 'Tab, E o C: volver al juego · Esc: pausa · W A S D: andar'
     // Con el ratón suelto el clic derecho abriría el menú del navegador.
     this.root.addEventListener('contextmenu', (e) => e.preventDefault())
   }
@@ -267,12 +281,13 @@ export class InventoryScreen {
    * La estación abierta (o null): con una de procesar se ven sus ranuras en vez de las recetas. Se llama cada frame con
    * la pantalla abierta, con la estación tal como está ahora.
    */
-  setStation(station: Structure | null) {
+  setStation(station: Structure | null, canForget = false) {
+    this.setShop(station?.shop ? station : null, canForget)
     const showing = station?.station ? station : null
     if (showing?.id !== this.station?.id) this.dragged = null
     this.station = showing
     this.stationColumn.hidden = !showing
-    this.recipesColumn.hidden = !!showing
+    this.recipesColumn.hidden = !!showing || !!this.shop
     if (!showing?.station) return
     this.stationTitle.textContent = STATION_NAMES[showing.kind]
     const { station: state } = showing
@@ -293,6 +308,78 @@ export class InventoryScreen {
     this.stationStall.hidden = !stall
     this.stationBars.progress.style.width = `${state.time > 0 ? Math.min(100, (state.progress / state.time) * 100) : 0}%`
     this.stationBars.burn.style.width = `${Math.min(100, (state.burn / 60) * 100)}%`
+  }
+
+  private buildShop(panel: HTMLElement) {
+    this.shopColumn = el('div', 'inventory-shop', panel)
+    this.shopColumn.hidden = true
+    el('h2', 'title', this.shopColumn).textContent = 'Mercader'
+    this.shopCoins = el('p', 'shop-coins', this.shopColumn)
+    const tabs = el('div', 'shop-tabs', this.shopColumn)
+    const tab = (mode: 'buy' | 'sell', text: string) => {
+      const button = el('button', 'shop-tab', tabs)
+      button.type = 'button'
+      button.textContent = text
+      button.tabIndex = -1
+      button.addEventListener('click', () => {
+        this.shopMode = mode
+        this.shopKey = ''
+      })
+      return button
+    }
+    this.shopTabs = { buy: tab('buy', 'Comprar'), sell: tab('sell', 'Vender') }
+    this.shopList = el('div', 'recipe-list shop-list', this.shopColumn)
+    el('p', 'hint', this.shopColumn).textContent = 'Clic: comprar o vender uno'
+  }
+
+  /** El puesto abierto (o null): se llama cada frame con la pantalla abierta. `canForget`: si el amuleto haría algo. */
+  private setShop(shop: Structure | null, canForget: boolean) {
+    this.shop = shop
+    this.shopColumn.hidden = !shop
+    const inventory = this.inventory
+    if (!shop?.shop || !inventory) return
+    const state = shop.shop
+    const coins = inventory.count('coin')
+    const key = `${this.shopMode}|${coins}|${canForget}|${JSON.stringify(state.bought)}|${inventory.slots.join()}|${PURCHASE_ITEMS.map((i) => inventory.count(i)).join()}`
+    if (key === this.shopKey) return
+    this.shopKey = key
+    this.shopCoins.textContent = `Monedas: ${coins}`
+    this.shopTabs.buy.classList.toggle('active', this.shopMode === 'buy')
+    this.shopTabs.sell.classList.toggle('active', this.shopMode === 'sell')
+    const rows: HTMLElement[] = []
+    const row = (item: ItemId, cost: string, problem: string | null, onclick: () => void) => {
+      const root = document.createElement('div')
+      root.className = 'recipe'
+      root.classList.toggle('available', !problem)
+      root.title = ITEM_NAMES[item]
+      el('div', 'icon', root).innerHTML = ICONS[item]
+      el('span', 'name', root).textContent = ITEM_NAMES[item]
+      el('span', 'cost', root).textContent = cost
+      const reason = el('span', 'reason', root)
+      reason.textContent = problem ?? ''
+      reason.hidden = !problem
+      root.addEventListener('click', () => {
+        if (!problem) onclick()
+      })
+      rows.push(root)
+    }
+    if (this.shopMode === 'buy') {
+      for (const offer of OFFERS) {
+        const available = offer.item !== 'forget_amulet' || canForget
+        const price = priceOf(offer, state)
+        row(offer.item, `${price} monedas${offer.rise ? ' · sube con cada compra' : ''}`, buyProblem(offer, state, inventory, available), () =>
+          this.onshop?.({ kind: 'shop', id: shop.id, op: 'buy', item: offer.item }),
+        )
+      }
+    } else {
+      for (const item of PURCHASE_ITEMS) {
+        const deal = PURCHASES[item]!
+        row(item, `${deal.amount} por ${deal.coins} ${deal.coins === 1 ? 'moneda' : 'monedas'} · tienes ${inventory.count(item)}`, sellProblem(item, inventory), () =>
+          this.onshop?.({ kind: 'shop', id: shop.id, op: 'sell', item }),
+        )
+      }
+    }
+    this.shopList.replaceChildren(...rows)
   }
 
   /** Se pone lo de la casilla `i` si es un peto o un escudo; devuelve si lo era. */

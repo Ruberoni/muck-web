@@ -126,7 +126,7 @@ Meterse en el mar tiene un precio: tras 12 s seguidos en su agua, vadeando o nad
 
 ## Enemigos
 
-Al anochecer empiezan a aparecer trasgos a 34–48 m del jugador, uno cada 5 s, y cada uno se anuncia antes: 1,5 s antes de salir se levanta una columna de humo oscuro donde aparecerá, que se ve por encima de los árboles y a través de la niebla, con un soplo grave que se oye desde allí (`enemyIncoming`, `src/view/SpawnSmokeView.ts`). Los jefes salen con su humo, sin esperar. Hay 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda y rodean árboles y rocas. También nadan: donde ya no se hace pie van a la mitad de su velocidad y nunca a más de 2,5 m/s, algo menos que lo que nada el jugador (3 m/s), y flotan con el cuerpo medio fuera, así que se les puede golpear. El agua ya no es un refugio, pero nadando siempre se les deja atrás. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic), y tienen 70 de vida: 7 golpes a mano; con hacha o pico, 4 de madera, 3 de piedra y 2 de hierro o mithril; con espada, 5, 3, 2 y 2, pero mucho más seguidos. Cada golpe los hace retroceder. Al morir dejan carne cruda y una moneda en el suelo; cuanta más vida tienen (las noches avanzadas, la Noche Eterna y el tótem la suben), más monedas sueltan. El gólem y el espíritu dan 2, y los jefes y el guardián muchas más. De momento las monedas se guardan para el futuro mercader. Al amanecer dejan de salir nuevos, pero los que quedan siguen ahí hasta que los mates, y cuentan para el tope de la noche siguiente. Desde la noche 2 algunos dejan paso a otros tres enemigos, cada noche más hasta la 4:
+Al anochecer empiezan a aparecer trasgos a 34–48 m del jugador, uno cada 5 s, y cada uno se anuncia antes: 1,5 s antes de salir se levanta una columna de humo oscuro donde aparecerá, que se ve por encima de los árboles y a través de la niebla, con un soplo grave que se oye desde allí (`enemyIncoming`, `src/view/SpawnSmokeView.ts`). Los jefes salen con su humo, sin esperar. Hay 3 a la vez la primera noche y 2 más cada noche, hasta 12. Persiguen al jugador algo más despacio de lo que anda y rodean árboles y rocas. También nadan: donde ya no se hace pie van a la mitad de su velocidad y nunca a más de 2,5 m/s, algo menos que lo que nada el jugador (3 m/s), y flotan con el cuerpo medio fuera, así que se les puede golpear. El agua ya no es un refugio, pero nadando siempre se les deja atrás. Pegados al jugador le quitan 10 de vida cada 1,2 s. Se golpean como los props (clic), y tienen 70 de vida: 7 golpes a mano; con hacha o pico, 4 de madera, 3 de piedra y 2 de hierro o mithril; con espada, 5, 3, 2 y 2, pero mucho más seguidos. Cada golpe los hace retroceder. Al morir dejan carne cruda y una moneda en el suelo; cuanta más vida tienen (las noches avanzadas, la Noche Eterna y el tótem la suben), más monedas sueltan. El gólem y el espíritu dan 2, y los jefes y el guardián muchas más. Las monedas se gastan en el mercader (ver [Mercader](#mercader)). Al amanecer dejan de salir nuevos, pero los que quedan siguen ahí hasta que los mates, y cuentan para el tope de la noche siguiente. Desde la noche 2 algunos dejan paso a otros tres enemigos, cada noche más hasta la 4:
 
 | Enemigo | Vida | Velocidad | Daño | Pico | Hacha | Espada | Mano | Sale sobre todo en | Suelta |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -205,6 +205,25 @@ Al activar el tótem el avión cae en llamas, lejos de él, y se anuncia hacia d
 Hay una tumba escondida en la isla, y se puede encontrar antes de activar el tótem, aunque hasta entonces está dormida. Al activarlo lanza una columna de luz que se ve a través de la niebla y sale en el minimapa. Manteniendo <kbd>E</kbd> 3 s se abre y nace el **Coloso de Cristal**: 3.000 de vida por jugador, armadura 15 y una coraza que hay que romper a pico, porque hasta entonces lo demás apenas le hace daño. Suelta el motor, que es lo último que le falta al avión. Si no se mata, sigue ahí; no se pierde nada.
 
 Lo imprescindible para escapar no se puede perder: si quien lo lleva se va, cae al suelo, y si cae al agua aparece en la orilla.
+
+## Mercader
+
+El puesto del mercader ya está en la isla desde el principio, a 40–70 m del punto de aparición y lejos del faro y del tótem, con un toldo morado, una linterna que se ve de noche y su punto en el minimapa. Con <kbd>E</kbd> o el **clic derecho** a su lado se abre el inventario con su tienda en lugar de las recetas (se puede seguir andando, y se cierra al alejarse). Las compras las decide el servidor (`src/sim/merchant.ts`).
+
+**Vende** (un clic, uno):
+
+| Objeto | Efecto | Precio |
+| --- | --- | --- |
+| Poción de curación | +60 de vida al momento | 8 |
+| Poción de velocidad | +30 % de velocidad, 60 s | 10 |
+| Poción de aguante | llena la resistencia y 60 s sin gastarla | 8 |
+| Poción de piedra | −30 % del daño recibido, 60 s | 12 |
+| Incienso de calma | todos los mobs comunes de la isla, vivos o anunciados, se deshacen en humo, sin botín | 25, +50 % cada compra |
+| Amuleto del olvido | deshace el último rasgo de las campanas (Rápidos, Fuertes o Agresivos) y su nivel; solo se vende si hay alguno | 40, +50 % cada compra |
+
+Lo que sube de precio sube para todos en la sala y se guarda con la partida. Se toman como la comida (**F**, o el clic derecho con ellos en la mano). No vende aceite: las noches tranquilas del faro se siguen pagando con carne y tiempo de destilador.
+
+**Compra**, barato y en lotes: 10 de madera o de piedra, o 3 de carne cruda, por 1 moneda; un lingote de hierro por 1 y uno de mithril por 3. No compra nada de lo que vende, ni lo que no se puede perder (piezas del avión, trofeos, fragmentos de meteorito): vender sirve para sacar algo de lo que sobra, pero las monedas salen sobre todo de los mobs.
 
 ## Meteoritos
 

@@ -9,11 +9,12 @@ import type { Inventory, ItemId } from './inventory'
 import { OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
 import { copyStation, followStation, newStation, STATION_DEFS, stepStation, type StationState } from './stations'
 import type { Vec3 } from './player'
+import { copyShop, newShop, type ShopState } from './merchant'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
 
 /** Lo que se puede colocar en el mundo. Todas sirven de estación: las recetas dicen cuál hay que tener cerca. */
-export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse' | 'distiller' | 'totem' | 'plane' | 'grave'
+export type StructureKind = 'campfire' | 'workbench' | 'furnace' | 'anvil' | 'lighthouse' | 'distiller' | 'totem' | 'plane' | 'grave' | 'merchant'
 
 export interface StructureDef {
   /** El objeto que se gasta al colocarla; null: no la coloca nadie. */
@@ -33,6 +34,8 @@ export const STRUCTURE_DEFS: Record<StructureKind, StructureDef> = {
   totem: { item: null, radius: TOTEM_RADIUS, facesPlacer: false },
   plane: { item: null, radius: 3, facesPlacer: false },
   grave: { item: null, radius: 1, facesPlacer: false },
+  // Al final: el orden es el índice en el cable.
+  merchant: { item: null, radius: 1.8, facesPlacer: false },
 }
 
 export const STRUCTURE_KINDS = Object.keys(STRUCTURE_DEFS) as StructureKind[]
@@ -80,6 +83,8 @@ export interface Structure extends Collider {
   plane?: PlaneState
   /** La tumba, ya abierta. */
   opened?: boolean
+  /** El puesto del mercader: lo comprado que sube de precio. */
+  shop?: ShopState
 }
 
 export interface StructureSpot {
@@ -107,6 +112,7 @@ const buildOf = (kind: StructureKind) => ({
   ...(kind === 'lighthouse' ? { fire: { oil: 0, burning: false, left: 0, lit: 0 } } : {}),
   ...(kind === 'plane' ? { plane: { hp: PLANE_HP, running: false, heat: 0 } } : {}),
   ...(STATION_DEFS[kind] ? { station: newStation() } : {}),
+  ...(kind === 'merchant' ? { shop: newShop() } : {}),
 })
 
 const copyStructure = (s: Structure): Structure => ({
@@ -115,6 +121,7 @@ const copyStructure = (s: Structure): Structure => ({
   ...(s.build ? { build: copyBuild(s.build) } : {}),
   ...(s.fire ? { fire: { ...s.fire } } : {}),
   ...(s.plane ? { plane: { ...s.plane } } : {}),
+  ...(s.shop ? { shop: copyShop(s.shop) } : {}),
 })
 
 /** Hueco entre el jugador y lo que coloca, si es grande. */

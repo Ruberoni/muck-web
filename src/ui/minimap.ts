@@ -24,6 +24,7 @@ export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; n
   totem: { shape: 'square', near: '#ff5a1f', far: '#ffb347' },
   plane: { shape: 'square', near: '#ffffff', far: '#dfe3e8' },
   grave: { shape: 'dot', near: '#9fd8ff', far: '#d6efff' },
+  merchant: { shape: 'dot', near: '#c46bff', far: '#e2b8ff' },
 }
 
 /** Cómo se marca el meteorito: como las estructuras, de cerca y de lejos. */

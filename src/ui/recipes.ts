@@ -18,7 +18,7 @@ export const clientCraftWorld = (structures: () => readonly Structure[]): CraftW
   nearStation: (kind, pos) => stationNear(structures(), kind, pos, CLIENT_STATION_RANGE),
 })
 
-export const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque', lighthouse: 'Faro', distiller: 'Destilador', totem: 'Tótem', plane: 'Avión', grave: 'Tumba' }
+export const STATION_NAMES: Record<StructureKind, string> = { campfire: 'Fogata', workbench: 'Mesa de trabajo', furnace: 'Horno', anvil: 'Yunque', lighthouse: 'Faro', distiller: 'Destilador', totem: 'Tótem', plane: 'Avión', grave: 'Tumba', merchant: 'Mercader' }
 const STATION_NEEDED: Record<StructureKind, string> = {
   campfire: 'Necesitas una fogata cerca',
   workbench: 'Necesitas una mesa de trabajo cerca',
@@ -29,10 +29,11 @@ const STATION_NEEDED: Record<StructureKind, string> = {
   totem: 'Necesitas un tótem cerca',
   plane: 'Necesitas el avión cerca',
   grave: 'Necesitas la tumba cerca',
+  merchant: 'Necesitas el mercader cerca',
 }
 
 /** Estaciones que se abren con clic derecho: las de procesar muestran sus ranuras; la mesa y el yunque, sus recetas. */
-const OPENABLE: ReadonlySet<StructureKind> = new Set(['campfire', 'furnace', 'distiller', 'workbench', 'anvil'])
+const OPENABLE: ReadonlySet<StructureKind> = new Set(['campfire', 'furnace', 'distiller', 'workbench', 'anvil', 'merchant'])
 /** Medio ángulo del cono de la mirada dentro del que se abre (en horizontal). */
 const AIM_COS = Math.cos((40 * Math.PI) / 180)
 
@@ -68,7 +69,7 @@ export function nearestProcessor(structures: readonly Structure[], pos: Vec3, ra
   let best: Structure | null = null
   let bestGap = Infinity
   for (const s of structures) {
-    if (!s.station) continue
+    if (!s.station && !s.shop) continue
     const gap = Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius
     if (gap > range || gap >= bestGap) continue
     best = s

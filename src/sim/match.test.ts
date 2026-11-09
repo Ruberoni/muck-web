@@ -130,6 +130,6 @@ describe('una partida entera', () => {
   it('empezar otra partida pone otra tumba, y solo una', () => {
     const { sim } = game()
     sim.startMatch({ players: 1, difficulty: 'easy' })
-    expect(sim.structures.list.map((s) => s.kind)).toEqual(['lighthouse', 'totem', 'grave'])
+    expect(sim.structures.list.map((s) => s.kind)).toEqual(['lighthouse', 'totem', 'grave', 'merchant'])
   })
 })

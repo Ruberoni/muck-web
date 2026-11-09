@@ -373,7 +373,7 @@
 .inventory .slot.picked { border-color: #7fd3ff; box-shadow: 0 0 0 2px #7fd3ff; }
 .inventory .slot.dragging { opacity: 0.45; }
 .inventory-station { display: grid; gap: 10px; align-content: start; min-width: 0; }
-.inventory-station[hidden], .inventory-recipes[hidden], .station-fuel[hidden], .station-stall[hidden] { display: none; }
+.inventory-station[hidden], .inventory-recipes[hidden], .inventory-shop[hidden], .station-fuel[hidden], .station-stall[hidden] { display: none; }
 .station-stall { margin: 0; font-size: 13px; color: #ffcf7a; }
 .station-machine, .station-fuel { display: flex; align-items: center; gap: 10px; }
 .station-machine .station-bar { flex: 1; }
@@ -676,3 +676,10 @@ kbd {
 
 /* Un enlace largo (cuando no se puede copiar) o un aviso no ensanchan el menú. */
 .lobby code, .lobby .status { overflow-wrap: anywhere; }
+
+/* La tienda del mercader, en la columna de las recetas. */
+.inventory-shop { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.shop-coins { margin: 0; font-weight: 600; color: #ffd866; }
+.shop-tabs { display: flex; gap: 6px; }
+.shop-tab { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgb(255 255 255 / 0.3); background: rgb(255 255 255 / 0.08); color: inherit; cursor: pointer; }
+.shop-tab.active { background: #ffd866; border-color: #ffd866; color: #1d2230; }

@@ -46,8 +46,8 @@ describe('islas aleatorias', () => {
     expect(slot.spawn).toEqual(sim.spawnCenter)
     expect(slot.player.pos).toMatchObject({ x: sim.spawnCenter.x, z: sim.spawnCenter.z })
     expect(sim.env.heightAt(5, 5)).toBe(island.heightAt(5, 5))
-    // El faro, el tótem y la tumba, en la isla nueva.
-    expect(sim.structures.list.map((s) => s.kind).sort()).toEqual(['grave', 'lighthouse', 'totem'])
+    // El faro, el tótem, la tumba y el mercader, en la isla nueva.
+    expect(sim.structures.list.map((s) => s.kind).sort()).toEqual(['grave', 'lighthouse', 'merchant', 'totem'])
   })
 
   it('se guarda con su isla y se restaura en ella', () => {

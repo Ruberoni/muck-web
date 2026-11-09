@@ -52,6 +52,7 @@ export type SimEventData =
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
+  | { type: 'playerTraded'; id: PlayerId; op: 'buy' | 'sell'; item: ItemId }
   /** Ha colocado `item` (la estructura llega en su `structurePlaced`). */
   | { type: 'playerPlaced'; id: PlayerId; item: ItemId }
   /** Ha tirado `amount` de `item` (el objeto del suelo llega en su `pickupSpawn`). */
@@ -93,6 +94,12 @@ export type SimEventData =
   | { type: 'shellBroken'; id: number }
   /** Los mobs han subido: un rasgo con la campana o, sin él (`trait` null), uno de los saltos. */
   | { type: 'mobsRose'; trait: MobTrait | null; threat: ThreatState }
+  /** El amuleto del olvido: los mobs pierden `trait` (null: no tenían ninguno). */
+  | { type: 'mobsForgot'; trait: MobTrait | null; threat: ThreatState }
+  /** El incienso de calma: los mobs comunes se deshacen en humo en estos sitios, sin botín. */
+  | { type: 'mobsCalmed'; spots: { x: number; z: number }[] }
+  /** Lo comprado en el puesto del mercader `id`: cambian los precios que suben. */
+  | { type: 'shopChanged'; id: number; bought: Partial<Record<ItemId, number>> }
   | { type: 'clockSet'; worldStartTick: number }
   | { type: 'worldReset'; worldStartTick: number }
 

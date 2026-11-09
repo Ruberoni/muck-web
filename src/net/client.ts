@@ -100,6 +100,7 @@ function concerns(e: SimEvent, me: PlayerId): boolean {
     case 'playerSwing':
     case 'playerAte':
     case 'playerCrafted':
+    case 'playerTraded':
     case 'playerPlaced':
     case 'playerDropped':
     case 'playerEquipped':
@@ -631,9 +632,15 @@ export class NetClient {
         sim.projectiles.remove(e.id)
         break
       case 'mobsRose':
+      case 'mobsForgot':
       case 'nightLit':
         sim.threat.load(e.threat)
         break
+      case 'shopChanged': {
+        const structure = sim.structures.byId(e.id)
+        if (structure) structure.shop = { bought: { ...e.bought } }
+        break
+      }
       case 'stationChanged': {
         const structure = sim.structures.byId(e.id)
         if (structure) structure.station = copyStation(e.station)

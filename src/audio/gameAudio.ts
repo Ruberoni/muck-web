@@ -147,6 +147,9 @@ export class GameAudio {
         case 'bell':
           s.play('bell')
           break
+        case 'playerTraded':
+          if (e.id === me) s.play('pickup')
+          break
         // Como un golpe al aire.
         case 'projectileThrown':
           s.play('swing', { gain: ROCK_THROW_GAIN })

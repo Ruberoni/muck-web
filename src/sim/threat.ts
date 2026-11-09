@@ -43,9 +43,11 @@ export interface ThreatState {
   totem: boolean
   /** Noches normales que quedaron iluminadas: cada una resta lo que habría subido la vida. */
   litNights: number
+  /** Los rasgos en el orden en que llegaron: el amuleto del olvido deshace el último. */
+  history?: MobTrait[]
 }
 
-const fresh = (): ThreatState => ({ level: 0, traits: { fast: 0, strong: 0, aggressive: 0 }, next: 'strong', eternal: false, totem: false, litNights: 0 })
+const fresh = (): ThreatState => ({ level: 0, traits: { fast: 0, strong: 0, aggressive: 0 }, next: 'strong', eternal: false, totem: false, litNights: 0, history: [] })
 
 /**
  * Cuánto han subido los mobs. La cantidad tiene tope, así que lo que sube después es esto: un poco cada noche, un salto
@@ -75,7 +77,24 @@ export class Threat {
     const trait = this.state.next
     this.state.level++
     this.state.traits[trait]++
+    ;(this.state.history ??= []).push(trait)
     this.state.next = TRAITS[Math.floor(rng() * TRAITS.length)]
+    return trait
+  }
+
+  /** Si hay algún rasgo que olvidar. */
+  get canForget(): boolean {
+    return TRAITS.some((t) => this.state.traits[t] > 0)
+  }
+
+  /** El amuleto del olvido: deshace el último rasgo (y su nivel). Devuelve cuál, o null si no había ninguno. */
+  forget(): MobTrait | null {
+    const history = (this.state.history ??= [])
+    // Una partida de antes del historial: cualquiera de los que haya.
+    const trait = history.pop() ?? TRAITS.find((t) => this.state.traits[t] > 0) ?? null
+    if (!trait || this.state.traits[trait] <= 0) return null
+    this.state.traits[trait]--
+    this.state.level = Math.max(0, this.state.level - 1)
     return trait
   }
 
@@ -97,10 +116,10 @@ export class Threat {
   }
 
   save(): ThreatState {
-    return { ...this.state, traits: { ...this.state.traits } }
+    return { ...this.state, traits: { ...this.state.traits }, history: [...(this.state.history ?? [])] }
   }
 
   load(state: ThreatState) {
-    this.state = { ...state, traits: { ...state.traits } }
+    this.state = { ...state, traits: { ...state.traits }, history: [...(state.history ?? [])] }
   }
 }

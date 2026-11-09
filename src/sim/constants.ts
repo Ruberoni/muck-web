@@ -53,6 +53,8 @@ export interface ConsumableDef {
   speed?: { factor: number; seconds: number }
   /** Segundos con el daño recibido multiplicado por `factor` (menos de 1). */
   guard?: { factor: number; seconds: number }
+  /** Lo que hace en el mundo, no en quien lo toma (lo decide la simulación): calmar a los mobs u olvidar un rasgo. */
+  world?: 'calm' | 'forget'
 }
 
 export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
@@ -64,6 +66,13 @@ export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
   healing_herb: { food: 0, heal: 25 },
   // Llena la resistencia y deja correr sin gastarla: con varias seguidas se corre sin parar.
   mint: { food: 0, stamina: STAMINA_MAX, breath: 20 },
+  // Lo que vende el mercader (merchant.ts).
+  healing_potion: { food: 0, heal: 60 },
+  speed_potion: { food: 0, speed: { factor: 1.3, seconds: 60 } },
+  stamina_potion: { food: 0, stamina: STAMINA_MAX, breath: 60 },
+  stone_potion: { food: 0, guard: { factor: 0.7, seconds: 60 } },
+  calm_incense: { food: 0, world: 'calm' },
+  forget_amulet: { food: 0, world: 'forget' },
 }
 
 export const MOUSE_SENSITIVITY = 0.002

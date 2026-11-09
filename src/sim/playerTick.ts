@@ -37,9 +37,12 @@ export interface Intent {
   drops: { item: ItemId; amount: number }[]
   /** Lo que mete o saca de las estaciones: lo hace la simulación, que tiene las estaciones (la predicción no). */
   stations: StationOp[]
+  /** Lo que compra o vende al mercader: también lo hace la simulación. */
+  trades: TradeOp[]
 }
 
 export type StationOp = Omit<Extract<ActionData, { kind: 'station' }>, 'kind'>
+export type TradeOp = Omit<Extract<ActionData, { kind: 'shop' }>, 'kind'>
 
 /**
  * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla, mover casillas, fabricar y tirar en el
@@ -48,7 +51,7 @@ export type StationOp = Omit<Extract<ActionData, { kind: 'station' }>, 'kind'>
 export function applyActions(actor: Actor, command: PlayerCommands | undefined, world: CraftWorld, emit: Emit): Intent {
   const move = command?.move
   const buttons = move?.buttons ?? 0
-  const intent: Intent = { aim: move?.aim, attack: (buttons & Btn.Attack) !== 0, use: (buttons & Btn.Use) !== 0, swing: false, place: false, eat: false, drops: [], stations: [] }
+  const intent: Intent = { aim: move?.aim, attack: (buttons & Btn.Attack) !== 0, use: (buttons & Btn.Use) !== 0, swing: false, place: false, eat: false, drops: [], stations: [], trades: [] }
   if (!command) return intent
   for (const action of [...command.actions].sort((a, b) => a.seq - b.seq)) {
     if (action.seq <= actor.appliedSeq) continue
@@ -74,6 +77,9 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
         break
       case 'station':
         intent.stations.push({ id: action.id, slot: action.slot, from: action.from, all: action.all })
+        break
+      case 'shop':
+        intent.trades.push({ id: action.id, op: action.op, item: action.item })
         break
       case 'drop': {
         const dropped = dropFromSlot(actor, action.slot, action.all, emit)
