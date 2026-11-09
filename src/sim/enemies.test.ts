@@ -15,8 +15,9 @@ import {
   STEP,
   WADE_DEPTH,
   WALK_SPEED,
+  WATER_SPEED_FACTOR,
 } from './constants'
-import { bossOfNight, bossScale, Enemies, enemyAimHeight, enemyCap, spawnChance, spawnType, type EnemyData } from './enemies'
+import { bossOfNight, bossScale, Enemies, enemyAimHeight, enemyCap, ENEMY_SWIM_MAX, spawnChance, spawnType, type EnemyData } from './enemies'
 import type { SimEventData } from './events'
 import { createCombat, Interaction, type Fighter } from './interaction'
 import { attackDamage, hitEfficacy } from './tiers'
@@ -104,8 +105,8 @@ describe('enemigos nocturnos', () => {
     expect(run(0.1)).toBe(GOBLIN.damage)
   })
 
-  it('no entran en agua profunda: quien nada lejos de la orilla está a salvo', () => {
-    // Desde el hueco libre hacia fuera hasta pasar 4 m de agua profunda.
+  it('nadan: en el agua van más despacio que el jugador, pero quien se queda en ella no está a salvo', () => {
+    // Desde el hueco libre hacia fuera hasta pasar 4 m de agua donde ya no se hace pie.
     const dir = { x: spot.x / Math.hypot(spot.x, spot.z), z: spot.z / Math.hypot(spot.x, spot.z) }
     let shore = 0
     let r = 0
@@ -117,11 +118,17 @@ describe('enemigos nocturnos', () => {
     expect(r).toBeLessThan(200)
     player = { x: spot.x + dir.x * r, z: spot.z + dir.z * r }
     const e = enemies.spawnAt(spot.x + dir.x * (shore - 6), spot.z + dir.z * (shore - 6))
-    expect(run(10)).toBe(0)
-    expect(heightAt(e.pos.x, e.pos.z)).toBeGreaterThanOrEqual(WATER_LEVEL - WADE_DEPTH)
-    // Llegó hasta la orilla, pero no hasta el jugador.
-    expect(dist(e, player)).toBeLessThan(6)
-    expect(dist(e, player)).toBeGreaterThan(CONTACT + GOBLIN.reach)
+    let fastest = 0
+    let damage = 0
+    for (let i = 0; i < Math.round(10 / STEP); i++) {
+      const before = { ...e.pos }
+      for (const d of enemies.step(STEP, [{ id: 0, pos: player, alive: true }], NIGHT, 1)) damage += d.damage
+      if (heightAt(before.x, before.z) < WATER_LEVEL - WADE_DEPTH && dist(e, player) > CONTACT + 0.5) fastest = Math.max(fastest, Math.hypot(e.pos.x - before.x, e.pos.z - before.z) / STEP)
+    }
+    expect(damage).toBeGreaterThan(0)
+    expect(fastest).toBeGreaterThan(0)
+    expect(fastest).toBeLessThanOrEqual(ENEMY_SWIM_MAX + 1e-6)
+    expect(ENEMY_SWIM_MAX).toBeLessThan(WALK_SPEED * WATER_SPEED_FACTOR)
   })
 
   it('la primera noche solo hay trasgos; desde la segunda, también gólems y espíritus', () => {

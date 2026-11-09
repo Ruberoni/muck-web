@@ -1,9 +1,11 @@
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 
-/** Segundos seguidos en agua honda del mar hasta que aparece el pez. */
+/** Segundos seguidos en el agua del mar hasta que aparece el pez. */
 export const FISH_DELAY = 12
-/** Lo que quita cada mordisco, y cada cuánto muerde. */
+/** Lo que quita cada mordisco donde ya no se hace pie, y cada cuánto muerde. */
 export const FISH_BITE = 35
+/** Lo que quita en lo poco hondo, donde aún se hace pie: la orilla también es peligrosa, pero menos. */
+export const FISH_BITE_SHALLOW = 15
 export const FISH_BITE_INTERVAL = 1.5
 
 /** Un pez detrás de un jugador: muerde mientras siga en el mar. No se puede matar ni apuntar. */
@@ -19,16 +21,19 @@ export interface FishState {
   swimming: [PlayerId, number][]
 }
 
-/** Quien puede atraer un pez: si está vivo (y sin el escudo de reaparecer) y si nada en agua honda del mar. */
+/** Quien puede atraer un pez: si está vivo (y sin el escudo de reaparecer), si está en el agua del mar y si nada. */
 export interface Swimmer {
   id: PlayerId
   alive: boolean
   inSea: boolean
+  /** Donde ya no se hace pie: muerde más. */
+  deep?: boolean
 }
 
 /**
- * Los peces del mar: quien se queda nadando en agua honda fuera de la isla (no en un lago) más de FISH_DELAY segundos
- * atrae uno, que muerde FISH_BITE cada FISH_BITE_INTERVAL hasta que sale del agua. Aparecer y morder se avisan
+ * Los peces del mar: quien se queda en el agua fuera de la isla (no en un lago), vadeando o nadando, más de FISH_DELAY
+ * segundos atrae uno, que muerde cada FISH_BITE_INTERVAL hasta que sale del agua: FISH_BITE donde se nada y
+ * FISH_BITE_SHALLOW donde aún se hace pie. Aparecer y morder se avisan
  * (`fishAppeared`, `fishBite`, `fishLeft`); el daño pasa por la armadura, pero no hay escudo que lo pare.
  */
 export class Fishes {
@@ -40,7 +45,7 @@ export class Fishes {
   /** Paso fijo. `swimmers`: los que están en el mundo. Devuelve los mordiscos de este paso. */
   step(dt: number, swimmers: readonly Swimmer[]): { playerId: PlayerId; damage: number }[] {
     const bites: { playerId: PlayerId; damage: number }[] = []
-    for (const { id, alive, inSea } of swimmers) {
+    for (const { id, alive, inSea, deep = true } of swimmers) {
       if (!alive || !inSea) {
         this.swimming.delete(id)
         this.leave(id)
@@ -58,7 +63,7 @@ export class Fishes {
       fish.biteIn -= dt
       if (fish.biteIn > 1e-9) continue
       fish.biteIn += FISH_BITE_INTERVAL
-      bites.push({ playerId: id, damage: FISH_BITE })
+      bites.push({ playerId: id, damage: deep ? FISH_BITE : FISH_BITE_SHALLOW })
       this.emit({ type: 'fishBite', id })
     }
     // Quien ya no está en el mundo (se ha ido) se lleva su pez.

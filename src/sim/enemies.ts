@@ -2,7 +2,7 @@ import { MOB_MAX_SPEED, NO_SCALING, type MobScaling } from './threat'
 import type { Biome } from './world/biomes'
 import { DEFAULT_ISLAND, type Island } from './world/island'
 import { DAY_FRACTION, DAY_LENGTH, isNight } from './world/daycycle'
-import { WATER_LEVEL } from './world/terrain'
+import { enemyFloor, WATER_LEVEL } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import {
@@ -26,6 +26,7 @@ import {
   ENEMY_TYPES,
   PLAYER_RADIUS,
   SHELL_RESIST,
+  STEP,
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
   type ChargeDef,
@@ -178,8 +179,13 @@ export function spawnType(roll: number, day: number, biome: Biome): EnemyType {
   return 'goblin'
 }
 
-/** No se mueve a agua profunda: si el jugador nada lejos de la orilla, lo esperan en ella. */
-const walkable = (island: Island, x: number, z: number) => island.heightAt(x, z) >= WATER_LEVEL - WADE_DEPTH
+/**
+ * En el agua (donde ya no se hace pie: el fondo por debajo de WADE_DEPTH) nadan: a la mitad de su velocidad y, como
+ * mucho, a ENEMY_SWIM_MAX, por debajo de lo que nada el jugador, para que siempre pueda escapar.
+ */
+export const ENEMY_SWIM_FACTOR = 0.5
+export const ENEMY_SWIM_MAX = 2.5
+const swimming = (island: Island, x: number, z: number) => island.heightAt(x, z) < WATER_LEVEL - WADE_DEPTH
 
 /** Enemigos: aparecen de noche y siguen hasta que los matan. Aparición, persecución, ataque y golpes recibidos. */
 export class Enemies {
@@ -401,7 +407,7 @@ export class Enemies {
       c.state = 'idle'
       this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
       this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
-      this.throwRock({ x: e.pos.x, y: this.island.heightAt(e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, damage)
+      this.throwRock({ x: e.pos.x, y: enemyFloor(this.island, e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, damage)
       return
     }
     if (c.cooldown <= 1e-9 && dist <= def.range) {
@@ -415,11 +421,17 @@ export class Enemies {
     if (away !== 0 && dist > 1e-6) this.move(e, ((e.pos.x - prey.pos.x) / dist) * away, ((e.pos.z - prey.pos.z) / dist) * away)
   }
 
-  /** Cada eje por separado, para que resbale por la orilla en vez de pararse. */
+  /** Se mueve (mx, mz) en este paso; en el agua, más despacio (ENEMY_SWIM_FACTOR, hasta ENEMY_SWIM_MAX). */
   private move(e: EnemyData, mx: number, mz: number) {
     const { x, z } = e.pos
-    if (walkable(this.island, e.pos.x + mx, e.pos.z)) e.pos.x += mx
-    if (walkable(this.island, e.pos.x, e.pos.z + mz)) e.pos.z += mz
+    if (swimming(this.island, x, z)) {
+      const step = Math.hypot(mx, mz)
+      const k = step > 1e-9 ? Math.min(ENEMY_SWIM_FACTOR, (ENEMY_SWIM_MAX * STEP) / step) : 1
+      mx *= k
+      mz *= k
+    }
+    e.pos.x += mx
+    e.pos.z += mz
     const r = Math.hypot(e.pos.x, e.pos.z)
     const bound = this.island.size * WORLD_BOUND_FACTOR
     if (r > bound) {
@@ -429,13 +441,9 @@ export class Enemies {
     this.settle(e, x, z)
   }
 
-  /** Lo saca de los props; si eso lo empuja al agua profunda, vuelve a (x, z). */
-  private settle(e: EnemyData, x: number, z: number) {
+  /** Lo saca de los props. */
+  private settle(e: EnemyData, _x: number, _z: number) {
     for (const grid of this.grids) resolveCircle(e.pos, ENEMY_DEFS[e.type].radius, grid)
-    if (!walkable(this.island, e.pos.x, e.pos.z)) {
-      e.pos.x = x
-      e.pos.z = z
-    }
   }
 
   /** Ni se amontonan entre ellos ni se meten dentro de ningún jugador vivo. */

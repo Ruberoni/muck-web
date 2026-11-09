@@ -351,7 +351,13 @@ export class Simulation {
     hits.push(
       ...this.fishes.step(
         STEP,
-        present.map(({ id, player, alive, shieldUntil }) => ({ id, alive: alive && this.tick >= shieldUntil, inSea: player.floating && !inLake(this.island, player.pos.x, player.pos.z) })),
+        present.map(({ id, player, alive, shieldUntil }) => ({
+          id,
+          alive: alive && this.tick >= shieldUntil,
+          // Desde que se pisa agua de verdad (vadeando), no solo nadando: las afueras de la isla son peligrosas.
+          inSea: player.inWater && !inLake(this.island, player.pos.x, player.pos.z),
+          deep: player.floating,
+        })),
       ),
     )
     // Golpe a golpe, por si el escudo para unos y otros no; el aviso, uno por jugador y paso.

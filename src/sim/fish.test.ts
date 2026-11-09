@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOAT_DEPTH, STEP } from './constants'
-import { FISH_BITE, FISH_BITE_INTERVAL, FISH_DELAY, Fishes } from './fish'
+import { FISH_BITE, FISH_BITE_INTERVAL, FISH_BITE_SHALLOW, FISH_DELAY, Fishes } from './fish'
 import { pickIsland } from './islands'
 import { Simulation } from './Simulation'
 import { heightAt, WATER_LEVEL } from './world/terrain'
@@ -83,5 +83,12 @@ describe('el pez', () => {
     }
     expect(slot.player.floating).toBe(true)
     expect(sim.fishes.list).toEqual([])
+  })
+
+  it('en lo poco hondo del mar también aparece, pero muerde menos', () => {
+    const fishes = new Fishes()
+    const bites: number[] = []
+    for (let t = 0; t < FISH_DELAY + FISH_BITE_INTERVAL * 2 + 0.1; t += STEP) for (const b of fishes.step(STEP, [{ id: 0, alive: true, inSea: true, deep: false }])) bites.push(b.damage)
+    expect(bites).toEqual([FISH_BITE_SHALLOW, FISH_BITE_SHALLOW])
   })
 })

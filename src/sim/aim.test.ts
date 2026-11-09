@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { aimRay, createPropHitboxes, enemyHitbox, ENEMY_BODY_LIFT, pickTarget, rayDistance } from './aim'
 import { ENEMY_DEFS, EYE_HEIGHT, REACH } from './constants'
 import { createPropWorld, TRUNK_BOTTOM_RADIUS, TRUNK_TOP_RADIUS, TRUNK_HEIGHT, type PropPlacement } from './props'
-import { heightAt } from './world/terrain'
+import { DEFAULT_TERRAIN, enemyFloor } from './world/terrain'
 
 const tree = (id: number, x: number, z: number, y = 0): PropPlacement => ({
   id,
@@ -56,8 +56,8 @@ describe('aim', () => {
   })
 
   it('elige lo más cercano; los muertos no tapan lo de detrás', () => {
-    // Los ojos a la altura del centro del enemigo, que está sobre el terreno.
-    const y = heightAt(101.5, 0) + ENEMY_BODY_LIFT * ENEMY_DEFS.goblin.scale - EYE_HEIGHT
+    // Los ojos a la altura del centro del enemigo, que está sobre el terreno (aquí, en el mar: flota).
+    const y = enemyFloor(DEFAULT_TERRAIN, 101.5, 0) + ENEMY_BODY_LIFT * ENEMY_DEFS.goblin.scale - EYE_HEIGHT
     const world = createPropWorld([tree(0, 101, 0, y), tree(1, 102.5, 0, y)])
     const hitboxes = createPropHitboxes(world.placements)
     const ray = aimRay(lookingEast(100, 0, y))
@@ -75,7 +75,7 @@ describe('aim', () => {
     const [x, z] = [100, 0]
     for (const yaw of [0, 1, 2, 3]) {
       const box = enemyHitbox(x, z, yaw, 'goblin')
-      const centre = heightAt(x, z) + ENEMY_BODY_LIFT * ENEMY_DEFS.goblin.scale
+      const centre = enemyFloor(DEFAULT_TERRAIN, x, z) + ENEMY_BODY_LIFT * ENEMY_DEFS.goblin.scale
       const from = { pos: { x: x - 2, y: centre - EYE_HEIGHT, z }, yaw: -Math.PI / 2, pitch: 0 }
       const d = rayDistance(aimRay(from), box)
       expect(d).toBeGreaterThan(1.3)

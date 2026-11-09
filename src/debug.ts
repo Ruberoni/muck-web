@@ -4,7 +4,7 @@ import { INVENTORY_SIZE, SLOT_COUNT, type ItemId } from './sim/inventory'
 import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
-import { WATER_LEVEL } from './sim/world/terrain'
+import { enemyFloor, WATER_LEVEL } from './sim/world/terrain'
 import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH, type EnemyType } from './sim/constants'
 import type { PropKind } from './sim/props'
 import { enemyAimHeight } from './sim/enemies'
@@ -338,7 +338,7 @@ export function installDebug(game: Game) {
       const p = player()
       const dx = e.pos.x - p.pos.x
       const dz = e.pos.z - p.pos.z
-      const dy = sim().island.heightAt(e.pos.x, e.pos.z) + enemyAimHeight(e.type) - (p.pos.y + EYE_HEIGHT)
+      const dy = enemyFloor(sim().island, e.pos.x, e.pos.z) + enemyAimHeight(e.type) - (p.pos.y + EYE_HEIGHT)
       const yaw = Math.atan2(-dx, -dz)
       const pitch = Math.atan2(dy, Math.hypot(dx, dz))
       // En red solo cambia la mirada, que es del cliente: el objetivo sale del siguiente paso.

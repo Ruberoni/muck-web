@@ -57,6 +57,15 @@ export interface Lake {
   radius: number
 }
 
+/** Lo que se hunde un enemigo que nada: flota con el cuerpo medio fuera, como el jugador. */
+export const ENEMY_SINK = 0.6
+
+/**
+ * Dónde pisa un enemigo en (x, z): el terreno o, en el agua honda, la superficie menos ENEMY_SINK. La misma altura
+ * para su caja de golpe, su alcance, su botín, lo que lanza y su vista.
+ */
+export const enemyFloor = (terrain: Pick<Terrain, 'heightAt'>, x: number, z: number) => Math.max(terrain.heightAt(x, z), WATER_LEVEL - ENEMY_SINK)
+
 /** El suelo de una isla. */
 export interface Terrain {
   /** Lado del cuadrado en el que cabe la isla, en metros: el mar empieza antes del borde. */

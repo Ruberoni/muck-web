@@ -19,7 +19,7 @@ import {
   type PropPlacement,
 } from './props'
 import { DEFAULT_ISLAND } from './world/island'
-import type { Terrain } from './world/terrain'
+import { enemyFloor, type Terrain } from './world/terrain'
 
 // Cuerpo del enemigo: un icosaedro estirado sobre el suelo, y el modelo entero escalado (ENEMY_DEFS[tipo].scale).
 // Los cuernos, los pies y los ojos son detalles de la vista y no cuentan para apuntar.
@@ -179,7 +179,7 @@ export function createPropHitboxes(placements: readonly PropPlacement[]): PropHi
 export function enemyHitbox(x: number, z: number, yaw: number, type: EnemyType, out?: Hitbox, terrain: Terrain = DEFAULT_ISLAND): Hitbox {
   const box = out ?? { x, y: 0, z, cosX: 1, sinX: 0, cosY: 1, sinY: 0, sx: 1, sy: 1, sz: 1, parts: ENEMY_SHAPE }
   box.x = x
-  box.y = terrain.heightAt(x, z)
+  box.y = enemyFloor(terrain, x, z)
   box.z = z
   box.cosY = Math.cos(yaw)
   box.sinY = Math.sin(yaw)
