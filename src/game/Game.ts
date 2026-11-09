@@ -7,6 +7,7 @@ import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
 import { MeteorView } from '../view/MeteorView'
 import { SpawnSmokeView } from '../view/SpawnSmokeView'
+import { HazardView } from '../view/HazardView'
 import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { autoSkin } from '../net/skins'
@@ -126,6 +127,7 @@ export class Game {
   readonly projectileView = new ProjectileView()
   readonly meteorView = new MeteorView()
   readonly smokeView = new SpawnSmokeView()
+  readonly hazardView = new HazardView()
   readonly fishView = new FishView()
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView(loadCharacter)
@@ -221,7 +223,7 @@ export class Game {
       (error) => console.warn('No se han podido cargar los modelos de naturaleza', error),
     )
     this.structureView = new StructureView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.fishView.group, this.remotePlayers.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.hazardView.group, this.fishView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
@@ -760,6 +762,10 @@ export class Game {
           this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
           this.audio.meteorIncoming()
           break
+        case 'hazardAdded':
+          // El pisotón hace temblar el suelo.
+          if (e.hazard.look === 'stomp') this.shake.start(Math.hypot(e.hazard.x - this.renderPos.x, e.hazard.z - this.renderPos.z))
+          break
         case 'enemyIncoming':
           this.smokeView.puff(e.x, e.z)
           this.audio.spawnPuff(e.x, e.z, this.listener())
@@ -944,7 +950,7 @@ export class Game {
       this.terrain = createTerrain(island)
       this.scene.add(this.terrain)
       this.hud.minimap.setIsland(island)
-      this.enemyView.island = this.meteorView.island = this.smokeView.island = island
+      this.enemyView.island = this.meteorView.island = this.smokeView.island = this.hazardView.island = island
     }
     if (this.propView.placements !== this.sim.world.placements) this.propView = this.buildPropView(this.propView)
   }
@@ -978,6 +984,7 @@ export class Game {
     this.projectileView.reset()
     this.meteorView.reset()
     this.smokeView.reset()
+    this.hazardView.reset()
     this.fishView.reset()
     this.structureView.reset()
     this.remotePlayers.reset()
@@ -1032,6 +1039,8 @@ export class Game {
     this.pickupView.update(sim.pickups.list, alpha)
     this.projectileView.update(dt, sim.projectiles.list, alpha)
     this.smokeView.update(dt)
+    // Las zonas y las ondas, en el tick que se ve: el predicho en red (como los proyectiles).
+    this.hazardView.update(sim.hazards.list, net ? (net.client.predictedTick ?? net.client.renderTick()) : sim.tick)
     this.meteorView.update(dt, sim.worldEvents.meteor, net ? net.client.renderTick() : sim.tick)
     this.fishView.update(dt, sim.fishes.list, (id) => (id === slot.id ? this.renderPos : (net?.client.shownPlayers.find((p) => p.id === id)?.pose ?? null)))
     this.propView.update(dt)

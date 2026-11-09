@@ -6,14 +6,20 @@ import { DEFAULT_ISLAND, type Island } from './world/island'
 
 type Vec3 = { x: number; y: number; z: number }
 
-export type ProjectileKind = 'rock'
+/** La roca del lanzarrocas; la roca gorda, que estalla al caer; y el trasgo que lanza el gigante, que se levanta. */
+export type ProjectileKind = 'rock' | 'boulder' | 'goblin'
 /** Con qué chocó un proyectil; `expired` si se le acabó el tiempo sin tocar nada. */
 export type ProjectileEnd = 'player' | 'obstacle' | 'ground' | 'expired'
 
 /** Radio y segundos que dura en el aire, como mucho. */
 export const PROJECTILE_DEFS: Record<ProjectileKind, { radius: number; life: number }> = {
   rock: { radius: 0.3, life: 5 },
+  boulder: { radius: 0.6, life: 6 },
+  goblin: { radius: 0.45, life: 6 },
 }
+
+/** Lo que pasa donde acaba un proyectil (la roca gorda estalla, el trasgo se levanta): lo hace la simulación. */
+export type ProjectileLanded = (p: Projectile, end: ProjectileEnd) => void
 
 /** Altura sobre el jugador hasta la que le da un proyectil. */
 const PLAYER_HEIGHT = EYE_HEIGHT + 0.1
@@ -90,6 +96,7 @@ export class Projectiles {
     private grids: SpatialGrid<Collider>[] = [],
     private emit: Emit = NO_EMIT,
     private island: Island = DEFAULT_ISLAND,
+    private landed: ProjectileLanded = () => {},
   ) {}
 
   /** Lanza un proyectil en el tick `tick`. */
@@ -122,6 +129,7 @@ export class Projectiles {
       this.remove(p.id)
       this.emit({ type: 'projectileHit', id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, end })
       if (target) damage.push({ playerId: target.id, damage: p.damage, from: { x: p.prev.x, z: p.prev.z } })
+      this.landed(p, end)
     }
     return damage
   }

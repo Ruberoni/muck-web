@@ -496,8 +496,12 @@ describe('jefes', () => {
       enemies = new Enemies([], mulberry32(7), (e) => events.push(e), (from, target, damage) => rocks.push({ tick, from, target, damage }))
     })
 
-    /** Un lanzarrocas a `distance` metros, sin aparición de otros: es de día. */
-    const facing = (distance: number) => enemies.spawnAt(player.x + distance, player.z, 'thrower')
+    /** Un lanzarrocas a `distance` metros, sin aparición de otros: es de día. Sin ataques especiales (hazards.test.ts). */
+    const facing = (distance: number) => {
+      const boss = enemies.spawnAt(player.x + distance, player.z, 'thrower')
+      boss.special.gap = 1e9
+      return boss
+    }
     const run = (steps: number) => {
       let damage = 0
       for (let i = 0; i < steps; i++) {

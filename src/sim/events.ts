@@ -1,4 +1,5 @@
-import type { EnemyType, HitEfficacy } from './constants'
+import type { EnemyType, HitEfficacy, SpecialId } from './constants'
+import type { Hazard } from './hazards'
 import type { StationState } from './stations'
 import type { RecipeId } from './crafting'
 import type { BuildState } from './builds'
@@ -38,6 +39,10 @@ export type SimEventData =
   /** Han entregado materiales a una construcción. `finished`: la fase que ha acabado, si ha acabado alguna. */
   | { type: 'buildProgress'; id: number; build: BuildState; finished: string | null }
   | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
+  /** Un jefe empieza un ataque especial (su aviso): suena, y la vista lo ve por su `enemyCharge`. */
+  | { type: 'enemySpecial'; id: number; attack: SpecialId }
+  /** Un peligro nuevo en el suelo (hazards.ts): el cliente lo copia y lo dibuja en su tick. */
+  | { type: 'hazardAdded'; hazard: Hazard }
   /** Va a salir un mob común aquí dentro de SPAWN_WARN segundos: humo y sonido. */
   | { type: 'enemyIncoming'; enemy: EnemyType; x: number; z: number }
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */

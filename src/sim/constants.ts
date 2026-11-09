@@ -247,6 +247,27 @@ export interface RangedDef {
   height: number
 }
 
+/** Los ataques especiales de los jefes (los hace la simulación con `onSpecial`, enemies.ts). */
+export type SpecialId = 'stomp' | 'tossGoblin' | 'rockRain' | 'boulder'
+
+/**
+ * Un ataque especial: a `min`–`max` metros del jugador avisa `windup` segundos (con la pose `look`), ataca y queda
+ * `recover` segundos agotado, quieto y recibiendo DAZED_DAMAGE veces el daño: el hueco para golpearlo. Cada uno tiene su
+ * espera (`cooldown`) y entre dos cualesquiera pasan al menos SPECIAL_GAP segundos.
+ */
+export interface SpecialDef {
+  id: SpecialId
+  min: number
+  max: number
+  windup: number
+  cooldown: number
+  recover: number
+  look: 'crouch' | 'aim'
+}
+
+/** Segundos entre el final de un ataque especial y el principio del siguiente, sea cual sea. */
+export const SPECIAL_GAP = 2.5
+
 /** Guarda un sitio: se despierta con un jugador a `aggro` metros y persigue mientras siga a menos de `leash` de ese sitio. */
 export interface GuardDef {
   aggro: number
@@ -299,6 +320,8 @@ export interface EnemyDef {
   light?: boolean
   /** Coraza, por jugador: hasta romperla a pico casi no recibe daño. */
   shell?: number
+  /** Ataques especiales, en orden de preferencia cuando hay varios listos. */
+  specials?: SpecialDef[]
 }
 
 export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian' | 'colossus' | 'dog', EnemyDef> = {
@@ -396,6 +419,12 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     cost: 8,
     boss: true,
     charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 5, dazed: 2.5 },
+    specials: [
+      // Pisotón: salta y cae con una onda de 7 m que se esquiva saltando o alejándose.
+      { id: 'stomp', min: 0, max: 5, windup: 0.8, cooldown: 9, recover: 1.4, look: 'crouch' },
+      // Agarra un trasgo y lo lanza: hace daño al caer, y el trasgo se levanta y pelea.
+      { id: 'tossGoblin', min: 10, max: 24, windup: 0.9, cooldown: 14, recover: 1.1, look: 'aim' },
+    ],
   },
   // Mini-boss a distancia: más lento que andar, para que se le pueda alcanzar, y sus rocas se esquivan.
   thrower: {
@@ -421,6 +450,12 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     cost: 7,
     boss: true,
     ranged: { flee: 8, max: 14, range: 20, height: 3 },
+    specials: [
+      // Lluvia de piedras: cinco marcas alrededor del jugador, que caen a los 1,2 s.
+      { id: 'rockRain', min: 4, max: 22, windup: 1, cooldown: 11, recover: 1.3, look: 'aim' },
+      // Roca gorda: lenta, y estalla en 3 m al caer.
+      { id: 'boulder', min: 6, max: 22, windup: 1.1, cooldown: 13, recover: 1.5, look: 'aim' },
+    ],
   },
   // Guarda el meteorito de día y de noche, hasta que lo matan. Más lento que andar, y el pico lo rompe antes.
   guardian: {

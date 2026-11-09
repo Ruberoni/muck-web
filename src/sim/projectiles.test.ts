@@ -168,6 +168,8 @@ describe('proyectiles', () => {
       sim.addPlayer(0)
       const { player } = sim.slot(0)
       const boss = sim.enemies.spawnAt(player.pos.x + 11, player.pos.z, 'thrower')
+      // Solo la roca de siempre: los ataques especiales se prueban en hazards.test.ts.
+      boss.special.gap = 1e9
       /** Avanza hasta el paso en que aparece un evento de tipo `type`. */
       const until = (type: SimEventData['type'], game = sim) => {
         for (let i = 0; i < 300; i++) {

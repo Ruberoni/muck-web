@@ -1,7 +1,7 @@
 import type { Clock } from '../../server/room'
 import type { ActionData, Move } from '../sim/commands'
 import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType } from '../sim/constants'
-import { NO_CHARGE, type EnemyData } from '../sim/enemies'
+import { NO_CHARGE, NO_SPECIAL, type EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
 import type { Difficulty } from '../sim/match'
@@ -343,6 +343,7 @@ export class NetClient {
     this.syncPickups(sim, tick)
     // En el momento de la predicción, no en el pasado del render: se ven donde van a llegar, para poder esquivarlos.
     sim.projectiles.follow(this.predictor?.tick ?? tick)
+    sim.hazards.follow(this.predictor?.tick ?? tick)
     return { own, remote: this.presentation.take(tick) }
   }
 
@@ -392,6 +393,11 @@ export class NetClient {
       this.notices.push(notice)
     }
     return this.notices.splice(0)
+  }
+
+  /** El tick que predice el cliente para el jugador local (null sin predicción): en él se dibuja lo que vuela y lo que marca el suelo. */
+  get predictedTick(): number | null {
+    return this.predictor?.tick ?? null
   }
 
   renderTick(): number {
@@ -631,6 +637,9 @@ export class NetClient {
       case 'projectileHit':
         sim.projectiles.remove(e.id)
         break
+      case 'hazardAdded':
+        sim.hazards.mirror(e.hazard)
+        break
       case 'mobsRose':
       case 'mobsForgot':
       case 'nightLit':
@@ -690,6 +699,7 @@ export class NetClient {
         for (const prop of sim.world.props) resetProp(prop)
         sim.structures.clear()
         sim.projectiles.clear()
+        sim.hazards.clear()
         sim.worldEvents.reset()
         sim.threat.reset()
         this.pickups.clear()
@@ -721,6 +731,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     knock: { x: 0, z: 0 },
     staggerGuard: 0,
     charge: { ...NO_CHARGE },
+    special: { ...NO_SPECIAL, cooldowns: {} },
     target: null,
     retarget: 0,
   }

@@ -28,14 +28,16 @@ import {
   STATION_RANGE,
   STEP,
 } from './constants'
-import { Enemies, PLANE_TARGET, type EnemiesState } from './enemies'
+import { Enemies, PLANE_TARGET, type EnemyData, type EnemyPrey, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, KEY_ITEMS, type InventoryState, type ItemId } from './inventory'
 import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, workFactor, type MatchEnd, type MatchResult, type MatchRules } from './match'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
-import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
+import { aimedVelocity, Projectiles, type Projectile, type ProjectileEnd, type ProjectilesState } from './projectiles'
+import { Hazards, ticks, type HazardsState } from './hazards'
+import type { SpecialId } from './constants'
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent, type StationOp, type TradeOp } from './playerTick'
 import { trade } from './merchant'
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, scaleProps, type PropPlacement, type PropWorld } from './props'
@@ -47,6 +49,7 @@ import { guardFactor, hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight, NIGHT_LENGTH } from './world/daycycle'
 import { createIsland, DEFAULT_ISLAND, inLake, type Island } from './world/island'
+import { enemyFloor, WATER_LEVEL } from './world/terrain'
 import { Fishes, type FishState } from './fish'
 import { WORLD_SEED } from './random'
 import { WorldEvents, type WorldEventsState } from './worldEvents'
@@ -59,6 +62,21 @@ const TOSS_HEIGHT = 1.2
 /** Altura sobre el suelo desde la que sale lo que termina una estación. */
 /** Intentos de encontrar dónde cae el avión o dónde va la tumba. */
 const CRASH_ATTEMPTS = 20
+// Los ataques especiales de los jefes (ver `special`).
+const STOMP_RADIUS = 7
+const STOMP_SPEED = 12
+const STOMP_WIDTH = 1.2
+const STOMP_DAMAGE = 20
+const TOSS_SPEED = 11
+const TOSS_DAMAGE = 15
+const RAIN_ROCKS = 5
+const RAIN_RADIUS = 1.8
+const RAIN_WARNING = 1.2
+const RAIN_DAMAGE = 15
+const BOULDER_SPEED = 9
+const BOULDER_DAMAGE = 25
+const BOULDER_BLAST = 3
+const BOULDER_BLAST_DAMAGE = 15
 /** Lo que se aparta el puesto del mercader del faro y del tótem (desde su borde). */
 const MERCHANT_GAP = 25
 /** Altura sobre el suelo desde la que sale una roca lanzada. */
@@ -119,6 +137,8 @@ export interface SimState {
   worldEvents: WorldEventsState
   /** Las partidas guardadas antes del pez no lo traen. */
   fish?: FishState
+  /** Lo que marcan en el suelo los ataques de los jefes; las de antes no lo traen. */
+  hazards?: HazardsState
   threat: ThreatState
   /** Todos los jugadores, también los `gone`, por id. */
   players: PlayerSlotState[]
@@ -160,6 +180,8 @@ export class Simulation {
   readonly threat = new Threat()
   /** Los peces del mar, detrás de quien nada lejos de la orilla. */
   readonly fishes: Fishes
+  /** Lo que marcan en el suelo los ataques especiales de los jefes. */
+  readonly hazards: Hazards
   /** Lo que ocupa sitio en la isla: props, estructuras y la roca del meteorito. */
   obstacles!: SpatialGrid<Collider>[]
   interaction!: Interaction
@@ -192,6 +214,7 @@ export class Simulation {
     this.rng = mulberry32(seed)
     this.structures = new Structures(this.events.emit)
     this.fishes = new Fishes(this.events.emit)
+    this.hazards = new Hazards(this.events.emit)
     // El mismo objeto con cualquier isla: la predicción del cliente se lo guarda.
     this.env = {
       heightAt: (x, z) => this.island.heightAt(x, z),
@@ -222,9 +245,9 @@ export class Simulation {
       alive: (id) => this.enemies.list.some((e) => e.id === id),
     }, island)
     this.obstacles = [world.grid, this.structures.grid, this.worldEvents.grid]
-    this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage), island)
+    this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage), island, (e, id, target) => this.special(e, id, target))
     this.pickups = new Pickups(this.obstacles, this.rng, emit, island)
-    this.projectiles = new Projectiles(this.obstacles, emit, island)
+    this.projectiles = new Projectiles(this.obstacles, emit, island, (p, end) => this.landed(p, end))
     this.interaction = new Interaction(world, this.pickups, this.enemies, emit, island)
     this.spawnCenter = findSpawn(world.grid, island)
     for (const slot of this.players.values()) slot.spawn = this.spawnPoint(slot.id)
@@ -352,6 +375,8 @@ export class Simulation {
     // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
     const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
+    // Detrás de los proyectiles: la roca gorda estalla en el mismo paso en que cae. En el aire, la onda pasa por debajo.
+    hits.push(...this.hazards.step(this.tick, present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil, grounded: player.grounded }))))
     hits.push(...this.worldEvents.step(this.tick, prey, this.clock.phase, this.clock.day, this.clock.eternal))
     // Muerde desde abajo: tampoco se para.
     hits.push(
@@ -464,6 +489,7 @@ export class Simulation {
     this.enemies.reset()
     this.pickups.clear()
     this.projectiles.clear()
+    this.hazards.clear()
     this.structures.clear()
     this.worldEvents.reset()
     this.fishes.reset()
@@ -513,6 +539,47 @@ export class Simulation {
     this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, ROCK_SPEED), damage)
   }
 
+  /** Un ataque especial de un jefe al acabar su aviso, contra `target` (ver SPECIALS en constants.ts). */
+  private special(e: EnemyData, id: SpecialId, target: EnemyPrey) {
+    const { x, z } = e.pos
+    const floor = enemyFloor(this.island, x, z)
+    const aim = (height: number) => ({ x: target.pos.x, y: this.island.heightAt(target.pos.x, target.pos.z) + height, z: target.pos.z })
+    switch (id) {
+      case 'stomp':
+        this.hazards.add({ look: 'stomp', x, z, radius: STOMP_RADIUS, startTick: this.tick, hitTick: this.tick, damage: STOMP_DAMAGE, ring: { speed: STOMP_SPEED, width: STOMP_WIDTH } })
+        break
+      case 'tossGoblin': {
+        const from = { x, y: floor + 2.6, z }
+        this.projectiles.launch(this.tick, 'goblin', from, aimedVelocity(from, aim(0.5), TOSS_SPEED), TOSS_DAMAGE)
+        break
+      }
+      case 'rockRain':
+        // Una justo donde está y las demás alrededor: quedarse quieto es lo peor.
+        for (let i = 0; i < RAIN_ROCKS; i++) {
+          const angle = this.rng() * Math.PI * 2
+          const r = i === 0 ? 0 : 1.5 + this.rng() * 3.5
+          const hx = target.pos.x + Math.cos(angle) * r
+          const hz = target.pos.z + Math.sin(angle) * r
+          this.hazards.add({ look: 'rock', x: hx, z: hz, radius: RAIN_RADIUS, startTick: this.tick, hitTick: this.tick + ticks(RAIN_WARNING), damage: RAIN_DAMAGE })
+        }
+        break
+      case 'boulder': {
+        const from = { x, y: floor + 3.2, z }
+        this.projectiles.launch(this.tick, 'boulder', from, aimedVelocity(from, aim(0.3), BOULDER_SPEED), BOULDER_DAMAGE)
+        break
+      }
+    }
+  }
+
+  /** Donde acaba un proyectil: la roca gorda estalla y el trasgo lanzado se levanta (si cae en tierra). */
+  private landed(p: Projectile, end: ProjectileEnd) {
+    const { x, z } = p.pos
+    if (p.kind === 'boulder' && end !== 'player' && end !== 'expired') {
+      this.hazards.add({ look: 'rock', x, z, radius: BOULDER_BLAST, startTick: this.tick, hitTick: this.tick, damage: BOULDER_BLAST_DAMAGE })
+    }
+    if (p.kind === 'goblin' && end !== 'expired' && this.island.heightAt(x, z) > WATER_LEVEL) this.enemies.spawnAt(x, z, 'goblin')
+  }
+
   /** Hace caer un meteorito ya (para probarlo): en (x, z) o, sin ellos, donde toque. */
   meteor(x?: number, z?: number) {
     const spot = x !== undefined && z !== undefined ? { x, z } : this.worldEvents.findSpot(this.inWorld().map(({ id, player, alive }) => ({ id, pos: player.pos, alive })))
@@ -541,6 +608,7 @@ export class Simulation {
       structures: this.structures.save(),
       worldEvents: this.worldEvents.save(),
       fish: this.fishes.save(),
+      hazards: this.hazards.save(),
       threat: this.threat.save(),
       players: [...this.players.values()]
         .sort((a, b) => a.id - b.id)
@@ -583,6 +651,7 @@ export class Simulation {
     this.enemies.load(state.enemies)
     this.pickups.load(state.pickups)
     this.projectiles.load(state.projectiles)
+    if (state.hazards) this.hazards.load(state.hazards)
     this.structures.load(state.structures)
     this.worldEvents.load(state.worldEvents)
     if (state.fish) this.fishes.load(state.fish)

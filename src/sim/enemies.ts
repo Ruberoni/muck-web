@@ -28,6 +28,7 @@ import {
   PLAYER_RADIUS,
   SHELL_RESIST,
   SPAWN_WARN,
+  SPECIAL_GAP,
   STEP,
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
@@ -37,6 +38,8 @@ import {
   type GuardDef,
   type HitEfficacy,
   type RangedDef,
+  type SpecialDef,
+  type SpecialId,
   type WeaponClass,
 } from './constants'
 
@@ -64,6 +67,24 @@ export interface EnemyCharge {
   dx: number
   dz: number
 }
+
+/** Por dónde van los ataques especiales de un jefe (SpecialDef). */
+export interface EnemySpecial {
+  /** El que está haciendo (null: ninguno). */
+  id: SpecialId | null
+  /** Segundos que le quedan al aviso o, con `recover`, a lo agotado. */
+  time: number
+  recover: boolean
+  /** Segundos hasta poder empezar otro, cualquiera. */
+  gap: number
+  /** Segundos hasta poder repetir cada uno. */
+  cooldowns: Partial<Record<SpecialId, number>>
+}
+
+export const NO_SPECIAL: EnemySpecial = { id: null, time: 0, recover: false, gap: 0, cooldowns: {} }
+
+/** Hace un ataque especial al acabar su aviso, contra `target` (la simulación tiene los proyectiles y los peligros). */
+export type OnSpecial = (e: EnemyData, id: SpecialId, target: EnemyPrey) => void
 
 /** Un enemigo en la simulación. Su modelo y sus animaciones (bote, golpe, embestida, muerte) son de EnemyView. */
 export interface EnemyData {
@@ -94,6 +115,7 @@ export interface EnemyData {
   /** Segundos hasta que otro golpe pueda volver a aturdirlo (`stagger` + `staggerGap` de su tipo). */
   staggerGuard: number
   charge: EnemyCharge
+  special: EnemySpecial
   /** A quién persigue (null: a nadie todavía). */
   target: PlayerId | null
   /** Segundos hasta volver a elegir a quién persigue. */
@@ -143,7 +165,15 @@ export interface PendingSpawn {
   left: number
 }
 
-const copyEnemy = (e: EnemyData): EnemyData => ({ ...e, pos: { ...e.pos }, prev: { ...e.prev }, home: { ...e.home }, knock: { ...e.knock }, charge: { ...e.charge } })
+const copyEnemy = (e: EnemyData): EnemyData => ({
+  ...e,
+  pos: { ...e.pos },
+  prev: { ...e.prev },
+  home: { ...e.home },
+  knock: { ...e.knock },
+  charge: { ...e.charge },
+  special: { ...(e.special ?? NO_SPECIAL), cooldowns: { ...(e.special?.cooldowns ?? {}) } },
+})
 
 export const NO_CHARGE: EnemyCharge = { state: 'idle', time: 0, cooldown: 0, dx: 0, dz: 0 }
 
@@ -227,6 +257,7 @@ export class Enemies {
     private emit: Emit = NO_EMIT,
     private throwRock: ThrowRock = () => {},
     private island: Island = DEFAULT_ISLAND,
+    private onSpecial: OnSpecial = () => {},
   ) {}
 
   /**
@@ -326,6 +357,7 @@ export class Enemies {
     const dz = player.z - e.pos.z
     const dist = Math.hypot(dx, dz)
     if (dist > 1e-6) e.yaw = Math.atan2(dx, dz)
+    if (def.specials && this.specials(e, def.specials, prey, dist, dt)) return false
     if (def.charge) {
       const hit = this.charge(e, def.charge, prey, dist, dt)
       if (hit !== null) return hit
@@ -349,6 +381,43 @@ export class Enemies {
     if (e.attackCooldown > 1e-9) return false
     e.attackCooldown = isCommon(e.type) ? def.attackInterval * this.scaling.attackInterval : def.attackInterval
     this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+    return true
+  }
+
+  /**
+   * Los ataques especiales: devuelve si está haciendo uno (avisando o agotado) y no hace nada más en este paso. Empieza
+   * uno solo sin embestir ni lanzar, el primero que esté listo y a su distancia.
+   */
+  private specials(e: EnemyData, list: readonly SpecialDef[], prey: EnemyPrey, dist: number, dt: number): boolean {
+    const s = (e.special ??= { ...NO_SPECIAL, cooldowns: {} })
+    s.gap = Math.max(0, s.gap - dt)
+    for (const key of Object.keys(s.cooldowns) as SpecialId[]) s.cooldowns[key] = Math.max(0, (s.cooldowns[key] ?? 0) - dt)
+    if (s.id) {
+      const def = list.find((d) => d.id === s.id)!
+      s.time -= dt
+      if (s.time > 1e-9) return true
+      if (!s.recover) {
+        this.onSpecial(e, s.id, prey)
+        this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+        s.recover = true
+        s.time = def.recover
+        this.emit({ type: 'enemyCharge', id: e.id, state: 'dazed' })
+        return true
+      }
+      s.id = null
+      s.recover = false
+      s.gap = SPECIAL_GAP
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
+      return false
+    }
+    if (s.gap > 1e-9 || e.charge.state !== 'idle') return false
+    const ready = list.find((d) => (s.cooldowns[d.id] ?? 0) <= 1e-9 && dist >= d.min && dist <= d.max)
+    if (!ready) return false
+    s.id = ready.id
+    s.time = ready.windup
+    s.cooldowns[ready.id] = ready.cooldown
+    this.emit({ type: 'enemyCharge', id: e.id, state: ready.look })
+    this.emit({ type: 'enemySpecial', id: e.id, attack: ready.id })
     return true
   }
 
@@ -585,6 +654,7 @@ export class Enemies {
       knock: { x: 0, z: 0 },
       staggerGuard: 0,
       charge: { ...NO_CHARGE },
+      special: { ...NO_SPECIAL, cooldowns: {} },
       target: null,
       retarget: 0,
     }
@@ -604,7 +674,8 @@ export class Enemies {
       efficacy = breaking ? 'effective' : 'resisted'
       if (breaking && e.shell <= 0) this.emit({ type: 'shellBroken', id: e.id })
     }
-    const dazed = e.charge.state === 'dazed'
+    // Aturdido tras embestir o agotado tras un ataque especial: es el momento de golpearlo.
+    const dazed = e.charge.state === 'dazed' || e.special?.recover === true
     if (dazed) efficacy = 'effective'
     e.hp = Math.max(0, e.hp - (dazed ? damage * DAZED_DAMAGE : damage))
     if (e.hp <= 0) {
