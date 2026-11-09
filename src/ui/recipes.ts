@@ -60,6 +60,23 @@ export function aimedStation(structures: readonly Structure[], pos: Vec3, yaw: n
   return best
 }
 
+/**
+ * La estación de procesar (fogata, horno, destilador) más cercana a `range` o menos de su borde: la que enseña sus
+ * ranuras al abrir el inventario con Tab o E a su lado, sin tener que mirarla.
+ */
+export function nearestProcessor(structures: readonly Structure[], pos: Vec3, range: number): Structure | null {
+  let best: Structure | null = null
+  let bestGap = Infinity
+  for (const s of structures) {
+    if (!s.station) continue
+    const gap = Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius
+    if (gap > range || gap >= bestGap) continue
+    best = s
+    bestGap = gap
+  }
+  return best
+}
+
 export interface RecipeGroup {
   station: StructureKind | null
   title: string

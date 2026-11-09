@@ -291,10 +291,13 @@
 
 .inventory[hidden] { display: none; }
 
-/* Dos columnas: casillas y recetas (necesitan unos 820 px). En ventanas estrechas se apilan y el panel entero se desplaza. */
+/* Dos columnas: casillas y recetas (necesitan unos 880 px). En ventanas estrechas se apilan y el panel entero se desplaza. */
 .inventory-panel {
   display: grid;
-  grid-template-columns: auto minmax(240px, 300px);
+  /* Ancho fijo: los textos de ayuda cambian al elegir una casilla o abrir una estación y no deben mover el panel. */
+  width: min(880px, calc(100vw - 32px));
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr) 300px;
   align-items: start;
   gap: 8px 24px;
   padding: 16px 20px;
@@ -347,8 +350,8 @@
 .recipe .reason { font-size: 12px; color: #ffb3a8; }
 .recipe .reason[hidden] { display: none; }
 
-@media (max-width: 880px) {
-  .inventory-panel { grid-template-columns: auto; }
+@media (max-width: 920px) {
+  .inventory-panel { grid-template-columns: minmax(0, 1fr); }
   .inventory-recipes { margin-top: 8px; }
   .recipe-list { max-height: none; overflow: visible; }
 }
@@ -365,8 +368,9 @@
 .inventory .slot:hover { background: rgb(255 255 255 / 0.12); }
 .inventory .slot.picked { border-color: #7fd3ff; box-shadow: 0 0 0 2px #7fd3ff; }
 .inventory .slot.dragging { opacity: 0.45; }
-.inventory-station { display: grid; gap: 10px; align-content: start; min-width: 260px; }
-.inventory-station[hidden], .inventory-recipes[hidden] { display: none; }
+.inventory-station { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.inventory-station[hidden], .inventory-recipes[hidden], .station-fuel[hidden], .station-stall[hidden] { display: none; }
+.station-stall { margin: 0; font-size: 13px; color: #ffcf7a; }
 .station-machine, .station-fuel { display: flex; align-items: center; gap: 10px; }
 .station-machine .station-bar { flex: 1; }
 .station-fuel .station-bar { width: 120px; }
@@ -398,7 +402,9 @@
   border-radius: 12px;
   background: rgb(0 0 0 / 0.45);
   text-align: center;
-  max-width: calc(100vw - 32px);
+  /* Ancho fijo: la sala de espera y los avisos cambian de texto y no deben estirar ni encoger el menú. */
+  width: min(560px, calc(100vw - 32px));
+  box-sizing: border-box;
   /* Con los ajustes el panel es más alto: en ventanas bajas se desplaza. */
   max-height: calc(100vh - 32px);
   overflow-y: auto;
@@ -663,3 +669,6 @@ kbd {
 .banner[hidden] { display: none; }
 .banner .title { font-size: 30px; font-weight: 700; color: #ffb3ab; }
 .banner .detail { font-size: 15px; padding: 4px 12px; border-radius: 8px; background: rgb(0 0 0 / 0.35); }
+
+/* Un enlace largo (cuando no se puede copiar) o un aviso no ensanchan el menú. */
+.lobby code, .lobby .status { overflow-wrap: anywhere; }

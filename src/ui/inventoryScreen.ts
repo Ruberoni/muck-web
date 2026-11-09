@@ -5,14 +5,14 @@ import type { Vec3 } from '../sim/player'
 import { ICONS } from './icons'
 import { CRAFT_MANY, RECIPE_GROUPS, recipeStatus, STATION_NAMES } from './recipes'
 import type { ActionData } from '../sim/commands'
-import { slotFor, STATION_DEFS, STATION_SLOTS, type StationSlot } from '../sim/stations'
+import { slotFor, STATION_DEFS, STATION_SLOTS, stationStall, type StationSlot } from '../sim/stations'
 import type { Structure } from '../sim/structures'
 import { EQUIP_SLOTS, equipSlotOf, type EquipSlot } from '../sim/equipment'
 
 const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { chest: 'Pecho', shield: 'Escudo' }
 
 const STATION_SLOT_NAMES: Record<StationSlot, string> = { input: 'Entrada', fuel: 'Combustible', output: 'Salida' }
-const STATION_HINT = 'Mayúsculas + clic en una casilla: meter la pila · Clic derecho: meter una · Arrastrar a una ranura · Clic en una ranura: sacarla'
+const STATION_HINT = 'Clic en una casilla: meter la pila · Clic derecho: meter una · Arrastrar a una ranura · Clic en una ranura: sacarla'
 
 /** Teclas que cierran la pantalla y vuelven a jugar: las que la abren (Tab, E y C). */
 const CLOSE_KEYS: ReadonlySet<string> = new Set([...INVENTORY_KEYS, RECIPES_KEY])
@@ -92,6 +92,8 @@ export class InventoryScreen {
   private stationTitle: HTMLElement
   private stationSlots = new Map<StationSlot, SlotView>()
   private stationBars: { progress: HTMLElement; burn: HTMLElement; fuelRow: HTMLElement }
+  /** Por qué no trabaja la estación abierta. */
+  private stationStall: HTMLElement
   /** Lo que se lleva puesto: un clic lo quita. */
   private equipSlots = new Map<EquipSlot, SlotView>()
 
@@ -127,8 +129,9 @@ export class InventoryScreen {
       const root = el('div', 'slot', i < SLOT_COUNT ? hotbar : backpack)
       if (i < SLOT_COUNT) el('span', 'key', root).textContent = String(i + 1)
       root.addEventListener('click', (e) => {
-        if (e.shiftKey && this.station) this.toStation(i, true)
-        else if (!(e.shiftKey && this.equip(i))) this.click(i)
+        // Con una estación abierta, un clic en lo que procesa o quema lo mete (sin casilla elegida a medias).
+        if (this.station && (e.shiftKey || this.picked === null) && this.toStation(i, true)) return
+        if (!(e.shiftKey && this.equip(i))) this.click(i)
       })
       root.addEventListener('contextmenu', () => this.station && this.toStation(i, false))
       root.addEventListener('mouseenter', () => (this.hovered = i))
@@ -212,6 +215,7 @@ export class InventoryScreen {
       this.stationSlots.set(slot, { root, icon: el('div', 'icon', root), count: el('span', 'count', root), item: undefined })
     }
     this.stationBars = { progress: el('div', 'fill', progressTrack), burn: el('div', 'fill', burnTrack), fuelRow }
+    this.stationStall = el('p', 'station-stall', this.stationColumn)
     el('p', 'hint', this.stationColumn).textContent = STATION_HINT
 
     el('p', 'hint inventory-keys', panel).textContent = 'Tab, E o C: volver al juego · Esc: pausa'
@@ -284,6 +288,9 @@ export class InventoryScreen {
       view.count.textContent = stack ? String(stack.amount) : ''
     }
     this.stationBars.fuelRow.hidden = !STATION_DEFS[showing.kind]?.fuel
+    const stall = stationStall(showing.kind, state)
+    this.stationStall.textContent = stall ?? ''
+    this.stationStall.hidden = !stall
     this.stationBars.progress.style.width = `${state.time > 0 ? Math.min(100, (state.progress / state.time) * 100) : 0}%`
     this.stationBars.burn.style.width = `${Math.min(100, (state.burn / 60) * 100)}%`
   }
@@ -297,14 +304,18 @@ export class InventoryScreen {
     return true
   }
 
-  /** Mete en la estación abierta lo de la casilla `i`, en la ranura que le toca (la pila con `all`, si no una). */
-  private toStation(i: number, all: boolean) {
+  /**
+   * Mete en la estación abierta lo de la casilla `i`, en la ranura que le toca (la pila con `all`, si no una). Devuelve
+   * si la estación lo acepta.
+   */
+  private toStation(i: number, all: boolean): boolean {
     const item = this.inventory?.slots[i]
     const target = item && this.station ? slotFor(this.station.kind, item) : null
-    if (!target || !this.station) return
+    if (!target || !this.station) return false
     this.picked = null
     this.onstation?.({ kind: 'station', id: this.station.id, slot: target, from: i, all })
     this.render()
+    return true
   }
 
   setInventory(inventory: Inventory) {

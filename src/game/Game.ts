@@ -35,7 +35,7 @@ import { WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
 import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
-import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, sendableActions } from '../ui/recipes'
+import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
 import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
@@ -247,6 +247,7 @@ export class Game {
     this.input = new Input(this.renderer.domElement, {
       isPlaying: () => this.state === 'playing',
       acceptsKeys: () => acceptsKeys(this.state),
+      keepsKeys: () => this.state === 'inventory',
       onLockChange: (locked) => {
         const next = afterLockChange(this.state, locked)
         if (next) this.setState(next)
@@ -329,7 +330,9 @@ export class Game {
     if (state === 'spectating') this.snapSpectator = true
     // Lo que se pidió en la pantalla justo antes de pausar (Esc, otra pestaña) no se manda al volver, minutos después.
     if (this.state === 'inventory' && state === 'paused') this.queued.length = 0
-    if (state !== 'playing') this.input.clear()
+    // Al abrir el inventario se sigue andando con lo que se mantiene pulsado; lo demás se olvida.
+    if (state === 'inventory' && this.state === 'playing') this.input.clearActions()
+    else if (state !== 'playing') this.input.clear()
     if (!inGame(state)) this.hud.net.closeChat()
     this.hud.setCrosshair(showsCrosshair(state))
     // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue. El espectador y el inventario
@@ -578,8 +581,10 @@ export class Game {
     const sendable = (actions: readonly ActionData[]) => sendableActions(actions, inventory, this.craftWorld, player.pos)
     let events: readonly SimEvent[]
     if (this.state === 'inventory') {
-      // Quieto (el `Move` sirve de keepalive) y solo con lo que manda la pantalla (o `__debug`).
-      events = this.session.step({ buttons: 0, yaw, pitch }, sendable(this.queued.splice(0)))
+      // Se anda y se salta con WASD y Espacio, pero no se corre (Mayúsculas + clic es de la pantalla), ni se golpea ni
+      // se usa; las acciones, solo las que manda la pantalla (o `__debug`).
+      const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : { ...this.input.state(), sprint: false, block: false }
+      events = this.session.step({ buttons: inputButtons(input, false, false), yaw, pitch }, sendable(this.queued.splice(0)))
     } else {
       const input = this.inputOverride ? { ...NO_INPUT, ...this.inputOverride } : this.input.state()
       // El clic derecho mantenido bloquea con el escudo puesto, salvo con comida en la mano (entonces come).
@@ -601,7 +606,12 @@ export class Game {
       const attack = this.attackOverride ?? this.input.attackHeld
       const use = usable && (this.useOverride ?? this.input.isDown(USE_KEY))
       events = this.session.step({ buttons: inputButtons(input, attack, use), yaw, pitch }, sendable(actions))
-      if (openInventory) this.openInventory(openInventory)
+      if (openInventory) {
+        // Con Tab o E junto a una fogata, un horno o un destilador se ven sus ranuras (C abre las recetas).
+        const station = openInventory === 'slots' ? nearestProcessor(this.sim.structures.list, player.pos, CLIENT_STATION_RANGE) : null
+        this.openInventory(openInventory)
+        if ((this.state as string) === 'inventory') this.openStationId = station?.id ?? null
+      }
     }
     this.snapPlayer = false
     const { sim, slot } = this

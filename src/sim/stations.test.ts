@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FUEL_SECONDS, newStation, putInto, slotFor, STATION_STACK, stepStation, takeFrom, type StationState } from './stations'
+import { followStation, FUEL_SECONDS, newStation, putInto, slotFor, stationStall, STATION_STACK, stepStation, takeFrom, type StationState } from './stations'
 
 const run = (station: StationState, seconds: number, kind: 'furnace' | 'campfire' | 'distiller' = 'furnace', factor = 1) => {
   let changes = 0
@@ -94,5 +94,49 @@ describe('estaciones con ranuras', () => {
     expect(s.output).toBeNull()
     run(s, 10, 'campfire', 2)
     expect(s.output).toEqual({ item: 'cooked_meat', amount: 1 })
+  })
+
+  it('la fogata avisa al empezar y al pararse, para que la barra del cliente siga a la de verdad', () => {
+    const s = newStation()
+    putInto('campfire', s, 'input', 'raw_meat', 1)
+    expect(stepStation('campfire', s, 0.5, 1)).toBe(true)
+    expect(s.time).toBe(10)
+    expect(stepStation('campfire', s, 0.5, 1)).toBe(false)
+    // Al acabar la única carne cambia la salida, y el paso siguiente ya no tiene nada que hacer: no avisa otra vez.
+    expect(run(s, 10, 'campfire')).toBe(1)
+    expect(s.time).toBe(0)
+    // Sin sitio en la salida se para y lo dice.
+    putInto('campfire', s, 'input', 'berry', 4)
+    expect(stepStation('campfire', s, 0.5, 1)).toBe(false)
+    expect(stationStall('campfire', s)).toMatch(/Saca carne asada/)
+  })
+
+  it('la copia del cliente avanza la unidad y lo que arde, y espera sin nada ardiendo', () => {
+    const s = newStation()
+    putInto('furnace', s, 'input', 'iron_ore', 1)
+    putInto('furnace', s, 'fuel', 'wood', 1)
+    stepStation('furnace', s, 0.5, 1)
+    const copy = { ...s }
+    followStation('furnace', copy, 5)
+    expect(copy.progress).toBeCloseTo(5.5)
+    expect(copy.burn).toBeCloseTo(9.5)
+    copy.burn = 0
+    followStation('furnace', copy, 5)
+    expect(copy.progress).toBeCloseTo(5.5)
+    const fire = newStation()
+    followStation('campfire', fire, 5)
+    expect(fire.progress).toBe(0)
+  })
+
+  it('dice por qué no trabaja', () => {
+    const s = newStation()
+    expect(stationStall('campfire', s)).toBeNull()
+    putInto('campfire', s, 'input', 'berry', 3)
+    expect(stationStall('campfire', s)).toMatch(/Faltan 1/)
+    putInto('campfire', s, 'input', 'berry', 1)
+    expect(stationStall('campfire', s)).toBeNull()
+    const f = newStation()
+    putInto('furnace', f, 'input', 'iron_ore', 1)
+    expect(stationStall('furnace', f)).toMatch(/Sin combustible/)
   })
 })

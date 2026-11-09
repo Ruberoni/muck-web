@@ -1,4 +1,4 @@
-import type { ItemId } from './inventory'
+import { ITEM_NAMES, type ItemId } from './inventory'
 import type { StructureKind } from './structures'
 
 /** Las ranuras de una estación de procesar: lo que entra, con qué arde y lo que sale. */
@@ -91,6 +91,34 @@ export function accepts(kind: StructureKind, slot: StationSlot, item: ItemId): b
   return false
 }
 
+/**
+ * La copia del cliente de una estación entre dos avisos (`stationChanged`): avanza la unidad en curso y gasta lo que
+ * arde, como `stepStation`, pero sin decidir nada. Sin nada ardiendo espera: o el servidor ya ha cogido más
+ * combustible (y llegará el aviso) o se ha quedado sin él.
+ */
+export function followStation(kind: StructureKind, s: StationState, dt: number) {
+  if (s.time <= 0) return
+  const fuel = STATION_DEFS[kind]?.fuel
+  if (fuel && s.burn <= 1e-9) return
+  if (fuel) s.burn = Math.max(0, s.burn - dt)
+  s.progress = Math.min(s.time, s.progress + dt)
+}
+
+/**
+ * Por qué no trabaja una estación que tiene algo en la entrada, para decirlo en su pantalla (null si trabaja o si no
+ * tiene nada que hacer). Mira lo mismo que `stepStation`.
+ */
+export function stationStall(kind: StructureKind, s: StationState): string | null {
+  const def = STATION_DEFS[kind]
+  const process = processOf(kind, s.input?.item)
+  if (!def || !s.input || !process) return null
+  if (s.output && s.output.item !== process.output) return `Saca ${ITEM_NAMES[s.output.item].toLowerCase()} de la salida para seguir`
+  if (s.output && s.output.amount >= STATION_STACK) return 'La salida está llena'
+  if (s.input.amount < process.amount) return `Faltan ${process.amount - s.input.amount}: van de ${process.amount} en ${process.amount}`
+  if (def.fuel && s.burn <= 1e-9 && !s.fuel) return 'Sin combustible: madera, madera seca o carbón'
+  return null
+}
+
 /** Mete hasta `amount` de `item` en `slot`; devuelve cuántas caben (0 si no vale o está ocupada con otra cosa). */
 export function putInto(kind: StructureKind, s: StationState, slot: StationSlot, item: ItemId, amount: number): number {
   if (!accepts(kind, slot, item)) return 0
@@ -123,8 +151,10 @@ export function stepStation(kind: StructureKind, s: StationState, dt: number, fa
   const process = processOf(kind, s.input?.item)
   const fits = process && (!s.output || (s.output.item === process.output && s.output.amount < STATION_STACK))
   if (!def || !process || !fits || s.input!.amount < process.amount) {
+    // Pararse se avisa: la copia del cliente avanza la barra mientras `time` no sea 0.
+    const was = s.time > 0
     s.progress = s.time = 0
-    return false
+    return was
   }
   let changed = false
   if (def.fuel && s.burn <= 1e-9) {
@@ -134,12 +164,18 @@ export function stepStation(kind: StructureKind, s: StationState, dt: number, fa
     changed = true
   }
   if (def.fuel) s.burn = Math.max(0, s.burn - dt)
+  // Empezar una unidad también se avisa: sin combustible que gastar (la fogata) no habría otro aviso hasta acabarla.
+  if (s.time <= 0) changed = true
   s.time = process.time * factor
   s.progress += dt
   if (s.progress < s.time - 1e-9) return changed
   s.progress = 0
   s.input!.amount -= process.amount
-  if (s.input!.amount <= 0) s.input = null
+  // Sin más entrada no queda unidad en curso: así el paso siguiente no tiene que avisar de que se para.
+  if (s.input!.amount <= 0) {
+    s.input = null
+    s.time = 0
+  }
   if (s.output) s.output.amount++
   else s.output = { item: process.output, amount: 1 }
   return true

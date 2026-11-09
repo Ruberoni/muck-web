@@ -7,7 +7,7 @@ import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { Inventory, ItemId } from './inventory'
 import { OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
-import { copyStation, newStation, STATION_DEFS, stepStation, type StationState } from './stations'
+import { copyStation, followStation, newStation, STATION_DEFS, stepStation, type StationState } from './stations'
 import type { Vec3 } from './player'
 
 const MIN_GROUND = WATER_LEVEL + 0.2
@@ -271,7 +271,7 @@ export class Structures {
   /** La copia del cliente: avanza las barras; lo que hay en las estaciones lo dice su `stationChanged`, y el faro, su `fireChanged`. */
   follow(dt: number, night: boolean) {
     for (const s of this.list) {
-      if (s.station && s.station.time > 0) s.station.progress = Math.min(s.station.time, s.station.progress + dt)
+      if (s.station) followStation(s.kind, s.station, dt)
       if (s.plane?.running) s.plane.heat += dt
       if (!s.fire?.burning) continue
       s.fire.left = Math.max(0, s.fire.left - dt)

@@ -42,6 +42,8 @@ interface InputCallbacks {
   isPlaying(): boolean
   /** Si cuentan las pulsaciones de teclado: también muerto en una sala (Tab cambia a quién se mira, Enter abre el chat). */
   acceptsKeys(): boolean
+  /** Si al soltar el ratón se conservan las teclas que se mantienen: con el inventario abierto se sigue andando. */
+  keepsKeys?(): boolean
 }
 
 /** Teclado (por e.code), ratón y pointer lock. */
@@ -115,7 +117,10 @@ export class Input {
 
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.element
-      if (!this.locked) this.clear()
+      if (!this.locked) {
+        if (this.callbacks.keepsKeys?.()) this.clearActions()
+        else this.clear()
+      }
       this.callbacks.onLockChange(this.locked)
     })
   }
@@ -194,6 +199,11 @@ export class Input {
 
   clear() {
     this.keys.clear()
+    this.clearActions()
+  }
+
+  /** Olvida pulsaciones, rueda y botones del ratón, pero no las teclas que se mantienen (para seguir andando). */
+  clearActions() {
     this.presses.clear()
     this.wheel = 0
     this.stepper.reset()
