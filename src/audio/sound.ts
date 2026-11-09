@@ -21,6 +21,8 @@ export type SoundName =
   | 'growl'
   /** Un jefe se agacha para embestir: se oye esté donde esté. */
   | 'roar'
+  /** Un perro salvaje: dos ladridos secos. */
+  | 'bark'
   /** Sale humo donde va a aparecer un mob: un soplo grave con un siseo. */
   | 'spawnPuff'
   /** La campana de la Noche Eterna: se oye en toda la isla. */
@@ -406,6 +408,12 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
     Math.max(
       s.tone(70, 0.9, { type: 'sawtooth', to: 130, gain: 0.45, attack: 0.08, lowpass: 650, vibrato: { rate: 26, depth: 20 } }),
       s.noise(0.7, { filter: 'lowpass', freq: 380, gain: 0.3, attack: 0.1 }),
+    ),
+  bark: (s) =>
+    Math.max(
+      s.tone(420 + s.random() * 60, 0.12, { type: 'sawtooth', to: 260, gain: 0.22, attack: 0.01, lowpass: 1600 }),
+      s.tone(400 + s.random() * 60, 0.14, { type: 'sawtooth', to: 240, gain: 0.2, attack: 0.01, lowpass: 1600, delay: 0.2 }),
+      s.noise(0.08, { filter: 'bandpass', freq: 900, q: 1.2, gain: 0.2 }),
     ),
   spawnPuff: (s) =>
     Math.max(

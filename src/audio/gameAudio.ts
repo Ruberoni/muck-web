@@ -84,7 +84,7 @@ export class GameAudio {
   ) {}
 
   /** Paso fijo, tras mover al jugador. */
-  step(dt: number, player: PlayerLike, enemies: readonly { pos: { x: number; z: number } }[]) {
+  step(dt: number, player: PlayerLike, enemies: readonly { type?: string; pos: { x: number; z: number } }[]) {
     const { pos } = player
     if (this.last) {
       const moved = Math.hypot(pos.x - this.last.x, pos.z - this.last.z)
@@ -112,7 +112,7 @@ export class GameAudio {
       this.growlTimer = GROWL_MIN_INTERVAL + this.rng() * GROWL_RANDOM_INTERVAL
       const e = enemies[Math.floor(this.rng() * enemies.length)]
       const { gain, pan } = spatialize(e.pos.x - pos.x, e.pos.z - pos.z, player.yaw, GROWL_DISTANCE)
-      this.sound.play('growl', { gain, pan })
+      this.sound.play(e.type === 'dog' ? 'bark' : 'growl', { gain, pan })
     }
   }
 

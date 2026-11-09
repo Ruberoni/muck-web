@@ -271,7 +271,7 @@ export interface EnemyDef {
   shell?: number
 }
 
-export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian' | 'colossus', EnemyDef> = {
+export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian' | 'colossus' | 'dog', EnemyDef> = {
   // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
@@ -441,8 +441,34 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     cost: 10,
     light: true,
   },
+  // Al final: el orden es el índice en el cable. Sale en manada (DOG_PACK), más rápido que andar y más lento que correr:
+  // obliga a gastar resistencia para escapar. Poca vida y mordiscos flojos pero seguidos.
+  dog: {
+    name: 'Perro salvaje',
+    verb: 'atacar',
+    hp: 45,
+    speed: 7.5,
+    radius: 0.42,
+    scale: 0.72,
+    damage: 4,
+    gap: 0.3,
+    reach: 0.6,
+    attackInterval: 0.9,
+    windup: 0.3,
+    knockback: 8,
+    stagger: 0.25,
+    staggerGap: 0.5,
+    nocturnal: true,
+    ai: 'chase',
+    weakness: {},
+    loot: [{ item: 'raw_meat', amount: 1 }, { item: 'coin', amount: 1 }],
+    cost: 1,
+    spawn: { fromNight: 2, biomes: { beach: 0.15, meadow: 0.25, forest: 0.12, mountain: 0.05 } },
+  },
 }
 export type EnemyType = keyof typeof ENEMY_DEFS
+/** Cuántos perros salen juntos cuando sale uno: entre `min` y `max`, sin pasar del tope. */
+export const DOG_PACK = { min: 2, max: 3 }
 /** Los tipos en orden fijo: un `snap` lleva el índice en vez del nombre. */
 export const ENEMY_TYPES = Object.keys(ENEMY_DEFS) as EnemyType[]
 

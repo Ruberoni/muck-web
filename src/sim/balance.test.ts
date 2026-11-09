@@ -251,7 +251,12 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
   })
 
   it('la espada de meteorito es la mejor espada contra todos', () => {
-    for (const type of ENEMY_TYPES) expect(timeToKill('meteor_sword', type), type).toBeLessThan(timeToKill('mithril_sword', type))
+    for (const type of ENEMY_TYPES) {
+      const mithril = timeToKill('mithril_sword', type)
+      // Lo que ya cae de un golpe (el perro) no puede caer antes.
+      if (mithril === 0) expect(timeToKill('meteor_sword', type), type).toBe(0)
+      else expect(timeToKill('meteor_sword', type), type).toBeLessThan(mithril)
+    }
   })
 
   it('ejemplo: el gólem con equipo de piedra', () => {

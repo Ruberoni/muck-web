@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { aimRay, createPropHitboxes, pickTarget, type AimRay } from '../sim/aim'
 import { SpatialGrid } from '../sim/collision'
-import { ENEMY_TYPES, EYE_HEIGHT, PROP_DEFS, REACH } from '../sim/constants'
+import { ENEMY_DEFS, ENEMY_TYPES, EYE_HEIGHT, PROP_DEFS, REACH } from '../sim/constants'
 import { createPropWorld, type PropData, type PropKind } from '../sim/props'
 import { mulberry32 } from '../sim/random'
 import { heightAt } from '../sim/world/terrain'
@@ -128,6 +128,8 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
     const rng = mulberry32(5)
     const grid = new SpatialGrid<PropData>()
     const [ex, ez] = [10, 10]
+    // Los pequeños (el perro), con los rayos más juntos: si no, casi todos pasan por encima.
+    const size = Math.min(1, ENEMY_DEFS[type].scale)
     const samples: { mesh: boolean | null; box: boolean | null }[] = []
     for (let i = 0; i < 1000; i++) {
       enemies.reset()
@@ -140,14 +142,14 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
       const ray = rayTowards(
         ex + Math.cos(angle) * dist,
         ez + Math.sin(angle) * dist,
-        ex + (rng() - 0.5) * 1.6,
-        heightAt(ex, ez) + rng() * 2.2,
-        ez + (rng() - 0.5) * 1.6,
+        ex + (rng() - 0.5) * 1.6 * size,
+        heightAt(ex, ez) + rng() * 2.2 * size,
+        ez + (rng() - 0.5) * 1.6 * size,
       )
       samples.push({ mesh: meshTarget([enemyView.group], ray) === 'enemy' || null, box: pickTarget(ray, grid, hitboxes, enemies.list) === enemy || null })
     }
     const result = compare(samples)
-    expect(result.touched).toBeGreaterThan(300)
+    expect(result.touched).toBeGreaterThan(300 * size)
     expect(result.boxOnly).toBe(0)
     expect(result.meshOnly / result.touched).toBeLessThan(0.25)
   })

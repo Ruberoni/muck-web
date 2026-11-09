@@ -12,6 +12,7 @@ import {
   BOSS_SPAWN_MAX,
   BOSS_SPAWN_MIN,
   DAZED_DAMAGE,
+  DOG_PACK,
   ENEMY_BASE_COUNT,
   ENEMY_DEFS,
   ENEMY_HARD_MAX,
@@ -242,7 +243,7 @@ export class Enemies {
         if (prey.length && !this.calm && count < enemyCapFor(day, players.length)) {
           // Por turnos: cada aparición elige a un jugador vivo distinto.
           const around = prey[this.spawnTurn++ % prey.length]
-          this.queueSpawn(around, prey, (x, z) => spawnType(this.rng(), day, this.island.biomeAt(x, z)))
+          this.queueSpawn(around, prey, (x, z) => spawnType(this.rng(), day, this.island.biomeAt(x, z)), enemyCapFor(day, players.length) - count)
         }
         this.spawnTimer = spawnIntervalFor(players.length) * this.scaling.spawnInterval
       }
@@ -502,14 +503,29 @@ export class Enemies {
     if (this.trySpawn(around, prey, BOSS_SPAWN_MIN, BOSS_SPAWN_MAX, () => type, players)) this.bossDay = day
   }
 
-  /** Un mob común: se anuncia (`enemyIncoming`) y sale SPAWN_WARN segundos después donde se anunció. */
-  private queueSpawn(around: EnemyPrey, prey: readonly EnemyPrey[], pick: (x: number, z: number) => EnemyType) {
+  /**
+   * Un mob común: se anuncia (`enemyIncoming`) y sale SPAWN_WARN segundos después donde se anunció. Un perro trae a su
+   * manada (DOG_PACK), cada uno con su humo, sin pasar de `room` (lo que queda hasta el tope).
+   */
+  private queueSpawn(around: EnemyPrey, prey: readonly EnemyPrey[], pick: (x: number, z: number) => EnemyType, room = 1) {
     const spot = this.findSpot(around, prey, ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX, pick)
     if (!spot) return null
-    const pending = { ...spot, left: SPAWN_WARN }
-    this.pending.push(pending)
-    this.emit({ type: 'enemyIncoming', enemy: spot.type, x: spot.x, z: spot.z })
-    return pending
+    const spots = [spot]
+    if (spot.type === 'dog') {
+      const size = Math.min(room, DOG_PACK.min + Math.floor(this.rng() * (DOG_PACK.max - DOG_PACK.min + 1)))
+      for (let i = 1; i < size; i++) {
+        const angle = this.rng() * Math.PI * 2
+        const x = spot.x + Math.cos(angle) * 2
+        const z = spot.z + Math.sin(angle) * 2
+        if (this.island.heightAt(x, z) < WATER_LEVEL + 0.2 || this.grids.some((grid) => resolveCircle({ x, z }, ENEMY_DEFS.dog.radius, grid))) continue
+        spots.push({ x, z, type: 'dog' })
+      }
+    }
+    for (const s of spots) {
+      this.pending.push({ ...s, left: SPAWN_WARN })
+      this.emit({ type: 'enemyIncoming', enemy: s.type, x: s.x, z: s.z })
+    }
+    return spots
   }
 
   /** Saca los anunciados cuyo aviso ha terminado, también de día. */

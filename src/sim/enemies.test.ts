@@ -105,6 +105,22 @@ describe('enemigos nocturnos', () => {
     expect(enemies.list).toHaveLength(1)
   })
 
+  it('desde la noche 2 salen perros, sobre todo en la pradera, y en manada', () => {
+    expect(spawnChance('dog', 1, 'meadow')).toBe(0)
+    expect(spawnChance('dog', 4, 'meadow')).toBeGreaterThan(spawnChance('dog', 4, 'mountain'))
+    // En la pradera, tras el gólem (0,1) y el espíritu (0,15) vienen los perros (0,25).
+    expect(spawnType(0.3, 4, 'meadow')).toBe('dog')
+    const events: SimEventData[] = []
+    enemies = new Enemies([world.grid], mulberry32(3), (e) => events.push(e))
+    enemies['queueSpawn']({ id: 0, pos: player, alive: true }, [{ id: 0, pos: player, alive: true }], () => 'dog', 10)
+    const dogs = events.filter((e) => e.type === 'enemyIncoming' && e.enemy === 'dog')
+    expect(dogs.length).toBeGreaterThanOrEqual(2)
+    // Sin sitio hasta el tope, solo uno.
+    events.length = 0
+    enemies['queueSpawn']({ id: 0, pos: player, alive: true }, [{ id: 0, pos: player, alive: true }], () => 'dog', 1)
+    expect(events.filter((e) => e.type === 'enemyIncoming')).toHaveLength(1)
+  })
+
   it('de día no aparece ninguno', () => {
     run(60, DAY)
     expect(enemies.list).toHaveLength(0)
@@ -165,7 +181,7 @@ describe('enemigos nocturnos', () => {
     expect(ENEMY_SWIM_MAX).toBeLessThan(WALK_SPEED * WATER_SPEED_FACTOR)
   })
 
-  it('la primera noche solo hay trasgos; desde la segunda, también gólems y espíritus', () => {
+  it('la primera noche solo hay trasgos; desde la segunda, también gólems, espíritus y perros', () => {
     enemies = new Enemies([world.grid], mulberry32(7))
     run(60, NIGHT, 1)
     expect(new Set(enemies.list.map((e) => e.type))).toEqual(new Set(['goblin']))
@@ -177,7 +193,7 @@ describe('enemigos nocturnos', () => {
       for (const e of enemies.list) seen.add(e.type)
       enemies.reset()
     }
-    expect(seen).toEqual(new Set(['goblin', 'golem', 'spirit']))
+    expect(seen).toEqual(new Set(['goblin', 'golem', 'spirit', 'dog']))
   })
 
   it('el gólem sale sobre todo en la montaña y el espíritu en el bosque, y cada noche más hasta su máximo', () => {

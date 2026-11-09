@@ -163,7 +163,8 @@ describe('en la partida', () => {
     expect(fell.find((e) => e.type === 'mobsRose')).toMatchObject({ trait: null, threat: { eternal: true, level: 0 } })
     const announced = sim.threat.state.next
     const rang = until(sim, 'mobsRose')
-    expect(rang.at(-1)).toMatchObject({ trait: announced, threat: { level: 1 } })
+    // En el mismo paso puede pasar algo más (un mob que pega): se mira la campana.
+    expect([...rang].reverse().find((e) => e.type === 'mobsRose')).toMatchObject({ trait: announced, threat: { level: 1 } })
     expect(sim.enemies.scaling.hp).toBeGreaterThan(1.5)
   })
 

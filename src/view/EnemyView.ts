@@ -56,6 +56,17 @@ const spiritLeafGeometry = mergeGeometries([
   new THREE.IcosahedronGeometry(0.13, 0).translate(-0.56, 1.56, 0),
   new THREE.IcosahedronGeometry(0.12, 0).translate(0.02, 1.84, -0.04),
 ])
+// Hocico, orejas, patas y cola del perro (a escala 1: el perro sale más pequeño).
+const dogDetailGeometry = mergeGeometries([
+  new THREE.BoxGeometry(0.26, 0.22, 0.34).translate(0, 0.9, 0.52),
+  new THREE.ConeGeometry(0.09, 0.26, 4).translate(0.2, 1.42, 0.12),
+  new THREE.ConeGeometry(0.09, 0.26, 4).translate(-0.2, 1.42, 0.12),
+  new THREE.BoxGeometry(0.14, 0.3, 0.14).translate(0.24, 0.15, 0.22),
+  new THREE.BoxGeometry(0.14, 0.3, 0.14).translate(-0.24, 0.15, 0.22),
+  new THREE.BoxGeometry(0.14, 0.3, 0.14).translate(0.24, 0.15, -0.22),
+  new THREE.BoxGeometry(0.14, 0.3, 0.14).translate(-0.24, 0.15, -0.22),
+  new THREE.ConeGeometry(0.07, 0.42, 4).rotateX(-1.1).translate(0, 1.0, -0.5),
+])
 // Las rocas que carga a la espalda el lanzarrocas, y sus puños.
 const throwerRockGeometry = mergeGeometries([
   new THREE.IcosahedronGeometry(0.22, 0).translate(0.17, 1.02, -0.44),
@@ -123,6 +134,7 @@ const LOOKS: Record<EnemyType, EnemyLook> = {
   ),
   guardian: look('#3b322d', '#1c0c06', [{ geometry: golemDetailGeometry, material: emberMaterial, castShadow: true }, eyes('#ffd23f')]),
   colossus: look('#9fd8ff', '#1e4a66', [{ geometry: golemDetailGeometry, material: standard('#d6efff'), castShadow: true }, eyes('#ffffff')]),
+  dog: look('#a8763e', '#2a1a0a', [{ geometry: dogDetailGeometry, material: standard('#5a3a1c'), castShadow: true }, eyes('#ff5a3b')]),
 }
 
 /** Modelo de un enemigo y sus animaciones, que solo existen en la vista. */
