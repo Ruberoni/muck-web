@@ -218,19 +218,24 @@ const AIM_HEIGHT: Record<PropFamily, number> = { tree: 1.2, rock: 0.2, bush: 0.5
 const aimHeight = (prop: PropData) => prop.y + AIM_HEIGHT[PROP_DEFS[prop.kind].family]
 
 /** Posición y orientación para apuntar a un prop desde fuera de su radio (debug y tests). */
-export function aimPose(prop: PropData, isFree: (x: number, z: number) => boolean) {
+export function aimPose(prop: PropData, isFree: (x: number, z: number) => boolean, ground?: (x: number, z: number) => number) {
   const dist = prop.radius + 1.2
   let x = prop.x + dist
   let z = prop.z
+  // Con `ground`, de los sitios libres el más a la altura del prop: en una ladera empinada, por arriba queda enterrado.
+  const base = ground?.(prop.x, prop.z) ?? 0
+  let best = Infinity
   for (let i = 0; i < 16; i++) {
     const angle = (i / 16) * Math.PI * 2
     const cx = prop.x + Math.cos(angle) * dist
     const cz = prop.z + Math.sin(angle) * dist
-    if (isFree(cx, cz)) {
-      x = cx
-      z = cz
-      break
-    }
+    if (!isFree(cx, cz)) continue
+    const off = ground ? Math.abs(ground(cx, cz) - base) : 0
+    if (off >= best) continue
+    best = off
+    x = cx
+    z = cz
+    if (!ground) break
   }
   const dx = prop.x - x
   const dz = prop.z - z

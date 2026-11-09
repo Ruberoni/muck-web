@@ -201,7 +201,9 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
   // Vertical: snap al suelo mientras se camina; caída libre si se despega.
   const floor = floorAt(env, pos.x, pos.z)
   if (player.grounded && !jumped) {
-    if (pos.y - floor < GROUND_SNAP) {
+    // Corriendo cuesta abajo por una ladera empinada se sigue pegado al suelo (hasta 1,5 de bajada por metro).
+    const snap = Math.max(GROUND_SNAP, Math.hypot(vel.x, vel.z) * dt * 1.5)
+    if (pos.y - floor < snap) {
       pos.y = floor
       vel.y = 0
     } else {

@@ -121,6 +121,8 @@ describe('meteoritos', () => {
     // Enfriado, se va con la siguiente campana y cae otro.
     worldEvents.step(++tick, players, midnight, 7, true)
     expect(count('meteorGone')).toBe(1)
+    // Si no encuentra sitio a la primera, lo vuelve a intentar en el paso siguiente.
+    for (let i = 0; i < 10 && count('meteorIncoming') < 2; i++) worldEvents.step(++tick, players, midnight, 7, true)
     expect(count('meteorIncoming')).toBe(2)
   })
 

@@ -5,8 +5,42 @@ import { createTerrainRng, mulberry32, WORLD_SEED } from '../random'
 export const WORLD_SIZE = 200
 export const WATER_LEVEL = 0
 export const SAND_LEVEL = 1.2
-export const ROCK_LEVEL = 9
+
+/** Desde esta altura (antes de elevar) el terreno sube más deprisa: las montañas. Lo de abajo no cambia. */
+export const LIFT_FROM = 5
+/** Cuánto más empinado queda lo de arriba: las cimas, de unos 10–12 m, pasan a unos 20–25 (en el claro del centro no se eleva). */
+export const LIFT_FACTOR = 3
+/** Metros en los que se pasa de no elevar a elevar del todo, para que la ladera no tenga un pliegue. */
+const LIFT_BLEND = 2
+/**
+ * El centro de la isla, donde aparecen los jugadores, suele ser lo más alto: hasta este radio no se eleva, para que siga
+ * siendo pradera (CLEARING_RADIUS, biomes.ts)…
+ */
+const LIFT_CLEAR = 24
+/** …y desde este, del todo. Entre los dos, la subida llega poco a poco, sin una pared alrededor del claro. */
+const LIFT_CLEAR_FADE = 44
+
+/**
+ * La altura elevada de una altura `h` del ruido: igual hasta LIFT_FROM y, por encima, con la pendiente multiplicada por
+ * LIFT_FACTOR, a la que se llega poco a poco en LIFT_BLEND metros (la integral de un smoothstep). Es monótona: lo que
+ * estaba más alto sigue más alto, así que las franjas de altura se pueden pasar por ella.
+ */
+export function lift(h: number): number {
+  if (h <= LIFT_FROM) return h
+  const t = (h - LIFT_FROM) / LIFT_BLEND
+  const ramp = t < 1 ? t * t * t - (t * t * t * t) / 2 : t - 0.5
+  return h + (LIFT_FACTOR - 1) * LIFT_BLEND * ramp
+}
+
+/** Desde aquí ya no crecen árboles ni arbustos: en la de antes, 9 m. */
+export const ROCK_LEVEL = lift(9)
 export const MAX_SLOPE = 1.6
+
+/**
+ * La pendiente que se admite a la altura `y` para algo que admite `slope` en llano: en la montaña elevada, LIFT_FACTOR
+ * veces más, porque elevar multiplica la pendiente.
+ */
+export const slopeLimit = (y: number, slope: number) => (y > lift(LIFT_FROM) ? slope * LIFT_FACTOR : slope)
 
 // Igual que THREE.MathUtils.clamp, para no cambiar ni un bit de la altura.
 const clamp = (x: number, min: number, max: number) => Math.max(min, Math.min(max, x))
@@ -49,7 +83,8 @@ const LAKE_GAP = 12
 /** El terreno de la isla de semilla `seed` y lado `size`: colinas de ruido, que bajan al mar en los bordes, y sus lagos. */
 export function terrainFor(seed: number, size = WORLD_SIZE): Terrain {
   const noise2D = createNoise2D(createTerrainRng(seed))
-  const base = (x: number, z: number): number => {
+  // Sin elevar: los lagos se buscan con esta, como antes.
+  const raw = (x: number, z: number): number => {
     const n =
       0.6 * noise2D(x * 0.012, z * 0.012) +
       0.3 * noise2D(x * 0.03, z * 0.03) +
@@ -62,7 +97,12 @@ export function terrainFor(seed: number, size = WORLD_SIZE): Terrain {
 
     return hills * falloff + falloff * 4 - 3
   }
-  const lakes = size > WORLD_SIZE ? placeLakes(seed, size, base) : []
+  const base = (x: number, z: number) => {
+    const h = raw(x, z)
+    if (h <= LIFT_FROM) return h
+    return h + (lift(h) - h) * smoothstep(LIFT_CLEAR, LIFT_CLEAR_FADE, Math.hypot(x, z))
+  }
+  const lakes = size > WORLD_SIZE ? placeLakes(seed, size, raw) : []
   const heightAt = (x: number, z: number): number => {
     let h = base(x, z)
     for (const lake of lakes) {

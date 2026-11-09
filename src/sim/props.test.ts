@@ -27,7 +27,7 @@ import {
 } from './props'
 import { Simulation } from './Simulation'
 import { biomeAt } from './world/biomes'
-import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt } from './world/terrain'
+import { heightAt, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeAt, slopeLimit } from './world/terrain'
 
 /** Árboles, rocas y arbustos, que salen primero y deciden el punto de aparición. */
 const ORIGINAL_COUNT = 180 + 60 + 45
@@ -78,7 +78,7 @@ describe('colocación de props', () => {
       const h = heightAt(p.x, p.z)
       expect(h).toBeGreaterThanOrEqual(band.min)
       expect(h).toBeLessThanOrEqual(band.max)
-      expect(slopeAt(p.x, p.z)).toBeLessThanOrEqual(slope)
+      expect(slopeAt(p.x, p.z)).toBeLessThanOrEqual(slopeLimit(h, slope))
     }
   })
 

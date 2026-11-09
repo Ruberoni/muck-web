@@ -8,10 +8,10 @@ describe('mundo determinista', () => {
   const world = createPropWorld()
   const view = new PropView(world.placements)
 
-  // La isla con biomas da '2db37a80' en Node y '2dceb132' en Chromium (las funciones matemáticas difieren en los
+  // La isla con biomas da 'de391c1d' en Node y '666df4c3' en Chromium (las funciones matemáticas difieren en los
   // últimos bits). El valor del navegador se comprueba con `__debug.worldHash`.
   it('conserva el hash de la isla (referencia en Node)', () => {
-    expect(computeWorldHash(islandMeshes(view))).toBe('2db37a80')
+    expect(computeWorldHash(islandMeshes(view))).toBe('de391c1d')
   })
 
   // Van en sus propios meshes y detrás en la lista: no cambian el hash anterior. Este es el suyo (referencia en Node,
@@ -20,7 +20,7 @@ describe('mundo determinista', () => {
     const { birch, iron_ore } = view.byKind
     expect(birch[0].count).toBeGreaterThan(0)
     expect(iron_ore[0].count).toBeGreaterThan(0)
-    expect(computeWorldHash([...birch, ...iron_ore])).toBe('72fab417')
+    expect(computeWorldHash([...birch, ...iron_ore])).toBe('e395207c')
   })
 
   // Lo mismo con los del mithril (`__debug.mithrilPropsHash` da lo mismo en Chromium).
@@ -28,7 +28,7 @@ describe('mundo determinista', () => {
     const { darkpine, mithril_ore } = view.byKind
     expect(darkpine[0].count).toBeGreaterThan(0)
     expect(mithril_ore[0].count).toBeGreaterThan(0)
-    expect(computeWorldHash([...darkpine, ...mithril_ore])).toBe('908639bf')
+    expect(computeWorldHash([...darkpine, ...mithril_ore])).toBe('3c10181c')
   })
 
   it('los arbustos son deterministas', () => {
@@ -38,7 +38,7 @@ describe('mundo determinista', () => {
     for (const mesh of berries) expect(mesh.count).toBe(bushes.count)
     expect(computeWorldHash([again.meshes.bushes, ...again.meshes.berries])).toBe(computeWorldHash([bushes, ...berries]))
     // Referencia en Node: lo que se coloca después va detrás y con su propio stream, así que no mueve los arbustos.
-    expect(computeWorldHash([bushes, ...berries])).toBe('0b002036')
+    expect(computeWorldHash([bushes, ...berries])).toBe('a33bdb96')
   })
 
   it('las posiciones de las colocaciones coinciden con las matrices de instancia', () => {

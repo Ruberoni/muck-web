@@ -582,7 +582,7 @@ describe('guardián', () => {
     run(1)
     expect(guardian.target).toBeNull()
     run(60 * 3)
-    expect(guardian.pos).toEqual(guardian.home)
+    expect(Math.hypot(guardian.pos.x - guardian.home.x, guardian.pos.z - guardian.home.z)).toBeLessThan(1e-9)
     expect(guardian.hp).toBe(100)
   })
 

@@ -1,6 +1,6 @@
 import type { Collider, SpatialGrid } from './collision'
 import { DEFAULT_ISLAND, type Island } from './world/island'
-import { MAX_SLOPE } from './world/terrain'
+import { MAX_SLOPE, slopeLimit } from './world/terrain'
 
 /** Radios de lo que ya viene puesto en la isla: los usan la colisión y la búsqueda de sitio. */
 export const LIGHTHOUSE_RADIUS = 6.2
@@ -33,7 +33,7 @@ function bestSpot(island: Island, grid: SpatialGrid<Collider>, radius: number, s
   const step = searchStep(island)
   for (let x = -reach; x <= reach; x += step) {
     for (let z = -reach; z <= reach; z += step) {
-      if (Math.hypot(x, z) > reach || island.slopeAt(x, z) > MAX_SLOPE) continue
+      if (Math.hypot(x, z) > reach || island.slopeAt(x, z) > slopeLimit(island.heightAt(x, z), MAX_SLOPE)) continue
       const value = score(x, z)
       if (value === null || value <= bestScore || !isClear(grid, x, z, radius + CLEARANCE)) continue
       best = { x, z }

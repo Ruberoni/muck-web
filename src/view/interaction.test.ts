@@ -31,7 +31,7 @@ function setup() {
   const aimAt = (prop: PropData) => {
     const isFree = (x: number, z: number) =>
       world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
-    const pose = aimPose(prop, isFree)
+    const pose = aimPose(prop, isFree, heightAt)
     const y = heightAt(pose.x, pose.z)
     Object.assign(viewer, { pos: { x: pose.x, y, z: pose.z }, yaw: pose.yaw, pitch: Math.atan2(pose.aimY - y - EYE_HEIGHT, pose.horizontal) })
     interaction.updateTarget(fighter)

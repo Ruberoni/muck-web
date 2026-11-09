@@ -4,7 +4,7 @@ import type { Emit } from './events'
 import { createBirchRng, createCoalOreRng, createCrystalOreRng, createDeadTreeRng, createBushRng, createDarkpineRng, createHerbRng, createIronOreRng, createMithrilOreRng, createRockRng, createTreeRng, type Rng } from './random'
 import { BIOME_FLORA } from './world/biomes'
 import { DEFAULT_ISLAND, type Island } from './world/island'
-import { MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
+import { lift, MAX_SLOPE, ROCK_LEVEL, SAND_LEVEL, slopeLimit, WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 
 const TREE_COUNT = 180
 const ROCK_COUNT = 60
@@ -19,16 +19,20 @@ export const CRYSTAL_ORE_COUNT = 12
 export const DEADTREE_COUNT = 24
 /** Las rocas llegan hasta la arena; el resto de lo que crece en el suelo, solo hasta la hierba. */
 const ROCK_MIN_HEIGHT = 0.4
-/** Franjas de altura del terreno (en el centro) de algunos tipos: las de las menas no se solapan entre sí. */
-export const BIRCH_BAND = { min: 3, max: 6 }
-export const IRON_ORE_BAND = { min: 6, max: 8.5 }
-export const DARKPINE_BAND = { min: 6, max: 9 }
+/**
+ * Franjas de altura del terreno (en el centro) de algunos tipos: las de las menas no se solapan entre sí. Se dan en la
+ * altura de antes de elevar las montañas y pasan por `lift`, así que caen en las mismas laderas.
+ */
+const band = (min: number, max: number) => ({ min: lift(min), max: lift(max) })
+export const BIRCH_BAND = band(3, 6)
+export const IRON_ORE_BAND = band(6, 8.5)
+export const DARKPINE_BAND = band(6, 9)
 /** Las cimas. */
-export const MITHRIL_ORE_BAND = { min: 8.5, max: Infinity }
+export const MITHRIL_ORE_BAND = band(8.5, Infinity)
 /** Entre la pradera y la montaña: se encuentra pronto, con el pico de madera. */
-export const COAL_ORE_BAND = { min: 3, max: 8 }
+export const COAL_ORE_BAND = band(3, 8)
 /** En las cimas, como el mithril. */
-export const CRYSTAL_ORE_BAND = { min: 8, max: Infinity }
+export const CRYSTAL_ORE_BAND = band(8, Infinity)
 /** Los tipos que salen después de los arbustos no se colocan a menos de esto (hasta su borde) del punto de aparición. */
 export const SPAWN_EXCLUSION = 8
 /** Intentos por prop de cada tipo: sobran (el test de cantidad exacta lo vigila). */
@@ -201,7 +205,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
     const sz = 0.8 + rockRng() * 1.4
     const rx = rockRng() * Math.PI
     const ry = rockRng() * Math.PI * 2
-    if (y < ROCK_MIN_HEIGHT || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < ROCK_MIN_HEIGHT || island.slopeAt(x, z) > slopeLimit(y, MAX_SLOPE * 1.5)) return null
     // Algo hundidas para que no parezcan apoyadas en un punto. El icosaedro tiene radio 1:
     // max(sx, sz) cubre sus vértices en XZ.
     return { kind: 'rock', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
@@ -233,7 +237,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
     const sz = 0.8 + oreRng() * 0.8
     const rx = oreRng() * Math.PI
     const ry = oreRng() * Math.PI * 2
-    if (y < IRON_ORE_BAND.min || y > IRON_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < IRON_ORE_BAND.min || y > IRON_ORE_BAND.max || island.slopeAt(x, z) > slopeLimit(y, MAX_SLOPE * 1.5)) return null
     // Como las rocas: algo hundidas, y max(sx, sz) cubre los vértices del icosaedro en XZ.
     return { kind: 'iron_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
@@ -242,7 +246,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
   scatter(pineRng, counts.darkpine, (x, z, y) => {
     const scale = 1.2 + pineRng() * 0.4
     const rotation = pineRng() * Math.PI * 2
-    if (y < DARKPINE_BAND.min || y > DARKPINE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE) return null
+    if (y < DARKPINE_BAND.min || y > DARKPINE_BAND.max || island.slopeAt(x, z) > slopeLimit(y, MAX_SLOPE)) return null
     return { kind: 'darkpine', x, y: y - 0.1, z, radius: TRUNK_BOTTOM_RADIUS * scale, rotX: 0, rotY: rotation, scaleX: scale, scaleY: scale, scaleZ: scale }
   })
 
@@ -254,7 +258,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
     const sz = 0.6 + mithrilRng() * 0.4
     const rx = mithrilRng() * Math.PI
     const ry = mithrilRng() * Math.PI * 2
-    if (y < MITHRIL_ORE_BAND.min || y > MITHRIL_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < MITHRIL_ORE_BAND.min || y > MITHRIL_ORE_BAND.max || island.slopeAt(x, z) > slopeLimit(y, MAX_SLOPE * 1.5)) return null
     return { kind: 'mithril_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
@@ -273,7 +277,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
     const sz = 0.8 + coalRng() * 0.6
     const rx = coalRng() * Math.PI
     const ry = coalRng() * Math.PI * 2
-    if (y < COAL_ORE_BAND.min || y > COAL_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < COAL_ORE_BAND.min || y > COAL_ORE_BAND.max || island.slopeAt(x, z) > slopeLimit(y, MAX_SLOPE * 1.5)) return null
     return { kind: 'coal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 
@@ -284,7 +288,7 @@ export function buildPropPlacements(island: Island = DEFAULT_ISLAND): PropPlacem
     const sz = 0.6 + crystalRng() * 0.4
     const rx = crystalRng() * Math.PI
     const ry = crystalRng() * Math.PI * 2
-    if (y < CRYSTAL_ORE_BAND.min || y > CRYSTAL_ORE_BAND.max || island.slopeAt(x, z) > MAX_SLOPE * 1.5) return null
+    if (y < CRYSTAL_ORE_BAND.min || y > CRYSTAL_ORE_BAND.max || island.slopeAt(x, z) > slopeLimit(y, MAX_SLOPE * 1.5)) return null
     return { kind: 'crystal_ore', x, y: y - sy * 0.3, z, radius: Math.max(sx, sz) * ROCK_RADIUS, rotX: rx * 0.2, rotY: ry, scaleX: sx, scaleY: sy, scaleZ: sz }
   })
 

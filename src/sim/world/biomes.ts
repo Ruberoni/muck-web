@@ -1,7 +1,7 @@
 import { createNoise2D } from 'simplex-noise'
 import type { PropKind } from '../props'
 import { createBiomeRng, WORLD_SEED } from '../random'
-import { DEFAULT_TERRAIN, SAND_LEVEL, type Terrain } from './terrain'
+import { DEFAULT_TERRAIN, lift, SAND_LEVEL, type Terrain } from './terrain'
 
 /** Zonas de la isla: deciden qué crece en cada sitio (BIOME_FLORA) y de qué color es el suelo. */
 export type Biome = 'beach' | 'meadow' | 'forest' | 'mountain'
@@ -11,7 +11,7 @@ export const BIOME_NAMES: Record<Biome, string> = { beach: 'Playa', meadow: 'Pra
 /** Por debajo de esta altura es playa. */
 export const BEACH_LEVEL = SAND_LEVEL + 0.3
 /** Desde esta altura es montaña: las franjas de las menas (props.ts) empiezan aquí. */
-export const MOUNTAIN_LEVEL = 6
+export const MOUNTAIN_LEVEL = lift(6)
 /** Hasta aquí desde el centro de la isla, donde aparecen los jugadores, siempre es pradera. */
 const CLEARING_RADIUS = 24
 /** Desde aquí el claro del centro ya no se nota. */

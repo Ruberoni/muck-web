@@ -39,7 +39,7 @@ function step(sim: Simulation, { buttons = 0, yaw = sim.slot(0).player.yaw, pitc
 /** Teletransporta al jugador delante del prop, mirándolo, y devuelve la orientación para los `Move`. */
 function aimAt(sim: Simulation, prop: PropData) {
   const isFree = (x: number, z: number) => sim.world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
-  const pose = aimPose(prop, isFree)
+  const pose = aimPose(prop, isFree, heightAt)
   const pitch = Math.atan2(pose.aimY - heightAt(pose.x, pose.z) - EYE_HEIGHT, pose.horizontal)
   sim.teleport(0, pose.x, pose.z, pose.yaw, pitch)
   return { yaw: pose.yaw, pitch }

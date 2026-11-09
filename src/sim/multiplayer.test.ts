@@ -84,7 +84,7 @@ function useStation(sim: Simulation, station: Structure, input: ItemId, amount: 
 function aimAt(sim: Simulation, id: PlayerId, prop: PropData, also = (_x: number, _z: number) => true) {
   const isFree = (x: number, z: number) =>
     also(x, z) && sim.world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
-  const pose = aimPose(prop, isFree)
+  const pose = aimPose(prop, isFree, heightAt)
   const pitch = Math.atan2(pose.aimY - heightAt(pose.x, pose.z) - EYE_HEIGHT, pose.horizontal)
   sim.teleport(id, pose.x, pose.z, pose.yaw, pitch)
   return { yaw: pose.yaw, pitch, x: pose.x, z: pose.z }

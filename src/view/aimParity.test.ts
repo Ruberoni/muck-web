@@ -103,7 +103,8 @@ describe('objetivo sin cámara: paridad con el raycast de three', () => {
   // en franjas, pero es la misma superficie).
   it.each(['tree', 'birch', 'darkpine', 'rock'] as const)('%s: el mismo objetivo en todos los rayos', (kind) => {
     const result = compare(propSamples(kind))
-    expect(result.touched).toBeGreaterThan(800)
+    // En las laderas de la montaña el suelo tapa algunos rayos.
+    expect(result.touched).toBeGreaterThan(700)
     expect(result.same).toBe(result.touched)
   })
 

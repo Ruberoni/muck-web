@@ -232,7 +232,7 @@ export function installDebug(game: Game) {
         }
         return true
       }
-      const pose = aimPose(prop, isFree)
+      const pose = aimPose(prop, isFree, sim().island.heightAt)
       const eyeY = Math.max(sim().island.heightAt(pose.x, pose.z), WATER_LEVEL - FLOAT_DEPTH) + EYE_HEIGHT
       const moved = game.teleport(pose.x, pose.z, pose.yaw, Math.atan2(pose.aimY - eyeY, pose.horizontal))
       if (moved) return moved.then(() => frames()).then(targetPropId)
