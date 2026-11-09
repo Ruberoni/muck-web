@@ -450,8 +450,8 @@ export const ENEMY_SPAWN_INTERVAL = 5
 /** Un jefe cada tantas noches, unos segundos después de anochecer y algo más lejos que el resto. */
 export const BOSS_EVERY = 3
 export const BOSS_DELAY = 20
-export const BOSS_SPAWN_MIN = 30
-export const BOSS_SPAWN_MAX = 40
+export const BOSS_SPAWN_MIN = 38
+export const BOSS_SPAWN_MAX = 50
 /** Velocidad horizontal de las rocas que se lanzan. */
 export const ROCK_SPEED = 14
 /** Meteoritos: desde este día, uno al día a una hora al azar entre estas dos fases. */
@@ -470,8 +470,10 @@ export const METEOR_DAMAGE = 20
 export const METEOR_BLAST = 4
 /** Vida y botín de un jefe: un 50 % más por cada jugador a partir del segundo. */
 export const BOSS_PER_PLAYER = 0.5
-export const ENEMY_SPAWN_MIN = 26
-export const ENEMY_SPAWN_MAX = 40
+export const ENEMY_SPAWN_MIN = 34
+export const ENEMY_SPAWN_MAX = 48
+/** Segundos entre el aviso de una aparición (humo y sonido, `enemyIncoming`) y la salida del mob. */
+export const SPAWN_WARN = 1.5
 /** Enemigos a la vez la primera noche; cada noche se suman ENEMY_PER_NIGHT, hasta ENEMY_MAX. */
 export const ENEMY_BASE_COUNT = 3
 export const ENEMY_PER_NIGHT = 2

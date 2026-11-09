@@ -5,7 +5,7 @@ import { createPropWorld, growBerries, type PropData } from './props'
 import { quickProps } from './quickProps'
 import { mulberry32 } from './random'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
-import { BERRY_REGROW, ENEMY_DEFS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, STEP } from './constants'
+import { BERRY_REGROW, ENEMY_DEFS, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLAYER_RADIUS, SPAWN_WARN, STEP } from './constants'
 import { Enemies } from './enemies'
 import { aimPose, createCombat, Interaction, type Fighter } from './interaction'
 import { Inventory } from './inventory'
@@ -118,9 +118,13 @@ describe('eventos de la simulación', () => {
       for (let i = 0; i < Math.round(seconds / STEP); i++) ctx.enemies.step(STEP, [{ id: 0, pos: player, alive: true }], phase, 1)
     }
     run(STEP)
+    // Primero se anuncia con humo y, SPAWN_WARN segundos después, aparece donde se anunció.
+    expect(ctx.enemies.list).toHaveLength(0)
+    run(SPAWN_WARN)
     // Aparece y en el mismo paso ya da el primer paso: `prev` es donde apareció.
     const { x, z } = ctx.enemies.list[0].prev
-    expect(ctx.events).toEqual([{ type: 'enemySpawn', id: 0, enemy: 'goblin', x, z }])
+    expect(ctx.events[0]).toEqual({ type: 'enemyIncoming', enemy: 'goblin', x, z })
+    expect(ctx.events.filter((e) => e.type === 'enemySpawn')).toEqual([{ type: 'enemySpawn', id: 0, enemy: 'goblin', x, z }])
 
     const e = ctx.enemies.spawnAt(player.x + PLAYER_RADIUS + ENEMY_DEFS.goblin.radius + 0.1, player.z)
     ctx.events.length = 0

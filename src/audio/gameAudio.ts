@@ -34,6 +34,9 @@ const rockLands = (end: ProjectileEnd) => end === 'ground' || end === 'obstacle'
 
 /** El impacto de un meteorito se oye en toda la isla: de lejos, más bajo pero nunca menos que esto. */
 const METEOR_HEARING = 180
+/** El humo de una aparición se oye hasta algo más allá de donde salen (ENEMY_SPAWN_MAX). */
+const SPAWN_HEARING = 70
+const SPAWN_MIN_GAIN = 0.15
 const METEOR_MIN_GAIN = 0.3
 
 /** Quién escucha: la cámara del jugador local. */
@@ -197,6 +200,12 @@ export class GameAudio {
   }
 
   /** Cae en (x, z), y de ahí viene el golpe. */
+  /** Humo donde va a salir un mob: se oye desde su sitio, más fuerte cuanto más cerca, también a través de la niebla. */
+  spawnPuff(x: number, z: number, listener: Listener) {
+    const { gain, pan } = spatialize(x - listener.x, z - listener.z, listener.yaw, SPAWN_HEARING)
+    if (gain > 0) this.sound.play('spawnPuff', { gain: Math.max(gain, SPAWN_MIN_GAIN), pan })
+  }
+
   meteorLanded(x: number, z: number, listener: Listener) {
     const { gain, pan } = spatialize(x - listener.x, z - listener.z, listener.yaw, METEOR_HEARING)
     this.sound.play('meteorImpact', { gain: Math.max(gain, METEOR_MIN_GAIN), pan })

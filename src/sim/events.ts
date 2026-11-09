@@ -38,6 +38,8 @@ export type SimEventData =
   /** Han entregado materiales a una construcción. `finished`: la fase que ha acabado, si ha acabado alguna. */
   | { type: 'buildProgress'; id: number; build: BuildState; finished: string | null }
   | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
+  /** Va a salir un mob común aquí dentro de SPAWN_WARN segundos: humo y sonido. */
+  | { type: 'enemyIncoming'; enemy: EnemyType; x: number; z: number }
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId; efficacy: HitEfficacy }
   | { type: 'enemyAttack'; id: number; target: PlayerId }

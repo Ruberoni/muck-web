@@ -343,6 +343,8 @@ export class Simulation {
     const prey = present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil }))
     const flying = this.structures.flying
     this.enemies.decoy = flying ? { id: PLANE_TARGET, pos: flying, alive: true, radius: flying.radius } : null
+    // Con el faro encendido no aparecen mobs comunes en toda la isla.
+    this.enemies.calm = this.structures.burning !== undefined
     // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
     const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))

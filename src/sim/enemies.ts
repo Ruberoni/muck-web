@@ -26,6 +26,7 @@ import {
   ENEMY_TYPES,
   PLAYER_RADIUS,
   SHELL_RESIST,
+  SPAWN_WARN,
   STEP,
   WADE_DEPTH,
   WORLD_BOUND_FACTOR,
@@ -129,6 +130,16 @@ export interface EnemiesState {
   spawnTurn: number
   /** Última noche en que le tocó salir a un jefe: no sale otro aunque se recargue la partida. */
   bossDay: number
+  /** Los que ya se han anunciado y aún no han salido. */
+  pending?: PendingSpawn[]
+}
+
+/** Un mob común anunciado con humo que saldrá en (x, z) cuando `left` llegue a 0. */
+export interface PendingSpawn {
+  x: number
+  z: number
+  type: EnemyType
+  left: number
 }
 
 const copyEnemy = (e: EnemyData): EnemyData => ({ ...e, pos: { ...e.pos }, prev: { ...e.prev }, home: { ...e.home }, knock: { ...e.knock }, charge: { ...e.charge } })
@@ -161,7 +172,7 @@ const hpScale = (def: EnemyDef, players: number) => (def.boss || def.guard || de
 const lootScaleOf = (def: EnemyDef, players: number) => (def.guard ? bossScale(players) : def.boss ? 1 + BOSS_PER_PLAYER * (bossScale(players) - 1) : 1)
 
 /** Los que suben con la amenaza: ni los jefes ni los guardianes. */
-const isCommon = (type: EnemyType) => !ENEMY_DEFS[type].boss && !ENEMY_DEFS[type].guard && !ENEMY_DEFS[type].light
+export const isCommon = (type: EnemyType) => !ENEMY_DEFS[type].boss && !ENEMY_DEFS[type].guard && !ENEMY_DEFS[type].light
 
 /** Probabilidad de que una aparición de la noche `day` en `biome` sea de tipo `type` en vez de un trasgo. */
 export function spawnChance(type: EnemyType, day: number, biome: Biome): number {
@@ -200,6 +211,10 @@ export class Enemies {
   scaling: MobScaling = { ...NO_SCALING }
   /** Lo que atrae a todos los mobs comunes, en vez de los jugadores: el avión con el motor en marcha. */
   decoy: EnemyPrey | null = null
+  /** Con el faro encendido no se anuncian mobs comunes nuevos (los ya anunciados salen igual). */
+  calm = false
+  /** Anunciados que aún no han salido: cuentan para el tope. */
+  private pending: PendingSpawn[] = []
 
   /**
    * `grids`: obstáculos que rodean (props, estructuras…). `throwRock`: lo que vuela va por los proyectiles de la partida.
@@ -219,14 +234,15 @@ export class Enemies {
    */
   step(dt: number, players: readonly EnemyPrey[], phase: number, day: number): EnemyDamage[] {
     const prey = players.filter((p) => p.alive)
+    this.stepPending(dt)
     if (isNight(phase)) {
       this.spawnTimer -= dt
       if (this.spawnTimer <= 1e-9) {
-        const count = this.list.filter((e) => isCommon(e.type)).length
-        if (prey.length && count < enemyCapFor(day, players.length)) {
+        const count = this.list.filter((e) => isCommon(e.type)).length + this.pending.length
+        if (prey.length && !this.calm && count < enemyCapFor(day, players.length)) {
           // Por turnos: cada aparición elige a un jugador vivo distinto.
           const around = prey[this.spawnTurn++ % prey.length]
-          this.trySpawn(around, prey, ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX, (x, z) => spawnType(this.rng(), day, this.island.biomeAt(x, z)))
+          this.queueSpawn(around, prey, (x, z) => spawnType(this.rng(), day, this.island.biomeAt(x, z)))
         }
         this.spawnTimer = spawnIntervalFor(players.length) * this.scaling.spawnInterval
       }
@@ -486,8 +502,34 @@ export class Enemies {
     if (this.trySpawn(around, prey, BOSS_SPAWN_MIN, BOSS_SPAWN_MAX, () => type, players)) this.bossDay = day
   }
 
+  /** Un mob común: se anuncia (`enemyIncoming`) y sale SPAWN_WARN segundos después donde se anunció. */
+  private queueSpawn(around: EnemyPrey, prey: readonly EnemyPrey[], pick: (x: number, z: number) => EnemyType) {
+    const spot = this.findSpot(around, prey, ENEMY_SPAWN_MIN, ENEMY_SPAWN_MAX, pick)
+    if (!spot) return null
+    const pending = { ...spot, left: SPAWN_WARN }
+    this.pending.push(pending)
+    this.emit({ type: 'enemyIncoming', enemy: spot.type, x: spot.x, z: spot.z })
+    return pending
+  }
+
+  /** Saca los anunciados cuyo aviso ha terminado, también de día. */
+  private stepPending(dt: number) {
+    if (!this.pending.length) return
+    for (const p of this.pending) p.left -= dt
+    const ready = this.pending.filter((p) => p.left <= 1e-9)
+    if (!ready.length) return
+    this.pending = this.pending.filter((p) => p.left > 1e-9)
+    for (const p of ready) this.spawnAt(p.x, p.z, p.type)
+  }
+
   /** Alrededor de `around`, entre `min` y `max` metros de él y a `min` como poco de todos los jugadores vivos. */
   private trySpawn(around: EnemyPrey, prey: readonly EnemyPrey[], min: number, max: number, pick: (x: number, z: number) => EnemyType, players = 1) {
+    const spot = this.findSpot(around, prey, min, max, pick)
+    return spot ? this.spawnAt(spot.x, spot.z, spot.type, players) : null
+  }
+
+  /** Un sitio libre en tierra alrededor de `around` (ver `trySpawn`) y el tipo que sale en él, o null. */
+  private findSpot(around: EnemyPrey, prey: readonly EnemyPrey[], min: number, max: number, pick: (x: number, z: number) => EnemyType) {
     for (let i = 0; i < SPAWN_ATTEMPTS; i++) {
       const angle = this.rng() * Math.PI * 2
       const r = min + this.rng() * (max - min)
@@ -498,7 +540,7 @@ export class Enemies {
       const type = pick(x, z)
       const pos = { x, z }
       if (this.grids.some((grid) => resolveCircle(pos, ENEMY_DEFS[type].radius, grid))) continue
-      return this.spawnAt(x, z, type, players)
+      return { x, z, type }
     }
     return null
   }
@@ -580,13 +622,21 @@ export class Enemies {
   /** Reinicio de partida: sin enemigos y con la próxima aparición inmediata al anochecer. */
   reset() {
     for (const e of [...this.list]) this.kill(e)
+    this.pending = []
     this.spawnTimer = 0
     this.spawnTurn = 0
     this.bossDay = 0
   }
 
   save(): EnemiesState {
-    return { list: this.list.map(copyEnemy), spawnTimer: this.spawnTimer, nextId: this.nextId, spawnTurn: this.spawnTurn, bossDay: this.bossDay }
+    return {
+      list: this.list.map(copyEnemy),
+      spawnTimer: this.spawnTimer,
+      nextId: this.nextId,
+      spawnTurn: this.spawnTurn,
+      bossDay: this.bossDay,
+      pending: this.pending.map((p) => ({ ...p })),
+    }
   }
 
   load(state: EnemiesState) {
@@ -596,5 +646,6 @@ export class Enemies {
     this.nextId = state.nextId
     this.spawnTurn = state.spawnTurn
     this.bossDay = state.bossDay
+    this.pending = (state.pending ?? []).map((p) => ({ ...p }))
   }
 }

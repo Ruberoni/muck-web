@@ -9,9 +9,12 @@ import {
   ENEMY_DEFS,
   ENEMY_SPAWN_MAX,
   type EnemyType,
+  BOSS_SPAWN_MAX,
+  BOSS_SPAWN_MIN,
   ENEMY_SPAWN_MIN,
   EYE_HEIGHT,
   PLAYER_RADIUS,
+  SPAWN_WARN,
   STEP,
   WADE_DEPTH,
   WALK_SPEED,
@@ -71,13 +74,44 @@ describe('enemigos nocturnos', () => {
     expect(enemyCap(100)).toBe(12)
   })
 
+  it('se anuncian con humo y salen SPAWN_WARN segundos después, donde se anunciaron', () => {
+    const events: SimEventData[] = []
+    enemies = new Enemies([world.grid], mulberry32(7), (e) => events.push(e))
+    run(STEP)
+    expect(enemies.list).toHaveLength(0)
+    const incoming = events.find((e) => e.type === 'enemyIncoming')
+    expect(incoming).toBeDefined()
+    run(SPAWN_WARN - 2 * STEP)
+    expect(enemies.list).toHaveLength(0)
+    run(2 * STEP)
+    expect(enemies.list).toHaveLength(1)
+    if (incoming?.type !== 'enemyIncoming') throw new Error('sin aviso')
+    // En el mismo paso ya da el primero: `prev` es donde apareció.
+    expect(enemies.list[0].prev).toEqual({ x: incoming.x, z: incoming.z })
+    // Lo anunciado cuenta para el tope y sobrevive a guardar y cargar.
+    run(4.9)
+    const saved = enemies.save()
+    const copy = new Enemies([world.grid], mulberry32(7))
+    copy.load(saved)
+    expect(copy.save()).toEqual(saved)
+  })
+
+  it('con el faro encendido no aparece ninguno', () => {
+    enemies.calm = true
+    run(60)
+    expect(enemies.list).toHaveLength(0)
+    enemies.calm = false
+    run(SPAWN_WARN + STEP)
+    expect(enemies.list).toHaveLength(1)
+  })
+
   it('de día no aparece ninguno', () => {
     run(60, DAY)
     expect(enemies.list).toHaveLength(0)
   })
 
   it('al anochecer aparecen en tierra, lejos del jugador, sin pasar del máximo', () => {
-    run(STEP)
+    run(SPAWN_WARN + STEP)
     expect(enemies.list).toHaveLength(1)
     const [first] = enemies.list
     const d = dist(first, player)
@@ -273,8 +307,8 @@ describe('enemigos nocturnos', () => {
     run(30)
     enemies.reset()
     expect(enemies.list).toHaveLength(0)
-    // La siguiente aparición es inmediata al anochecer.
-    run(STEP)
+    // La siguiente aparición se anuncia al momento y sale SPAWN_WARN segundos después.
+    run(SPAWN_WARN + STEP)
     expect(enemies.list).toHaveLength(1)
   })
 })
@@ -303,7 +337,7 @@ describe('jefes', () => {
     expect(dist(bosses()[0], player)).toBeGreaterThanOrEqual(25)
   })
 
-  it('sale una vez, a los 20 s de anochecer y a 30–40 m, sin contar para el tope', () => {
+  it('sale una vez, a los 20 s de anochecer y a 38–50 m, sin contar para el tope', () => {
     step(DUSK, 3)
     expect(bosses()).toHaveLength(0)
     // Se mide nada más salir: luego camina hacia el jugador.
@@ -311,9 +345,9 @@ describe('jefes', () => {
     expect(bosses()).toHaveLength(1)
     const [boss] = bosses()
     const distance = Math.hypot(boss.prev.x - player.x, boss.prev.z - player.z)
-    expect(distance).toBeGreaterThanOrEqual(29.5)
-    expect(distance).toBeLessThanOrEqual(40.5)
-    for (let i = 0; i < 60; i++) step(BOSS_PHASE, 3)
+    expect(distance).toBeGreaterThanOrEqual(BOSS_SPAWN_MIN - 0.5)
+    expect(distance).toBeLessThanOrEqual(BOSS_SPAWN_MAX + 0.5)
+    for (let i = 0; i < Math.round((SPAWN_WARN + 0.5) / STEP); i++) step(BOSS_PHASE, 3)
     expect(bosses()).toHaveLength(1)
     expect(enemies.list.filter((e) => e.type === 'goblin').length).toBeGreaterThan(0)
     // Muerto no vuelve a salir esa noche, ni al recargar la partida.

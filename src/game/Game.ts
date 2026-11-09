@@ -6,6 +6,7 @@ import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { PickupView } from '../view/PickupView'
 import { MeteorView } from '../view/MeteorView'
+import { SpawnSmokeView } from '../view/SpawnSmokeView'
 import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { autoSkin } from '../net/skins'
@@ -15,6 +16,7 @@ import { FishView } from '../view/FishView'
 import { loadNature, type NatureModels } from '../view/nature'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
+import { isCommon } from '../sim/enemies'
 import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
 import { TRAIT_NAMES } from '../sim/threat'
 import { BiomeNotice } from '../ui/biomeNotice'
@@ -122,6 +124,7 @@ export class Game {
   readonly pickupView = new PickupView()
   readonly projectileView = new ProjectileView()
   readonly meteorView = new MeteorView()
+  readonly smokeView = new SpawnSmokeView()
   readonly fishView = new FishView()
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView(loadCharacter)
@@ -217,7 +220,7 @@ export class Game {
       (error) => console.warn('No se han podido cargar los modelos de naturaleza', error),
     )
     this.structureView = new StructureView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.fishView.group, this.remotePlayers.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.fishView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
@@ -746,6 +749,17 @@ export class Game {
           this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
           this.audio.meteorIncoming()
           break
+        case 'enemyIncoming':
+          this.smokeView.puff(e.x, e.z)
+          this.audio.spawnPuff(e.x, e.z, this.listener())
+          break
+        case 'enemySpawn':
+          // Los comunes ya echaron humo al anunciarse; los jefes salen al momento, con su humo.
+          if (!isCommon(e.enemy)) {
+            this.smokeView.puff(e.x, e.z)
+            this.audio.spawnPuff(e.x, e.z, this.listener())
+          }
+          break
         case 'meteorLanded':
           this.shake.start(Math.hypot(e.x - this.renderPos.x, e.z - this.renderPos.z))
           this.audio.meteorLanded(e.x, e.z, this.listener())
@@ -919,7 +933,7 @@ export class Game {
       this.terrain = createTerrain(island)
       this.scene.add(this.terrain)
       this.hud.minimap.setIsland(island)
-      this.enemyView.island = this.meteorView.island = island
+      this.enemyView.island = this.meteorView.island = this.smokeView.island = island
     }
     if (this.propView.placements !== this.sim.world.placements) this.propView = this.buildPropView(this.propView)
   }
@@ -952,6 +966,7 @@ export class Game {
     this.pickupView.reset()
     this.projectileView.reset()
     this.meteorView.reset()
+    this.smokeView.reset()
     this.fishView.reset()
     this.structureView.reset()
     this.remotePlayers.reset()
@@ -1005,6 +1020,7 @@ export class Game {
     this.enemyView.update(dt, enemies.list, alpha)
     this.pickupView.update(sim.pickups.list, alpha)
     this.projectileView.update(dt, sim.projectiles.list, alpha)
+    this.smokeView.update(dt)
     this.meteorView.update(dt, sim.worldEvents.meteor, net ? net.client.renderTick() : sim.tick)
     this.fishView.update(dt, sim.fishes.list, (id) => (id === slot.id ? this.renderPos : (net?.client.shownPlayers.find((p) => p.id === id)?.pose ?? null)))
     this.propView.update(dt)
