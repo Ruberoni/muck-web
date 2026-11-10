@@ -47,6 +47,8 @@ export type SimEventData =
   | { type: 'enemyIncoming'; enemy: EnemyType; x: number; z: number }
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId; efficacy: HitEfficacy }
+  /** Un mob empieza un golpe cuerpo a cuerpo: pega `EnemyDef.strike` segundos después (`enemyAttack`) si no falla. */
+  | { type: 'enemySwing'; id: number; target: PlayerId }
   | { type: 'enemyAttack'; id: number; target: PlayerId }
   /** Embestida: se agacha (`crouch`), carga (`rush`) y acaba (`idle`). */
   | { type: 'enemyCharge'; id: number; state: ChargeState }

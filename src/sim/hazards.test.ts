@@ -210,3 +210,28 @@ describe('los ataques del trasgo gigante y del lanzarrocas', () => {
     expect(far.launched).toBeGreaterThanOrEqual(1)
   })
 })
+
+describe('los jefes solo atacan con sus ataques especiales', () => {
+  const BOSS_TYPES = ['giant', 'thrower', 'guardian', 'colossus'] as const
+
+  it.each(BOSS_TYPES)('%s, pegado al jugador y sin ataques especiales, no le hace nada', (type) => {
+    const events: SimEventData[] = []
+    const enemies = new Enemies([], mulberry32(1), (e) => events.push(e), undefined, undefined, () => {})
+    const boss = enemies.spawnAt(1.5, 0, type)
+    boss.special.gap = 1e9
+    const player = { id: 0, pos: { x: 0, z: 0 }, alive: true }
+    let damage = 0
+    for (let i = 0; i < ticks(6); i++) for (const hit of enemies.step(STEP, [player], 0.3, 3)) damage += hit.damage
+    expect(damage).toBe(0)
+    expect(events.some((e) => e.type === 'enemyAttack' || e.type === 'enemySwing')).toBe(false)
+  })
+
+  it.each(BOSS_TYPES)('%s tiene a 0–9 m algún ataque especial que se repite en 10 s o menos', (type) => {
+    const specials = ENEMY_DEFS[type].specials!
+    for (let d = 0; d <= 9; d += 0.5) {
+      const near = specials.filter((s) => d >= s.min && d <= s.max)
+      expect(near.length, `${type} a ${d} m`).toBeGreaterThan(0)
+      expect(Math.min(...near.map((s) => s.cooldown)), `${type} a ${d} m`).toBeLessThanOrEqual(10)
+    }
+  })
+})

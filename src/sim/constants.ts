@@ -220,17 +220,13 @@ export type HitEfficacy = 'effective' | 'normal' | 'resisted'
 /** Cómo se comporta un enemigo. */
 export type EnemyAI = 'chase' | 'charge' | 'ranged' | 'guard'
 
-/** Embestida: a `min`–`max` metros se agacha `windup` segundos y carga en línea recta `time` segundos a `speed`. */
+/**
+ * Embestida: es un ataque especial (`charge`, con su distancia, su aviso agachado y lo que queda agotado al acabar);
+ * esto es la carrera: en línea recta `time` segundos a `speed`.
+ */
 export interface ChargeDef {
-  min: number
-  max: number
-  windup: number
   speed: number
   time: number
-  /** Segundos hasta poder volver a embestir. */
-  cooldown: number
-  /** Segundos que queda aturdido al acabar: quieto, y recibe DAZED_DAMAGE veces el daño. */
-  dazed: number
   /** Daño si alcanza al jugador (sin él, el de su golpe normal): un golpe fuerte al final de la carrera. */
   damage?: number
 }
@@ -238,13 +234,14 @@ export interface ChargeDef {
 /** Por cuánto se multiplica el daño a un jefe aturdido tras embestir. */
 export const DAZED_DAMAGE = 2
 
-/**
- * A distancia: se acerca hasta `max` metros y retrocede si tiene al jugador a menos de `flee`. Hasta `range` metros
- * se para `windup` segundos y lanza una roca desde `height` metros de altura, cada `attackInterval` segundos.
- */
-export interface RangedDef {
+/** Guarda las distancias: se acerca hasta `max` metros y retrocede si tiene al jugador a menos de `flee`. */
+export interface KeepDef {
   flee: number
   max: number
+}
+
+/** A distancia: hasta `range` metros se para `windup` segundos y lanza desde `height` metros, cada `attackInterval`. */
+export interface RangedDef {
   range: number
   height: number
 }
@@ -252,6 +249,7 @@ export interface RangedDef {
 /** Los ataques especiales de los jefes (los hace la simulación con `onSpecial`, enemies.ts). */
 export type SpecialId =
   | 'stomp'
+  | 'charge'
   | 'arrowVolley'
   | 'summonGolems'
   | 'smash'
@@ -309,6 +307,11 @@ export interface EnemyDef {
   attackInterval: number
   /** Espera desde que llega al jugador (o se recupera de un golpe) hasta su primer ataque. */
   windup: number
+  /**
+   * Cuerpo a cuerpo: segundos desde que empieza el golpe (`enemySwing`, la animación) hasta que pega. Si en ese tiempo
+   * el jugador se ha alejado, falla; un golpe que lo aturde lo interrumpe. Sin él, pega al empezar.
+   */
+  strike?: number
   /** Velocidad a la que lo empuja un golpe. */
   knockback: number
   /** Segundos que un golpe lo deja aturdido, sin moverse ni atacar; 0: nunca se aturde. */
@@ -332,6 +335,8 @@ export interface EnemyDef {
   boss?: boolean
   charge?: ChargeDef
   ranged?: RangedDef
+  /** Guarda las distancias en vez de acercarse hasta tocar al jugador. */
+  keep?: KeepDef
   /** Sale de un evento, no de la noche: no cuenta para el tope, y su vida y su botín van por jugador. */
   guard?: GuardDef
   /** Jefe de luz: nace de una tumba, con vida por jugador. Guarda una pieza del avión. */
@@ -357,7 +362,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     gap: 0.35,
     reach: 0.7,
     attackInterval: 1.2,
-    windup: 0.5,
+    windup: 0.3,
+    strike: 0.45,
     knockback: 6,
     stagger: 0.3,
     staggerGap: 0.6,
@@ -379,7 +385,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     gap: 0.35,
     reach: 0.8,
     attackInterval: 1.6,
-    windup: 0.7,
+    windup: 0.4,
+    strike: 0.6,
     knockback: 0,
     stagger: 0,
     staggerGap: 0,
@@ -402,7 +409,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     gap: 0.35,
     reach: 0.7,
     attackInterval: 1,
-    windup: 0.4,
+    windup: 0.25,
+    strike: 0.5,
     knockback: 6,
     stagger: 0.3,
     staggerGap: 0.6,
@@ -437,10 +445,12 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     cost: 8,
     boss: true,
     // Embestida: corre hacia el jugador y, si lo alcanza, le da un golpe fuerte con la lanza.
-    charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 5, dazed: 2.5, damage: 40 },
+    charge: { speed: 16, time: 0.6, damage: 40 },
     specials: [
       // Pisotón: salta y cae clavando la lanza, con una onda de 7 m que se esquiva saltando o alejándose.
-      { id: 'stomp', min: 0, max: 5, windup: 0.8, cooldown: 9, recover: 1.4, look: 'crouch' },
+      { id: 'stomp', min: 0, max: 6, windup: 0.8, cooldown: 5, recover: 1.4, look: 'crouch' },
+      // Embestida: a 5–9 m se agacha, carga en línea recta hacia donde estabas y queda aturdido al acabar.
+      { id: 'charge', min: 5, max: 9, windup: 0.8, cooldown: 8, recover: 2.5, look: 'crouch' },
       // Tres flechas fuertes con el arco, seguidas y rápidas, cada una hacia donde está el jugador al soltarla.
       { id: 'arrowVolley', min: 10, max: 26, windup: 0.9, cooldown: 10, recover: 1.2, look: 'aim', repeat: { count: 3, every: 0.3 } },
     ],
@@ -469,14 +479,14 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     loot: [{ item: 'mithril_ore', amount: 2 }, { item: 'stone', amount: 6 }, { item: 'boss_trophy', amount: 1 }, { item: 'coin', amount: 10 }],
     cost: 7,
     boss: true,
-    ranged: { flee: 8, max: 14, range: 20, height: 3 },
+    keep: { flee: 8, max: 14 },
     specials: [
       // Golpe fuerte: si lo tienes pegado, golpea el suelo delante con los dos puños.
-      { id: 'smash', min: 0, max: 4, windup: 0.7, cooldown: 5, recover: 1.2, look: 'crouch' },
+      { id: 'smash', min: 0, max: 4, windup: 0.7, cooldown: 4.5, recover: 1.2, look: 'crouch' },
       // Llama gólems de piedra: salen del suelo a su alrededor (hasta SUMMON_MAX a la vez).
       { id: 'summonGolems', min: 0, max: 30, windup: 1.2, cooldown: 22, recover: 1.5, look: 'crouch' },
       // Roca rápida: casi el doble de rápida que las de siempre, y más fuerte.
-      { id: 'fastRock', min: 8, max: 24, windup: 0.6, cooldown: 5, recover: 0.8, look: 'aim' },
+      { id: 'fastRock', min: 4, max: 24, windup: 0.6, cooldown: 5, recover: 0.8, look: 'aim' },
     ],
   },
   // Guarda el meteorito de día y de noche, hasta que lo matan. Más lento que andar, y el pico lo rompe antes.
@@ -504,11 +514,11 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     guard: { aggro: 15, leash: 25 },
     specials: [
       // Anillo de fuego: una onda lenta de 9 m que se esquiva saltando.
-      { id: 'fireRing', min: 0, max: 6, windup: 0.9, cooldown: 10, recover: 1.4, look: 'crouch' },
+      { id: 'fireRing', min: 0, max: 6, windup: 0.9, cooldown: 5, recover: 1.4, look: 'crouch' },
       // Suelo ardiente: tres charcos alrededor del jugador que queman 5 s.
       { id: 'burningGround', min: 3, max: 18, windup: 1, cooldown: 12, recover: 1.3, look: 'aim' },
       // Rayo: marca donde estás y cae a los 0,9 s.
-      { id: 'lightning', min: 4, max: 20, windup: 0.8, cooldown: 7, recover: 1, look: 'aim' },
+      { id: 'lightning', min: 2, max: 20, windup: 0.8, cooldown: 7, recover: 1, look: 'aim' },
     ],
   },
   // Jefe de luz: casi no recibe daño hasta que un pico le rompe la coraza. Guarda el motor del avión.
@@ -537,9 +547,9 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     light: true,
     specials: [
       // Pulso: si estás pegado a él, un estallido de 4,5 m a su alrededor.
-      { id: 'pulse', min: 0, max: 4, windup: 0.7, cooldown: 8, recover: 1.2, look: 'crouch' },
+      { id: 'pulse', min: 0, max: 4, windup: 0.7, cooldown: 5, recover: 1.2, look: 'crouch' },
       // Pilares: una fila de cristales que brotan del suelo, uno tras otro, hacia el jugador.
-      { id: 'pillars', min: 3, max: 16, windup: 0.9, cooldown: 10, recover: 1.3, look: 'crouch' },
+      { id: 'pillars', min: 1, max: 16, windup: 0.9, cooldown: 10, recover: 1.3, look: 'crouch' },
       // Abanico de esquirlas: cinco, abiertas; se esquiva entre dos o de lado.
       { id: 'shardFan', min: 5, max: 20, windup: 0.9, cooldown: 9, recover: 1.1, look: 'aim' },
       // Haz de luz: te apunta 2 s, marca donde estás y cae a los 0,8 s.
@@ -559,7 +569,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     gap: 0.3,
     reach: 0.6,
     attackInterval: 0.9,
-    windup: 0.3,
+    windup: 0.15,
+    strike: 0.35,
     knockback: 8,
     stagger: 0.25,
     staggerGap: 0.5,

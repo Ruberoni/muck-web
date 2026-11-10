@@ -545,7 +545,7 @@ describe('Simulation con varios jugadores', () => {
         if (e.type === 'playerHurt') hurt.add(e.id)
       }
     }
-    expect([...seen]).toEqual(expect.arrayContaining(['enemySpawn', 'enemyAttack', 'playerHurt', 'playerSwing']))
+    expect([...seen]).toEqual(expect.arrayContaining(['enemySpawn', 'enemySwing', 'playerSwing']))
     // Basta con que alguien salga herido: los mobs comunes solo persiguen dentro de su rango de agro (ENEMY_AGGRO),
     // así que quienes se alejan corriendo dejan de ser atacados y ya no se puede exigir que lo sean varios.
     expect(hurt.size).toBeGreaterThan(0)

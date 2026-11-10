@@ -77,7 +77,7 @@ const throwerRockGeometry = mergeGeometries([
 ])
 // La que levanta antes de lanzarla, justo donde sale la de verdad.
 const { thrower } = ENEMY_DEFS
-const heldRockGeometry = new THREE.IcosahedronGeometry(0.2, 0).translate(0, thrower.ranged!.height / thrower.scale, 0)
+const heldRockGeometry = new THREE.IcosahedronGeometry(0.2, 0).translate(0, 3 / thrower.scale, 0)
 // El destello de un golpe, según lo que le haya hecho: rojo normal, amarillo si es débil a esa arma y gris si la resiste.
 const FLASH_COLORS: Record<HitEfficacy, string> = { normal: '#ff3b2f', effective: '#ffc21f', resisted: '#8e8e8e' }
 

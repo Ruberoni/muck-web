@@ -192,12 +192,35 @@ describe('enemigos nocturnos', () => {
     expect(boss.target).toBe(0)
   })
 
-  it('pegado al jugador ataca tras la espera y luego a intervalos fijos', () => {
-    enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
-    expect(run(0.45)).toBe(0)
+  it('pegado al jugador empieza el golpe tras la espera, pega al impacto y luego a intervalos fijos', () => {
+    const events: SimEventData[] = []
+    enemies = new Enemies([world.grid], mulberry32(7), (e) => events.push(e))
+    const e = enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
+    const impact = GOBLIN.windup + GOBLIN.strike!
+    expect(run(GOBLIN.windup + 0.05)).toBe(0)
+    expect(events).toContainEqual({ type: 'enemySwing', id: e.id, target: 0 })
+    expect(run(impact - GOBLIN.windup - 0.1)).toBe(0)
     expect(run(0.1)).toBe(GOBLIN.damage)
     expect(run(GOBLIN.attackInterval - 0.1)).toBe(0)
     expect(run(0.1)).toBe(GOBLIN.damage)
+  })
+
+  it('el golpe se esquiva alejándose corriendo mientras lo prepara', () => {
+    const e = enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
+    run(GOBLIN.windup + 0.05)
+    expect(e.strike).toBeGreaterThan(0)
+    // Lo que se aleja corriendo mientras el trasgo, que le sigue, prepara el golpe.
+    player.x -= 6
+    expect(run(GOBLIN.strike!)).toBe(0)
+  })
+
+  it('un golpe que lo aturde le interrumpe el suyo', () => {
+    const e = enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
+    run(GOBLIN.windup + 0.05)
+    expect(e.strike).toBeGreaterThan(0)
+    enemies.hit(e, 1, player, 0)
+    expect(e.strike).toBe(0)
+    expect(run(GOBLIN.strike!)).toBe(0)
   })
 
   it('nadan: en el agua van más despacio que el jugador, pero quien se queda en ella no está a salvo', () => {
@@ -300,12 +323,13 @@ describe('enemigos nocturnos', () => {
       longest = Math.max(longest, tick - lastAttack)
       lastAttack = tick
     }
-    expect(attacks).toBeGreaterThan(5)
-    // Lo peor es un golpe justo antes de que ataque: su intervalo (1,2 s) más el aturdimiento y volver a su alcance.
-    expect(longest * STEP).toBeLessThanOrEqual(1.65)
+    expect(attacks).toBeGreaterThanOrEqual(5)
+    // Un golpe que lo aturde le interrumpe el suyo, pero lo vuelve a intentar tras su espera y aguanta un rato
+    // (staggerGap): lo peor es que lo aturdan justo antes de pegar.
+    expect(longest * STEP).toBeLessThanOrEqual(2)
   })
 
-  it.each([0.25, 0.3, 0.4, 0.5, 0.6, 1])('golpeado cada %s s nunca tarda más de 1,65 s en atacar', (every) => {
+  it.each([0.25, 0.3, 0.4, 0.5, 0.6, 1])('golpeado cada %s s nunca tarda más de 2 s en atacar', (every) => {
     const e = enemies.spawnAt(player.x + CONTACT + GOBLIN.gap, player.z)
     const period = Math.round(every / STEP)
     let lastAttack = 0
@@ -316,7 +340,7 @@ describe('enemigos nocturnos', () => {
       if (lastAttack) longest = Math.max(longest, tick - lastAttack)
       lastAttack = tick
     }
-    expect(longest * STEP).toBeLessThanOrEqual(1.65)
+    expect(longest * STEP).toBeLessThanOrEqual(2)
   })
 
   it('mientras aguanta, un golpe quita vida pero no lo aturde, no lo empuja ni le retrasa el ataque', () => {
@@ -472,13 +496,15 @@ describe('jefes', () => {
     it('apartándose se esquiva: la dirección se fija al salir', () => {
       const { boss } = facing(7)
       const CHARGE = GIANT.charge!
-      for (let i = 0; i < Math.round(CHARGE.windup / STEP) + 1; i++) step(0.3, 3)
+      const special = GIANT.specials!.find((s) => s.id === 'charge')!
+      for (let i = 0; i < Math.round(special.windup / STEP) + 1; i++) step(0.3, 3)
       expect(boss.charge.state).toBe('rush')
       player.z += 4
       let damage = 0
       for (let i = 0; i < Math.round(CHARGE.time / STEP); i++) for (const hit of step(0.3, 3)) damage += hit.damage
       expect(damage).toBe(0)
-      expect(boss.charge).toMatchObject({ state: 'dazed', cooldown: expect.any(Number) })
+      expect(boss.charge.state).toBe('dazed')
+      expect(boss.special.cooldowns.charge).toBeGreaterThan(0)
     })
 
     it('tras embestir queda aturdido, sin moverse ni atacar, y recibe el doble', () => {
@@ -491,7 +517,8 @@ describe('jefes', () => {
       expect(boss.hp).toBe(hp - 200)
       // Hasta que se recupera no hace nada.
       let damage = 0
-      for (let i = 0; i < Math.round(GIANT.charge!.dazed / STEP) - 2; i++) for (const hit of step(0.3, 3)) damage += hit.damage
+      const special = GIANT.specials!.find((s) => s.id === 'charge')!
+      for (let i = 0; i < Math.round(special.recover / STEP) - 2; i++) for (const hit of step(0.3, 3)) damage += hit.damage
       expect(damage).toBe(0)
       expect(boss.pos).toEqual({ x, z })
       charge()
@@ -527,9 +554,7 @@ describe('jefes', () => {
 
   describe('lanzarrocas', () => {
     const THROWER = ENEMY_DEFS.thrower
-    const RANGED = THROWER.ranged!
-    const INTERVAL = Math.round(THROWER.attackInterval / STEP)
-    const WINDUP = Math.round(THROWER.windup / STEP)
+    const KEEP = THROWER.keep!
     let events: SimEventData[]
     let rocks: { tick: number; from: { x: number; y: number; z: number }; target: number; damage: number }[]
     let tick: number
@@ -564,7 +589,7 @@ describe('jefes', () => {
       const boss = facing(30)
       holdFire(boss)
       run(60 * 6)
-      expect(dist(boss, player)).toBeCloseTo(RANGED.max, 3)
+      expect(dist(boss, player)).toBeCloseTo(KEEP.max, 3)
     })
 
     it('entre medias se queda donde está', () => {
@@ -581,38 +606,16 @@ describe('jefes', () => {
       run(1)
       expect(boss.yaw).toBeCloseTo(-Math.PI / 2, 6)
       run(60 * 2)
-      expect(dist(boss, player)).toBeCloseTo(RANGED.flee, 3)
+      expect(dist(boss, player)).toBeCloseTo(KEEP.flee, 3)
       expect(THROWER.speed).toBeLessThan(WALK_SPEED)
     })
 
-    it('cada 2,5 s se para, avisa 0,7 s y lanza; no pega por su cuenta', () => {
+    it('sin sus ataques especiales no lanza ni pega: ya no tiene ataque normal', () => {
       const boss = facing(12)
-      run(1)
-      expect(boss.charge.state).toBe('aim')
-      expect(events).toContainEqual({ type: 'enemyCharge', id: boss.id, state: 'aim' })
-      expect(run(WINDUP - 1)).toBe(0)
+      expect(run(60 * 8)).toBe(0)
       expect(rocks).toEqual([])
-      run(1)
       expect(boss.charge.state).toBe('idle')
-      expect(rocks).toEqual([{ tick: WINDUP + 1, from: { x: boss.pos.x, y: heightAt(boss.pos.x, boss.pos.z) + RANGED.height, z: boss.pos.z }, target: 0, damage: THROWER.damage }])
-      expect(events.at(-1)).toEqual({ type: 'enemyAttack', id: boss.id, target: 0 })
-      expect(run(INTERVAL * 2)).toBe(0)
-      expect(rocks.map((r) => r.tick)).toEqual([WINDUP + 1, WINDUP + 1 + INTERVAL, WINDUP + 1 + INTERVAL * 2])
-    })
-
-    it('mientras avisa no se mueve', () => {
-      const boss = facing(3)
-      run(1)
-      const { x, z } = boss.pos
-      run(WINDUP - 1)
-      expect(boss.charge.state).toBe('aim')
-      expect(boss.pos).toEqual({ x, z })
-    })
-
-    it('más allá de su alcance no lanza', () => {
-      const boss = facing(RANGED.range + 3)
-      run(10)
-      expect(boss.charge.state).toBe('idle')
+      expect(events.some((e) => e.type === 'enemyAttack')).toBe(false)
     })
 
     it('sin nadie a quien lanzar se queda quieto', () => {
@@ -621,15 +624,6 @@ describe('jefes', () => {
       enemies.step(STEP, [], 0.3, 6)
       expect(boss.charge.state).toBe('idle')
       expect(boss.pos).toEqual({ x, z })
-    })
-
-    it('un golpe no lo interrumpe', () => {
-      const boss = facing(12)
-      run(1)
-      enemies.hit(boss, 10, player, 0)
-      expect(boss.charge.state).toBe('aim')
-      run(WINDUP)
-      expect(rocks).toHaveLength(1)
     })
   })
 })
@@ -668,12 +662,11 @@ describe('guardián', () => {
     expect(guardian.pos.x).toBeGreaterThan(spot.x)
   })
 
-  it('persigue y pega como cualquiera, también de noche', () => {
+  it('persigue también de noche, pero sin sus ataques especiales no pega: no tiene ataque normal', () => {
     player.x = spot.x + 6
-    expect(run(60 * 4)).toBeGreaterThanOrEqual(GUARDIAN.damage)
+    expect(run(60 * 4)).toBe(0)
     expect(dist(guardian, player)).toBeLessThan(3)
-    guardian.attackCooldown = 0
-    expect(run(60 * 2, NIGHT)).toBeGreaterThanOrEqual(GUARDIAN.damage)
+    expect(run(60 * 2, NIGHT)).toBe(0)
   })
 
   it('más lento que andar: se le puede dejar atrás', () => {
@@ -891,7 +884,7 @@ describe('los enemigos salen de ENEMY_DEFS', () => {
   })
 
   it('vida, velocidad, daño y ritmo de ataque son los de su tipo', () => {
-    Object.assign(GOBLIN, { hp: 100, speed: 8, damage: 33, attackInterval: 0.5, windup: 0 })
+    Object.assign(GOBLIN, { hp: 100, speed: 8, damage: 33, attackInterval: 0.5, windup: 0, strike: 0 })
     const enemies = new Enemies([world.grid], mulberry32(7))
     const e = enemies.spawnAt(spot.x + 6, spot.z)
     expect(e).toMatchObject({ type: 'goblin', hp: 100, maxHp: 100 })

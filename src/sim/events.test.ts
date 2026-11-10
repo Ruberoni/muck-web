@@ -128,7 +128,8 @@ describe('eventos de la simulación', () => {
 
     const e = ctx.enemies.spawnAt(player.x + PLAYER_RADIUS + ENEMY_DEFS.goblin.radius + 0.1, player.z)
     ctx.events.length = 0
-    run(0.6)
+    run(ENEMY_DEFS.goblin.windup + ENEMY_DEFS.goblin.strike! + 0.1)
+    expect(ctx.events).toContainEqual({ type: 'enemySwing', id: e.id, target: 0 })
     expect(ctx.events).toContainEqual({ type: 'enemyAttack', id: e.id, target: 0 })
 
     ctx.events.length = 0
