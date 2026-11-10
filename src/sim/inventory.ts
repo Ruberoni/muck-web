@@ -41,6 +41,12 @@ export type ItemId =
   | 'crystal'
   | 'iron_chestplate'
   | 'mithril_chestplate'
+  | 'iron_helmet'
+  | 'iron_leggings'
+  | 'iron_boots'
+  | 'mithril_helmet'
+  | 'mithril_leggings'
+  | 'mithril_boots'
   | 'wood_shield'
   | 'iron_shield'
   | 'crystal_shield'
@@ -93,6 +99,12 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   crystal: 'Cristal',
   iron_chestplate: 'Peto de hierro',
   mithril_chestplate: 'Peto de mithril',
+  iron_helmet: 'Casco de hierro',
+  iron_leggings: 'Pantalones de hierro',
+  iron_boots: 'Botas de hierro',
+  mithril_helmet: 'Casco de mithril',
+  mithril_leggings: 'Pantalones de mithril',
+  mithril_boots: 'Botas de mithril',
   wood_shield: 'Escudo de madera',
   iron_shield: 'Escudo de hierro',
   crystal_shield: 'Escudo de cristal',
@@ -155,6 +167,12 @@ export const GROUND_TIME: Record<ItemId, number | null> = {
   crystal: MATERIAL,
   iron_chestplate: GEAR,
   mithril_chestplate: GEAR,
+  iron_helmet: GEAR,
+  iron_leggings: GEAR,
+  iron_boots: GEAR,
+  mithril_helmet: GEAR,
+  mithril_leggings: GEAR,
+  mithril_boots: GEAR,
   wood_shield: GEAR,
   iron_shield: GEAR,
   crystal_shield: GEAR,

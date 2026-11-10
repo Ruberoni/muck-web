@@ -18,7 +18,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 63
+export const PROTOCOL_VERSION = 64
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -172,6 +172,8 @@ export interface PlayerSnap {
   connection: Connection
   /** El último RTT que contó (ms); 0 si aún no ha dicho ninguno. */
   ping: number
+  /** La armadura que lleva puesta, en un número (`armorCode`): sin ella, ninguna. */
+  armor?: number
   /** El escudo que lleva puesto, si lleva, y si lo tiene arriba. */
   shield?: ItemId
   blocking?: boolean
@@ -365,7 +367,7 @@ export interface SnapWire extends Omit<Snap, 'you' | 'players' | 'enemies' | 'mo
  * `[id, x, y, z, yaw, pitch, item, health, vivo (1/0), ausente (1/0), ping, escudo?, bloqueando (1/0)?]`: solo van los
  * que están en el mundo, y los dos últimos solo si lleva escudo.
  */
-export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number, ItemId?, (0 | 1)?]
+export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number, number, ItemId?, (0 | 1)?]
 /**
  * `[id, x, z, yaw, hp, tipo, maxHp, apariencia]`, con `tipo` el índice en ENEMY_TYPES. `maxHp` solo va si no es la de
  * su tipo (los jefes) o si detrás va la apariencia, y la apariencia solo si no es la de siempre.
@@ -375,7 +377,7 @@ export type EnemyTuple = [number, number, number, number, number, number, number
 export type PickupTuple = [number, number, number, number, 0 | 1]
 
 export function playerTuple(p: PlayerSnap): PlayerTuple {
-  const tuple: PlayerTuple = [p.id, p.pos.x, p.pos.y, p.pos.z, p.yaw, p.pitch, p.item, p.health, p.alive ? 1 : 0, p.connection === 'absent' ? 1 : 0, p.ping]
+  const tuple: PlayerTuple = [p.id, p.pos.x, p.pos.y, p.pos.z, p.yaw, p.pitch, p.item, p.health, p.alive ? 1 : 0, p.connection === 'absent' ? 1 : 0, p.ping, p.armor ?? 0]
   if (p.shield) tuple.push(p.shield, p.blocking ? 1 : 0)
   return tuple
 }
@@ -412,7 +414,7 @@ export class ServerDecoder {
         return {
           ...msg,
           you: { ...msg.you, inventory },
-          players: msg.players.map(([id, x, y, z, yaw, pitch, item, health, alive, absent, ping, shield, blocking]) => ({
+          players: msg.players.map(([id, x, y, z, yaw, pitch, item, health, alive, absent, ping, armor, shield, blocking]) => ({
             id,
             pos: { x, y, z },
             yaw,
@@ -422,6 +424,7 @@ export class ServerDecoder {
             alive: alive === 1,
             connection: absent === 1 ? 'absent' : 'present',
             ping,
+            ...(armor ? { armor } : {}),
             ...(shield ? { shield, blocking: blocking === 1 } : {}),
           })),
           enemies: msg.enemies.map(([id, x, z, yaw, hp, index, maxHp, look]) => {

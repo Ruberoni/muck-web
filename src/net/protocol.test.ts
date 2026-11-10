@@ -146,7 +146,7 @@ describe('protocolo', () => {
       { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', from: 0 },
       { seq: 1, tick: 1, kind: 'equip', slot: INVENTORY_SIZE },
       { seq: 1, tick: 1, kind: 'equip' },
-      { seq: 1, tick: 1, kind: 'unequip', which: 'legs' },
+      { seq: 1, tick: 1, kind: 'unequip', which: 'hands' },
       { seq: 1, tick: 1, kind: 'unequip' },
       { seq: 1, tick: 1, kind: 'fly' },
       { seq: 1, kind: 'eat' },
@@ -267,12 +267,19 @@ describe('snap en el cable', () => {
   })
 
   it('el escudo solo viaja si lo lleva, con si está bloqueando', () => {
-    expect(playerTuple(player)).toHaveLength(11)
+    expect(playerTuple(player)).toHaveLength(12)
     const guarded: PlayerSnap = { ...player, shield: 'iron_shield', blocking: true }
-    expect(playerTuple(guarded)).toHaveLength(13)
+    expect(playerTuple(guarded)).toHaveLength(14)
     const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), players: [playerTuple(player), playerTuple(guarded)] }))
     expect(snap).toMatchObject({ players: [player, guarded] })
     expect(snap.type === 'snap' && snap.players[0]).not.toHaveProperty('shield')
+  })
+
+  it('la armadura de los demás viaja en un número, y sin ella no se manda nada', () => {
+    const armored: PlayerSnap = { ...player, armor: 41, shield: 'wood_shield', blocking: false }
+    const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), players: [playerTuple(player), playerTuple(armored)] }))
+    expect(snap).toMatchObject({ players: [player, armored] })
+    expect(snap.type === 'snap' && snap.players[0]).not.toHaveProperty('armor')
   })
 
   it('las tuplas se leen como los objetos de los que salen', () => {

@@ -92,9 +92,9 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })
 
-  it(`con ${MAX_PLAYERS} jugadores, el mejor peto y el mejor escudo para cada uno también caben`, () => {
+  it(`con ${MAX_PLAYERS} jugadores, la mejor armadura entera y el mejor escudo para cada uno también caben`, () => {
     const need: Amounts = {}
-    for (const r of [...PER_PLAYER, 'mithril_chestplate', 'crystal_shield'] as const) rawCost(r, need, MAX_PLAYERS)
+    for (const r of [...PER_PLAYER, 'mithril_helmet', 'mithril_chestplate', 'mithril_leggings', 'mithril_boots', 'crystal_shield'] as const) rawCost(r, need, MAX_PLAYERS)
     for (const r of SHARED) rawCost(r, need)
     const have = supply()
     for (const item of Object.keys(need) as ItemId[]) expect(need[item], item).toBeLessThanOrEqual(have[item]!)

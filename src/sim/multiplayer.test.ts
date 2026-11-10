@@ -428,8 +428,14 @@ describe('Simulation con varios jugadores', () => {
       'meteor_sword',
       'iron_shield',
       'crystal_shield',
+      'iron_helmet',
       'iron_chestplate',
+      'iron_leggings',
+      'iron_boots',
+      'mithril_helmet',
       'mithril_chestplate',
+      'mithril_leggings',
+      'mithril_boots',
     ])
     expect(sim.slot(0).player.health).toBeGreaterThan(0)
   })

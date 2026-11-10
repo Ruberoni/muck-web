@@ -9,7 +9,7 @@ import { playerColor, RemotePlayerView } from './RemotePlayerView'
 const shown = (id: number, x: number, data: Partial<RemotePlayer> = {}): Shown<RemotePlayer> => ({
   id,
   pose: { x, y: 2, z: 5, yaw: 1, pitch: 0.3 },
-  data: { item: null, shield: null, blocking: false, health: 100, alive: true, connection: 'present', ping: 0, ...data },
+  data: { item: null, shield: null, blocking: false, armor: 0, health: 100, alive: true, connection: 'present', ping: 0, ...data },
 })
 
 /** Las mallas de un modelo con el color de su cuerpo. */

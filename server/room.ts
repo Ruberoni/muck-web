@@ -32,6 +32,7 @@ import { DEFAULT_RULES, type Difficulty, type MatchResult, type MatchRules } fro
 import { pickIsland } from '../src/sim/islands'
 import { DEFAULT_ISLAND } from '../src/sim/world/island'
 import { Simulation, type PlayerSlot, type SimState } from '../src/sim/Simulation'
+import { armorCode } from '../src/sim/equipment'
 import { autoSkin } from '../src/net/skins'
 
 // --- Lo que la sala necesita de la plataforma (Durable Object, Node o los tests) ---
@@ -790,6 +791,7 @@ export class Room {
       yaw: cm(player.yaw),
       pitch: cm(player.pitch),
       item: inventory.selectedItem,
+      armor: armorCode(inventory.equipped),
       ...(inventory.equipped.shield ? { shield: inventory.equipped.shield, blocking: player.blocking } : {}),
       health: Math.round(player.health),
       alive,

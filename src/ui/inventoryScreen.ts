@@ -11,7 +11,7 @@ import type { Structure } from '../sim/structures'
 import { EQUIP_SLOTS, equipSlotOf, type EquipSlot } from '../sim/equipment'
 import { buyProblem, OFFERS, priceOf, PURCHASES, sellProblem } from '../sim/merchant'
 
-const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { chest: 'Pecho', shield: 'Escudo' }
+const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { head: 'Cabeza', chest: 'Pecho', legs: 'Piernas', feet: 'Pies', shield: 'Escudo' }
 const PURCHASE_ITEMS = Object.keys(PURCHASES) as ItemId[]
 
 const STATION_SLOT_NAMES: Record<StationSlot, string> = { input: 'Entrada', fuel: 'Combustible', output: 'Salida' }

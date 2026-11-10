@@ -305,6 +305,32 @@ function chestplate(metal: THREE.Material) {
   return g
 }
 
+/** Un casco: la cúpula y las carrilleras. */
+function helmet(metal: THREE.Material) {
+  const g = new THREE.Group()
+  g.add(part(new THREE.SphereGeometry(0.11, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.08, 0), metal))
+  g.add(part(mergeGeometries([new THREE.BoxGeometry(0.03, 0.08, 0.1).translate(-0.1, 0.05, 0.01), new THREE.BoxGeometry(0.03, 0.08, 0.1).translate(0.1, 0.05, 0.01)]), metal))
+  // La cresta, más oscura.
+  g.add(part(new THREE.BoxGeometry(0.02, 0.03, 0.2).translate(0, 0.19, 0), darkIron))
+  return g
+}
+
+/** Unos pantalones: el cinto y las dos perneras. */
+function leggings(metal: THREE.Material) {
+  const g = new THREE.Group()
+  g.add(part(mergeGeometries([new THREE.BoxGeometry(0.08, 0.2, 0.08).translate(-0.05, 0.1, 0), new THREE.BoxGeometry(0.08, 0.2, 0.08).translate(0.05, 0.1, 0)]), metal))
+  g.add(part(new THREE.BoxGeometry(0.19, 0.04, 0.09).translate(0, 0.21, 0), darkIron))
+  return g
+}
+
+/** Un par de botas. */
+function boots(metal: THREE.Material) {
+  const g = new THREE.Group()
+  const boot = (x: number) => [new THREE.BoxGeometry(0.06, 0.12, 0.06).translate(x, 0.08, 0), new THREE.BoxGeometry(0.06, 0.04, 0.11).translate(x, 0.02, 0.025)]
+  g.add(part(mergeGeometries([...boot(-0.05), ...boot(0.05)]), metal))
+  return g
+}
+
 const glass = new THREE.MeshStandardMaterial({ color: '#dff4ff', transparent: true, opacity: 0.45, flatShading: true })
 const cork = mat('#a87a4a')
 const POTION_COLORS = { healing_potion: '#e0443a', speed_potion: '#f2c94c', stamina_potion: '#5fd18a', stone_potion: '#8a877c' } as const
@@ -442,6 +468,18 @@ export function itemModel(item: ItemId): THREE.Group {
       return chestplate(ironHead)
     case 'mithril_chestplate':
       return chestplate(mithrilHead)
+    case 'iron_helmet':
+      return helmet(ironHead)
+    case 'mithril_helmet':
+      return helmet(mithrilHead)
+    case 'iron_leggings':
+      return leggings(ironHead)
+    case 'mithril_leggings':
+      return leggings(mithrilHead)
+    case 'iron_boots':
+      return boots(ironHead)
+    case 'mithril_boots':
+      return boots(mithrilHead)
   }
 }
 

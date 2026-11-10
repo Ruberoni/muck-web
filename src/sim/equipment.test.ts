@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData } from './commands'
 import { STAMINA_MAX, STEP, WALK_SPEED } from './constants'
-import { BLOCK_SPEED_FACTOR, BLOCK_STAMINA_PER_DAMAGE, damageTaken, noEquipment, spendGuard, type Equipped } from './equipment'
+import { armorCode, armorOf, armorReduce, BLOCK_SPEED_FACTOR, BLOCK_STAMINA_PER_DAMAGE, damageTaken, EQUIP_DEFS, noEquipment, spendGuard, type Equipped } from './equipment'
 import { Inventory } from './inventory'
 import { createPlayer } from './player'
 import { generatePropPlacements } from './props'
@@ -16,9 +16,9 @@ const EAST = -Math.PI / 2
 const guard = (blocking: boolean) => ({ blocking, yaw: EAST, pos: { x: 0, z: 0 } })
 
 describe('daño con equipo', () => {
-  it('el peto quita su parte de todo, venga de donde venga', () => {
-    expect(damageTaken(20, wearing({ chest: 'iron_chestplate' }), guard(false)).damage).toBeCloseTo(16, 6)
-    expect(damageTaken(20, wearing({ chest: 'mithril_chestplate' }), guard(false), { x: -5, z: 0 }).damage).toBeCloseTo(13, 6)
+  it('la armadura quita su parte de todo, venga de donde venga', () => {
+    expect(damageTaken(20, wearing({ chest: 'iron_chestplate' }), guard(false)).damage).toBeCloseTo(20 * (1 - 0.11), 6)
+    expect(damageTaken(20, wearing({ chest: 'mithril_chestplate' }), guard(false), { x: -5, z: 0 }).damage).toBeCloseTo(20 * (1 - 0.19), 6)
     expect(damageTaken(20, noEquipment(), guard(false), { x: 5, z: 0 })).toEqual({ damage: 20, blocked: 0 })
   })
 
@@ -37,7 +37,26 @@ describe('daño con equipo', () => {
   it('cada escudo para más que el anterior, y con peto se suman', () => {
     const blocked = (shield: 'wood_shield' | 'iron_shield' | 'crystal_shield') => damageTaken(100, wearing({ shield }), guard(true), { x: 5, z: 0 }).damage
     expect([blocked('wood_shield'), blocked('iron_shield'), blocked('crystal_shield')].map((d) => Math.round(d))).toEqual([30, 20, 10])
-    expect(damageTaken(100, wearing({ shield: 'iron_shield', chest: 'iron_chestplate' }), guard(true), { x: 5, z: 0 }).damage).toBeCloseTo(16, 6)
+    expect(damageTaken(100, wearing({ shield: 'iron_shield', chest: 'iron_chestplate' }), guard(true), { x: 5, z: 0 }).damage).toBeCloseTo(20 * (1 - 0.11), 6)
+  })
+
+  it('las cuatro piezas se suman: de hierro quitan un 25 % y de mithril un 42 %, y se pueden mezclar', () => {
+    const iron = wearing({ head: 'iron_helmet', chest: 'iron_chestplate', legs: 'iron_leggings', feet: 'iron_boots' })
+    const mithril = wearing({ head: 'mithril_helmet', chest: 'mithril_chestplate', legs: 'mithril_leggings', feet: 'mithril_boots' })
+    expect(armorReduce(iron)).toBeCloseTo(0.25, 6)
+    expect(armorReduce(mithril)).toBeCloseTo(0.42, 6)
+    expect(armorReduce(wearing({ head: 'mithril_helmet', feet: 'iron_boots' }))).toBeCloseTo(0.08 + 0.03, 6)
+    expect(damageTaken(100, mithril, guard(false)).damage).toBeCloseTo(58, 6)
+    // Cada pieza, en su hueco.
+    for (const [item, def] of Object.entries(EQUIP_DEFS)) if (def.tier) expect(item.endsWith(def.slot === 'head' ? 'helmet' : def.slot === 'chest' ? 'chestplate' : def.slot === 'legs' ? 'leggings' : 'boots')).toBe(true)
+  })
+
+  it('la armadura viaja en un número, de 0 a 80, y se lee igual', () => {
+    expect(armorCode(noEquipment())).toBe(0)
+    const mixed = wearing({ head: 'iron_helmet', legs: 'mithril_leggings', shield: 'iron_shield' })
+    expect(armorOf(armorCode(mixed))).toEqual({ head: 'iron', chest: null, legs: 'mithril', feet: null })
+    const full = wearing({ head: 'mithril_helmet', chest: 'mithril_chestplate', legs: 'mithril_leggings', feet: 'mithril_boots' })
+    expect(armorCode(full)).toBe(80)
   })
 
   it('parar gasta resistencia y, sin ella, el escudo baja', () => {
@@ -107,7 +126,7 @@ describe('ponerse y quitarse equipo', () => {
     inv.equip(0)
     const copy = new Inventory()
     copy.load(JSON.parse(JSON.stringify(inv.save())))
-    expect(copy.equipped).toEqual({ chest: null, shield: 'crystal_shield' })
+    expect(copy.equipped).toEqual({ ...noEquipment(), shield: 'crystal_shield' })
     const { equipped: _, ...old } = inv.save()
     copy.load(old)
     expect(copy.equipped).toEqual(noEquipment())
@@ -152,7 +171,7 @@ describe('el escudo en la partida', () => {
     expect(firstHit(-EAST, Btn.Block, equip).hurt).toMatchObject({ dmg: bare.dmg })
     expect(firstHit(EAST, 0, equip).hurt).toMatchObject({ dmg: bare.dmg })
     // El peto, siempre.
-    expect(firstHit(-EAST, 0, [{ kind: 'equip', slot: 1 }]).hurt).toMatchObject({ dmg: expect.closeTo(bare.dmg * 0.8, 6) })
+    expect(firstHit(-EAST, 0, [{ kind: 'equip', slot: 1 }]).hurt).toMatchObject({ dmg: expect.closeTo(bare.dmg * (1 - EQUIP_DEFS.iron_chestplate!.reduce), 6) })
   })
 
   it('bloqueando se anda a la mitad, sin correr, y no se golpea; sin escudo, Block no hace nada', () => {

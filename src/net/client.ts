@@ -63,6 +63,8 @@ export interface RemotePlayer {
   /** El escudo en la mano izquierda, si lleva, y si lo tiene arriba. */
   shield: ItemId | null
   blocking: boolean
+  /** La armadura que lleva puesta (`armorCode`). */
+  armor: number
   health: number
   alive: boolean
   connection: Connection
@@ -516,10 +518,10 @@ export class NetClient {
   private pushRemote(tick: number, players: readonly PlayerSnap[], enemies: readonly EnemySnap[]) {
     this.players.push(
       tick,
-      players.map(({ id, pos, yaw, pitch, item, health, alive, connection, ping, shield, blocking }) => ({
+      players.map(({ id, pos, yaw, pitch, item, health, alive, connection, ping, armor, shield, blocking }) => ({
         id,
         pose: { ...pos, yaw, pitch },
-        data: { item, shield: shield ?? null, blocking: blocking === true, health, alive, connection, ping },
+        data: { item, shield: shield ?? null, blocking: blocking === true, armor: armor ?? 0, health, alive, connection, ping },
       })),
     )
     this.enemies.push(

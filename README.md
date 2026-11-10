@@ -70,8 +70,8 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | yunque | espada de meteorito | 3 fragmentos de meteorito + 2 madera oscura |
 | yunque | escudo de hierro | 4 lingotes de hierro + 2 madera de abedul |
 | yunque | escudo de cristal | 4 cristales + 2 lingotes de hierro |
-| yunque | peto de hierro | 6 lingotes de hierro |
-| yunque | peto de mithril | 6 lingotes de mithril |
+| yunque | casco, peto, pantalones y botas de hierro | 3, 5, 4 y 2 lingotes de hierro |
+| yunque | casco, peto, pantalones y botas de mithril | 3, 5, 4 y 2 lingotes de mithril |
 
 Se ven todas siempre; las que no se pueden hacer salen atenuadas, con lo que falta en rojo y el motivo ("Necesitas un yunque cerca" si falta la estación). Un clic fabrica una y **Mayúsculas + clic**, hasta 5 seguidas.
 
@@ -110,12 +110,12 @@ Se fabrica con 6 de madera y 3 de piedra. Con ella en la mano aparece una vista 
 
 ## Armadura y escudo
 
-En la pantalla de inventario, encima de la mochila, hay dos huecos de equipo: **pecho** y **escudo**. Para ponerse un peto o un escudo, **Mayúsculas + clic** en su casilla o arrastrarlo a su hueco; un clic en el hueco lo devuelve al inventario. Lo puesto no ocupa casilla, y al morir cae con todo lo demás.
+En la pantalla de inventario, encima de la mochila, hay cinco huecos de equipo: **cabeza**, **pecho**, **piernas**, **pies** y **escudo**. Para ponerse una pieza de armadura o un escudo, **Mayúsculas + clic** en su casilla o arrastrarlo a su hueco; un clic en el hueco lo devuelve al inventario. Lo puesto no ocupa casilla, y al morir cae con todo lo demás.
 
-- **Peto**: quita siempre una parte de todo el daño de los enemigos, venga de donde venga: el de hierro un 20 % y el de mithril un 35 %.
+- **Armadura**: cuatro piezas que se ponen y se quitan cada una por su lado (casco, peto, pantalones y botas) y se pueden mezclar. Cada una quita siempre una parte de todo el daño de los enemigos, venga de donde venga, y se suman: de hierro, el casco un 5 %, el peto un 11 %, los pantalones un 6 % y las botas un 3 % (un 25 % entre las cuatro); de mithril, un 8, un 19, un 10 y un 5 % (un 42 %).
 - **Escudo**: manteniendo el **clic derecho** se levanta y para el daño que llega de frente (60° a cada lado de la mirada): el de madera un 70 %, el de hierro un 80 % y el de cristal un 90 %. Lo de los lados, lo de detrás y los meteoritos pasan enteros. Con el escudo arriba no se golpea, se anda a la mitad y no se corre, y la resistencia no se recupera; cada punto parado gasta 0,6 de resistencia y, si se acaba, el escudo baja hasta recuperarse, como al agotarse corriendo. Lo que se para suena a metal.
 
-Peto y escudo se suman: con el de hierro levantado y el peto de hierro, un golpe de frente se queda en el 16 %. Los demás jugadores ven el escudo colgado a la izquierda, y delante cuando bloquean. Los valores están en `EQUIP_DEFS` (`src/sim/equipment.ts`).
+Armadura y escudo se suman: con el de hierro levantado y la armadura de hierro entera, un golpe de frente se queda en el 15 %. Los demás jugadores ven el escudo colgado a la izquierda, y delante cuando bloquean, y la armadura que lleva cada uno (viaja en un número, `armorCode`). Los valores están en `EQUIP_DEFS` (`src/sim/equipment.ts`).
 
 ## Supervivencia
 
