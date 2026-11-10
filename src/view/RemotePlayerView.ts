@@ -88,13 +88,13 @@ export class RemotePlayerView {
         continue
       }
       const action =
-        e.type === 'playerSwing' ? 'swing' : e.type === 'playerAte' ? 'eat' : e.type === 'playerPlaced' || e.type === 'playerDropped' ? 'place' : null
+        e.type === 'playerSwing' ? 'swing' : e.type === 'playerEating' ? 'eat' : e.type === 'playerPlaced' || e.type === 'playerDropped' ? 'place' : null
       if (!action || !('id' in e)) continue
       const model = this.models.get(e.id)
       if (!model) continue
       model.action = action
       model.actionTime = 0
-      model.actionLength = e.type === 'playerSwing' ? swingDuration(e.item) : ACTION_DURATION[action]
+      model.actionLength = e.type === 'playerSwing' ? swingDuration(e.item) : e.type === 'playerEating' ? e.seconds : ACTION_DURATION[action]
       model.rig?.act(action === 'swing' ? (e.type === 'playerSwing' && e.item && isTool(e.item) ? 'Sword_Slash' : 'Punch_Right') : ACTION_CLIP[action], model.actionLength)
     }
   }

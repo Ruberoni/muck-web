@@ -710,3 +710,25 @@ kbd {
   line-height: 1.4;
   opacity: 0.6;
 }
+
+/* Lo que lleva comido o bebido: una barrita bajo la mira. */
+.eating {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 22px);
+  width: 64px;
+  height: 5px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  pointer-events: none;
+}
+.eating[hidden] {
+  display: none;
+}
+.eating-fill {
+  height: 100%;
+  width: 0;
+  background: #f2c94c;
+}

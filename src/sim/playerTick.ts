@@ -6,7 +6,7 @@ import { startSwing, stepStrike, type Fighter } from './interaction'
 import type { Inventory, ItemId } from './inventory'
 import { stepPlayer, type Player, type PlayerEnv } from './player'
 import { placeableOf } from './structures'
-import { eat, isDead, stepSurvival } from './survival'
+import { eat, isDead, stepSurvival, useful } from './survival'
 
 // La parte de un tick que toca solo al jugador y que el cliente predice: acciones sobre su inventario,
 // movimiento, espera entre golpes, comer y hambre. `Simulation.step` la ejecuta por trozos alrededor de lo que
@@ -132,7 +132,8 @@ export function movePlayer(actor: Actor, command: PlayerCommands | undefined, en
     player.pitch = command.move.pitch
   }
   const input = buttonsInput(command?.move.buttons ?? 0)
-  input.block &&= actor.inventory.equipped.shield !== null
+  // Comiendo no se levanta el escudo.
+  input.block &&= actor.inventory.equipped.shield !== null && player.eatLeft <= 0
   stepPlayer(player, input, env, STEP)
 }
 
@@ -144,12 +145,13 @@ export function movePlayer(actor: Actor, command: PlayerCommands | undefined, en
 export function useHands(actor: Actor, intent: Intent): { swing: boolean; strike: boolean; place: boolean } {
   const item = actor.inventory.selectedItem
   const placing = placeableOf(item) !== null
-  // Con el escudo arriba no se golpea ni se coloca, y no queda ningún golpe pendiente para cuando baje.
-  const busy = placing || actor.player.blocking
+  // Con el escudo arriba o comiendo no se golpea ni se coloca, y no queda ningún golpe pendiente para después.
+  const eating = actor.player.eatLeft > 0
+  const busy = placing || actor.player.blocking || eating
   if (busy) actor.combat.pendingSwing = false
-  const strike = stepStrike(actor.combat, STEP, item, actor.player.blocking)
+  const strike = stepStrike(actor.combat, STEP, item, actor.player.blocking || eating)
   const swing = startSwing(actor.combat, STEP, !busy && intent.attack, !busy && intent.swing, item)
-  return { swing, strike, place: placing && !actor.player.blocking && intent.place }
+  return { swing, strike, place: placing && !actor.player.blocking && !eating && intent.place }
 }
 
 /**
@@ -158,7 +160,8 @@ export function useHands(actor: Actor, intent: Intent): { swing: boolean; strike
  */
 export function finishPlayerTick(actor: Actor, intent: Intent, emit: Emit) {
   if (isDead(actor.player)) return
-  if (intent.eat) consume(actor, emit)
+  stepEating(actor, emit)
+  if (intent.eat && actor.player.eatLeft <= 0 && !actor.player.blocking && actor.combat.strikeLeft <= 0) startEating(actor, emit)
   stepSurvival(actor.player, STEP)
 }
 
@@ -169,12 +172,39 @@ export function nextFood(inventory: Inventory): ItemId | null {
   return inventory.has('berry') ? 'berry' : null
 }
 
-function consume(actor: Actor, emit: Emit) {
+/** Empieza a comer lo que toca (`nextFood`), si sirve de algo: tarda su `time`, y no se gasta hasta acabar. */
+function startEating(actor: Actor, emit: Emit) {
   const { inventory, player, id } = actor
   const item = nextFood(inventory)
-  if (!item || !eat(player, CONSUMABLE_DEFS[item]!)) return
+  const def = item && CONSUMABLE_DEFS[item]
+  if (!item || !def || !useful(player, def)) return
+  player.eatItem = item
+  player.eatLeft = def.time
+  emit({ type: 'playerEating', id, item, seconds: def.time })
+}
+
+/**
+ * Lo que está comiendo, un paso: al acabar, si aún sirve, se lo come (el efecto y `playerAte`). Si cambia de casilla
+ * (ya no es lo que se comería) o lo pierde, se queda sin comer y no lo gasta.
+ */
+function stepEating(actor: Actor, emit: Emit) {
+  const { inventory, player, id } = actor
+  if (player.eatLeft <= 0) return
+  const item = player.eatItem
+  if (!item || nextFood(inventory) !== item) return cancelEating(actor, emit)
+  player.eatLeft -= STEP
+  if (player.eatLeft > 1e-9) return
+  player.eatLeft = 0
+  player.eatItem = null
+  if (!eat(player, CONSUMABLE_DEFS[item]!)) return emit({ type: 'playerEatCancelled', id })
   inventory.remove(item, 1)
   emit({ type: 'playerAte', id, item })
+}
+
+function cancelEating({ player, id }: Actor, emit: Emit) {
+  player.eatLeft = 0
+  player.eatItem = null
+  emit({ type: 'playerEatCancelled', id })
 }
 
 /** Lo que la predicción necesita del mundo del cliente: `nearStation` mira las estaciones de su espejo. */

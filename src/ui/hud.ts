@@ -88,6 +88,9 @@ export class Hud {
   private held: HTMLElement
   private hurt: HTMLElement
   private crosshair: HTMLElement
+  private eating: HTMLElement
+  private eatingFill: HTMLElement
+  private eatingShown = -1
   private overlay: HTMLElement
   private overlayTitle: HTMLElement
   private results: HTMLElement
@@ -99,6 +102,9 @@ export class Hud {
     const root = el('div', 'hud', container)
     this.hurt = el('div', 'hurt', root)
     this.crosshair = el('div', 'crosshair', root)
+    this.eating = el('div', 'eating', root)
+    this.eating.hidden = true
+    this.eatingFill = el('div', 'eating-fill', this.eating)
     this.prompt = el('div', 'prompt', root)
     this.day = el('div', 'day', root)
     this.biome = el('div', 'biome-notice', root)
@@ -186,6 +192,17 @@ export class Hud {
     this.last.hunger = v
     this.hungerFill.style.transform = `scaleX(${v / max})`
     this.hungerBar.classList.toggle('starving', v === 0)
+  }
+
+  /** Lo que lleva comido de lo que está comiendo o bebiendo (0 a 1), en una barrita bajo la mira; null: nada. */
+  setEating(progress: number | null) {
+    const shown = progress !== null
+    if (this.eating.hidden === !shown && (!shown || Math.abs(progress - this.eatingShown) < 0.01)) return
+    this.eating.hidden = !shown
+    if (shown) {
+      this.eatingShown = progress
+      this.eatingFill.style.width = `${Math.round(progress * 100)}%`
+    }
   }
 
   /** Los efectos con tiempo que siguen en marcha (aliento, rapidez, piedra), con los segundos que les quedan. */

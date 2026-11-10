@@ -37,8 +37,12 @@ export const HEALTH_REGEN_PER_SEC = 1
 /** Segundos sin regeneración natural tras recibir daño: esperando no se cura en mitad de una pelea. */
 export const HEALTH_REGEN_DELAY = 8
 export const EAT_KEY = 'KeyF'
+/** Comiendo o bebiendo se anda a esta parte de la velocidad, sin correr. */
+export const EAT_SPEED_FACTOR = 0.5
 
 export interface ConsumableDef {
+  /** Segundos que se tarda en comerlo o beberlo: el efecto llega al acabar. */
+  time: number
   /** Hambre que devuelve. */
   food: number
   /** Vida que cura al momento. */
@@ -58,21 +62,21 @@ export interface ConsumableDef {
 }
 
 export const CONSUMABLE_DEFS: Partial<Record<ItemId, ConsumableDef>> = {
-  berry: { food: 15 },
+  berry: { time: 0.6, food: 15 },
   // Se puede comer, pero llena poco: compensa asarla.
-  raw_meat: { food: 8 },
-  cooked_meat: { food: 45, heal: 15 },
-  berry_infusion: { food: 0, regen: { perSec: 2, seconds: 20 } },
-  healing_herb: { food: 0, heal: 25 },
+  raw_meat: { time: 0.9, food: 8 },
+  cooked_meat: { time: 0.9, food: 45, heal: 15 },
+  berry_infusion: { time: 1, food: 0, regen: { perSec: 2, seconds: 20 } },
+  healing_herb: { time: 0.7, food: 0, heal: 25 },
   // Llena la resistencia y deja correr sin gastarla: con varias seguidas se corre sin parar.
-  mint: { food: 0, stamina: STAMINA_MAX, breath: 20 },
+  mint: { time: 0.6, food: 0, stamina: STAMINA_MAX, breath: 20 },
   // Lo que vende el mercader (merchant.ts).
-  healing_potion: { food: 0, heal: 60 },
-  speed_potion: { food: 0, speed: { factor: 1.3, seconds: 60 } },
-  stamina_potion: { food: 0, stamina: STAMINA_MAX, breath: 60 },
-  stone_potion: { food: 0, guard: { factor: 0.7, seconds: 60 } },
-  calm_incense: { food: 0, world: 'calm' },
-  forget_amulet: { food: 0, world: 'forget' },
+  healing_potion: { time: 1.1, food: 0, heal: 60 },
+  speed_potion: { time: 1.1, food: 0, speed: { factor: 1.3, seconds: 60 } },
+  stamina_potion: { time: 1.1, food: 0, stamina: STAMINA_MAX, breath: 60 },
+  stone_potion: { time: 1.1, food: 0, guard: { factor: 0.7, seconds: 60 } },
+  calm_incense: { time: 1.2, food: 0, world: 'calm' },
+  forget_amulet: { time: 1, food: 0, world: 'forget' },
 }
 
 export const MOUSE_SENSITIVITY = 0.002

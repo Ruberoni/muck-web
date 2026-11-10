@@ -38,7 +38,7 @@ import type { Island } from '../sim/world/island'
 import { createTerrain } from '../world/terrain'
 import { WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
-import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
+import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
@@ -782,9 +782,12 @@ export class Game {
         case 'playerDropped':
           if (e.id === slot.id) this.handheld.play('place', e.item)
           break
-        case 'playerAte':
-          // Se come aunque se tenga otra cosa en la mano: la animación se hace con lo que se come.
-          if (e.id === slot.id) this.handheld.play('eat', e.item)
+        case 'playerEating':
+          // Se come aunque se tenga otra cosa en la mano: la animación se hace con lo que se come, lo que tarda.
+          if (e.id === slot.id) this.handheld.play('eat', e.item, e.seconds)
+          break
+        case 'playerEatCancelled':
+          if (e.id === slot.id) this.handheld.stop('eat')
           break
         case 'matchEnded':
           // En una sala se vuelve al lobby con el `match` que viene detrás (ver followMatch).
@@ -1139,6 +1142,8 @@ export class Game {
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft })
+    const eating = p.eatItem && CONSUMABLE_DEFS[p.eatItem]
+    this.hud.setEating(eating && p.eatLeft > 0 ? 1 - p.eatLeft / eating.time : null)
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)
     // Se va antes de tiempo si ya se lleva en la mano lo que hacía falta.
     const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)

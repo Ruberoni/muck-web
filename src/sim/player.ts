@@ -1,5 +1,6 @@
 import { WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import {
+  EAT_SPEED_FACTOR,
   FLOAT_DEPTH,
   GRAVITY,
   HEALTH_MAX,
@@ -21,6 +22,7 @@ import {
 } from './constants'
 import { BLOCK_SPEED_FACTOR } from './equipment'
 import { NO_HEALING, speedFactor, type Vitals } from './survival'
+import type { ItemId } from './inventory'
 
 export interface Vec3 {
   x: number
@@ -65,6 +67,9 @@ export interface Player extends Vitals {
   regenDelay: number
   /** Con el escudo arriba: anda a la mitad, no corre, no golpea y la resistencia no se recupera. */
   blocking: boolean
+  /** Segundos que le quedan a lo que está comiendo o bebiendo (`eatItem`); 0: nada. Mientras, anda despacio y no golpea. */
+  eatLeft: number
+  eatItem: ItemId | null
 }
 
 const BOUND = WORLD_SIZE * WORLD_BOUND_FACTOR
@@ -88,6 +93,8 @@ export function createPlayer(env: PlayerEnv, x: number, z: number, yaw = 0): Pla
     sprintLocked: false,
     regenDelay: 0,
     blocking: false,
+    eatLeft: 0,
+    eatItem: null,
     health: HEALTH_MAX,
     hunger: HUNGER_MAX,
     ...NO_HEALING,
@@ -151,11 +158,12 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
   const wz = -mx * sin + mz * cos
 
   const canSprint = !player.exhausted && !player.sprintLocked
-  const sprinting = player.grounded && moving && input.sprint && canSprint && !player.inWater && !player.blocking
+  const eating = player.eatLeft > 0
+  const sprinting = player.grounded && moving && input.sprint && canSprint && !player.inWater && !player.blocking && !eating
   let spent = false
 
   if (player.grounded) {
-    const speed = (sprinting ? SPRINT_SPEED : WALK_SPEED) * (player.inWater ? WATER_SPEED_FACTOR : 1) * (player.blocking ? BLOCK_SPEED_FACTOR : 1) * speedFactor(player)
+    const speed = (sprinting ? SPRINT_SPEED : WALK_SPEED) * (player.inWater ? WATER_SPEED_FACTOR : 1) * (player.blocking ? BLOCK_SPEED_FACTOR : 1) * (eating ? EAT_SPEED_FACTOR : 1) * speedFactor(player)
     vel.x = wx * speed
     vel.z = wz * speed
   }

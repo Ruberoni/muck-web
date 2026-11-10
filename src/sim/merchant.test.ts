@@ -73,6 +73,9 @@ describe('el mercader', () => {
     slot.inventory.add('calm_incense', 1)
     slot.inventory.select(slot.inventory.slots.indexOf('calm_incense'))
     const events = sim.step(new Map([[0, { move: { tick: sim.tick + 1, buttons: 0, yaw: 0, pitch: 0 }, actions: [{ kind: 'eat', seq: 1, tick: sim.tick + 1 }] }]]))
+    // Se enciende en lo que tarda en usarlo, y entonces hace efecto.
+    expect(events.map((e) => e.type)).toContain('playerEating')
+    for (let i = 0; i < 120 && slot.player.eatLeft > 0; i++) events.push(...sim.step(new Map()))
     expect(events.map((e) => e.type)).toContain('mobsCalmed')
     expect(sim.enemies.list).toHaveLength(0)
     expect(sim.pickups.list.filter((p) => p.item === 'raw_meat')).toHaveLength(0)

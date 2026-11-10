@@ -60,6 +60,10 @@ export type SimEventData =
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   /** El golpe pega, contra lo que tiene delante ahora (o al aire): el daño y el sonido del impacto. */
   | { type: 'playerStrike'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
+  /** Empieza a comer o beber `item`: tarda `seconds`, y al acabar llega `playerAte` con su efecto. */
+  | { type: 'playerEating'; id: PlayerId; item: ItemId; seconds: number }
+  /** Lo que estaba comiendo se queda sin comer (cambió de casilla o ya no lo tiene): no lo gasta. */
+  | { type: 'playerEatCancelled'; id: PlayerId }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
   | { type: 'playerTraded'; id: PlayerId; op: 'buy' | 'sell'; item: ItemId }

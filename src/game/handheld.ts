@@ -632,16 +632,21 @@ export class Handheld {
   }
 
   /** Empieza una animación; un golpe nuevo reinicia el anterior. Con `item`, la hace con ese objeto. */
-  play(action: HandAction, item?: ItemId) {
+  play(action: HandAction, item?: ItemId, seconds?: number) {
     this.action = action
     this.actionTime = 0
     if (item !== undefined) this.show(item)
-    this.actionLength = action === 'swing' ? swingDuration(this.item) : ACTION_DURATION[action]
+    this.actionLength = seconds ?? (action === 'swing' ? swingDuration(this.item) : ACTION_DURATION[action])
     if (action === 'swing') {
       const cls = weaponClass(this.item)
       this.variant = this.swings[cls] ?? 0
       this.swings[cls] = this.variant + 1
     }
+  }
+
+  /** Corta `action` si es la que está haciendo (comer, al cancelarse). */
+  stop(action: HandAction) {
+    if (this.action === action) this.action = null
   }
 
   /** La variante del golpe en curso (se turnan): para las pruebas. */

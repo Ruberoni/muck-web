@@ -36,6 +36,13 @@ function step(sim: Simulation, { buttons = 0, yaw = sim.slot(0).player.yaw, pitc
   return sim.step(new Map([[0, { move, actions: actions.map((a): Action => ({ ...a, seq: ++seq, tick })) }]]))
 }
 
+/** Come (con `actions`, que acaban en `eat`) y sigue hasta que acaba de comer: todo lo que pasa entre tanto. */
+function eatNow(sim: Simulation, actions: ActionData[]) {
+  const events = step(sim, { actions })
+  for (let i = 0; i < 120 && sim.slot(0).player.eatLeft > 0; i++) events.push(...step(sim))
+  return events
+}
+
 /** Golpea con un clic (acción `swing`) y sigue hasta que el golpe pega (`swingImpact`): todo lo que pasa entre tanto. */
 function strike(sim: Simulation, { yaw, pitch }: Command = {}) {
   const events = step(sim, { yaw, pitch, actions: [{ kind: 'swing' }] })
@@ -149,19 +156,20 @@ describe('Simulation', () => {
     inventory.add('wood', 1)
     player.hunger = 50
     // La carne, en la casilla elegida.
-    expect(step(sim, { actions: [{ kind: 'eat' }] })).toContainEqual(expect.objectContaining({ type: 'playerAte', id: 0, item: 'raw_meat' }))
+    expect(eatNow(sim, [{ kind: 'eat' }])).toContainEqual(expect.objectContaining({ type: 'playerAte', id: 0, item: 'raw_meat' }))
     expect(inventory.count('raw_meat')).toBe(1)
-    expect(player.hunger).toBeCloseTo(50 + CONSUMABLE_DEFS.raw_meat!.food, 1)
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.hunger - (50 + CONSUMABLE_DEFS.raw_meat!.food))).toBeLessThan(1)
     // Con madera en la mano, una baya aunque haya carne.
-    step(sim, { actions: [{ kind: 'select', slot: 2 }, { kind: 'eat' }] })
+    eatNow(sim, [{ kind: 'select', slot: 2 }, { kind: 'eat' }])
     expect(inventory.count('berry')).toBe(1)
     expect(inventory.count('raw_meat')).toBe(1)
     // Con la mano vacía y sin bayas, nada.
     inventory.remove('berry', 1)
-    expect(step(sim, { actions: [{ kind: 'select', slot: 5 }, { kind: 'eat' }] }).map((e) => e.type)).not.toContain('playerAte')
+    expect(eatNow(sim, [{ kind: 'select', slot: 5 }, { kind: 'eat' }]).map((e) => e.type)).not.toContain('playerAte')
     // Lleno: no se gasta.
     player.hunger = HUNGER_MAX
-    expect(step(sim, { actions: [{ kind: 'select', slot: 0 }, { kind: 'eat' }] }).map((e) => e.type)).not.toContain('playerAte')
+    expect(eatNow(sim, [{ kind: 'select', slot: 0 }, { kind: 'eat' }]).map((e) => e.type)).not.toContain('playerAte')
     expect(inventory.count('raw_meat')).toBe(1)
   })
 
@@ -187,11 +195,13 @@ describe('Simulation', () => {
     expect(cooked.food).toBeGreaterThan(CONSUMABLE_DEFS.raw_meat!.food * 5)
     player.hunger = 40
     player.health = 50
-    step(sim, { actions: [{ kind: 'select', slot: inventory.slots.indexOf('cooked_meat') }, { kind: 'eat' }] })
-    expect(player.hunger).toBeCloseTo(40 + cooked.food, 1)
-    expect(player.health).toBeCloseTo(50 + cooked.heal!, 1)
+    eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('cooked_meat') }, { kind: 'eat' }])
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.hunger - (40 + cooked.food))).toBeLessThan(1)
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.health - (50 + cooked.heal!))).toBeLessThan(1)
 
-    step(sim, { actions: [{ kind: 'select', slot: inventory.slots.indexOf('berry_infusion') }, { kind: 'eat' }] })
+    eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('berry_infusion') }, { kind: 'eat' }])
     expect(player.regenLeft).toBeCloseTo(20, 1)
     expect(player.regenPerSec).toBe(2)
     expect(inventory.count('berry_infusion')).toBe(0)
@@ -211,8 +221,9 @@ describe('Simulation', () => {
     expect(herb.alive).toBe(true)
 
     player.health = 40
-    step(sim, { actions: [{ kind: 'eat' }] })
-    expect(player.health).toBeCloseTo(40 + CONSUMABLE_DEFS.healing_herb!.heal!, 1)
+    eatNow(sim, [{ kind: 'eat' }])
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.health - (40 + CONSUMABLE_DEFS.healing_herb!.heal!))).toBeLessThan(1)
     expect(inventory.count('healing_herb')).toBe(0)
 
     const regrow = PROP_DEFS.healing_herb.harvest!.regrow
