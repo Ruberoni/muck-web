@@ -86,8 +86,13 @@ export const WHEEL_GESTURE_GAP_MS = 150
 
 export const REACH = 3.5
 /** Segundos entre golpes, salvo que el arma diga otra cosa (ToolDef.cooldown). */
-export const HIT_COOLDOWN = 0.4
-const SWORD_COOLDOWN = 0.25
+export const HIT_COOLDOWN = 0.45
+const SWORD_COOLDOWN = 0.28
+/**
+ * Segundos desde que empieza un golpe (`playerSwing`, la animación) hasta que pega (`playerStrike`), por clase de
+ * arma: la espada, rápida; el hacha y el pico, que se levantan y caen. Siempre menos que la espera entre golpes.
+ */
+export const STRIKE_DELAY: Record<WeaponClass, number> = { sword: 0.12, axe: 0.18, pickaxe: 0.18, hand: 0.14 }
 /** Enemigos a los que alcanza un golpe de espada como mucho, contando al apuntado (Interaction). */
 export const SWEEP_TARGETS = 4
 export const WOBBLE_DURATION = 0.15
@@ -210,7 +215,7 @@ export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   iron_sword: { family: 'sword', tier: 3, damage: 1, attack: 35, cooldown: SWORD_COOLDOWN },
   mithril_sword: { family: 'sword', tier: 4, damage: 1, attack: 50, cooldown: SWORD_COOLDOWN },
   // La mejor arma del juego, y la única con más cadencia que las demás espadas.
-  meteor_sword: { family: 'sword', tier: 5, damage: 1, attack: 65, cooldown: 0.22 },
+  meteor_sword: { family: 'sword', tier: 5, damage: 1, attack: 65, cooldown: 0.25 },
 }
 
 /** Con qué se golpea a un enemigo: una familia de herramienta o, con cualquier otra cosa, la mano. */

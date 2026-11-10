@@ -36,6 +36,13 @@ function step(sim: Simulation, { buttons = 0, yaw = sim.slot(0).player.yaw, pitc
   return sim.step(new Map([[0, { move, actions: actions.map((a): Action => ({ ...a, seq: ++seq, tick })) }]]))
 }
 
+/** Golpea con un clic (acción `swing`) y sigue hasta que el golpe pega (`swingImpact`): todo lo que pasa entre tanto. */
+function strike(sim: Simulation, { yaw, pitch }: Command = {}) {
+  const events = step(sim, { yaw, pitch, actions: [{ kind: 'swing' }] })
+  for (let i = 0; i < 30 && !events.some((e) => e.type === 'playerStrike'); i++) events.push(...step(sim, { yaw, pitch }))
+  return events
+}
+
 /** Teletransporta al jugador delante del prop, mirándolo, y devuelve la orientación para los `Move`. */
 function aimAt(sim: Simulation, prop: PropData) {
   const isFree = (x: number, z: number) => sim.world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
@@ -64,8 +71,9 @@ describe('Simulation', () => {
     const sim = solo(1)
     const tree = firstTree(sim)
     const look = aimAt(sim, tree)
-    const events = step(sim, { ...look, actions: [{ kind: 'swing' }] })
+    const events = strike(sim, look)
     expect(events.map((e) => e.type)).toContain('playerSwing')
+    expect(events.map((e) => e.type)).toContain('playerStrike')
     expect(tree.hp).toBe(tree.maxHp - 1)
   })
 
@@ -194,7 +202,7 @@ describe('Simulation', () => {
     const { inventory, player } = sim.slot(0)
     const herb = sim.world.props.find((p) => p.kind === 'healing_herb')!
     const look = aimAt(sim, herb)
-    expect(step(sim, { ...look, actions: [{ kind: 'swing' }] })).toContainEqual(expect.objectContaining({ type: 'berryTaken', id: herb.id, hp: 0 }))
+    expect(strike(sim, look)).toContainEqual(expect.objectContaining({ type: 'berryTaken', id: herb.id, hp: 0 }))
     expect(inventory.count('healing_herb')).toBe(1)
     expect(herb).toMatchObject({ hp: 0, alive: true })
     // Sin hierba no da nada, ni se rompe.
@@ -236,7 +244,7 @@ describe('Simulation', () => {
       if (item) slot.inventory.add(item, 1)
       const { x, z } = slot.player.pos
       const enemies = spots.map(([dx, dz]) => sim.enemies.spawnAt(x + dx, z + dz))
-      return { sim, enemies, swing: () => step(sim, { actions: [{ kind: 'swing' }] }) }
+      return { sim, enemies, swing: () => strike(sim) }
     }
 
     it('la espada daña a todos los que tiene delante, aunque el golpe vaya al aire', () => {
@@ -273,7 +281,7 @@ describe('Simulation', () => {
       const look = aimAt(sim, tree)
       const hp = tree.hp
       sim.enemies.spawnAt(sim.slot(0).player.pos.x, sim.slot(0).player.pos.z + 40)
-      step(sim, { ...look, actions: [{ kind: 'swing' }] })
+      strike(sim, look)
       // Como a mano: un golpe de 1.
       expect(tree.hp).toBe(hp - 1)
     })

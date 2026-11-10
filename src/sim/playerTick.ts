@@ -2,7 +2,7 @@ import { buttonsInput, Btn, type ActionData, type PlayerCommands } from './comma
 import { CONSUMABLE_DEFS, STEP } from './constants'
 import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
-import { startSwing, type Fighter } from './interaction'
+import { startSwing, stepStrike, type Fighter } from './interaction'
 import type { Inventory, ItemId } from './inventory'
 import { stepPlayer, type Player, type PlayerEnv } from './player'
 import { placeableOf } from './structures'
@@ -137,16 +137,19 @@ export function movePlayer(actor: Actor, command: PlayerCommands | undefined, en
 }
 
 /**
- * Lo que hacen las manos en este paso: si empieza un golpe y si toca colocar lo que se lleva. Con algo colocable
- * en la mano (PLACEABLE_DEFS) el clic lo coloca en vez de golpear, y no queda ningún golpe pendiente.
+ * Lo que hacen las manos en este paso: si empieza un golpe, si pega el que estaba en el aire y si toca colocar lo
+ * que se lleva. Con algo colocable en la mano (PLACEABLE_DEFS) el clic lo coloca en vez de golpear, y no queda
+ * ningún golpe pendiente.
  */
-export function useHands(actor: Actor, intent: Intent): { swing: boolean; place: boolean } {
-  const placing = placeableOf(actor.inventory.selectedItem) !== null
+export function useHands(actor: Actor, intent: Intent): { swing: boolean; strike: boolean; place: boolean } {
+  const item = actor.inventory.selectedItem
+  const placing = placeableOf(item) !== null
   // Con el escudo arriba no se golpea ni se coloca, y no queda ningún golpe pendiente para cuando baje.
   const busy = placing || actor.player.blocking
   if (busy) actor.combat.pendingSwing = false
-  const swing = startSwing(actor.combat, STEP, !busy && intent.attack, !busy && intent.swing, actor.inventory.selectedItem)
-  return { swing, place: placing && !actor.player.blocking && intent.place }
+  const strike = stepStrike(actor.combat, STEP, item, actor.player.blocking)
+  const swing = startSwing(actor.combat, STEP, !busy && intent.attack, !busy && intent.swing, item)
+  return { swing, strike, place: placing && !actor.player.blocking && intent.place }
 }
 
 /**
@@ -195,6 +198,7 @@ export function predictPlayer(actor: Actor, command: PlayerCommands | undefined,
   if (!actor.alive) return false
   movePlayer(actor, command, world.env)
   const hands = useHands(actor, intent)
+  if (hands.strike) world.emit({ type: 'playerStrike', id: actor.id, item: actor.inventory.selectedItem, target: intent.aim ?? null })
   if (hands.swing) world.emit({ type: 'playerSwing', id: actor.id, item: actor.inventory.selectedItem, target: intent.aim ?? null })
   const placed = hands.place ? placeableOf(actor.inventory.selectedItem) : null
   if (placed && world.canPlace(actor.player, placed.radius)) {

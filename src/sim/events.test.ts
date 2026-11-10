@@ -58,6 +58,12 @@ function setup() {
       growBerries(world.props, STEP, emit)
       interaction.step(fighter, STEP, attack)
     }
+    // El último golpe que empezó pega un poco después (swingImpact): se espera a que caiga.
+    for (let i = 0; i < 60 && fighter.combat.strikeLeft > 0; i++) {
+      interaction.updateTarget(fighter)
+      growBerries(world.props, STEP, emit)
+      interaction.step(fighter, STEP, false)
+    }
   }
   return { events, inventory, enemies, pickups, interaction, aimAt, hold }
 }
@@ -67,22 +73,29 @@ describe('eventos de la simulación', () => {
     const ctx = setup()
     const tree = world.props.find((p) => p.kind === 'tree' && p.alive)!
     ctx.aimAt(tree)
-    ctx.hold(1.2)
+    ctx.hold(HIT_COOLDOWN * 2 + STEP)
     const target = { kind: 'prop', id: tree.id }
-    expect(ctx.events.slice(0, 6)).toEqual([
+    // Cada golpe empieza (playerSwing) y pega después (playerStrike), y entonces le quita vida.
+    expect(ctx.events.slice(0, 9)).toEqual([
       { type: 'playerSwing', id: 0, item: null, target },
+      { type: 'playerStrike', id: 0, item: null, target },
       { type: 'propHit', id: tree.id, hp: 2, by: 0 },
       { type: 'playerSwing', id: 0, item: null, target },
+      { type: 'playerStrike', id: 0, item: null, target },
       { type: 'propHit', id: tree.id, hp: 1, by: 0 },
       { type: 'playerSwing', id: 0, item: null, target },
+      { type: 'playerStrike', id: 0, item: null, target },
       { type: 'propDestroyed', id: tree.id, by: 0 },
     ])
-    expect(types(ctx.events.slice(6))).toEqual(['pickupSpawn', 'pickupSpawn', 'pickupSpawn', 'pickupSpawn'])
-    expect(ctx.events[6]).toMatchObject({ item: 'wood', amount: 1 })
+    expect(types(ctx.events.slice(9))).toEqual(['pickupSpawn', 'pickupSpawn', 'pickupSpawn', 'pickupSpawn'])
+    expect(ctx.events[9]).toMatchObject({ item: 'wood', amount: 1 })
     // Golpes al aire después de romperlo.
     ctx.events.length = 0
     ctx.hold(HIT_COOLDOWN)
-    expect(ctx.events).toEqual([{ type: 'playerSwing', id: 0, item: null, target: null }])
+    expect(ctx.events).toEqual([
+      { type: 'playerSwing', id: 0, item: null, target: null },
+      { type: 'playerStrike', id: 0, item: null, target: null },
+    ])
   })
 
   it('las bayas: cogerla y que vuelva a crecer', () => {
@@ -92,6 +105,7 @@ describe('eventos de la simulación', () => {
     ctx.hold(STEP)
     expect(ctx.events).toEqual([
       { type: 'playerSwing', id: 0, item: null, target: { kind: 'prop', id: bush.id } },
+      { type: 'playerStrike', id: 0, item: null, target: { kind: 'prop', id: bush.id } },
       { type: 'berryTaken', id: bush.id, hp: bush.maxHp - 1, by: 0 },
     ])
     ctx.events.length = 0

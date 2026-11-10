@@ -460,7 +460,9 @@ export class Simulation {
       else this.interaction.validateAim(slot, intent.aim)
       this.use(slot, intent.use)
       const hands = useHands(slot, intent)
-      if (hands.swing) this.interaction.strike(slot)
+      // Lo que pega ahora, contra lo que tiene delante en este paso; y lo que empieza, que pegará después.
+      if (hands.strike) this.interaction.strike(slot)
+      if (hands.swing) this.interaction.swing(slot)
       if (hands.place) this.place(slot)
       for (const { item, amount } of intent.drops) this.toss(slot, item, amount)
       for (const op of intent.stations) this.tendStation(slot, op)

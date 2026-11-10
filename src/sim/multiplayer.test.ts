@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type PlayerCommands } from './commands'
 import { RECIPE_IDS, type RecipeId } from './crafting'
 import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, PROP_DEFS, STATION_RANGE, STEP } from './constants'
+import { swingImpact } from './tiers'
 import { Enemies, enemyCap, enemyCapFor, spawnIntervalFor, type EnemyPrey } from './enemies'
 import type { PlayerId, SimEvent, SimEventData, TargetRef } from './events'
 import { aimPose } from './interaction'
@@ -15,6 +16,9 @@ import { FUEL_SECONDS, processOf } from './stations'
 import type { Structure } from './structures'
 import { DAY_FRACTION } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
+
+/** Pasos desde que empieza un golpe con `item` hasta que pega. */
+const impactTicks = (item: ItemId | null) => Math.ceil(swingImpact(item) / STEP - 1e-6)
 
 const placements = generatePropPlacements()
 const world = createPropWorld(placements)
@@ -155,12 +159,12 @@ describe('Simulation con varios jugadores', () => {
       events.push(...stepAll(sim, { 0: { ...a, buttons: Btn.Attack }, 1: { ...b, buttons: Btn.Attack } }))
       if (!tree.alive) fell = t
     }
-    // A mano son 3 golpes: dos a la vez y el tercero al acabar el cooldown.
-    expect(fell).toBe(1 + Math.round(HIT_COOLDOWN / STEP))
+    // A mano son 3 golpes: dos a la vez y el tercero al acabar el cooldown, cuando pega.
+    expect(fell).toBe(1 + Math.round(HIT_COOLDOWN / STEP) + impactTicks(null))
     expect(ofType(events, 'propHit').map((e) => e.by)).toEqual([0, 1])
     expect(ofType(events, 'propDestroyed')).toEqual([expect.objectContaining({ id: tree.id, by: 0 })])
-    // El segundo golpe de ese tick ya no encuentra el árbol.
-    const lastSwings = ofType(events, 'playerSwing').filter((e) => e.tick === fell)
+    // El segundo golpe que pega en ese tick ya no encuentra el árbol.
+    const lastSwings = ofType(events, 'playerStrike').filter((e) => e.tick === fell)
     expect(lastSwings.map((e) => [e.id, e.target?.id ?? null])).toEqual([[0, tree.id], [1, null]])
     expect(sim.pickups.list.filter((p) => p.item === 'wood')).toHaveLength(4)
     expect(sim.slot(0).target).toBeNull()
@@ -181,8 +185,8 @@ describe('Simulation con varios jugadores', () => {
       events.push(...stepAll(sim, { 0: { ...a, buttons: Btn.Attack }, 1: { ...b, buttons: Btn.Attack } }))
       if (!rock.alive) broke = t
     }
-    // 4 de vida y 2 por golpe: el segundo golpe del pico, al acabar el cooldown.
-    expect(broke).toBe(1 + Math.round(HIT_COOLDOWN / STEP))
+    // 4 de vida y 2 por golpe: el segundo golpe del pico, al acabar el cooldown, cuando pega.
+    expect(broke).toBe(1 + Math.round(HIT_COOLDOWN / STEP) + impactTicks('wood_pickaxe'))
     // Los dos golpean (y se oyen), pero solo los del pico le quitan vida.
     expect(ofType(events, 'playerSwing').filter((e) => e.target?.id === rock.id).map((e) => [e.id, e.item])).toEqual([
       [0, null],
@@ -200,6 +204,7 @@ describe('Simulation con varios jugadores', () => {
     const bush = sim.world.props.find((p) => p.kind === 'bush')!
     const look = aimAt(sim, 1, bush)
     const events = stepAll(sim, { 0: {}, 1: { ...look, actions: [{ kind: 'swing' }] } })
+    for (let i = 0; i < impactTicks(null); i++) events.push(...stepAll(sim, { 0: {}, 1: look }))
     expect(ofType(events, 'berryTaken')).toEqual([expect.objectContaining({ id: bush.id, by: 1 })])
     expect(sim.slot(1).inventory.count('berry')).toBe(1)
     expect(sim.slot(0).inventory.count('berry')).toBe(0)
@@ -334,7 +339,7 @@ describe('Simulation con varios jugadores', () => {
       stepAll(sim, { 0: { ...look, buttons: Btn.Attack } })
       if (!ore.alive) broke = t
     }
-    expect(broke).toBe(1 + Math.round(HIT_COOLDOWN / STEP))
+    expect(broke).toBe(1 + Math.round(HIT_COOLDOWN / STEP) + impactTicks('iron_pickaxe'))
     expect(sim.pickups.list.filter((p) => p.item === 'iron_ore')).toHaveLength(3)
   })
 
@@ -701,7 +706,12 @@ describe('objetos del suelo con varios jugadores', () => {
 })
 
 describe('objetivo que manda el cliente (Move.aim)', () => {
-  const swing = (sim: Simulation, look: Command) => ofType(stepAll(sim, { 0: { ...look, actions: [{ kind: 'swing' }] } }), 'playerSwing')[0]
+  /** Un clic y lo que pega después: el objetivo se comprueba al pegar, con el `aim` de ese paso. */
+  const swing = (sim: Simulation, look: Command) => {
+    let events = stepAll(sim, { 0: { ...look, actions: [{ kind: 'swing' }] } })
+    for (let i = 0; i < 30 && !ofType(events, 'playerStrike').length; i++) events = stepAll(sim, { 0: look })
+    return ofType(events, 'playerStrike')[0]
+  }
 
   it('se acepta si es creíble aunque el rayo no lo toque', () => {
     const sim = withPlayers(1)

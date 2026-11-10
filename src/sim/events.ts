@@ -56,7 +56,10 @@ export type SimEventData =
   /** Sale un proyectil: con esto el cliente sigue su trayectoria (ver `Projectiles`). */
   | { type: 'projectileThrown'; id: number; kind: ProjectileKind; x: number; y: number; z: number; vx: number; vy: number; vz: number }
   | { type: 'projectileHit'; id: number; x: number; y: number; z: number; end: ProjectileEnd }
+  /** Empieza un golpe: la animación. Pega `swingImpact` segundos después (`playerStrike`), si no se pierde. */
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
+  /** El golpe pega, contra lo que tiene delante ahora (o al aire): el daño y el sonido del impacto. */
+  | { type: 'playerStrike'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
   | { type: 'playerTraded'; id: PlayerId; op: 'buy' | 'sell'; item: ItemId }

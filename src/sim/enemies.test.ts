@@ -16,6 +16,7 @@ import {
   BOSS_SPAWN_MIN,
   ENEMY_SPAWN_MIN,
   EYE_HEIGHT,
+  HIT_COOLDOWN,
   PLAYER_RADIUS,
   SPAWN_WARN,
   SPEAR_GOBLIN_SHARE,
@@ -770,6 +771,11 @@ describe('combate', () => {
         interaction.updateTarget(fighter)
         interaction.step(fighter, STEP, true)
       }
+      // El último golpe que empezó pega un poco después (swingImpact): se espera a que caiga.
+      for (let i = 0; i < 60 && fighter.combat.strikeLeft > 0; i++) {
+        interaction.updateTarget(fighter)
+        interaction.step(fighter, STEP, false)
+      }
     }
     const equip = (item: ItemId) => {
       inventory.add(item, 1)
@@ -810,7 +816,7 @@ describe('combate', () => {
 
   it('a mano hacen falta 7 golpes', () => {
     const { enemy, hold, meat } = setup()
-    hold(0.4 * 6 + STEP)
+    hold(HIT_COOLDOWN * 6 + STEP)
     expect(enemy.hp).toBe(0)
     expect(meat()).toHaveLength(1)
   })
@@ -866,7 +872,7 @@ describe('combate', () => {
     GOBLIN.loot = [{ item: 'raw_meat', amount: 1 }, { item: 'stone', amount: 2 }]
     const { hold, equip, pickups } = setup()
     equip('mithril_axe')
-    hold(0.4 + STEP)
+    hold(HIT_COOLDOWN + STEP)
     GOBLIN.loot = loot
     expect(pickups.list.map((p) => p.item).sort()).toEqual(['raw_meat', 'stone', 'stone'])
   })

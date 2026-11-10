@@ -8,7 +8,7 @@ import { enemyAimHeight, type Enemies, type EnemyData } from './enemies'
 import type { Inventory, ItemId } from './inventory'
 import type { Player } from './player'
 import type { Pickups } from './pickups'
-import { attackDamage, hitEfficacy, isSword, propDamage, swingCooldown, weaponClass } from './tiers'
+import { attackDamage, hitEfficacy, isSword, propDamage, swingCooldown, swingImpact, weaponClass } from './tiers'
 
 /** Lo que se puede golpear: un prop o un enemigo (se distinguen por `kind`). */
 export type Target = PropData | EnemyData
@@ -19,6 +19,10 @@ export interface Combat {
   cooldown: number
   /** Un golpe pedido (acción `swing`) durante el cooldown: se da en cuanto acabe. */
   pendingSwing: boolean
+  /** Segundos hasta que pega el golpe que ha empezado (`swingImpact`); 0: no hay ninguno en el aire. */
+  strikeLeft: number
+  /** Con qué empezó: si cambia lo que lleva en la mano antes de pegar, el golpe se pierde. */
+  strikeItem: ItemId | null
 }
 
 /** Lo que Interaction necesita de un jugador para que golpee (un PlayerSlot lo cumple). */
@@ -31,7 +35,7 @@ export interface Fighter {
   target: Target | null
 }
 
-export const createCombat = (): Combat => ({ cooldown: 0, pendingSwing: false })
+export const createCombat = (): Combat => ({ cooldown: 0, pendingSwing: false, strikeLeft: 0, strikeItem: null })
 
 // Altura sobre la base (rocas: sobre el centro) desde la que cae lo que sueltan. Lo que se recoge no suelta nada al suelo.
 const DROP_HEIGHT: Record<PropFamily, number> = { tree: 1, rock: 0.3, bush: 0, herb: 0 }
@@ -111,18 +115,22 @@ export class Interaction {
    * si soltó algo (lo rompió, lo mató o cogió una baya).
    */
   step(fighter: Fighter, dt: number, attackHeld: boolean, swing = false): { target: Target | null; dropped: boolean } | null {
-    return startSwing(fighter.combat, dt, attackHeld, swing, fighter.inventory.selectedItem) ? this.strike(fighter) : null
+    const item = fighter.inventory.selectedItem
+    const lands = stepStrike(fighter.combat, dt, item, false)
+    if (startSwing(fighter.combat, dt, attackHeld, swing, item)) this.swing(fighter)
+    return lands ? this.strike(fighter) : null
   }
 
-  /** El golpe que empieza (ya decidido por `startSwing`) contra el objetivo del jugador, o al aire. */
+  /** Empieza un golpe (ya decidido por `startSwing`): pega `swingImpact` segundos después. */
+  swing(fighter: Fighter) {
+    const target = fighter.target
+    this.emit({ type: 'playerSwing', id: fighter.id, item: fighter.inventory.selectedItem, target: refOf(target) })
+  }
+
+  /** El golpe que pega (ya decidido por `stepStrike`) contra lo que el jugador tiene delante ahora, o al aire. */
   strike(fighter: Fighter): { target: Target | null; dropped: boolean } {
     const target = fighter.target
-    this.emit({
-      type: 'playerSwing',
-      id: fighter.id,
-      item: fighter.inventory.selectedItem,
-      target: target && { kind: target.kind === 'enemy' ? 'enemy' : 'prop', id: target.id },
-    })
+    this.emit({ type: 'playerStrike', id: fighter.id, item: fighter.inventory.selectedItem, target: refOf(target) })
     const hit = target ? this.hit(fighter, target) : false
     const swept = isSword(fighter.inventory.selectedItem) && this.sweep(fighter, target)
     return { target, dropped: hit || swept }
@@ -200,9 +208,13 @@ export class Interaction {
   }
 }
 
+/** Lo que tiene delante, como lo dicen los eventos. */
+const refOf = (target: Target | null) => target && { kind: target.kind === 'enemy' ? ('enemy' as const) : ('prop' as const), id: target.id }
+
 /**
  * La espera entre golpes de un paso: baja el cooldown y dice si empieza un golpe (ataque mantenido o `swing`
- * pendiente con el cooldown acabado), con la cadencia de `item`. Sin mundo: la predicción del cliente la usa tal cual.
+ * pendiente con el cooldown acabado), con la cadencia de `item`. El golpe pega `swingImpact` segundos después
+ * (`stepStrike`). Sin mundo: la predicción del cliente la usa tal cual.
  */
 export function startSwing(combat: Combat, dt: number, attackHeld: boolean, swing: boolean, item: ItemId | null): boolean {
   combat.cooldown = Math.max(0, combat.cooldown - dt)
@@ -210,6 +222,26 @@ export function startSwing(combat: Combat, dt: number, attackHeld: boolean, swin
   if (!(attackHeld || combat.pendingSwing) || combat.cooldown > 1e-9) return false
   combat.pendingSwing = false
   combat.cooldown = swingCooldown(item)
+  combat.strikeLeft = swingImpact(item)
+  combat.strikeItem = item
+  return true
+}
+
+/**
+ * El golpe en el aire de un paso: dice si pega ahora. Se pierde si cambia lo que se lleva en la mano o si `cancel`
+ * (el escudo arriba). Va antes de `startSwing` en el mismo paso: un golpe no pega en el paso en que empieza.
+ */
+export function stepStrike(combat: Combat, dt: number, item: ItemId | null, cancel: boolean): boolean {
+  if (combat.strikeLeft <= 0) return false
+  if (cancel || item !== combat.strikeItem) {
+    combat.strikeLeft = 0
+    combat.strikeItem = null
+    return false
+  }
+  combat.strikeLeft -= dt
+  if (combat.strikeLeft > 1e-9) return false
+  combat.strikeLeft = 0
+  combat.strikeItem = null
   return true
 }
 

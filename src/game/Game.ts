@@ -771,6 +771,8 @@ export class Game {
           break
         case 'playerSwing':
           if (e.id === slot.id) this.handheld.play('swing')
+          break
+        case 'playerStrike':
           this.swingAtProp(e)
           break
         case 'playerPlaced':
@@ -861,7 +863,7 @@ export class Game {
    * Un golpe a un prop que no le hace nada (sin la herramienta que pide) no tiene evento propio: el cliente lo
    * decide con el objeto del golpe y el tipo del prop. Tiembla igual y, si es propio, se avisa de qué hace falta.
    */
-  private swingAtProp(e: Extract<SimEvent, { type: 'playerSwing' }>) {
+  private swingAtProp(e: Extract<SimEvent, { type: 'playerStrike' }>) {
     if (e.target?.kind !== 'prop') return
     const prop = this.sim.world.props[e.target.id]
     if (!prop) return
@@ -887,6 +889,7 @@ export class Game {
         case 'enemyDied':
           return sim.enemies.list.find((en) => en.id === e.id)?.pos ?? playerAt(e.by)
         case 'playerSwing':
+        case 'playerStrike':
         case 'playerHurt':
         case 'playerDied':
         case 'playerAte':

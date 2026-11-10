@@ -94,13 +94,14 @@ const SNAP_TICKS = 3
 const spinOf = (id: number) => (id * 2.39996) % (2 * Math.PI)
 
 /** Lo que el jugador local ya ha presentado al predecirlo: el servidor se lo repite, pero no se presenta otra vez. */
-const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerAte', 'playerCrafted', 'playerPlaced', 'playerDropped', 'playerEquipped'])
+const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerStrike', 'playerAte', 'playerCrafted', 'playerPlaced', 'playerDropped', 'playerEquipped'])
 
 /** Un evento que trata del jugador `me` (lo que le pasa o lo que ha provocado), o del mundo entero. */
 function concerns(e: SimEvent, me: PlayerId): boolean {
   if ('by' in e) return e.by === me
   switch (e.type) {
     case 'playerSwing':
+    case 'playerStrike':
     case 'playerAte':
     case 'playerCrafted':
     case 'playerTraded':

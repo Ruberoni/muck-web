@@ -4,6 +4,7 @@ import {
   HAND_ATTACK,
   HIT_COOLDOWN,
   PROP_DEFS,
+  STRIKE_DELAY,
   TOOL_DEFS,
   type EnemyType,
   type HitEfficacy,
@@ -50,6 +51,9 @@ export const isSword = (item: ItemId | null) => weaponClass(item) === 'sword'
 
 /** Segundos entre golpes con `item`. */
 export const swingCooldown = (item: ItemId | null) => (item ? TOOL_DEFS[item]?.cooldown : undefined) ?? HIT_COOLDOWN
+
+/** Segundos desde que empieza un golpe con `item` hasta que pega. */
+export const swingImpact = (item: ItemId | null) => STRIKE_DELAY[weaponClass(item)]
 
 const weakness = (item: ItemId | null, type: EnemyType) => ENEMY_DEFS[type].weakness[weaponClass(item)] ?? 1
 

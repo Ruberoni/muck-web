@@ -128,7 +128,11 @@ export class GameAudio {
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
-          if (e.id === me) this.swing(e.item, e.target, list, propKind)
+          // Al empezar, el aire; lo que suena al dar, al pegar.
+          if (e.id === me) this.sound.play('swing')
+          break
+        case 'playerStrike':
+          if (e.id === me && e.target) this.swing(e.item, e.target, list, propKind)
           break
         case 'propDestroyed':
           s.play(breakOf(propKind(e.id)))
@@ -231,7 +235,10 @@ export class GameAudio {
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
-          at(e, REMOTE_HEARING.hit, this.impact(e.item, e.target, list, propKind))
+          at(e, REMOTE_HEARING.hit, 'swing')
+          break
+        case 'playerStrike':
+          if (e.target) at(e, REMOTE_HEARING.hit, this.impact(e.item, e.target, list, propKind))
           break
         case 'propDestroyed':
           at(e, REMOTE_HEARING.hit, breakOf(propKind(e.id)))
