@@ -734,6 +734,8 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     special: { ...NO_SPECIAL, cooldowns: {} },
     target: null,
     retarget: 0,
+    // El espejo no decide a quién persigue ni vaga: solo se dibuja y se apunta.
+    wander: 0,
   }
 }
 

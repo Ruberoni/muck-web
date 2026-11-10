@@ -21,6 +21,10 @@ import {
   ENEMY_PER_PLAYER,
   ENEMY_RETARGET,
   ENEMY_RETARGET_MARGIN,
+  ENEMY_AGGRO,
+  ENEMY_AGGRO_DROP,
+  ENEMY_WANDER_SPEED,
+  ENEMY_WANDER_SPIN,
   ENEMY_SPAWN_INTERVAL,
   ENEMY_SPAWN_MAX,
   ENEMY_SPAWN_MIN,
@@ -121,6 +125,8 @@ export interface EnemyData {
   target: PlayerId | null
   /** Segundos hasta volver a elegir a quién persigue. */
   retarget: number
+  /** Rumbo al que vaga mientras no persigue a nadie (radianes); gira despacio, distinto en cada enemigo. */
+  wander: number
 }
 
 /** Lanza una roca desde `from` hacia el jugador `target`. */
@@ -174,6 +180,8 @@ const copyEnemy = (e: EnemyData): EnemyData => ({
   knock: { ...e.knock },
   charge: { ...e.charge },
   special: { ...(e.special ?? NO_SPECIAL), cooldowns: { ...(e.special?.cooldowns ?? {}) } },
+  // Las partidas guardadas antes de que existiera no lo llevan.
+  wander: e.wander ?? 0,
 })
 
 export const NO_CHARGE: EnemyCharge = { state: 'idle', time: 0, cooldown: 0, dx: 0, dz: 0 }
@@ -223,10 +231,11 @@ export function spawnType(roll: number, day: number, biome: Biome): EnemyType {
 }
 
 /**
- * En el agua (donde ya no se hace pie: el fondo por debajo de WADE_DEPTH) nadan: a la mitad de su velocidad y, como
- * mucho, a ENEMY_SWIM_MAX, por debajo de lo que nada el jugador, para que siempre pueda escapar.
+ * En el agua (donde ya no se hace pie: el fondo por debajo de WADE_DEPTH) nadan: al 30 % de su velocidad y, como
+ * mucho, a ENEMY_SWIM_MAX, por debajo de lo que nada el jugador (3 m/s), para que siempre pueda escapar. El agua da
+ * margen para huir sin ser refugio: siguen persiguiendo y alcanzan a quien se entretenga.
  */
-export const ENEMY_SWIM_FACTOR = 0.5
+export const ENEMY_SWIM_FACTOR = 0.3
 export const ENEMY_SWIM_MAX = 2.5
 const swimming = (island: Island, x: number, z: number) => island.heightAt(x, z) < WATER_LEVEL - WADE_DEPTH
 
@@ -301,17 +310,24 @@ export class Enemies {
   /**
    * El jugador vivo más cercano, reevaluado cada ENEMY_RETARGET segundos: solo cambia si otro está
    * ENEMY_RETARGET_MARGIN metros más cerca, para que no dude entre dos. Si el suyo ya no está, elige al momento.
+   *
+   * Los mobs comunes solo persiguen dentro de su rango: ven a quien tienen a ENEMY_AGGRO metros y no lo sueltan
+   * hasta ENEMY_AGGRO_DROP. Más lejos se quedan sin objetivo y vagan por la zona (`wander`). Los jefes persiguen
+   * hasta la otra punta de la isla, y los guardianes ya tienen su propio `aggro` y `leash`.
    */
   private chooseTarget(e: EnemyData, prey: readonly EnemyPrey[], dt: number): EnemyPrey | null {
     const { guard } = ENEMY_DEFS[e.type]
     if (guard) return this.guardTarget(e, guard, prey)
+    const common = isCommon(e.type)
+    const distance = (p: EnemyPrey) => Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z)
     let current = e.target === null ? undefined : prey.find((p) => p.id === e.target)
+    if (common && current && distance(current) > ENEMY_AGGRO_DROP) current = undefined
     e.retarget -= dt
     if (current && e.retarget > 1e-9) return current
     e.retarget = ENEMY_RETARGET
-    const distance = (p: EnemyPrey) => Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z)
+    const reach = common ? ENEMY_AGGRO : Infinity
     let nearest: EnemyPrey | undefined
-    for (const p of prey) if (!nearest || distance(p) < distance(nearest)) nearest = p
+    for (const p of prey) if (distance(p) <= reach && (!nearest || distance(p) < distance(nearest))) nearest = p
     if (nearest && (!current || distance(nearest) < distance(current) - ENEMY_RETARGET_MARGIN)) current = nearest
     e.target = current?.id ?? null
     return current ?? null
@@ -351,6 +367,7 @@ export class Enemies {
     if (!prey) {
       e.attackCooldown = Math.max(e.attackCooldown - dt, def.windup)
       if (def.guard) this.goHome(e, def.speed * dt)
+      else if (isCommon(e.type)) this.wander(e, def.speed, dt)
       return false
     }
     const player = prey.pos
@@ -431,6 +448,20 @@ export class Enemies {
     e.yaw = Math.atan2(dx, dz)
     const k = Math.min(step, dist) / dist
     this.move(e, dx * k, dz * k)
+  }
+
+  /**
+   * Sin objetivo, un mob común vaga por la zona en vez de quedarse quieto: así sigue buscando a quien se le ha
+   * escapado y vuelve a verle en cuanto se acerca. El rumbo gira despacio y el sentido depende del id, para que no
+   * vayan todos en paralelo ni describan el mismo círculo.
+   */
+  private wander(e: EnemyData, speed: number, dt: number) {
+    // De -1 a 1 sin pasar por 0: quien no girara se iría en línea recta hasta salir de la isla.
+    const spin = ((e.id % 6) + 0.5) / 3 - 1
+    e.wander += spin * ENEMY_WANDER_SPIN * dt
+    e.yaw = e.wander
+    const step = Math.min(ENEMY_WANDER_SPEED, speed * 0.35) * dt
+    this.move(e, Math.sin(e.wander) * step, Math.cos(e.wander) * step)
   }
 
   /**
@@ -658,6 +689,7 @@ export class Enemies {
       special: { ...NO_SPECIAL, cooldowns: {} },
       target: null,
       retarget: 0,
+      wander: 0,
     }
     this.list.push(e)
     this.emit({ type: 'enemySpawn', id: e.id, enemy: type, x, z })

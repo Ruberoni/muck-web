@@ -6,7 +6,10 @@ import { mulberry32 } from './random'
 import { DAY_LENGTH } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL, WATER_LEVEL } from './world/terrain'
 import {
+  ENEMY_AGGRO,
+  ENEMY_AGGRO_DROP,
   ENEMY_DEFS,
+  ENEMY_RETARGET,
   ENEMY_SPAWN_MAX,
   type EnemyType,
   BOSS_SPAWN_MAX,
@@ -145,6 +148,48 @@ describe('enemigos nocturnos', () => {
     run(1.5)
     expect(dist(e, player)).toBeCloseTo(CONTACT + GOBLIN.gap, 5)
     expect(GOBLIN.gap).toBeLessThan(GOBLIN.reach)
+  })
+
+  it('más allá del margen de seguimiento pierden el objetivo, pero no se quedan quietos: vagan', () => {
+    const e = enemies.spawnAt(player.x + 5, player.z)
+    run(0.5)
+    expect(e.target).toBe(0)
+    player.x += ENEMY_AGGRO_DROP + 5
+    run(ENEMY_RETARGET + STEP)
+    expect(e.target).toBeNull()
+    const { x, z } = e.pos
+    run(2)
+    expect(Math.hypot(e.pos.x - x, e.pos.z - z)).toBeGreaterThan(0.5)
+  })
+
+  it('vuelven a perseguir en cuanto el jugador entra en su rango', () => {
+    const e = enemies.spawnAt(player.x + ENEMY_AGGRO + 20, player.z)
+    run(ENEMY_RETARGET + STEP)
+    expect(e.target).toBeNull()
+    player.x = e.pos.x - 10
+    player.z = e.pos.z
+    run(ENEMY_RETARGET + STEP)
+    expect(e.target).toBe(0)
+  })
+
+  it('entre el rango de adquisición y el de seguimiento no dudan: siguen a quien ya perseguían', () => {
+    expect(ENEMY_AGGRO_DROP).toBeGreaterThan(ENEMY_AGGRO)
+    const e = enemies.spawnAt(player.x + 5, player.z)
+    run(0.5)
+    expect(e.target).toBe(0)
+    player.x = e.pos.x + (ENEMY_AGGRO + ENEMY_AGGRO_DROP) / 2
+    player.z = e.pos.z
+    run(ENEMY_RETARGET + STEP)
+    expect(e.target).toBe(0)
+  })
+
+  it('los jefes ven más lejos: adquieren objetivo fuera del rango de los mobs comunes', () => {
+    const far = ENEMY_AGGRO + 10
+    const mob = enemies.spawnAt(player.x + far, player.z)
+    const boss = enemies.spawnAt(player.x - far, player.z, 'giant')
+    run(ENEMY_RETARGET + STEP)
+    expect(mob.target).toBeNull()
+    expect(boss.target).toBe(0)
   })
 
   it('pegado al jugador ataca tras la espera y luego a intervalos fijos', () => {

@@ -606,6 +606,16 @@ export const ENEMY_HARD_MAX = 24
 /** Cada cuánto vuelve a elegir a quién persigue, y cuánto más cerca debe estar otro para cambiar. */
 export const ENEMY_RETARGET = 0.5
 export const ENEMY_RETARGET_MARGIN = 3
+/**
+ * A cuántos metros ve un mob común a un jugador y se lanza a por él, y a cuántos lo suelta una vez detrás. Dos
+ * cifras para que no dude en la frontera: si fueran la misma, perdería y recuperaría el objetivo a cada paso.
+ * Los jefes y los guardianes no las usan (los guardianes tienen su propio `aggro` y `leash`).
+ */
+export const ENEMY_AGGRO = 55
+export const ENEMY_AGGRO_DROP = 80
+/** A cuánto vagan buscando cuando no persiguen a nadie, y qué deprisa gira su rumbo. */
+export const ENEMY_WANDER_SPEED = 1.2
+export const ENEMY_WANDER_SPIN = 0.35
 
 // Distancia por delante del jugador a la que se colocan la fogata y las demás estructuras (radios en structures.ts).
 export const PLACE_DISTANCE = 2.2
