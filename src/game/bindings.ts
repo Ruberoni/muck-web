@@ -83,6 +83,12 @@ export function anyOf(codes: ReadonlySet<string>, binding: string): boolean {
 export const binds = (binding: string, code: string) => codesOf(binding).includes(code)
 
 /**
+ * Si esa tecla cierra la pantalla de inventario: la cierran las mismas que la abren, y la abren la del inventario,
+ * la de recetas y también la de usar (que sin nada que usar cerca abre la pantalla en vez de actuar).
+ */
+export const closesInventory = (b: Bindings, code: string) => binds(b.inventory, code) || binds(b.recipes, code) || binds(b.use, code)
+
+/**
  * Asigna `code` a `action` y se lo quita a cualquier otra: dos acciones con la misma tecla se activarían a la vez.
  * La que se queda sin ninguna pasa a "sin asignar" y se ve como `—` en el panel.
  */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anyOf, BINDABLE_ACTIONS, binds, bindingLabel, codesOf, DEFAULT_BINDINGS, keyLabel, rebind, sanitizeBindings } from './bindings'
+import { anyOf, BINDABLE_ACTIONS, binds, bindingLabel, closesInventory, codesOf, DEFAULT_BINDINGS, keyLabel, rebind, sanitizeBindings } from './bindings'
 
 /** Todos los códigos usados, con la acción que los tiene. */
 const used = (bindings: Record<string, string>) => BINDABLE_ACTIONS.flatMap((action) => codesOf(bindings[action]).map((code) => [action, code] as const))
@@ -50,6 +50,16 @@ describe('teclas reasignables', () => {
 
   it('una acción sin asignar sigue sin asignar tras sanear', () => {
     expect(sanitizeBindings({ ...DEFAULT_BINDINGS, sprint: '' }).sprint).toBe('')
+  })
+
+  it('la pantalla de inventario la cierran las mismas teclas que la abren', () => {
+    // Tab, E y C, como antes del refactor: la E cuenta porque sin nada que usar cerca abre la pantalla.
+    for (const code of ['Tab', 'KeyE', 'KeyC']) expect(closesInventory(DEFAULT_BINDINGS, code)).toBe(true)
+    for (const code of ['KeyQ', 'Escape', 'KeyW']) expect(closesInventory(DEFAULT_BINDINGS, code)).toBe(false)
+    // Y siguen a la tecla que se asigne, no a una fija.
+    const rebound = rebind({ ...DEFAULT_BINDINGS }, 'use', 'KeyG')
+    expect(closesInventory(rebound, 'KeyG')).toBe(true)
+    expect(closesInventory(rebound, 'KeyE')).toBe(false)
   })
 
   it('los nombres que se leen en pantalla', () => {

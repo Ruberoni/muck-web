@@ -45,3 +45,9 @@ export const ESCAPE_RESUME_MS = 400
 
 /** Si Esc debe reanudar: solo en pausa, y una vez pasada la pulsación que la provocó (`pausedForMs`). */
 export const escapeResumes = (state: GameState, pausedForMs: number) => state === 'paused' && pausedForMs >= ESCAPE_RESUME_MS
+
+/**
+ * Cuánto tarda Chrome en volver a dejar capturar el ratón después de que el usuario la soltara con Esc. Un intento
+ * dentro de esa ventana se rechaza, así que al reanudar con Esc se reintenta una vez al pasar.
+ */
+export const POINTER_LOCK_COOLDOWN_MS = 1300

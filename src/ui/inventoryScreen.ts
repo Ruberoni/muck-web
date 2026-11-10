@@ -1,5 +1,5 @@
 import { type InventoryFocus } from '../game/actions'
-import { binds, bindingLabel, DEFAULT_BINDINGS, type Bindings } from '../game/bindings'
+import { binds, bindingLabel, closesInventory, DEFAULT_BINDINGS, type Bindings } from '../game/bindings'
 import type { CraftWorld, Recipe, RecipeId } from '../sim/crafting'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
@@ -422,9 +422,9 @@ export class InventoryScreen {
 
   private onKey = (e: KeyboardEvent) => {
     const b = this.bindings
-    // Cierran la pantalla las teclas que la abren. Tab movería el foco. Mantener la tecla no cierra y abre: la
-    // autorrepetición no cuenta.
-    if (binds(b.inventory, e.code) || binds(b.recipes, e.code)) {
+    // Cierran la pantalla las teclas que la abren (`closesInventory`). Tab movería el foco. Mantener la tecla no
+    // cierra y abre: la autorrepetición no cuenta.
+    if (closesInventory(b, e.code)) {
       e.preventDefault()
       if (!e.repeat) this.onclose?.()
     } else if (e.code === 'Escape') {

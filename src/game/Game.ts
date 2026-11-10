@@ -46,7 +46,7 @@ import { CameraShake } from './shake'
 import { Input, RIGHT_CLICK } from './input'
 import { holdsFood, stepActions, type InventoryFocus } from './actions'
 import { anyOf } from './bindings'
-import { acceptsKeys, afterLockChange, escapeResumes, inGame, showsCrosshair, type GameState } from './states'
+import { acceptsKeys, afterLockChange, escapeResumes, inGame, POINTER_LOCK_COOLDOWN_MS, showsCrosshair, type GameState } from './states'
 import { loadSettings, saveSettings, SETTING_RANGES, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput, type Vec3 } from '../sim/player'
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
@@ -281,11 +281,10 @@ export class Game {
     })
 
     // Esc también reanuda, además del clic en el overlay. Va antes que el listener de la pantalla de inventario
-    // (que se engancha al abrirse), así que desde allí Esc pausa y no reanuda en la misma pulsación. Si el
-    // navegador aún no deja recapturar, `play()` enseña el overlay de reintento, igual que con un clic.
+    // (que se engancha al abrirse), así que desde allí Esc pausa y no reanuda en la misma pulsación.
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || e.repeat) return
-      if (escapeResumes(this.state, performance.now() - this.pausedAt)) void this.play()
+      if (escapeResumes(this.state, performance.now() - this.pausedAt)) void this.resumeByEscape()
     })
 
     // Zoom del minimapa con + y −. Fuera del cauce de las pulsaciones de `Input` (que alimenta los pasos fijos de
@@ -386,6 +385,19 @@ export class Game {
     if (ok) return
     this.retrying = true
     this.hud.showOverlay('retry')
+  }
+
+  /**
+   * Reanudar con Esc. Chrome rechaza recapturar el ratón durante ~1,25 s después de que el usuario la soltara con
+   * Esc, y un doble Esc a velocidad normal cae siempre dentro de esa ventana: en vez de acabar en el aviso de "haz
+   * clic", se reintenta una vez al pasar. Si también falla, `play()` sí enseña ese aviso.
+   */
+  private async resumeByEscape() {
+    this.sound.unlock()
+    if (await this.input.requestLock()) return
+    window.setTimeout(() => {
+      if (this.state === 'paused') void this.play()
+    }, POINTER_LOCK_COOLDOWN_MS)
   }
 
   /** Partida nueva: inventario vacío, isla restaurada y jugador en el punto de aparición. En red no hace nada (la isla es del servidor). */
