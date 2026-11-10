@@ -5,6 +5,7 @@ import { DAY_FRACTION, DAY_LENGTH, isNight } from './world/daycycle'
 import { enemyFloor, WATER_LEVEL } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
+import type { ProjectileKind } from './projectiles'
 import {
   BOSS_DELAY,
   BOSS_EVERY,
@@ -31,6 +32,7 @@ import {
   ENEMY_TYPES,
   PLAYER_RADIUS,
   SHELL_RESIST,
+  SPEAR_GOBLIN_SHARE,
   SHELL_BROKEN_PACE,
   SPAWN_WARN,
   SPECIAL_GAP,
@@ -64,8 +66,11 @@ const contactOf = (type: EnemyType) => PLAYER_RADIUS + ENEMY_DEFS[type].radius
  */
 const STRIKE_SLACK = 0.8
 
-/** `crouch` y `rush`: la embestida. `dazed`: aturdido tras ella. `aim`: preparando un lanzamiento. */
-export type ChargeState = 'idle' | 'crouch' | 'rush' | 'dazed' | 'aim'
+/**
+ * `crouch` y `rush`: la embestida. `dazed`: aturdido tras ella. `aim`: preparando un lanzamiento. `throw`: acabando el
+ * de un mob común, quieto pero sin recibir el doble.
+ */
+export type ChargeState = 'idle' | 'crouch' | 'rush' | 'dazed' | 'aim' | 'throw'
 
 /** Por dónde va una embestida o un lanzamiento. */
 export interface EnemyCharge {
@@ -140,8 +145,8 @@ export interface EnemyData {
   strike: number
 }
 
-/** Lanza una roca desde `from` hacia el jugador `target`. */
-export type ThrowRock = (from: { x: number; y: number; z: number }, target: PlayerId, damage: number) => void
+/** Lanza `kind` desde `from` a `speed` m/s hacia donde está el jugador `target`. */
+export type Throw = (kind: ProjectileKind, from: { x: number; y: number; z: number }, target: PlayerId, damage: number, speed: number) => void
 
 /** Lo que los enemigos ven de un jugador que está en el mundo. Los muertos y quien acaba de reaparecer no son objetivo, pero cuentan para N. */
 export interface EnemyPrey {
@@ -235,11 +240,15 @@ export function spawnChance(type: EnemyType, day: number, biome: Biome): number 
 
 /** El tipo que aparece con la tirada `roll` (de 0 a 1): lo que sobra de las probabilidades son trasgos. */
 export function spawnType(roll: number, day: number, biome: Biome): EnemyType {
+  let left = 1
   for (const type of ENEMY_TYPES) {
-    roll -= spawnChance(type, day, biome)
+    const chance = spawnChance(type, day, biome)
+    roll -= chance
+    left -= chance
     if (roll < 0) return type
   }
-  return 'goblin'
+  // Lo que sobra son trasgos, y de ellos una parte, lanceros: con lo que queda de la misma tirada.
+  return roll < left * SPEAR_GOBLIN_SHARE ? 'spearGoblin' : 'goblin'
 }
 
 /**
@@ -277,7 +286,7 @@ export class Enemies {
     private grids: SpatialGrid<Collider>[],
     private rng: () => number = Math.random,
     private emit: Emit = NO_EMIT,
-    private throwRock: ThrowRock = () => {},
+    private throwAt: Throw = () => {},
     private island: Island = DEFAULT_ISLAND,
     private onSpecial: OnSpecial = () => {},
   ) {}
@@ -581,8 +590,9 @@ export class Enemies {
   }
 
   /**
-   * A distancia: mantiene las distancias y cada `attackInterval` segundos se para, avisa y lanza una roca hacia donde
-   * está el jugador al soltarla. Su daño lo hace la roca al llegar, no este paso.
+   * A distancia: mantiene las distancias y cada `attackInterval` (más algo, según el enemigo) se para, apunta
+   * `windup` segundos y lanza hacia donde está el jugador al soltarlo; luego queda `recover` segundos quieto, acabando
+   * el lanzamiento. Su daño lo hace lo lanzado al llegar, no este paso.
    */
   private ranged(e: EnemyData, def: RangedDef, prey: EnemyPrey, dist: number, dt: number) {
     const c = e.charge
@@ -591,16 +601,26 @@ export class Enemies {
     if (c.state === 'aim') {
       c.time -= dt
       if (c.time > 1e-9) return
+      c.state = 'throw'
+      c.time = def.recover
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'throw' })
+      this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+      const dealt = Math.round(damage * this.scaling.damage)
+      this.throwAt(def.projectile, { x: e.pos.x, y: enemyFloor(this.island, e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, dealt, def.speed)
+      return
+    }
+    if (c.state === 'throw') {
+      c.time -= dt
+      if (c.time > 1e-9) return
       c.state = 'idle'
       this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
-      this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
-      this.throwRock({ x: e.pos.x, y: enemyFloor(this.island, e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, damage)
       return
     }
     if (c.cooldown <= 1e-9 && dist <= def.range) {
       c.state = 'aim'
       c.time = windup
-      c.cooldown = attackInterval
+      // Cada uno a su ritmo: de `attackInterval` a `attackInterval + jitter`, fijo por enemigo y sin tirar dados.
+      c.cooldown = (attackInterval + def.jitter * ((e.id * 0.618034) % 1)) * this.scaling.attackInterval
       this.emit({ type: 'enemyCharge', id: e.id, state: 'aim' })
       return
     }
@@ -806,6 +826,12 @@ export class Enemies {
     e.knock.z = (dz / d) * def.knockback
     e.stagger = def.stagger
     e.staggerGuard = def.stagger + def.staggerGap
+    // Aturdido mientras apunta, no lanza: lo vuelve a intentar tras su espera.
+    if (e.charge.state === 'aim' && def.ranged) {
+      e.charge.state = 'idle'
+      e.charge.cooldown = def.windup
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
+    }
     // Un golpe que lo aturde le interrumpe el suyo, que vuelve a intentar tras su espera.
     e.attackCooldown = e.strike > 0 ? def.windup : Math.max(e.attackCooldown, def.windup)
     e.strike = 0

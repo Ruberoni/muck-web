@@ -240,10 +240,18 @@ export interface KeepDef {
   max: number
 }
 
-/** A distancia: hasta `range` metros se para `windup` segundos y lanza desde `height` metros, cada `attackInterval`. */
+/**
+ * A distancia: hasta `range` metros se para `windup` segundos (apunta) y lanza `projectile` desde `height` metros a
+ * `speed` m/s hacia donde está el jugador al soltarlo; después queda `recover` segundos quieto, acabando el
+ * lanzamiento. Lanza cada `attackInterval` segundos y, según el enemigo, hasta `jitter` más: no todos a la vez.
+ */
 export interface RangedDef {
   range: number
   height: number
+  projectile: 'spear'
+  speed: number
+  recover: number
+  jitter: number
 }
 
 /** Los ataques especiales de los jefes (los hace la simulación con `onSpecial`, enemies.ts). */
@@ -347,7 +355,7 @@ export interface EnemyDef {
   specials?: SpecialDef[]
 }
 
-export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian' | 'colossus' | 'dog', EnemyDef> = {
+export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'thrower' | 'guardian' | 'colossus' | 'dog' | 'spearGoblin', EnemyDef> = {
   // Herramientas: 7 golpes a mano, 4 de madera, 3 de piedra y 2 de hierro o mithril. Espadas: 5, 3, 2 y 2.
   goblin: {
     name: 'Trasgo',
@@ -581,8 +589,35 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     cost: 1,
     spawn: { fromNight: 2, biomes: { beach: 0.15, meadow: 0.25, forest: 0.12, mountain: 0.05 } },
   },
+  // Al final, por el cable. Un trasgo de cada SPEAR_GOBLIN_SHARE: se queda a 8–14 m y lanza su lanza cada 4–5 s con
+  // una animación lenta que avisa (apunta 0,62 s, el `soltar` de Lanzar, y tarda 0,73 s más en acabarla).
+  spearGoblin: {
+    name: 'Trasgo lancero',
+    verb: 'atacar',
+    hp: 55,
+    speed: 5,
+    radius: 0.55,
+    scale: 1.25,
+    damage: 12,
+    gap: 0.35,
+    reach: 0.7,
+    attackInterval: 4,
+    windup: 0.62,
+    knockback: 6,
+    stagger: 0.3,
+    staggerGap: 0.6,
+    nocturnal: true,
+    ai: 'ranged',
+    weakness: {},
+    loot: [{ item: 'raw_meat', amount: 1 }, { item: 'coin', amount: 1 }],
+    cost: 1,
+    keep: { flee: 8, max: 14 },
+    ranged: { range: 18, height: 1.6, projectile: 'spear', speed: 16, recover: 0.73, jitter: 1 },
+  },
 }
 export type EnemyType = keyof typeof ENEMY_DEFS
+/** De los que salen como trasgos, la parte que son lanceros. */
+export const SPEAR_GOBLIN_SHARE = 1 / 3
 /** Cuántos perros salen juntos cuando sale uno: entre `min` y `max`, sin pasar del tope. */
 export const DOG_PACK = { min: 2, max: 3 }
 /** Los tipos en orden fijo: un `snap` lleva el índice en vez del nombre. */

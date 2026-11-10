@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { PROJECTILE_DEFS, type Projectile, type ProjectileKind } from '../sim/projectiles'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 const SPIN = 7
 const aheadOf = new THREE.Vector3()
@@ -8,6 +9,11 @@ const geometries: Record<ProjectileKind, THREE.BufferGeometry> = {
   rock: new THREE.IcosahedronGeometry(PROJECTILE_DEFS.rock.radius, 0),
   // Una flecha larga, a lo largo de +z (mira hacia donde va).
   arrow: new THREE.CylinderGeometry(0.04, 0.04, 1.3, 5).rotateX(Math.PI / 2),
+  // La lanza del trasgo lancero: un asta larga con punta de piedra, apuntando hacia donde va.
+  spear: mergeGeometries([
+    new THREE.CylinderGeometry(0.035, 0.035, 1.7, 5).rotateX(Math.PI / 2),
+    new THREE.ConeGeometry(0.07, 0.25, 5).rotateX(Math.PI / 2).translate(0, 0, 0.95),
+  ])!,
   // Una esquirla de cristal, alargada.
   shard: new THREE.OctahedronGeometry(PROJECTILE_DEFS.shard.radius, 0).scale(0.7, 0.7, 1.8),
 }
@@ -15,6 +21,7 @@ const geometries: Record<ProjectileKind, THREE.BufferGeometry> = {
 const materials: Record<ProjectileKind, THREE.Material> = {
   rock: new THREE.MeshStandardMaterial({ color: '#8a877c', emissive: '#3a3226', flatShading: true }),
   arrow: new THREE.MeshStandardMaterial({ color: '#c9a66b', emissive: '#5a3a10', flatShading: true }),
+  spear: new THREE.MeshStandardMaterial({ color: '#8a6a44', emissive: '#3a2410', flatShading: true }),
   shard: new THREE.MeshStandardMaterial({ color: '#bfe8ff', emissive: '#3a8fc4', flatShading: true }),
 }
 
@@ -37,8 +44,8 @@ export class ProjectileView {
         this.group.add(mesh)
       }
       mesh.position.set(p.prev.x + (p.pos.x - p.prev.x) * alpha, p.prev.y + (p.pos.y - p.prev.y) * alpha, p.prev.z + (p.pos.z - p.prev.z) * alpha)
-      if (p.kind === 'arrow') {
-        // La flecha no gira: apunta hacia donde va.
+      if (p.kind === 'arrow' || p.kind === 'spear') {
+        // La flecha y la lanza no giran: apuntan hacia donde van.
         aheadOf.set(mesh.position.x + p.pos.x - p.prev.x, mesh.position.y + p.pos.y - p.prev.y, mesh.position.z + p.pos.z - p.prev.z)
         mesh.lookAt(aheadOf)
       } else {

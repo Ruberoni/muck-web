@@ -115,6 +115,7 @@ function look(color: string, glow: string, details: EnemyLook['details'], held?:
 
 const LOOKS: Record<EnemyType, EnemyLook> = {
   goblin: look('#9558bd', '#2b1240', [{ geometry: detailGeometry, material: standard('#3a2348'), castShadow: true }, eyes('#ffe066')]),
+  spearGoblin: look('#6a5ccf', '#1e1846', [{ geometry: detailGeometry, material: standard('#2e2860'), castShadow: true }, eyes('#ffe066')]),
   golem: look('#8a877c', '#1c1b18', [{ geometry: golemDetailGeometry, material: standard('#66635a'), castShadow: true }, eyes('#ffb13b')]),
   giant: look('#b0423a', '#2e0f0c', [{ geometry: detailGeometry, material: standard('#4a1f1c'), castShadow: true }, eyes('#ffe066')]),
   spirit: look('#6e4c2f', '#1e140b', [

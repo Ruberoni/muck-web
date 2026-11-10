@@ -35,7 +35,7 @@ import { Inventory, KEY_ITEMS, type InventoryState, type ItemId } from './invent
 import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, workFactor, type MatchEnd, type MatchResult, type MatchRules } from './match'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
-import { aimedVelocity, Projectiles, type ProjectilesState } from './projectiles'
+import { aimedVelocity, Projectiles, type ProjectileKind, type ProjectilesState } from './projectiles'
 import { Hazards, ticks, type HazardsState } from './hazards'
 import type { SpecialId } from './constants'
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent, type StationOp, type TradeOp } from './playerTick'
@@ -280,7 +280,7 @@ export class Simulation {
       alive: (id) => this.enemies.list.some((e) => e.id === id),
     }, island)
     this.obstacles = [world.grid, this.structures.grid, this.worldEvents.grid]
-    this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage), island, (e, id, target) => this.special(e, id, target))
+    this.enemies = new Enemies(this.obstacles, this.rng, emit, (kind, from, target, damage, speed) => this.launchAt(kind, from, target, damage, speed), island, (e, id, target) => this.special(e, id, target))
     this.pickups = new Pickups(this.obstacles, this.rng, emit, island)
     this.projectiles = new Projectiles(this.obstacles, emit, island)
     this.interaction = new Interaction(world, this.pickups, this.enemies, emit, island)
@@ -565,13 +565,13 @@ export class Simulation {
 
   /** Lanza una roca desde (x, z), a la altura del pecho, hacia el jugador `id`. */
   throwRock(x: number, z: number, id: PlayerId) {
-    this.launchRock({ x, y: this.island.heightAt(x, z) + THROW_HEIGHT, z }, id, ENEMY_DEFS.thrower.damage)
+    this.launchAt('rock', { x, y: this.island.heightAt(x, z) + THROW_HEIGHT, z }, id, ENEMY_DEFS.thrower.damage, ROCK_SPEED)
   }
 
-  /** Una roca hacia donde está ahora el jugador `id`. */
-  private launchRock(from: { x: number; y: number; z: number }, id: PlayerId, damage: number) {
+  /** Lanza `kind` a `speed` m/s hacia donde está ahora el jugador `id`, al pecho. */
+  private launchAt(kind: ProjectileKind, from: { x: number; y: number; z: number }, id: PlayerId, damage: number, speed: number) {
     const { pos } = this.slot(id).player
-    this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, ROCK_SPEED), damage)
+    this.projectiles.launch(this.tick, kind, from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, speed), damage)
   }
 
   /** Un ataque especial de un jefe al acabar su aviso, contra `target` (ver SPECIALS en constants.ts). */

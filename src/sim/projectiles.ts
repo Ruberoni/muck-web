@@ -7,7 +7,7 @@ import { DEFAULT_ISLAND, type Island } from './world/island'
 type Vec3 = { x: number; y: number; z: number }
 
 /** La roca del lanzarrocas, la flecha del trasgo gigante y la esquirla del Coloso. */
-export type ProjectileKind = 'rock' | 'arrow' | 'shard'
+export type ProjectileKind = 'rock' | 'arrow' | 'shard' | 'spear'
 /** Con qué chocó un proyectil; `expired` si se le acabó el tiempo sin tocar nada. */
 export type ProjectileEnd = 'player' | 'obstacle' | 'ground' | 'expired'
 
@@ -15,6 +15,7 @@ export type ProjectileEnd = 'player' | 'obstacle' | 'ground' | 'expired'
 export const PROJECTILE_DEFS: Record<ProjectileKind, { radius: number; life: number }> = {
   rock: { radius: 0.3, life: 5 },
   arrow: { radius: 0.2, life: 3 },
+  spear: { radius: 0.25, life: 3 },
   shard: { radius: 0.25, life: 4 },
 }
 
