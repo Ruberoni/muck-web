@@ -88,7 +88,7 @@ export class Interaction {
 
   private enemyInReach(fighter: Fighter, enemy: EnemyData, slack: number) {
     const { x, z } = enemy.pos
-    return this.inReach(fighter, x, enemyFloor(this.island, x, z) + enemyAimHeight(enemy.type), z, ENEMY_DEFS[enemy.type].radius + slack)
+    return this.inReach(fighter, x, enemyFloor(this.island, x, z) + enemyAimHeight(enemy.type, enemy.look), z, ENEMY_DEFS[enemy.type].radius + slack)
   }
 
   /** Si (x, y, z) está a como mucho REACH + `radius` de los ojos y a menos de 60° de la mirada. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aimRay, createPropHitboxes, enemyHitbox, ENEMY_BODY_LIFT, pickTarget, rayDistance } from './aim'
-import { ENEMY_DEFS, EYE_HEIGHT, REACH } from './constants'
+import { ENEMY_DEFS, EYE_HEIGHT, LOOK_GROWTH, REACH } from './constants'
 import { createPropWorld, TRUNK_BOTTOM_RADIUS, TRUNK_TOP_RADIUS, TRUNK_HEIGHT, type PropPlacement } from './props'
 import { DEFAULT_TERRAIN, enemyFloor } from './world/terrain'
 
@@ -91,6 +91,13 @@ describe('aim', () => {
     enemyHitbox(1, 1, 0, 'goblin', box)
     ENEMY_DEFS.goblin.scale = scale
     expect([box.sx, box.sy, box.sz]).toEqual([2, 2, 2])
+  })
+
+  it('la hitbox crece con la apariencia de su tipo: el trasgo de la Noche Eterna y el perro del tótem', () => {
+    expect(enemyHitbox(0, 0, 0, 'goblin', undefined, undefined, 1).sx).toBeCloseTo(ENEMY_DEFS.goblin.scale * LOOK_GROWTH.goblin![1])
+    expect(enemyHitbox(0, 0, 0, 'dog', undefined, undefined, 1).sx).toBe(ENEMY_DEFS.dog.scale)
+    expect(enemyHitbox(0, 0, 0, 'dog', undefined, undefined, 2).sx).toBeCloseTo(ENEMY_DEFS.dog.scale * LOOK_GROWTH.dog![2])
+    expect(enemyHitbox(0, 0, 0, 'golem', undefined, undefined, 2).sx).toBe(ENEMY_DEFS.golem.scale)
   })
 
   it('desde dentro no se toca', () => {

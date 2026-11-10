@@ -407,6 +407,8 @@ export class Simulation {
     this.enemies.decoy = flying ? { id: PLANE_TARGET, pos: flying, alive: true, radius: flying.radius } : null
     // Con el faro encendido no aparecen mobs comunes en toda la isla.
     this.enemies.calm = this.structures.burning !== undefined
+    // Los que salgan ahora, con la apariencia de la amenaza: la del tótem, la de la Noche Eterna o la de siempre.
+    this.enemies.look = this.threat.state.totem ? 2 : this.threat.state.eternal ? 1 : 0
     // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
     const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))

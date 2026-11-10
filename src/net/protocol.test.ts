@@ -256,6 +256,16 @@ describe('snap en el cable', () => {
     expect(snap).toMatchObject({ enemies: [enemy, boss] })
   })
 
+  it('la apariencia de un mob solo viaja si no es la de siempre, y llega igual', () => {
+    const night: EnemySnap = { ...enemy, look: 1 }
+    const totem: EnemySnap = { ...enemy, id: 10, look: 2 }
+    expect(enemyTuple(night)).toHaveLength(8)
+    const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), enemies: [enemyTuple(enemy), enemyTuple(night), enemyTuple(totem)] }))
+    expect(snap).toMatchObject({ enemies: [enemy, night, totem] })
+    if (snap.type !== 'snap') throw new Error('no es un snap')
+    expect(snap.enemies[0].look).toBeUndefined()
+  })
+
   it('el escudo solo viaja si lo lleva, con si está bloqueando', () => {
     expect(playerTuple(player)).toHaveLength(11)
     const guarded: PlayerSnap = { ...player, shield: 'iron_shield', blocking: true }

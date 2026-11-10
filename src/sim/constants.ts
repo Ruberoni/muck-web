@@ -623,6 +623,20 @@ export const DOG_PACK = { min: 2, max: 3 }
 /** Los tipos en orden fijo: un `snap` lleva el índice en vez del nombre. */
 export const ENEMY_TYPES = Object.keys(ENEMY_DEFS) as EnemyType[]
 
+/**
+ * La apariencia de un mob común, fijada al salir: 0 la de siempre, 1 la de la Noche Eterna y 2 la del tótem activado
+ * (más fuerte). Los jefes y los guardianes, siempre 0.
+ */
+export type MobLook = 0 | 1 | 2
+/** Por cuánto crece cada tipo en cada apariencia (lo demás no crece): lo mismo que `extras.escala` en su modelo. */
+export const LOOK_GROWTH: Partial<Record<EnemyType, readonly [number, number, number]>> = {
+  goblin: [1, 1.3, 1.3],
+  spearGoblin: [1, 1.3, 1.3],
+  dog: [1, 1, 1.2],
+}
+/** La escala de un enemigo de tipo `type` con la apariencia `look`: la de su tipo por lo que crece. */
+export const enemyScale = (type: EnemyType, look: MobLook = 0) => ENEMY_DEFS[type].scale * (LOOK_GROWTH[type]?.[look] ?? 1)
+
 export const ENEMY_SPAWN_INTERVAL = 5
 /** Un jefe cada tantas noches, unos segundos después de anochecer y algo más lejos que el resto. */
 export const BOSS_EVERY = 3

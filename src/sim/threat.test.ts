@@ -198,3 +198,24 @@ describe('las monedas de los mobs', () => {
     expect(ENEMY_DEFS.giant.loot.find((l) => l.item === 'coin')!.amount).toBeGreaterThan(ENEMY_DEFS.goblin.loot.find((l) => l.item === 'coin')!.amount)
   })
 })
+
+describe('la apariencia de los mobs', () => {
+  it('los comunes salen con la de la amenaza y la conservan; los jefes, siempre la de siempre', () => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    sim.step(new Map())
+    expect(sim.enemies.spawnAt(0, 0, 'goblin').look).toBe(0)
+    sim.threat.state.eternal = true
+    sim.step(new Map())
+    const night = sim.enemies.spawnAt(3, 0, 'goblin')
+    expect(night.look).toBe(1)
+    expect(sim.enemies.spawnAt(6, 0, 'giant').look).toBe(0)
+    sim.threat.state.totem = true
+    sim.step(new Map())
+    expect(sim.enemies.spawnAt(9, 0, 'dog').look).toBe(2)
+    expect(night.look).toBe(1)
+    const copy = new Enemies([], mulberry32(1))
+    copy.load(JSON.parse(JSON.stringify(sim.enemies.save())))
+    expect(copy.list.map((e) => e.look)).toEqual(sim.enemies.list.map((e) => e.look))
+  })
+})

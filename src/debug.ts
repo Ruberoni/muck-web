@@ -338,7 +338,7 @@ export function installDebug(game: Game) {
       const p = player()
       const dx = e.pos.x - p.pos.x
       const dz = e.pos.z - p.pos.z
-      const dy = enemyFloor(sim().island, e.pos.x, e.pos.z) + enemyAimHeight(e.type) - (p.pos.y + EYE_HEIGHT)
+      const dy = enemyFloor(sim().island, e.pos.x, e.pos.z) + enemyAimHeight(e.type, e.look) - (p.pos.y + EYE_HEIGHT)
       const yaw = Math.atan2(-dx, -dz)
       const pitch = Math.atan2(dy, Math.hypot(dx, dz))
       // En red solo cambia la mirada, que es del cliente: el objetivo sale del siguiente paso.

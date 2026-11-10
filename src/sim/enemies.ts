@@ -30,6 +30,7 @@ import {
   ENEMY_SPAWN_MAX,
   ENEMY_SPAWN_MIN,
   ENEMY_TYPES,
+  enemyScale,
   PLAYER_RADIUS,
   SHELL_RESIST,
   SPEAR_GOBLIN_SHARE,
@@ -45,6 +46,7 @@ import {
   type GuardDef,
   type HitEfficacy,
   type KeepDef,
+  type MobLook,
   type RangedDef,
   type SpecialDef,
   type SpecialId,
@@ -56,8 +58,8 @@ const SPAWN_ATTEMPTS = 12
 const SPAWN_RAMP = 3
 /** Los jefes, por turnos: el de la noche 3, el de la 6, y vuelta a empezar. */
 const BOSSES: readonly EnemyType[] = ['giant', 'thrower']
-/** Altura del centro del cuerpo de un tipo de enemigo: a donde apunta aimAtEnemy. */
-export const enemyAimHeight = (type: EnemyType) => 0.8 * ENEMY_DEFS[type].scale
+/** Altura del centro del cuerpo de un tipo de enemigo con su apariencia: a donde apunta aimAtEnemy. */
+export const enemyAimHeight = (type: EnemyType, look: MobLook = 0) => 0.8 * enemyScale(type, look)
 /** Distancia entre centros a la que un enemigo de este tipo toca a un jugador. */
 const contactOf = (type: EnemyType) => PLAYER_RADIUS + ENEMY_DEFS[type].radius
 /**
@@ -143,6 +145,8 @@ export interface EnemyData {
   wander: number
   /** Segundos hasta que pega el golpe que ha empezado (`EnemyDef.strike`); 0: no está golpeando. */
   strike: number
+  /** Su apariencia, la de cuando salió (MobLook). */
+  look: MobLook
 }
 
 /** Lanza `kind` desde `from` a `speed` m/s hacia donde está el jugador `target`. */
@@ -199,6 +203,7 @@ const copyEnemy = (e: EnemyData): EnemyData => ({
   // Las partidas guardadas antes de que existieran no los llevan.
   wander: e.wander ?? 0,
   strike: e.strike ?? 0,
+  look: e.look ?? 0,
 })
 
 export const NO_CHARGE: EnemyCharge = { state: 'idle', time: 0, cooldown: 0, dx: 0, dz: 0 }
@@ -275,6 +280,8 @@ export class Enemies {
   decoy: EnemyPrey | null = null
   /** Con el faro encendido no se anuncian mobs comunes nuevos (los ya anunciados salen igual). */
   calm = false
+  /** La apariencia con la que salen los mobs comunes: la pone la simulación según la amenaza. */
+  look: MobLook = 0
   /** Anunciados que aún no han salido: cuentan para el tope. */
   private pending: PendingSpawn[] = []
 
@@ -787,6 +794,7 @@ export class Enemies {
       retarget: 0,
       wander: 0,
       strike: 0,
+      look: isCommon(type) ? this.look : 0,
     }
     this.list.push(e)
     this.emit({ type: 'enemySpawn', id: e.id, enemy: type, x, z })

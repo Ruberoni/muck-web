@@ -547,7 +547,7 @@ export class Room {
     if (events.length) this.broadcast({ type: 'ev', list: events })
     const players = this.playerSnaps()
     const tuples = players.map(playerTuple)
-    const enemies = sim.enemies.list.map((e) => enemyTuple({ id: e.id, type: e.type, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp, maxHp: e.maxHp }))
+    const enemies = sim.enemies.list.map((e) => enemyTuple({ id: e.id, type: e.type, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp, maxHp: e.maxHp, look: e.look }))
     const movingPickups = sim.pickups.list
       .filter((p) => this.movedPickups.has(p.id))
       .map((p) => pickupTuple({ id: p.id, pos: { x: cm(p.pos.x), y: cm(p.pos.y), z: cm(p.pos.z) }, grounded: p.grounded }))

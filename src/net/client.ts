@@ -1,6 +1,6 @@
 import type { Clock } from '../../server/room'
 import type { ActionData, Move } from '../sim/commands'
-import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType } from '../sim/constants'
+import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType, type MobLook } from '../sim/constants'
 import { NO_CHARGE, NO_SPECIAL, type EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
@@ -74,6 +74,7 @@ export interface RemoteEnemy {
   type: EnemyType
   hp: number
   maxHp: number
+  look: MobLook
 }
 
 /** Un objeto del suelo del espejo: se dibuja con sus muestras de `movingPickups` (quieto, en la última). */
@@ -523,7 +524,7 @@ export class NetClient {
     )
     this.enemies.push(
       tick,
-      enemies.map(({ id, type, pos, yaw, hp, maxHp }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { type, hp, maxHp } })),
+      enemies.map(({ id, type, pos, yaw, hp, maxHp, look }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { type, hp, maxHp, look: look ?? 0 } })),
     )
   }
 
@@ -548,6 +549,7 @@ export class NetClient {
       enemy.yaw = pose.yaw
       enemy.hp = data.hp
       enemy.maxHp = data.maxHp
+      enemy.look = data.look
       list.push(enemy)
     }
     if (this.mirrorEnemies.size > list.length) {
@@ -737,6 +739,7 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     // El espejo no decide a quién persigue ni vaga: solo se dibuja y se apunta.
     wander: 0,
     strike: 0,
+    look: 0,
   }
 }
 
