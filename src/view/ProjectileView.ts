@@ -2,20 +2,19 @@ import * as THREE from 'three'
 import { PROJECTILE_DEFS, type Projectile, type ProjectileKind } from '../sim/projectiles'
 
 const SPIN = 7
+const aheadOf = new THREE.Vector3()
 
 const geometries: Record<ProjectileKind, THREE.BufferGeometry> = {
   rock: new THREE.IcosahedronGeometry(PROJECTILE_DEFS.rock.radius, 0),
-  boulder: new THREE.IcosahedronGeometry(PROJECTILE_DEFS.boulder.radius, 0),
-  // Un trasgo hecho una bola, dando vueltas.
-  goblin: new THREE.IcosahedronGeometry(PROJECTILE_DEFS.goblin.radius, 0).scale(1, 1.2, 0.9),
+  // Una flecha larga, a lo largo de +z (mira hacia donde va).
+  arrow: new THREE.CylinderGeometry(0.04, 0.04, 1.3, 5).rotateX(Math.PI / 2),
   // Una esquirla de cristal, alargada.
   shard: new THREE.OctahedronGeometry(PROJECTILE_DEFS.shard.radius, 0).scale(0.7, 0.7, 1.8),
 }
 // Un poco de emisivo para que se vea venir de noche.
 const materials: Record<ProjectileKind, THREE.Material> = {
   rock: new THREE.MeshStandardMaterial({ color: '#8a877c', emissive: '#3a3226', flatShading: true }),
-  boulder: new THREE.MeshStandardMaterial({ color: '#6f6a5e', emissive: '#4a2410', flatShading: true }),
-  goblin: new THREE.MeshStandardMaterial({ color: '#9558bd', emissive: '#2b1240', flatShading: true }),
+  arrow: new THREE.MeshStandardMaterial({ color: '#c9a66b', emissive: '#5a3a10', flatShading: true }),
   shard: new THREE.MeshStandardMaterial({ color: '#bfe8ff', emissive: '#3a8fc4', flatShading: true }),
 }
 
@@ -38,8 +37,14 @@ export class ProjectileView {
         this.group.add(mesh)
       }
       mesh.position.set(p.prev.x + (p.pos.x - p.prev.x) * alpha, p.prev.y + (p.pos.y - p.prev.y) * alpha, p.prev.z + (p.pos.z - p.prev.z) * alpha)
-      mesh.rotation.x += dt * SPIN
-      mesh.rotation.z += dt * SPIN * 0.6
+      if (p.kind === 'arrow') {
+        // La flecha no gira: apunta hacia donde va.
+        aheadOf.set(mesh.position.x + p.pos.x - p.prev.x, mesh.position.y + p.pos.y - p.prev.y, mesh.position.z + p.pos.z - p.prev.z)
+        mesh.lookAt(aheadOf)
+      } else {
+        mesh.rotation.x += dt * SPIN
+        mesh.rotation.z += dt * SPIN * 0.6
+      }
     }
     for (const [id, mesh] of this.models) {
       if (this.seen.has(id)) continue

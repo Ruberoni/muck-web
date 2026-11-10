@@ -84,6 +84,9 @@ export interface EnemySpecial {
   gap: number
   /** Segundos hasta poder repetir cada uno. */
   cooldowns: Partial<Record<SpecialId, number>>
+  /** Con `repeat`: cuántas veces más ataca y en cuántos segundos la próxima. */
+  shots?: number
+  shotTime?: number
 }
 
 export const NO_SPECIAL: EnemySpecial = { id: null, time: 0, recover: false, gap: 0, cooldowns: {} }
@@ -300,7 +303,10 @@ export class Enemies {
       e.prev.z = e.pos.z
       const target = this.decoy && isCommon(e.type) ? this.decoy : this.chooseTarget(e, prey, dt)
       if (!this.chase(e, target, dt) || !target) continue
-      const dealt = isCommon(e.type) ? Math.round(ENEMY_DEFS[e.type].damage * this.scaling.damage) : ENEMY_DEFS[e.type].damage
+      const def = ENEMY_DEFS[e.type]
+      // Si alcanza al final de una embestida, el golpe de la embestida (más fuerte, si tiene).
+      const base = e.charge.state === 'dazed' && def.charge?.damage ? def.charge.damage : def.damage
+      const dealt = isCommon(e.type) ? Math.round(base * this.scaling.damage) : base
       damage.push({ playerId: target.id, damage: dealt, from: { x: e.pos.x, z: e.pos.z } })
     }
     this.separate(prey)
@@ -413,17 +419,30 @@ export class Enemies {
     if (s.id) {
       const def = list.find((d) => d.id === s.id)!
       s.time -= dt
+      // Los demás ataques de una tanda (las flechas del gigante), mientras ya está agotado.
+      if (s.recover && (s.shots ?? 0) > 0) {
+        s.shotTime = (s.shotTime ?? 0) - dt
+        if (s.shotTime <= 1e-9) {
+          s.shots = (s.shots ?? 0) - 1
+          s.shotTime = def.repeat!.every
+          this.onSpecial(e, s.id, prey)
+          this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+        }
+      }
       if (s.time > 1e-9) return true
       if (!s.recover) {
         this.onSpecial(e, s.id, prey)
         this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
         s.recover = true
         s.time = def.recover
+        s.shots = def.repeat ? def.repeat.count - 1 : 0
+        s.shotTime = def.repeat?.every ?? 0
         this.emit({ type: 'enemyCharge', id: e.id, state: 'dazed' })
         return true
       }
       s.id = null
       s.recover = false
+      s.shots = 0
       s.gap = SPECIAL_GAP
       this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
       return false

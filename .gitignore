@@ -4,3 +4,7 @@ dist
 .DS_Store
 .wrangler
 *.zip
+
+# Lo que se descarga para el taller de arte no se sube: solo las carpetas
+arte/muestras/*/*
+!arte/muestras/*/.gitkeep

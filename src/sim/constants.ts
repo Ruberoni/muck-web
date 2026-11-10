@@ -231,6 +231,8 @@ export interface ChargeDef {
   cooldown: number
   /** Segundos que queda aturdido al acabar: quieto, y recibe DAZED_DAMAGE veces el daño. */
   dazed: number
+  /** Daño si alcanza al jugador (sin él, el de su golpe normal): un golpe fuerte al final de la carrera. */
+  damage?: number
 }
 
 /** Por cuánto se multiplica el daño a un jefe aturdido tras embestir. */
@@ -250,9 +252,10 @@ export interface RangedDef {
 /** Los ataques especiales de los jefes (los hace la simulación con `onSpecial`, enemies.ts). */
 export type SpecialId =
   | 'stomp'
-  | 'tossGoblin'
-  | 'rockRain'
-  | 'boulder'
+  | 'arrowVolley'
+  | 'summonGolems'
+  | 'smash'
+  | 'fastRock'
   | 'fireRing'
   | 'lightning'
   | 'burningGround'
@@ -264,7 +267,8 @@ export type SpecialId =
 /**
  * Un ataque especial: a `min`–`max` metros del jugador avisa `windup` segundos (con la pose `look`), ataca y queda
  * `recover` segundos agotado, quieto y recibiendo DAZED_DAMAGE veces el daño: el hueco para golpearlo. Cada uno tiene su
- * espera (`cooldown`) y entre dos cualesquiera pasan al menos SPECIAL_GAP segundos.
+ * espera (`cooldown`) y entre dos cualesquiera pasan al menos SPECIAL_GAP segundos. Con `repeat`, ataca `count` veces,
+ * cada `every` segundos (las demás, ya agotado; `recover` tiene que alcanzar para todas).
  */
 export interface SpecialDef {
   id: SpecialId
@@ -274,6 +278,7 @@ export interface SpecialDef {
   cooldown: number
   recover: number
   look: 'crouch' | 'aim'
+  repeat?: { count: number; every: number }
 }
 
 /** Segundos entre el final de un ataque especial y el principio del siguiente, sea cual sea. */
@@ -431,15 +436,17 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     loot: [{ item: 'raw_meat', amount: 3 }, { item: 'iron_bar', amount: 2 }, { item: 'boss_trophy', amount: 1 }, { item: 'coin', amount: 12 }],
     cost: 8,
     boss: true,
-    charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 5, dazed: 2.5 },
+    // Embestida: corre hacia el jugador y, si lo alcanza, le da un golpe fuerte con la lanza.
+    charge: { min: 5, max: 9, windup: 0.8, speed: 16, time: 0.6, cooldown: 5, dazed: 2.5, damage: 40 },
     specials: [
-      // Pisotón: salta y cae con una onda de 7 m que se esquiva saltando o alejándose.
+      // Pisotón: salta y cae clavando la lanza, con una onda de 7 m que se esquiva saltando o alejándose.
       { id: 'stomp', min: 0, max: 5, windup: 0.8, cooldown: 9, recover: 1.4, look: 'crouch' },
-      // Agarra un trasgo y lo lanza: hace daño al caer, y el trasgo se levanta y pelea.
-      { id: 'tossGoblin', min: 10, max: 24, windup: 0.9, cooldown: 14, recover: 1.1, look: 'aim' },
+      // Tres flechas fuertes con el arco, seguidas y rápidas, cada una hacia donde está el jugador al soltarla.
+      { id: 'arrowVolley', min: 10, max: 26, windup: 0.9, cooldown: 10, recover: 1.2, look: 'aim', repeat: { count: 3, every: 0.3 } },
     ],
   },
-  // Mini-boss a distancia: más lento que andar, para que se le pueda alcanzar, y sus rocas se esquivan.
+  // Mini-boss a distancia, un gólem de roca grande: más lento que andar, para que se le pueda alcanzar, y sus rocas se
+  // esquivan. Llama gólems de piedra; pegado, golpea fuerte; de lejos, tira una roca muy rápida.
   thrower: {
     name: 'Lanzarrocas',
     verb: 'atacar',
@@ -464,10 +471,12 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     boss: true,
     ranged: { flee: 8, max: 14, range: 20, height: 3 },
     specials: [
-      // Lluvia de piedras: cinco marcas alrededor del jugador, que caen a los 1,2 s.
-      { id: 'rockRain', min: 4, max: 22, windup: 1, cooldown: 11, recover: 1.3, look: 'aim' },
-      // Roca gorda: lenta, y estalla en 3 m al caer.
-      { id: 'boulder', min: 6, max: 22, windup: 1.1, cooldown: 13, recover: 1.5, look: 'aim' },
+      // Golpe fuerte: si lo tienes pegado, golpea el suelo delante con los dos puños.
+      { id: 'smash', min: 0, max: 4, windup: 0.7, cooldown: 5, recover: 1.2, look: 'crouch' },
+      // Llama gólems de piedra: salen del suelo a su alrededor (hasta SUMMON_MAX a la vez).
+      { id: 'summonGolems', min: 0, max: 30, windup: 1.2, cooldown: 22, recover: 1.5, look: 'crouch' },
+      // Roca rápida: casi el doble de rápida que las de siempre, y más fuerte.
+      { id: 'fastRock', min: 8, max: 24, windup: 0.6, cooldown: 5, recover: 0.8, look: 'aim' },
     ],
   },
   // Guarda el meteorito de día y de noche, hasta que lo matan. Más lento que andar, y el pico lo rompe antes.

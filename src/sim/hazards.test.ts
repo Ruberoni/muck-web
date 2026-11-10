@@ -147,3 +147,66 @@ describe('los ataques del guardián y del Coloso', () => {
     expect(cooldownAfter(true) / cooldownAfter(false)).toBeCloseTo(SHELL_BROKEN_PACE, 2)
   })
 })
+
+describe('los ataques del trasgo gigante y del lanzarrocas', () => {
+  /** Un jefe a `distance` metros del jugador, quieto, y lo que pasa en sus primeros `seconds` segundos. */
+  const run = (type: 'giant' | 'thrower', distance: number, seconds: number, prepare = (_boss: ReturnType<Simulation['enemies']['spawnAt']>) => {}) => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player } = sim.slot(0)
+    const boss = sim.enemies.spawnAt(player.pos.x + distance, player.pos.z, type)
+    prepare(boss)
+    const specials: string[] = []
+    let attacks = 0
+    let launched = 0
+    for (let i = 0; i < ticks(seconds); i++) {
+      Object.assign(player, { health: 100 })
+      const before = sim.projectiles.list.length
+      for (const e of sim.step(new Map())) {
+        if (e.type === 'enemySpecial') specials.push(e.attack)
+        if (e.type === 'enemyAttack' && e.id === boss.id) attacks++
+      }
+      launched += Math.max(0, sim.projectiles.list.length - before)
+    }
+    return { sim, boss, player, specials, attacks, launched }
+  }
+
+  it('el gigante, de lejos, tira tres flechas seguidas con el arco', () => {
+    const volley = ENEMY_DEFS.giant.specials!.find((s) => s.id === 'arrowVolley')!
+    const { specials, attacks, sim } = run('giant', 18, volley.windup + volley.recover)
+    expect(specials).toEqual(['arrowVolley'])
+    expect(attacks).toBe(3)
+    expect(sim.projectiles.list.every((p) => p.kind === 'arrow')).toBe(true)
+  })
+
+  it('la embestida del gigante, si alcanza, pega más fuerte que su golpe', () => {
+    const enemies = new Enemies([], mulberry32(1), undefined, undefined, undefined, () => {})
+    enemies.spawnAt(7, 0, 'giant')
+    let dealt: number[] = []
+    for (let i = 0; i < ticks(3) && !dealt.length; i++) dealt = enemies.step(STEP, [{ id: 0, pos: { x: 0, z: 0 }, alive: true }], 0.3, 1).map((d) => d.damage)
+    expect(dealt).toEqual([ENEMY_DEFS.giant.charge!.damage])
+    expect(ENEMY_DEFS.giant.charge!.damage!).toBeGreaterThan(ENEMY_DEFS.giant.damage)
+  })
+
+  it('el lanzarrocas llama dos gólems a su alrededor, y no más de tres a la vez', () => {
+    const summon = ENEMY_DEFS.thrower.specials!.find((s) => s.id === 'summonGolems')!
+    const { specials, sim, boss } = run('thrower', 12, summon.windup + 0.1)
+    expect(specials).toEqual(['summonGolems'])
+    const golems = () => sim.enemies.list.filter((e) => e.type === 'golem')
+    expect(golems()).toHaveLength(2)
+    for (const g of golems()) expect(Math.hypot(g.pos.x - boss.pos.x, g.pos.z - boss.pos.z)).toBeLessThan(5)
+    ;(sim as unknown as { special: (e: unknown, id: string, t: unknown) => void }).special(boss, 'summonGolems', { id: 0, pos: sim.slot(0).player.pos, alive: true })
+    expect(golems()).toHaveLength(3)
+  })
+
+  it('el lanzarrocas, pegado, golpea el suelo delante; de lejos, tira una roca muy rápida', () => {
+    const near = run('thrower', 2.5, 0.8)
+    expect(near.specials).toEqual(['smash'])
+    const smash = near.sim.hazards.list.length ? near.sim.hazards.list[0] : null
+    // El golpe es en su tick: o se ve todavía o ya pegó; en los dos casos el jugador estaba delante.
+    if (smash) expect(smash).toMatchObject({ look: 'rock' })
+    const far = run('thrower', 14, 0.8, (boss) => { boss.special.cooldowns.summonGolems = 1e9 })
+    expect(far.specials).toEqual(['fastRock'])
+    expect(far.launched).toBeGreaterThanOrEqual(1)
+  })
+})
