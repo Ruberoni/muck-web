@@ -35,3 +35,13 @@ export function afterLockChange(state: GameState, locked: boolean): GameState | 
   if (locked) return state === 'dead' ? null : 'playing'
   return holdsMouse(state) ? 'paused' : null
 }
+
+/**
+ * Milisegundos que hay que llevar en pausa antes de que Esc pueda reanudar. El Esc que suelta la captura suele
+ * consumirlo el navegador, pero donde sí llega a la página lo hace justo después de pausar: sin este margen la
+ * misma pulsación pausaría y reanudaría a la vez, y Esc dejaría de servir para pausar.
+ */
+export const ESCAPE_RESUME_MS = 400
+
+/** Si Esc debe reanudar: solo en pausa, y una vez pasada la pulsación que la provocó (`pausedForMs`). */
+export const escapeResumes = (state: GameState, pausedForMs: number) => state === 'paused' && pausedForMs >= ESCAPE_RESUME_MS

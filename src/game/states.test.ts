@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptsKeys, afterLockChange, holdsMouse, inGame, showsCrosshair, type GameState } from './states'
+import { acceptsKeys, afterLockChange, ESCAPE_RESUME_MS, escapeResumes, holdsMouse, inGame, showsCrosshair, type GameState } from './states'
 
 const ALL: GameState[] = ['menu', 'playing', 'paused', 'dead', 'spectating', 'inventory']
 const which = (f: (s: GameState) => boolean) => ALL.filter(f)
@@ -29,5 +29,12 @@ describe('estados de Game', () => {
     expect(afterLockChange('playing', false)).toBe('paused')
     expect(afterLockChange('spectating', false)).toBe('paused')
     for (const state of ['inventory', 'dead', 'menu', 'paused'] as const) expect(afterLockChange(state, false)).toBeNull()
+  })
+
+  it('Esc reanuda solo en pausa y solo tras la pulsación que la provocó', () => {
+    for (const state of ALL) expect(escapeResumes(state, ESCAPE_RESUME_MS)).toBe(state === 'paused')
+    expect(escapeResumes('paused', 0)).toBe(false)
+    expect(escapeResumes('paused', ESCAPE_RESUME_MS - 1)).toBe(false)
+    expect(escapeResumes('paused', ESCAPE_RESUME_MS)).toBe(true)
   })
 })

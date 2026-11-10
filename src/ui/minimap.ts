@@ -132,6 +132,13 @@ export class Minimap {
   private size = 0
   private dpr = 1
   private p = { x: 0, y: 0 }
+  /** Radio del mundo que cabe ahora en el mapa: el zoom lo cambia (`setViewRadius`). */
+  private viewRadius = VIEW_RADIUS
+
+  /** Zoom: radio del mundo (en unidades) que cabe entre el centro y el borde. Menor radio, más cerca. */
+  setViewRadius(radius: number) {
+    this.viewRadius = radius
+  }
 
   /** Pinta otra isla (la de una partida nueva). */
   setIsland(island: Island) {
@@ -158,10 +165,10 @@ export class Minimap {
   }
 
   draw(view: MinimapView) {
-    const { ctx, size, p } = this
+    const { ctx, size, p, viewRadius } = this
     if (!size) return
     const c = size / 2
-    const scale = c / VIEW_RADIUS
+    const scale = c / viewRadius
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     ctx.clearRect(0, 0, size, size)
 
@@ -186,7 +193,7 @@ export class Minimap {
     ctx.lineWidth = 1
     for (const e of view.enemies) {
       toMinimap(e.pos.x - view.x, e.pos.z - view.z, view.yaw, p)
-      if (Math.hypot(p.x, p.y) > VIEW_RADIUS) continue
+      if (Math.hypot(p.x, p.y) > viewRadius) continue
       this.dot(c + p.x * scale, c + p.y * scale, (ENEMY_DOT * ENEMY_DEFS[e.type].scale) / ENEMY_DEFS.goblin.scale)
     }
 

@@ -18,8 +18,30 @@ describe('ajustes', () => {
 
   it('se guardan y se vuelven a leer igual', () => {
     const storage = memory()
-    saveSettings({ sensitivity: 1.5, fov: 90, volume: 0.25 }, storage)
-    expect(loadSettings(storage)).toEqual({ sensitivity: 1.5, fov: 90, volume: 0.25 })
+    saveSettings({ ...DEFAULT_SETTINGS, sensitivity: 1.5, fov: 90, volume: 0.25, mapRadius: 50, antialias: false }, storage)
+    expect(loadSettings(storage)).toEqual({ ...DEFAULT_SETTINGS, sensitivity: 1.5, fov: 90, volume: 0.25, mapRadius: 50, antialias: false })
+  })
+
+  it('las teclas se guardan y se vuelven a leer igual', () => {
+    const storage = memory()
+    saveSettings({ ...DEFAULT_SETTINGS, bindings: { ...DEFAULT_SETTINGS.bindings, jump: 'KeyK', sprint: '' } }, storage)
+    expect(loadSettings(storage).bindings).toMatchObject({ jump: 'KeyK', sprint: '' })
+  })
+
+  it('el zoom del minimapa se recorta a su rango', () => {
+    const { min, max } = SETTING_RANGES.mapRadius
+    expect(sanitizeSettings({ mapRadius: 1 }).mapRadius).toBe(min)
+    expect(sanitizeSettings({ mapRadius: 9999 }).mapRadius).toBe(max)
+    expect(sanitizeSettings({ mapRadius: 'lejos' }).mapRadius).toBe(DEFAULT_SETTINGS.mapRadius)
+  })
+
+  it('los interruptores solo los cambia un booleano', () => {
+    expect(sanitizeSettings({ antialias: false }).antialias).toBe(false)
+    expect(sanitizeSettings({ antialias: true }).antialias).toBe(true)
+    // Guardado de una versión anterior, o basura: se queda el valor por defecto.
+    expect(sanitizeSettings({}).antialias).toBe(DEFAULT_SETTINGS.antialias)
+    expect(sanitizeSettings({ antialias: 'sí' }).antialias).toBe(DEFAULT_SETTINGS.antialias)
+    expect(sanitizeSettings({ antialias: null }).antialias).toBe(DEFAULT_SETTINGS.antialias)
   })
 
   it('recorta valores fuera de rango y descarta los que no son números', () => {

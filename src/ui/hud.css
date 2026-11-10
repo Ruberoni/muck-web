@@ -288,7 +288,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(10 20 30 / 0.45);
+  background: rgb(10 20 30 / 0.9);
   pointer-events: auto;
   cursor: default;
 }
@@ -306,7 +306,7 @@
   gap: 8px 24px;
   padding: 16px 20px;
   border-radius: 12px;
-  background: rgb(0 0 0 / 0.5);
+  background: rgb(0 0 0 / 0.9);
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
   overflow: auto;
@@ -404,7 +404,7 @@
 .overlay .panel {
   padding: 24px 32px;
   border-radius: 12px;
-  background: rgb(0 0 0 / 0.45);
+  background: rgb(0 0 0 / 0.9);
   text-align: center;
   /* Ancho fijo: la sala de espera y los avisos cambian de texto y no deben estirar ni encoger el menú. */
   width: min(560px, calc(100vw - 32px));
@@ -461,6 +461,26 @@ kbd {
 
 .setting input { width: 100%; margin: 0; accent-color: #ffd866; cursor: pointer; }
 .setting .value { text-align: right; font-variant-numeric: tabular-nums; }
+.setting .name small { display: block; font-size: 11px; font-weight: 400; opacity: 0.7; }
+.setting.toggle { grid-template-columns: minmax(0, 1fr) auto; }
+.setting.toggle input { width: auto; height: 16px; }
+.setting.keys { grid-template-columns: minmax(0, 1fr) auto; }
+
+.keybind {
+  font: inherit;
+  font-size: 12px;
+  min-width: 8em;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+.keybind:hover { background: rgb(255 255 255 / 0.22); }
+.keybind.waiting { border-color: #ffd866; color: #ffd866; }
+.keybind.reset { min-width: 0; justify-self: start; margin-top: 4px; }
 
 /* --- Multijugador --- */
 

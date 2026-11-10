@@ -1,4 +1,5 @@
-import { DROP_KEY, INVENTORY_KEYS, RECIPES_KEY, type InventoryFocus } from '../game/actions'
+import { type InventoryFocus } from '../game/actions'
+import { binds, bindingLabel, DEFAULT_BINDINGS, type Bindings } from '../game/bindings'
 import type { CraftWorld, Recipe, RecipeId } from '../sim/crafting'
 import { INVENTORY_SIZE, ITEM_NAMES, SLOT_COUNT, type Inventory, type ItemId } from '../sim/inventory'
 import type { Vec3 } from '../sim/player'
@@ -16,13 +17,14 @@ const PURCHASE_ITEMS = Object.keys(PURCHASES) as ItemId[]
 const STATION_SLOT_NAMES: Record<StationSlot, string> = { input: 'Entrada', fuel: 'Combustible', output: 'Salida' }
 const STATION_HINT = 'Clic en una casilla: meter la pila · Clic derecho: meter una · Arrastrar a una ranura · Clic en una ranura: sacarla'
 
-/** Teclas que cierran la pantalla y vuelven a jugar: las que la abren (Tab, E y C). */
-const CLOSE_KEYS: ReadonlySet<string> = new Set([...INVENTORY_KEYS, RECIPES_KEY])
 /** Con la pantalla abierta no hacen nada: no deben pulsar lo que tenga el foco ni llegar al juego. */
 const BLOCKED_KEYS: ReadonlySet<string> = new Set(['Space', 'Enter', 'NumpadEnter'])
 
-const PICK_HINT =
-  'Clic en una casilla y en otra, o arrastrar: intercambiarlas · 1–9 con el ratón encima: a esa casilla de la hotbar · Q: tirar uno · Ctrl + Q: todos · Mayúsculas + clic en un peto o un escudo, o arrastrarlo a su hueco: ponérselo'
+/** La ayuda de la pantalla, nombrando la tecla que se haya asignado para tirar. */
+function pickHint(b: Bindings) {
+  const drop = bindingLabel(b.drop)
+  return `Clic en una casilla y en otra, o arrastrar: intercambiarlas · 1–9 con el ratón encima: a esa casilla de la hotbar · ${drop}: tirar uno · Ctrl + ${drop}: todos · Mayúsculas + clic en un peto o un escudo, o arrastrarlo a su hueco: ponérselo`
+}
 
 /** La casilla de la hotbar que nombra una tecla (1–9), o null si no es una de ellas. */
 export function hotbarSlotOf(code: string): number | null {
@@ -77,6 +79,8 @@ export class InventoryScreen {
   onstation: ((action: Extract<ActionData, { kind: 'station' }>) => void) | null = null
   onequip: ((action: Extract<ActionData, { kind: 'equip' | 'unequip' }>) => void) | null = null
   onshop: ((action: Extract<ActionData, { kind: 'shop' }>) => void) | null = null
+  /** Teclas asignadas: de aquí salen las que cierran la pantalla, la que tira y la que nombra la ayuda. */
+  private bindings: Bindings = { ...DEFAULT_BINDINGS }
   private root: HTMLElement
   private slots: SlotView[] = []
   private recipes: RecipeView[] = []
@@ -239,6 +243,12 @@ export class InventoryScreen {
 
   get open(): boolean {
     return !this.root.hidden
+  }
+
+  /** Cambia las teclas (desde los ajustes) y repinta la ayuda si la pantalla está abierta. */
+  setBindings(bindings: Bindings) {
+    this.bindings = bindings
+    if (this.open) this.render()
   }
 
   setOpen(open: boolean) {
@@ -411,8 +421,10 @@ export class InventoryScreen {
   }
 
   private onKey = (e: KeyboardEvent) => {
-    if (CLOSE_KEYS.has(e.code)) {
-      // Tab movería el foco. Mantener la tecla no cierra y abre: la autorrepetición no cuenta.
+    const b = this.bindings
+    // Cierran la pantalla las teclas que la abren. Tab movería el foco. Mantener la tecla no cierra y abre: la
+    // autorrepetición no cuenta.
+    if (binds(b.inventory, e.code) || binds(b.recipes, e.code)) {
       e.preventDefault()
       if (!e.repeat) this.onclose?.()
     } else if (e.code === 'Escape') {
@@ -423,7 +435,7 @@ export class InventoryScreen {
       if (e.repeat || from === null) return
       this.picked = null
       this.move(from, hotbarSlotOf(e.code)!)
-    } else if (e.code === DROP_KEY) {
+    } else if (binds(b.drop, e.code)) {
       const slot = this.hovered
       if (e.repeat || slot === null || !this.inventory?.slots[slot]) return
       e.preventDefault()
@@ -431,7 +443,7 @@ export class InventoryScreen {
       this.picked = null
       this.ondrop?.(slot, e.ctrlKey)
       this.render()
-    } else if (BLOCKED_KEYS.has(e.code)) {
+    } else if (BLOCKED_KEYS.has(e.code) || binds(b.jump, e.code)) {
       e.preventDefault()
     }
   }
@@ -475,6 +487,6 @@ export class InventoryScreen {
     }
     const picked = this.picked === null ? undefined : inventory.slots[this.picked]
     this.label.textContent =
-      picked === undefined ? (this.station ? STATION_HINT : PICK_HINT) : `${picked ? ITEM_NAMES[picked] : 'Casilla vacía'}: clic en otra casilla para intercambiarlas`
+      picked === undefined ? (this.station ? STATION_HINT : pickHint(this.bindings)) : `${picked ? ITEM_NAMES[picked] : 'Casilla vacía'}: clic en otra casilla para intercambiarlas`
   }
 }

@@ -5,7 +5,8 @@ import { createTerrain, createWater } from './world/terrain'
 
 const SUN_DISTANCE = 150
 const SHADOW_HALF = 60
-const SHADOW_MAP_SIZE = 2048
+/** Texel de unos 12 cm: suficiente para low-poly y 4 veces menos relleno que 2048. */
+const SHADOW_MAP_SIZE = 1024
 const TEXEL = (SHADOW_HALF * 2) / SHADOW_MAP_SIZE
 
 // Orientación de la cámara de sombras (mira en -lightDir con up +Y, igual que la que crea three).

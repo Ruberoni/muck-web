@@ -44,9 +44,10 @@ import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { CameraShake } from './shake'
 import { Input, RIGHT_CLICK } from './input'
-import { holdsFood, stepActions, USE_KEY, type InventoryFocus } from './actions'
-import { acceptsKeys, afterLockChange, inGame, showsCrosshair, type GameState } from './states'
-import { loadSettings, saveSettings, type Settings } from './settings'
+import { holdsFood, stepActions, type InventoryFocus } from './actions'
+import { anyOf } from './bindings'
+import { acceptsKeys, afterLockChange, escapeResumes, inGame, showsCrosshair, type GameState } from './states'
+import { loadSettings, saveSettings, SETTING_RANGES, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput, type Vec3 } from '../sim/player'
 import type { PlayerSlot, Simulation } from '../sim/Simulation'
 import { LocalSession, type Session } from '../net/session'
@@ -180,6 +181,8 @@ export class Game {
   private worldVersion = -1
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
   private retrying = false
+  /** `performance.now()` al entrar en pausa: Esc no reanuda hasta pasarse la pulsación que la provocó. */
+  private pausedAt = 0
   /** La estación cuyas ranuras enseña la pantalla de inventario (null: las recetas). */
   private openStationId: number | null = null
   private projected = new THREE.Vector3()
@@ -195,7 +198,9 @@ export class Game {
   private matchPhase: MatchInfo['phase'] | null = null
 
   constructor(container: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true })
+    // El MSAA es un atributo del contexto WebGL y no se puede cambiar con él ya creado: por eso el ajuste del
+    // panel se guarda y se aplica al recargar la página, no al momento.
+    this.renderer = new THREE.WebGLRenderer({ antialias: this.settings.antialias })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(window.innerWidth, window.innerHeight)
     this.renderer.shadowMap.enabled = true
@@ -227,6 +232,7 @@ export class Game {
     this.lookFromPlayer()
 
     this.hud = new Hud(container, () => this.onOverlayClick())
+    this.hud.minimap.setViewRadius(this.settings.mapRadius)
     this.hud.net.onsay = (text) => this.net?.client.say(text)
     this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
     this.hud.inventory.ondrop = (slot, all) => this.queueAction({ kind: 'drop', slot, all })
@@ -248,6 +254,7 @@ export class Game {
       (settings, key) => {
         saveSettings(settings)
         if (key === 'volume') this.sound.play('pickup')
+        if (key === 'bindings') this.applyBindings()
       },
     )
 
@@ -261,7 +268,8 @@ export class Game {
         // Muerto con un jugador el overlay necesita el ratón suelto para su clic.
         else if (locked) document.exitPointerLock()
       },
-    })
+    }, this.settings.bindings)
+    this.applyBindings()
     // Con el inventario abierto el ratón ya está suelto: ocultar la pestaña o cambiar de ventana no cambiaría el
     // estado, y en red se seguiría en partida y al volver se re-simularían de golpe todos los ticks perdidos.
     const leave = () => {
@@ -270,6 +278,22 @@ export class Game {
     window.addEventListener('blur', leave)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) leave()
+    })
+
+    // Esc también reanuda, además del clic en el overlay. Va antes que el listener de la pantalla de inventario
+    // (que se engancha al abrirse), así que desde allí Esc pausa y no reanuda en la misma pulsación. Si el
+    // navegador aún no deja recapturar, `play()` enseña el overlay de reintento, igual que con un clic.
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Escape' || e.repeat) return
+      if (escapeResumes(this.state, performance.now() - this.pausedAt)) void this.play()
+    })
+
+    // Zoom del minimapa con + y −. Fuera del cauce de las pulsaciones de `Input` (que alimenta los pasos fijos de
+    // la simulación): el zoom es de la vista, y así también responde con el inventario abierto.
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat || !inGame(this.state) || types(e.target)) return
+      const step = e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : e.code === 'Minus' || e.code === 'NumpadSubtract' ? -1 : 0
+      if (step) this.zoomMap(step)
     })
 
     window.addEventListener('resize', () => {
@@ -346,6 +370,7 @@ export class Game {
     // siguen conectados.
     if (inGame(state)) this.net?.wake()
     else this.net?.suspend()
+    if (state === 'paused') this.pausedAt = performance.now()
     this.state = state
     this.hud.inventory.setOpen(state === 'inventory')
     if (state !== 'inventory') this.openStationId = null
@@ -411,9 +436,29 @@ export class Game {
   applySettings() {
     this.camera.fov = this.settings.fov
     this.camera.updateProjectionMatrix()
+    this.hud.minimap.setViewRadius(this.settings.mapRadius)
     // Mover un deslizador es un gesto del usuario: basta para poder sonar.
     this.sound.unlock()
     this.sound.setVolume(this.settings.volume)
+  }
+
+  /**
+   * Reparte las teclas asignadas entre quienes las leen. Va aparte de `applySettings`: cambiarlas olvida lo que se
+   * mantiene pulsado, y no debe pasar en cada paso de un deslizador.
+   */
+  applyBindings() {
+    this.input.setBindings(this.settings.bindings)
+    this.hud.inventory.setBindings(this.settings.bindings)
+  }
+
+  /** Zoom del minimapa: +1 acerca (cabe menos mundo en el mapa), −1 aleja. Se guarda con los demás ajustes. */
+  private zoomMap(direction: 1 | -1) {
+    const { min, max, step } = SETTING_RANGES.mapRadius
+    const radius = Math.min(max, Math.max(min, this.settings.mapRadius - direction * step))
+    if (radius === this.settings.mapRadius) return
+    this.settings.mapRadius = radius
+    saveSettings(this.settings)
+    this.hud.minimap.setViewRadius(radius)
   }
 
   /**
@@ -608,14 +653,16 @@ export class Game {
         clickSwings: this.attackOverride === null,
         usable,
         shield,
+        bindings: this.settings.bindings,
       })
       // El chat no se abre a la vez que el inventario.
       if (!openInventory) this.chatKey(presses)
       const attack = this.attackOverride ?? this.input.attackHeld
-      const use = usable && (this.useOverride ?? this.input.isDown(USE_KEY))
+      const use = usable && (this.useOverride ?? this.input.isBindingDown(this.settings.bindings.use))
       events = this.session.step({ buttons: inputButtons(input, attack, use), yaw, pitch }, sendable(actions))
       if (openInventory) {
-        // Con Tab o E junto a una fogata, un horno o un destilador se ven sus ranuras (C abre las recetas).
+        // Con la tecla del inventario junto a una fogata, un horno o un destilador se ven sus ranuras (la de
+        // recetas abre las recetas).
         const station = openInventory === 'slots' ? nearestProcessor(this.sim.structures.list, player.pos, CLIENT_STATION_RANGE) : null
         this.openInventory(openInventory)
         if ((this.state as string) === 'inventory') this.openStationId = station?.id ?? null
@@ -628,13 +675,13 @@ export class Game {
     this.present(events)
   }
 
-  /** Muerto en una sala: quieto y sin acciones (el `Move` sirve de keepalive); Tab cambia a quién se mira. */
+  /** Muerto en una sala: quieto y sin acciones (el `Move` sirve de keepalive); la tecla del inventario cambia a quién se mira. */
   private spectatorStep() {
     const presses = this.input.takePresses()
     this.input.takeWheel()
     this.queued.length = 0
     this.chatKey(presses)
-    if (presses.has('Tab')) this.spectateNext()
+    if (anyOf(presses, this.settings.bindings.inventory)) this.spectateNext()
     const { yaw, pitch } = this.look
     // En solitario lo que pasa en el mundo llega aquí (en una sala, con `render`).
     this.present(this.session.step({ buttons: 0, yaw, pitch }, []))
@@ -1165,4 +1212,9 @@ function noticeText(notice: Exclude<Notice, { type: 'chat' }>): string {
     case 'islandReset':
       return 'La isla se ha reiniciado por una actualización'
   }
+}
+
+/** Si el foco está en un campo de texto (el chat, el código de una sala): esas teclas son suyas, no del juego. */
+function types(target: EventTarget | null) {
+  return target instanceof HTMLElement && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
 }

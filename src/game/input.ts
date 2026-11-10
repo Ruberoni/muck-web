@@ -1,9 +1,9 @@
 import { MOUSE_SPIKE_LIMIT, WHEEL_GESTURE_GAP_MS, WHEEL_LINE_PX, WHEEL_STEP_PX } from '../sim/constants'
 import type { PlayerInput } from '../sim/player'
+import { anyOf, binds, CLICK, DEFAULT_BINDINGS, RIGHT_CLICK, type Bindings } from './bindings'
 
-/** Códigos de pulsación única del clic izquierdo y derecho (no son e.code reales). */
-export const CLICK = 'Mouse0'
-export const RIGHT_CLICK = 'Mouse2'
+// Los pseudo-códigos del ratón viven en `bindings.ts`, que no importa de aquí; se reexportan para quien ya los usa.
+export { CLICK, RIGHT_CLICK }
 /** Una tecla pulsada con Ctrl cuenta además como esta pulsación (tampoco es un e.code real): `withCtrl('KeyQ')`. */
 export const withCtrl = (code: string) => `Ctrl+${code}`
 
@@ -46,7 +46,7 @@ interface InputCallbacks {
   keepsKeys?(): boolean
 }
 
-/** Teclado (por e.code), ratón y pointer lock. */
+/** Teclado (por e.code), ratón y pointer lock. Las teclas de cada acción son las de `bindings`. */
 export class Input {
   private keys = new Set<string>()
   private presses = new Set<string>()
@@ -56,18 +56,19 @@ export class Input {
   private rawMouse = false
   private wheel = 0
   private stepper = new WheelStepper()
-  attackHeld = false
-  /** El clic derecho mantenido: bloquea si hay escudo (lo decide Game). */
-  blockHeld = false
+  private bindings: Bindings
   locked = false
 
   constructor(
     private element: HTMLElement,
     private callbacks: InputCallbacks,
+    bindings: Bindings = DEFAULT_BINDINGS,
   ) {
+    this.bindings = bindings
     window.addEventListener('keydown', (e) => {
-      // Tab cambia a quién mira el espectador: con el ratón capturado no debe mover el foco.
-      if (e.code === 'Space' || (e.code === 'Tab' && this.locked)) e.preventDefault()
+      // Saltar no debe desplazar la página, y con el ratón capturado la tecla del inventario no debe mover el foco
+      // (Tab cambia a quién mira el espectador). Se mira lo asignado, no unas teclas fijas.
+      if (binds(this.bindings.jump, e.code) || (this.locked && binds(this.bindings.inventory, e.code))) e.preventDefault()
       this.keys.add(e.code)
       if (e.repeat) return
       this.press(e.code)
@@ -87,15 +88,16 @@ export class Input {
       this.dx += e.movementX
       this.dy += e.movementY
     })
-    // El clic que inicia o reanuda llega con el juego aún en menú/pausa, así que no cuenta como golpe.
+    // El clic que inicia o reanuda llega con el juego aún en menú/pausa, así que no cuenta como golpe. El botón
+    // mantenido entra en `keys` con su pseudo-código: así golpear y bloquear se asignan igual que una tecla.
     document.addEventListener('mousedown', (e) => {
       if (!this.callbacks.isPlaying()) return
       if (e.button === 2) {
-        this.blockHeld = true
+        this.keys.add(RIGHT_CLICK)
         return this.press(RIGHT_CLICK)
       }
       if (e.button !== 0) return
-      this.attackHeld = true
+      this.keys.add(CLICK)
       this.press(CLICK)
     })
     // Con el ratón capturado el clic derecho es del juego, no del menú contextual.
@@ -103,8 +105,8 @@ export class Input {
       if (this.locked) e.preventDefault()
     })
     document.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.attackHeld = false
-      if (e.button === 2) this.blockHeld = false
+      if (e.button === 0) this.keys.delete(CLICK)
+      if (e.button === 2) this.keys.delete(RIGHT_CLICK)
     })
 
     // Solo con el ratón capturado: en menús y pausa la rueda sigue desplazando la página.
@@ -184,17 +186,33 @@ export class Input {
     return this.keys.has(code)
   }
 
+  /** Si se mantiene alguna de las teclas asignadas a una acción. */
+  isBindingDown(binding: string) {
+    return anyOf(this.keys, binding)
+  }
+
   state(): PlayerInput {
-    const k = this.keys
+    const { keys: k, bindings: b } = this
     return {
-      forward: k.has('KeyW'),
-      back: k.has('KeyS'),
-      left: k.has('KeyA'),
-      right: k.has('KeyD'),
-      sprint: k.has('ShiftLeft') || k.has('ShiftRight'),
-      jump: k.has('Space'),
-      block: this.blockHeld,
+      forward: anyOf(k, b.forward),
+      back: anyOf(k, b.back),
+      left: anyOf(k, b.left),
+      right: anyOf(k, b.right),
+      sprint: anyOf(k, b.sprint),
+      jump: anyOf(k, b.jump),
+      block: this.callbacks.isPlaying() && anyOf(k, b.block),
     }
+  }
+
+  /** Si se mantiene lo asignado a golpear. Solo en partida, como siempre lo estuvo el clic. */
+  get attackHeld() {
+    return this.callbacks.isPlaying() && anyOf(this.keys, this.bindings.attack)
+  }
+
+  /** Cambia las teclas asignadas (desde los ajustes) y olvida lo pulsado: lo que se soltó puede ser otra tecla. */
+  setBindings(bindings: Bindings) {
+    this.bindings = bindings
+    this.clear()
   }
 
   clear() {
@@ -207,8 +225,9 @@ export class Input {
     this.presses.clear()
     this.wheel = 0
     this.stepper.reset()
-    this.attackHeld = false
-    this.blockHeld = false
+    // La captura se puede perder con el botón pulsado, y entonces no llega su `mouseup`.
+    this.keys.delete(CLICK)
+    this.keys.delete(RIGHT_CLICK)
     this.dx = this.dy = 0
   }
 }
