@@ -33,6 +33,8 @@ export const ICONS: Record<ItemId, string> = {
   iron_pickaxe: pickaxe('#dfe3e8', '#9aa3ad'),
   mithril_axe: axe('#8fd0f2', '#4f9cc8'),
   mithril_pickaxe: pickaxe('#8fd0f2', '#4f9cc8'),
+  meteor_axe: axe('#ff8a3b', '#c8400f'),
+  meteor_pickaxe: pickaxe('#ff8a3b', '#c8400f'),
   wood_sword: sword('#d9a86a', '#b07b45'),
   stone_sword: sword('#b8b5a8', '#7c796e'),
   iron_sword: sword('#dfe3e8', '#9aa3ad'),

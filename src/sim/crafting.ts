@@ -28,6 +28,8 @@ export type RecipeId =
   | 'stone_sword'
   | 'iron_sword'
   | 'mithril_sword'
+  | 'meteor_axe'
+  | 'meteor_pickaxe'
   | 'meteor_sword'
   | 'wood_shield'
   | 'iron_shield'
@@ -64,6 +66,9 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'mithril_axe', result: 'mithril_axe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_pickaxe', result: 'mithril_pickaxe', cost: [{ item: 'mithril_bar', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'mithril_sword', result: 'mithril_sword', cost: [{ item: 'mithril_bar', amount: 2 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
+  // Las herramientas más caras del juego: además de los fragmentos, piden hierro, mithril y las dos maderas.
+  { id: 'meteor_axe', result: 'meteor_axe', cost: [{ item: 'meteor_fragment', amount: 3 }, { item: 'dark_wood', amount: 2 }, { item: 'birch_wood', amount: 2 }, { item: 'iron_bar', amount: 3 }, { item: 'mithril_bar', amount: 2 }], station: 'anvil' },
+  { id: 'meteor_pickaxe', result: 'meteor_pickaxe', cost: [{ item: 'meteor_fragment', amount: 4 }, { item: 'dark_wood', amount: 2 }, { item: 'birch_wood', amount: 2 }, { item: 'iron_bar', amount: 3 }, { item: 'mithril_bar', amount: 2 }], station: 'anvil' },
   { id: 'meteor_sword', result: 'meteor_sword', cost: [{ item: 'meteor_fragment', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'iron_shield', result: 'iron_shield', cost: [{ item: 'iron_bar', amount: 4 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
   { id: 'crystal_shield', result: 'crystal_shield', cost: [{ item: 'crystal', amount: 4 }, { item: 'iron_bar', amount: 2 }], station: 'anvil' },

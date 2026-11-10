@@ -67,10 +67,12 @@ describe('niveles: daño contra props', () => {
     ['stone_axe', 4, 4, 0, 0, 0, 0, 1],
     ['iron_axe', 6, 6, 6, 0, 0, 0, 1],
     ['mithril_axe', 12, 12, 12, 0, 0, 0, 1],
+    ['meteor_axe', 16, 16, 16, 0, 0, 0, 1],
     ['wood_pickaxe', 1, 0, 0, 2, 0, 0, 1],
     ['stone_pickaxe', 1, 0, 0, 4, 4, 0, 1],
     ['iron_pickaxe', 1, 0, 0, 6, 6, 6, 1],
     ['mithril_pickaxe', 1, 0, 0, 12, 12, 12, 1],
+    ['meteor_pickaxe', 1, 0, 0, 24, 24, 24, 1],
     // Las espadas no talan ni pican: como la mano.
     ['wood_sword', 1, 0, 0, 0, 0, 0, 1],
     ['stone_sword', 1, 0, 0, 0, 0, 0, 1],
@@ -102,6 +104,8 @@ describe('niveles: daño contra props', () => {
     ['stone_pickaxe', 'iron_ore', 15, 'mithril_pickaxe', 5],
     ['iron_axe', 'darkpine', 12, 'mithril_axe', 6],
     ['iron_pickaxe', 'mithril_ore', 16, 'mithril_pickaxe', 8],
+    ['mithril_axe', 'darkpine', 6, 'meteor_axe', 5],
+    ['mithril_pickaxe', 'coal_ore', 2, 'meteor_pickaxe', 1],
   ] as const)('%s rompe un %s en %i golpes y %s en %i: mejorar la herramienta es ganar tiempo', (worst, kind, slow, best, fast) => {
     expect(hits(worst, kind)).toBe(slow)
     expect(hits(best, kind)).toBe(fast)
@@ -186,5 +190,7 @@ describe('niveles: daño contra props', () => {
     expect(attackDamage('iron_pickaxe', 'goblin')).toBe(40)
     expect(attackDamage('mithril_axe', 'goblin')).toBe(60)
     expect(attackDamage('mithril_pickaxe', 'goblin')).toBe(60)
+    expect(attackDamage('meteor_axe', 'goblin')).toBe(80)
+    expect(attackDamage('meteor_pickaxe', 'goblin')).toBe(80)
   })
 })

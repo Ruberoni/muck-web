@@ -35,6 +35,8 @@ describe('recetas en la pantalla de inventario', () => {
         'mithril_axe',
         'mithril_pickaxe',
         'mithril_sword',
+        'meteor_axe',
+        'meteor_pickaxe',
         'meteor_sword',
         'iron_shield',
         'crystal_shield',

@@ -200,10 +200,15 @@ export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
   iron_axe: { family: 'axe', tier: 3, damage: 6, attack: 40 },
   // El mithril no abre nada de nivel 4: da velocidad (abedul y mena de hierro de un golpe) y ataque.
   mithril_axe: { family: 'axe', tier: 4, damage: 12, attack: 60 },
+  // Un tercio más que el mithril (×4/3), como el ataque de las dos. Tampoco abren nada: son pura velocidad.
+  meteor_axe: { family: 'axe', tier: 5, damage: 16, attack: 80 },
   wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 20 },
   stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 30 },
   iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 40 },
   mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 12, attack: 60 },
+  // El doble que el mithril, no ×4/3: con 16 la roca y la mena de carbón seguirían en 2 golpes, los mismos que con
+  // el de mithril, y tiers.test.ts exige que cada nivel rompa más deprisa lo que el anterior no rompía de un golpe.
+  meteor_pickaxe: { family: 'pickaxe', tier: 5, damage: 24, attack: 80 },
   // Algo menos de daño que una herramienta de su nivel, pero más cadencia y golpe en arco: las armas para pelear.
   wood_sword: { family: 'sword', tier: 1, damage: 1, attack: 16, cooldown: SWORD_COOLDOWN },
   stone_sword: { family: 'sword', tier: 2, damage: 1, attack: 25, cooldown: SWORD_COOLDOWN },

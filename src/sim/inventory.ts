@@ -31,6 +31,8 @@ export type ItemId =
   | 'iron_sword'
   | 'mithril_sword'
   | 'meteor_fragment'
+  | 'meteor_axe'
+  | 'meteor_pickaxe'
   | 'meteor_sword'
   | 'distiller'
   | 'oil'
@@ -84,6 +86,8 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   iron_sword: 'Espada de hierro',
   mithril_sword: 'Espada de mithril',
   meteor_fragment: 'Fragmento de meteorito',
+  meteor_axe: 'Hacha de meteorito',
+  meteor_pickaxe: 'Pico de meteorito',
   meteor_sword: 'Espada de meteorito',
   distiller: 'Destilador',
   oil: 'Aceite',
@@ -145,6 +149,8 @@ export const GROUND_TIME: Record<ItemId, number | null> = {
   iron_sword: GEAR,
   mithril_sword: GEAR,
   meteor_fragment: null,
+  meteor_axe: GEAR,
+  meteor_pickaxe: GEAR,
   meteor_sword: GEAR,
   distiller: GEAR,
   oil: MATERIAL,

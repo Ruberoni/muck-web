@@ -67,6 +67,8 @@ Las recetas están en la pantalla de inventario (**C** la abre directamente en e
 | yunque | hacha, pico o espada de hierro | 3 lingotes de hierro + 2 madera de abedul |
 | yunque | hacha o pico de mithril | 3 lingotes de mithril + 2 madera oscura |
 | yunque | espada de mithril | 2 lingotes de mithril + 2 madera oscura |
+| yunque | hacha de meteorito | 3 fragmentos de meteorito + 2 madera oscura + 2 madera de abedul + 3 lingotes de hierro + 2 lingotes de mithril |
+| yunque | pico de meteorito | 4 fragmentos de meteorito + 2 madera oscura + 2 madera de abedul + 3 lingotes de hierro + 2 lingotes de mithril |
 | yunque | espada de meteorito | 3 fragmentos de meteorito + 2 madera oscura |
 | yunque | escudo de hierro | 4 lingotes de hierro + 2 madera de abedul |
 | yunque | escudo de cristal | 4 cristales + 2 lingotes de hierro |
@@ -85,7 +87,7 @@ Fundir, cocinar y destilar no son recetas: se hacen en las ranuras de la estaci�
 | fogata | 4 bayas | 1 infusión de bayas | 15 s |
 | destilador | 1 carne cruda | 1 aceite | 60 s |
 
-Las herramientas de hierro hacen 6 de daño a lo de su familia y son las que abren el pino oscuro y la mena de mithril. Las de mithril, las mejores, hacen 12: nada pide mithril, pero tumban abedules y menas de hierro de un golpe, y pinos oscuros y menas de mithril de dos.
+Las herramientas de hierro hacen 6 de daño a lo de su familia y son las que abren el pino oscuro y la mena de mithril. Las de mithril hacen 12: nada pide mithril, y con ellas un abedul cae en 4 golpes, una mena de hierro en 5, un pino oscuro en 6 y una mena de mithril en 8. Las de meteorito son las mejores y las más caras, y tampoco abren nada nuevo: el hacha hace 16 (el árbol de un golpe, el abedul de 3 y el pino oscuro de 5) y el pico 24 (la roca y la mena de carbón de un golpe, la mena de hierro de 3, la de cristal de 3 y la de mithril de 4).
 
 Las espadas son las armas para pelear: no talan ni pican, golpean cada 0,25 s (las herramientas, cada 0,4 s), y cada golpe alcanza además a los enemigos de delante, hasta 4, aunque vaya al aire. Por golpe hacen algo menos que una herramienta de su nivel:
 
@@ -96,7 +98,7 @@ Las espadas son las armas para pelear: no talan ni pican, golpean cada 0,25 s (l
 | piedra | 30 | 25 |
 | hierro | 40 | 35 |
 | mithril | 60 | 50 |
-| meteorito | — | 65 |
+| meteorito | 80 | 65 |
 
 ## Estaciones
 
@@ -241,7 +243,7 @@ Lo que sube de precio sube para todos en la sala y se guarda con la partida. Se 
 
 Desde el día 2 cae un meteorito al día, a media mañana o a mediodía, a la hora que toque en cada partida; en la Noche Eterna, con cada campana. Se anuncia 6 s antes con una bola de fuego en el cielo, un silbido, el aviso "¡Cae un meteorito al norte!" (según dónde estés) y una marca roja en el suelo. Cae en hierba libre, entre 40 y 70 m de un jugador vivo, y quien esté a menos de 4 m recibe 20 de daño. Deja un cráter y una roca que no se puede atravesar, con su rombo en el minimapa, y junto a ella aparece su guardián. Mientras viva, la roca sigue al rojo y no cae otro; al morir, la roca se enfría y desaparece al amanecer siguiente. Los decide `src/sim/worldEvents.ts`, y en red el cliente sigue sus eventos.
 
-El **Guardián del meteorito** tiene 1.500 de vida por cada jugador en el mundo y armadura 10, hace 15 de daño, es más lento que andar y no se aturde. El pico le hace ×1,5. Se queda quieto junto al cráter hasta que un jugador vivo se acerca a 15 m; entonces lo persigue mientras no se aleje más de 25 m de su sitio, y si se aleja vuelve a él sin curarse. Sigue ahí de día y de noche hasta que lo matan, y suelta 3 fragmentos de meteorito por jugador. Con 3 fragmentos y 2 de madera oscura, en el yunque, se hace la espada de meteorito: 65 de ataque y un golpe cada 0,22 s, la mejor espada del juego.
+El **Guardián del meteorito** tiene 1.500 de vida por cada jugador en el mundo y armadura 10, hace 15 de daño, es más lento que andar y no se aturde. El pico le hace ×1,5. Se queda quieto junto al cráter hasta que un jugador vivo se acerca a 15 m; entonces lo persigue mientras no se aleje más de 25 m de su sitio, y si se aleja vuelve a él sin curarse. Sigue ahí de día y de noche hasta que lo matan, y suelta 3 fragmentos de meteorito por jugador. Con 3 fragmentos y 2 de madera oscura, en el yunque, se hace la espada de meteorito: 65 de ataque y un golpe cada 0,22 s, la mejor espada del juego. Con 3 fragmentos el hacha y 4 el pico, más 2 de madera oscura, 2 de abedul, 3 lingotes de hierro y 2 de mithril cada una, se hacen las herramientas de meteorito (16 y 24 de daño, 80 de ataque): las mejores del juego y tan caras que el equipo de meteorito completo pide diez fragmentos por jugador, cuatro guardianes.
 
 ## Despliegue
 

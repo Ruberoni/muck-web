@@ -349,6 +349,8 @@ export function itemModel(item: ItemId): THREE.Group {
       return axe(ironHead)
     case 'mithril_axe':
       return axe(mithrilHead)
+    case 'meteor_axe':
+      return axe(meteorHead)
     case 'wood_pickaxe':
       return pickaxe(woodHead)
     case 'stone_pickaxe':
@@ -357,6 +359,8 @@ export function itemModel(item: ItemId): THREE.Group {
       return pickaxe(ironHead)
     case 'mithril_pickaxe':
       return pickaxe(mithrilHead)
+    case 'meteor_pickaxe':
+      return pickaxe(meteorHead)
     case 'wood_sword':
       return sword(woodHead)
     case 'stone_sword':

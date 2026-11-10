@@ -107,6 +107,17 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     expect(need.dark_wood).toBeLessThanOrEqual(supply().dark_wood!)
   })
 
+  it('las herramientas de meteorito piden cuatro guardianes por jugador, y aun así caben en el hierro y el mithril de la isla', () => {
+    const need: Amounts = {}
+    for (const r of [...PER_PLAYER, 'meteor_axe', 'meteor_pickaxe', 'meteor_sword'] as const) rawCost(r, need, MAX_PLAYERS)
+    // 3 del hacha, 4 del pico y 3 de la espada; cada guardián suelta 3 fragmentos por jugador.
+    const fragments = 10
+    expect(need.meteor_fragment).toBe(fragments * MAX_PLAYERS)
+    expect(Math.ceil(fragments / ENEMY_DEFS.guardian.loot[0].amount)).toBe(4)
+    const have = supply()
+    for (const item of ['iron_ore', 'mithril_ore', 'birch_wood', 'dark_wood'] as const) expect(need[item]!, item).toBeLessThanOrEqual(have[item]!)
+  })
+
   it('un jugador solo rompe unos 18 árboles, 11 rocas, 5 menas de hierro, 2 de mithril, 2 abedules y 2 pinos oscuros', () => {
     const need = whole([...PER_PLAYER, ...SHARED].reduce((into, r) => rawCost(r, into), {} as Amounts))
     expect(need).toEqual({ wood: 71, stone: 33, iron_ore: 13, birch_wood: 6, mithril_ore: 8, dark_wood: 6 })
@@ -241,7 +252,7 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
 
   it('la coraza del Coloso se rompe en pocos golpes con un pico bueno, y nada se la salta', () => {
     const swings = (item: ItemId) => Math.ceil(ENEMY_DEFS.colossus.shell! / attackDamage(item, 'colossus'))
-    expect((['stone_pickaxe', 'iron_pickaxe', 'mithril_pickaxe'] as const).map(swings)).toEqual([27, 16, 9])
+    expect((['stone_pickaxe', 'iron_pickaxe', 'mithril_pickaxe', 'meteor_pickaxe'] as const).map(swings)).toEqual([27, 16, 9, 7])
     // Con la espada, sin romperla: un 10 % de lo que haría.
     expect(ENEMY_DEFS.colossus.hp / (attackDamage('meteor_sword', 'colossus') * SHELL_RESIST)).toBeGreaterThan(500)
   })
