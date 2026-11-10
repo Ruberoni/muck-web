@@ -4,6 +4,8 @@ import { autoSkin, isSkin, SKINS } from '../src/net/skins'
 
 /** Lo mismo que limita el coste de una sala: cada skin se descarga entera. */
 const MAX_SKIN_BYTES = 1024 * 1024
+/** La náufraga: el cuerpo en piezas y las cuatro de armadura, que se prenden y se apagan. */
+const PIECES = ['Naufraga_Pelo', 'Naufraga_Cabeza', 'Naufraga_Torso', 'Naufraga_Piernas', 'Naufraga_Pies', 'Armadura_Casco', 'Armadura_Peto', 'Armadura_Pantalon', 'Armadura_Botas']
 
 const glbJson = (path) => {
   const file = readFileSync(path)
@@ -14,12 +16,16 @@ const glbJson = (path) => {
 const skinPath = (file) => `public/models/skins/${file}.glb`
 
 describe('los modelos', () => {
-  it('cada skin es una sola malla, sin animaciones y con colores en los vértices', () => {
+  it('cada skin trae el cuerpo y las cuatro piezas de armadura, sin animaciones', () => {
     for (const { file } of SKINS) {
       const gltf = glbJson(skinPath(file))
-      expect(gltf.meshes).toHaveLength(1)
-      expect(gltf.meshes[0].primitives).toHaveLength(1)
-      expect(Object.keys(gltf.meshes[0].primitives[0].attributes).sort()).toEqual(['COLOR_0', 'JOINTS_0', 'NORMAL', 'POSITION', 'WEIGHTS_0'])
+      expect(gltf.nodes.filter((n) => n.mesh !== undefined).map((n) => n.name).sort()).toEqual([...PIECES].sort())
+      for (const mesh of gltf.meshes) {
+        // Como mucho dos materiales: el del cuerpo y el que se tiñe del metal de la armadura.
+        expect(mesh.primitives.length).toBeLessThanOrEqual(2)
+        for (const p of mesh.primitives) expect(Object.keys(p.attributes)).toEqual(expect.arrayContaining(['JOINTS_0', 'NORMAL', 'POSITION', 'WEIGHTS_0']))
+      }
+      for (const piece of ['Casco', 'Peto', 'Pantalon', 'Botas']) expect(gltf.materials.map((m) => m.name)).toContain(`Armadura_${piece}_Tinte`)
       expect(gltf.animations).toBeUndefined()
       expect(statSync(skinPath(file)).size).toBeLessThan(MAX_SKIN_BYTES)
     }
@@ -28,7 +34,8 @@ describe('los modelos', () => {
   it('todas comparten esqueleto con las animaciones', () => {
     const bones = (path) =>
       glbJson(path)
-        .nodes.map((node) => node.name)
+        .nodes.filter((node) => node.mesh === undefined)
+        .map((node) => node.name)
         .filter((name) => name !== 'Character')
     const expected = bones('public/models/animations.glb')
     for (const { file } of SKINS) expect(bones(skinPath(file))).toEqual(expected)

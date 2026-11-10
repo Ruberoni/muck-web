@@ -12,3 +12,5 @@
 | `espiritu/Espiritu.glb`  | Hecho aquí desde cero (`espiritu.mjs`) sobre el esqueleto de las skins de Quaternius | CC0      |
 | `trasgo-gigante/TrasgoGigante.glb` | **Superhero Male** y **Hair_Long** de Universal Base Characters de Quaternius (quaternius.com, itch.io; `License_Standard.txt` del paquete: CC0), sin cambiar su forma. Pintura, tocado, collares, arco, lanza, carcaj, taparrabo y animaciones hechos aquí | CC0      |
 | `lanzarrocas/Lanzarrocas.glb` | Hecho aquí desde cero (`golem.mjs`, como el gólem) sobre el esqueleto de las skins de Quaternius | CC0      |
+
+`arte/fuentes/Casual.glb` y `arte/fuentes/Medieval.glb` son las skins de Ultimate Modular Women de Quaternius (CC0), de donde salen el personaje y el trasgo: ya no se usan en el juego.

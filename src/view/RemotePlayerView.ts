@@ -114,6 +114,8 @@ export class RemotePlayerView {
       this.wear(model, data.alive ? data.shield : null, data.blocking)
       this.track(model, dt, pose.x, pose.z)
       if (rig) {
+        // La armadura que lleva puesta: cada pieza tapa su parte del cuerpo.
+        rig.setArmor(data.armor)
         // forward = (-sin(yaw), -cos(yaw)), y su derecha, (cos(yaw), -sin(yaw)).
         const sin = Math.sin(pose.yaw)
         const cos = Math.cos(pose.yaw)

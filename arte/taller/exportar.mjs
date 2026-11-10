@@ -39,6 +39,15 @@ const salida = process.argv[2] ?? '../../public/models/mobs'
 mkdirSync(salida, { recursive: true })
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 
+// La náufraga: el único personaje, con sus cuatro piezas de armadura (el juego enseña las que lleva puestas).
+{
+  const doc = await io.read('../listas/personaje/Jugador.glb')
+  await doc.transform(prune(), quantize())
+  const archivo = '../../public/models/skins/Naufraga.glb'
+  await io.write(archivo, doc)
+  console.log(`Naufraga.glb: ${(statSync(archivo).size / 1024).toFixed(0)} KB`)
+}
+
 for (const [desde, hacia] of MODELOS) {
   const doc = await io.read(join('../listas', desde))
   const root = doc.getRoot()

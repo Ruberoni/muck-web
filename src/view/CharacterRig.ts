@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { ARMOR_SLOTS, armorOf, type ArmorSlot, type ArmorTier } from '../sim/equipment'
 
 /** Lo que hace el torso sin que dejen de moverse las piernas. */
 export type RigAction = 'Sword_Slash' | 'Punch_Right' | 'Interact' | 'HitRecieve'
@@ -58,6 +59,34 @@ const named = (clips: readonly THREE.AnimationClip[], name: string) => {
  * Un personaje con esqueleto y sus animaciones. Las piernas y el torso se animan por separado, para poder correr y
  * golpear a la vez. Mira a −Z, como el resto de avatares, y `hand` es donde va lo que lleva en la mano.
  */
+/** Cada pieza de armadura del modelo y la parte del cuerpo que tapa (arte/taller/armeria.html). */
+const ARMOR_PIECES: Record<ArmorSlot, { armor: string; body: string }> = {
+  head: { armor: 'Armadura_Casco', body: 'Naufraga_Pelo' },
+  chest: { armor: 'Armadura_Peto', body: 'Naufraga_Torso' },
+  legs: { armor: 'Armadura_Pantalon', body: 'Naufraga_Piernas' },
+  feet: { armor: 'Armadura_Botas', body: 'Naufraga_Pies' },
+}
+/** El color del metal de cada armadura, en las partes `_Tinte` de sus piezas. */
+const ARMOR_TINTS: Record<ArmorTier, { color: string; metalness: number; roughness: number }> = {
+  iron: { color: '#c3c9d1', metalness: 0.55, roughness: 0.4 },
+  mithril: { color: '#8fd0f2', metalness: 0.5, roughness: 0.3 },
+}
+/** Compartidos por todos los jugadores: un material teñido por cada material de tinte y metal. */
+const tinted = new Map<string, THREE.Material>()
+function tintOf(material: THREE.MeshStandardMaterial, tier: ArmorTier) {
+  const key = `${material.uuid}:${tier}`
+  let out = tinted.get(key)
+  if (!out) {
+    const { color, metalness, roughness } = ARMOR_TINTS[tier]
+    const clone = material.clone()
+    clone.color.set(color)
+    clone.metalness = metalness
+    clone.roughness = roughness
+    tinted.set(key, (out = clone))
+  }
+  return out
+}
+
 export class CharacterRig {
   readonly object = new THREE.Group()
   /** Lo que lleva en la mano se añade aquí. */
@@ -78,6 +107,9 @@ export class CharacterRig {
   private turn = new THREE.Quaternion()
   private parentTurn = new THREE.Quaternion()
   private ownTurn = new THREE.Quaternion()
+  /** Las piezas de armadura del modelo (si las tiene), con sus partes teñibles y el material que traen. */
+  private armor: { slot: ArmorSlot; piece: THREE.Object3D; body: THREE.Object3D | undefined; tints: { mesh: THREE.Mesh; own: THREE.MeshStandardMaterial }[] }[] = []
+  private armorCode = -1
 
   constructor(body: THREE.Object3D, clips: readonly THREE.AnimationClip[]) {
     // Los modelos miran a +Z.
@@ -114,6 +146,30 @@ export class CharacterRig {
     this.hand.quaternion.copy(GRIP_ROTATION).multiply(ITEM_UP)
     this.hand.scale.setScalar(ITEM_SCALE)
     body.getObjectByName(HAND_BONE)?.add(this.hand)
+    for (const slot of ARMOR_SLOTS) {
+      const piece = body.getObjectByName(ARMOR_PIECES[slot].armor)
+      if (!piece) continue
+      const tints: { mesh: THREE.Mesh; own: THREE.MeshStandardMaterial }[] = []
+      piece.traverse((node) => {
+        const mesh = node as THREE.Mesh
+        if (mesh.isMesh && (mesh.material as THREE.Material).name.endsWith('_Tinte')) tints.push({ mesh, own: mesh.material as THREE.MeshStandardMaterial })
+      })
+      this.armor.push({ slot, piece, body: body.getObjectByName(ARMOR_PIECES[slot].body), tints })
+    }
+    this.setArmor(0)
+  }
+
+  /** La armadura que lleva puesta (`armorCode`): cada pieza tapa su parte del cuerpo y va del color de su metal. */
+  setArmor(code: number) {
+    if (code === this.armorCode) return
+    this.armorCode = code
+    const worn = armorOf(code)
+    for (const { slot, piece, body, tints } of this.armor) {
+      const tier = worn[slot]
+      piece.visible = tier !== null
+      if (body) body.visible = tier === null
+      if (tier) for (const { mesh, own } of tints) mesh.material = tintOf(own, tier)
+    }
   }
 
   /** Empieza `name`, que dura `seconds`, aunque hubiera otra a medias. */

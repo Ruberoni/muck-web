@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { CharacterRig, chooseLocomotion } from './CharacterRig'
+import { armorCode, noEquipment } from '../sim/equipment'
 
 const NAMES = ['Idle', 'Walk', 'Run', 'Run_Back', 'Run_Left', 'Run_Right', 'Sword_Slash', 'Punch_Right', 'Interact', 'HitRecieve', 'Death']
 
@@ -97,5 +98,52 @@ describe('CharacterRig', () => {
     const rig = new CharacterRig(inner, clips())
     expect(rig.object.children).toContain(inner)
     expect(inner.rotation.y).toBeCloseTo(Math.PI)
+  })
+})
+
+describe('la armadura en el personaje', () => {
+  /** La náufraga en pequeño: sus partes del cuerpo y las piezas de armadura, con su parte de tinte. */
+  function castaway() {
+    const root = body()
+    const tint = new THREE.MeshStandardMaterial({ color: '#7a5230' })
+    tint.name = 'Armadura_Peto_Tinte'
+    for (const name of ['Naufraga_Pelo', 'Naufraga_Cabeza', 'Naufraga_Torso', 'Naufraga_Piernas', 'Naufraga_Pies', 'Armadura_Casco', 'Armadura_Pantalon', 'Armadura_Botas']) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial())
+      mesh.name = name
+      root.add(mesh)
+    }
+    const chest = new THREE.Group()
+    chest.name = 'Armadura_Peto'
+    chest.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()), new THREE.Mesh(new THREE.BoxGeometry(), tint))
+    root.add(chest)
+    return root
+  }
+  const visible = (rig: CharacterRig, name: string) => rig.object.getObjectByName(name)!.visible
+
+  it('sin armadura se ve el cuerpo entero; cada pieza puesta tapa su parte, y la cabeza siempre se ve', () => {
+    const rig = new CharacterRig(castaway(), clips())
+    for (const name of ['Naufraga_Pelo', 'Naufraga_Torso', 'Naufraga_Piernas', 'Naufraga_Pies']) expect(visible(rig, name)).toBe(true)
+    for (const name of ['Armadura_Casco', 'Armadura_Peto', 'Armadura_Pantalon', 'Armadura_Botas']) expect(visible(rig, name)).toBe(false)
+    rig.setArmor(armorCode({ ...noEquipment(), head: 'iron_helmet', legs: 'mithril_leggings' }))
+    expect([visible(rig, 'Armadura_Casco'), visible(rig, 'Naufraga_Pelo')]).toEqual([true, false])
+    expect([visible(rig, 'Armadura_Pantalon'), visible(rig, 'Naufraga_Piernas')]).toEqual([true, false])
+    expect([visible(rig, 'Armadura_Peto'), visible(rig, 'Naufraga_Torso')]).toEqual([false, true])
+    expect(visible(rig, 'Naufraga_Cabeza')).toBe(true)
+    rig.setArmor(0)
+    expect(visible(rig, 'Naufraga_Pelo')).toBe(true)
+  })
+
+  it('la parte de tinte va del color de su metal, y dos jugadores comparten el material', () => {
+    const a = new CharacterRig(castaway(), clips())
+    const b = new CharacterRig(castaway(), clips())
+    const tintOf = (rig: CharacterRig) => (rig.object.getObjectByName('Armadura_Peto')!.children[1] as THREE.Mesh).material as THREE.MeshStandardMaterial
+    a.setArmor(armorCode({ ...noEquipment(), chest: 'iron_chestplate' }))
+    expect(tintOf(a).color.getHexString()).toBe(new THREE.Color('#c3c9d1').getHexString())
+    a.setArmor(armorCode({ ...noEquipment(), chest: 'mithril_chestplate' }))
+    expect(tintOf(a).color.getHexString()).toBe(new THREE.Color('#8fd0f2').getHexString())
+    expect((a.object.getObjectByName('Armadura_Peto')!.children[0] as THREE.Mesh).material).not.toBe(tintOf(a))
+    // Cada uno con su modelo, pero el mismo material teñido: no se clona uno por jugador.
+    b.setArmor(armorCode({ ...noEquipment(), chest: 'mithril_chestplate' }))
+    expect(tintOf(b).color.getHexString()).toBe(tintOf(a).color.getHexString())
   })
 })
