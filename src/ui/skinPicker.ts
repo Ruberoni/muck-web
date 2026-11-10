@@ -78,6 +78,19 @@ function skinPreview(canvas: HTMLCanvasElement, load: LoadCharacter) {
 
 /** Elegir personaje: se guarda en el navegador y se manda al entrar en una sala. Sin elegir, toca uno según el número. */
 export function skinField(parent: HTMLElement, load: LoadCharacter) {
+  const canvas = document.createElement('canvas')
+  canvas.className = 'skin-preview'
+  canvas.width = PREVIEW_WIDTH
+  canvas.height = PREVIEW_HEIGHT
+  const show = skinPreview(canvas, load)
+
+  // Con una sola skin no hay nada que elegir: se enseña el personaje y basta, sin un desplegable que la repite.
+  if (SKINS.length < 2) {
+    parent.appendChild(canvas)
+    show(0)
+    return { value: () => 0 }
+  }
+
   const row = document.createElement('label')
   row.className = 'field'
   row.append('Tu personaje (te ven tus amigos)')
@@ -86,13 +99,8 @@ export function skinField(parent: HTMLElement, load: LoadCharacter) {
   SKINS.forEach(({ name }, i) => select.add(new Option(name, String(i))))
   row.appendChild(select)
   parent.appendChild(row)
-  const canvas = document.createElement('canvas')
-  canvas.className = 'skin-preview'
-  canvas.width = PREVIEW_WIDTH
-  canvas.height = PREVIEW_HEIGHT
   parent.appendChild(canvas)
 
-  const show = skinPreview(canvas, load)
   const value = () => (select.value === AUTOMATIC ? undefined : Number(select.value))
   select.value = String(loadSkin() ?? AUTOMATIC)
   show(value())

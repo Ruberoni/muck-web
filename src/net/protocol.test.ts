@@ -32,7 +32,7 @@ const valid = (msg: unknown) => parse(msg).ok
 
 describe('la skin del hello', () => {
   it('es opcional, y solo vale un índice de la lista', () => {
-    expect(parse({ ...hello, skin: 3 })).toMatchObject({ ok: true, msg: { skin: 3 } })
+    expect(parse({ ...hello, skin: 0 })).toMatchObject({ ok: true, msg: { skin: 0 } })
     expect(parse(hello)).toMatchObject({ ok: true })
     expect(parse({ ...hello, skin: 99 })).toMatchObject({ ok: false })
     expect(parse({ ...hello, skin: 'bruja' })).toMatchObject({ ok: false })

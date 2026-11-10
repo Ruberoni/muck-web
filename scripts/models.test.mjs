@@ -46,7 +46,9 @@ describe('los modelos', () => {
 
 describe('las skins', () => {
   it('a quien no elige le toca una distinta en una sala llena', () => {
-    expect(new Set([0, 1, 2, 3, 4].map(autoSkin)).size).toBe(5)
+    // Con una sola skin todos caen en la misma; si vuelven a ser varias, que no se repitan en una sala llena.
+    const auto = [0, 1, 2, 3, 4].map(autoSkin)
+    expect(new Set(auto).size).toBe(Math.min(5, SKINS.length))
     expect([0, 7, 123].every((id) => isSkin(autoSkin(id)))).toBe(true)
   })
 

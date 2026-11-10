@@ -158,7 +158,7 @@ Un enemigo puede ser débil o resistente a una clase de arma (`weakness`): el go
 
 ## Personajes
 
-En una sala, cada jugador es un personaje animado. Hay 10 skins, y en el menú se elige una con su vista previa ("Tu personaje"); se guarda en el navegador y la ven los demás. En "Automático" toca una de las cinco primeras según el número de jugador. Como la partida es en primera persona, la propia no se ve al jugar, y en solitario no se descarga ninguna hasta abrir la vista previa.
+En una sala, cada jugador es un personaje animado. De momento hay **una sola skin**, la más ligera del pack (Punk: 710 KB, 11.956 vértices, 5.956 triángulos), así que el menú enseña su vista previa sin desplegable. Los otros nueve modelos siguen en `public/models/skins/` sin referenciar —no se descargan— y basta con volver a listarlos en `src/net/skins.ts` para recuperarlos; con dos o más vuelve a aparecer el selector. Cuando hay varias, se elige una en el menú ("Tu personaje"), se guarda en el navegador y la ven los demás, y en "Automático" toca una de las cinco primeras según el número de jugador. Como la partida es en primera persona, la propia no se ve al jugar, y en solitario no se descarga ninguna hasta abrir la vista previa.
 
 Andan, corren en las cuatro direcciones, golpean, comen, reciben golpes y mueren, y llevan en la mano lo que tienen seleccionado. Las piernas y el torso se animan por separado, para poder correr y golpear a la vez (`src/view/CharacterRig.ts`). Solo se descarga la skin de quienes están en la sala; mientras llega, o si no se puede cargar, se ve el cuerpo de cajas de siempre. A la simulación le da igual la skin: colisiones, vida y velocidad no cambian.
 

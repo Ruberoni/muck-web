@@ -293,11 +293,12 @@ describe('Room', () => {
     const { room, time } = setup()
     const a = new Client(room, time)
     const b = new Client(room, time, 'b')
-    a.hello('create', { skin: 7 })
+    // Con una sola skin en la lista (ver src/net/skins.ts), la elegida y la automática coinciden en 0.
+    a.hello('create', { skin: 0 })
     b.hello('join')
     time.advance(0)
-    expect(a.of('join')).toMatchObject([{ id: 1, skin: 1 }])
-    expect(b.welcome.state.players).toMatchObject([{ id: 0, skin: 7 }])
+    expect(a.of('join')).toMatchObject([{ id: 1, skin: 0 }])
+    expect(b.welcome.state.players).toMatchObject([{ id: 0, skin: 0 }])
   })
 
   it('dos clientes ven caer el mismo árbol', () => {
@@ -309,7 +310,7 @@ describe('Room', () => {
     expect(b.welcome.id).toBe(1)
     expect(b.welcome.placements).toHaveLength(room.sim!.world.placements.length)
     expect(b.welcome.island).toBe(room.sim!.island.seed)
-    expect(a.of('join')).toEqual([{ type: 'join', id: 1, name: 'Ana', skin: 1 }])
+    expect(a.of('join')).toEqual([{ type: 'join', id: 1, name: 'Ana', skin: 0 }])
 
     const sim = room.sim!
     quickProps(sim.world.props)
