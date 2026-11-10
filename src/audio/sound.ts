@@ -32,6 +32,8 @@ export type SoundName =
   | 'meteorImpact'
   | 'step'
   | 'stepWater'
+  /** Un paso de un mob: más grave y más corto que el del jugador, porque se repite muchísimo. */
+  | 'enemyStep'
   | 'jump'
   | 'land'
   | 'death'
@@ -442,6 +444,8 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
       s.noise(0.5, { filter: 'bandpass', freq: 1500, q: 0.7, gain: 0.5, delay: 0.05 }),
     ),
   step: (s) => s.noise(0.08, { filter: 'lowpass', freq: 450 + s.random() * 250, gain: 1, attack: 0.004 }),
+  // Un mob: un golpe grave y seco, más corto que el paso del jugador, porque con la manada suena sin parar.
+  enemyStep: (s) => s.noise(0.06, { filter: 'lowpass', freq: 220 + s.random() * 120, gain: 0.6, attack: 0.004 }),
   stepWater: (s) =>
     Math.max(
       s.noise(0.16, { filter: 'bandpass', freq: 900 + s.random() * 400, q: 0.9, gain: 0.45, attack: 0.02 }),

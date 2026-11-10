@@ -1,4 +1,4 @@
-import { PROP_DEFS, type PropFamily } from '../sim/constants'
+import { ENEMY_DEFS, PROP_DEFS, type EnemyType, type PropFamily } from '../sim/constants'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
 import type { ProjectileEnd } from '../sim/projectiles'
@@ -24,6 +24,13 @@ const breakOf = (kind: PropKind) => BREAK[PROP_DEFS[kind].family]
 export const REMOTE_HEARING = { hit: 30, place: 25, hurt: 20, step: 15, other: 15 } as const
 /** La muerte de otro se oye siempre, aunque esté lejos (con esta ganancia como mínimo). */
 export const REMOTE_DEATH_GAIN = 0.35
+
+/** Hasta dónde se oyen los pasos de un mob: importan de cerca (avisan de que llega) y son muchos a la vez. */
+export const ENEMY_STEP_HEARING = 16
+/** Lo que suena de cerca un paso de mob, frente al 1 del propio: discreto, porque se repite muchísimo. */
+export const ENEMY_STEP_GAIN = 0.45
+/** Pasos de mob que suenan como mucho en un paso fijo, los más cercanos: con la manada encima no deben saturar. */
+export const ENEMY_STEPS_PER_FRAME = 2
 
 /** Una roca que sale y una que choca con algo, más bajo que un golpe propio. */
 const ROCK_THROW_GAIN = 0.5
@@ -57,6 +64,14 @@ export interface RemoteWalker {
   alive: boolean
 }
 
+/** Un mob para sus pasos: lo que ya tiene la simulación (un `EnemyData` cumple). */
+export interface EnemyWalker {
+  id: number
+  type: EnemyType
+  pos: { x: number; z: number }
+  alive: boolean
+}
+
 type Point = { x: number; z: number }
 
 interface PlayerLike {
@@ -77,6 +92,10 @@ export class GameAudio {
   private growlTimer = GROWL_MIN_INTERVAL
   /** Pasos de los demás: dónde estaban en el frame anterior y cuánto llevan andado desde el último paso. */
   private walkers = new Map<PlayerId, { x: number; z: number; stride: number }>()
+  /** Pasos de los mobs: lo mismo, por id de enemigo. */
+  private mobs = new Map<number, { x: number; z: number; stride: number }>()
+  /** Los pasos de mob de este paso fijo, los más cercanos: se reutiliza, no se reserva nada por frame. */
+  private mobSteps = Array.from({ length: ENEMY_STEPS_PER_FRAME }, () => ({ gain: 0, pan: 0, water: false }))
 
   constructor(
     private sound: SoundOut,
@@ -303,6 +322,53 @@ export class GameAudio {
     for (const id of this.walkers.keys()) if (!seen.has(id)) this.walkers.delete(id)
   }
 
+  /**
+   * Por paso fijo: los pasos de los mobs, uno cada STRIDE metros por su escala (los del Coloso son largos y los de un
+   * perro cortos). Flojos y de cerca, y como mucho ENEMY_STEPS_PER_FRAME, los más cercanos: con 24 mobs a la vez no
+   * deben saturar. `swimming` dice dónde no hacen pie: ahí nadan y chapotean en vez de pisar.
+   */
+  enemySteps(enemies: readonly EnemyWalker[], listener: Listener, swimming: (x: number, z: number) => boolean) {
+    const picks = this.mobSteps
+    let picked = 0
+    for (const e of enemies) {
+      const last = this.mobs.get(e.id)
+      if (!last) {
+        this.mobs.set(e.id, { x: e.pos.x, z: e.pos.z, stride: 0 })
+        continue
+      }
+      const moved = Math.hypot(e.pos.x - last.x, e.pos.z - last.z)
+      last.x = e.pos.x
+      last.z = e.pos.z
+      // Un salto grande es una corrección del servidor o una aparición, no un paso; un muerto no anda.
+      if (!e.alive || moved >= MAX_STEP_DISTANCE * 4) continue
+      last.stride += moved
+      const stride = STRIDE * ENEMY_DEFS[e.type].scale
+      if (last.stride < stride) continue
+      last.stride -= stride
+      const { gain, pan } = spatialize(e.pos.x - listener.x, e.pos.z - listener.z, listener.yaw, ENEMY_STEP_HEARING)
+      if (gain <= 0) continue
+      // De los que pisan en este paso, se guardan los más cercanos (los de más ganancia).
+      let slot = picked
+      if (picked === picks.length) {
+        slot = 0
+        for (let i = 1; i < picks.length; i++) if (picks[i].gain < picks[slot].gain) slot = i
+        if (picks[slot].gain >= gain) continue
+      } else picked++
+      picks[slot].gain = gain
+      picks[slot].pan = pan
+      picks[slot].water = swimming(e.pos.x, e.pos.z)
+    }
+    for (let i = 0; i < picked; i++) {
+      const { gain, pan, water } = picks[i]
+      this.sound.play(water ? 'stepWater' : 'enemyStep', { gain: gain * ENEMY_STEP_GAIN * (0.85 + this.rng() * 0.3), pan })
+    }
+    // El mapa no se queda con los que ya no están: se limpia solo cuando sobra, sin reservar un Set en cada frame.
+    if (this.mobs.size > enemies.length) {
+      const left = new Set(enemies.map((e) => e.id))
+      for (const id of this.mobs.keys()) if (!left.has(id)) this.mobs.delete(id)
+    }
+  }
+
   /** Impacto de un golpe propio con `item`, o al aire si `target` es null. */
   private swing(item: ItemId | null, target: TargetRef | null, list: readonly SimEvent[], propKind: (id: number) => PropKind) {
     const name = this.impact(item, target, list, propKind)
@@ -336,5 +402,6 @@ export class GameAudio {
     this.stride = 0
     this.growlTimer = GROWL_MIN_INTERVAL
     this.walkers.clear()
+    this.mobs.clear()
   }
 }

@@ -36,7 +36,7 @@ import type { Island } from '../sim/world/island'
 import { createTerrain } from '../world/terrain'
 import { WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
-import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP } from '../sim/constants'
+import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
@@ -177,6 +177,8 @@ export class Game {
   private shake = new CameraShake()
   /** Las estaciones al fabricar, como las ve el cliente (con margen): para el filtro de envío y la pantalla. */
   private craftWorld = clientCraftWorld(() => this.sim.structures.list)
+  /** Dónde un mob ya no hace pie y nada (la regla de la simulación): ahí sus pasos son chapoteos. */
+  private mobSwimming = (x: number, z: number) => this.sim.island.heightAt(x, z) < WATER_LEVEL - WADE_DEPTH
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
   private worldVersion = -1
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
@@ -686,6 +688,7 @@ export class Game {
     const { sim, slot } = this
     // Una vez por tick real (en red, por tick predicho; nunca al re-simular).
     this.audio.step(STEP, slot.player, sim.enemies.list)
+    this.audio.enemySteps(sim.enemies.list, this.listener(), this.mobSwimming)
     this.present(events)
   }
 

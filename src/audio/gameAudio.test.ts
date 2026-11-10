@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { STEP } from '../sim/constants'
+import { ENEMY_DEFS, STEP, type EnemyType } from '../sim/constants'
 import type { SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
 import type { PropKind } from '../sim/props'
-import { GameAudio, GROWL_DISTANCE, REMOTE_DEATH_GAIN, REMOTE_HEARING, STRIDE, type RemoteWalker } from './gameAudio'
+import {
+  ENEMY_STEP_GAIN,
+  ENEMY_STEP_HEARING,
+  ENEMY_STEPS_PER_FRAME,
+  GameAudio,
+  GROWL_DISTANCE,
+  REMOTE_DEATH_GAIN,
+  REMOTE_HEARING,
+  STRIDE,
+  type EnemyWalker,
+  type RemoteWalker,
+} from './gameAudio'
 import { spatialize, volumeToGain, type PlayOptions, type SoundName } from './sound'
 
 function setup() {
@@ -289,6 +300,89 @@ describe('sonido de los demás', () => {
     played.length = 0
     near.z += 30
     audio.remoteSteps([near], listener)
+    expect(played).toEqual([])
+  })
+})
+
+describe('pasos de los mobs', () => {
+  const listener = { x: 0, z: 0, yaw: 0 }
+  /** En tierra: `swimming` devuelve false y los pasos suenan a paso. */
+  const land = () => false
+  const mob = (id: number, type: EnemyType, x: number, alive = true): EnemyWalker => ({ id, type, pos: { x, z: 0 }, alive })
+  /** Andar 0,1 m por llamada, como en las pruebas de los demás pasos. */
+  const walk = (audio: GameAudio, mobs: EnemyWalker[], times: number, swimming = land) => {
+    for (let i = 0; i < times; i++) {
+      for (const e of mobs) e.pos.z += 0.1
+      audio.enemySteps(mobs, listener, swimming)
+    }
+  }
+
+  it('uno cada STRIDE por su escala, flojo y de su lado; quieto, ninguno', () => {
+    const { audio, played } = setup()
+    const goblin = mob(1, 'goblin', 4)
+    audio.enemySteps([goblin], listener, land)
+    expect(played).toEqual([])
+    walk(audio, [goblin], 30)
+    // 3 m andados con un paso de 2,1 × 1,25 m: uno, a los 2,7 m.
+    expect(played.map((p) => p.name)).toEqual(['enemyStep'])
+    expect(played[0].options!.gain).toBeCloseTo(spatialize(4, 2.7, 0, ENEMY_STEP_HEARING).gain * ENEMY_STEP_GAIN)
+    expect(played[0].options!.pan).toBeGreaterThan(0.5)
+    // Mucho más flojo que el paso de otro jugador a la misma distancia.
+    expect(played[0].options!.gain).toBeLessThan(spatialize(4, 2.7, 0, REMOTE_HEARING.step).gain)
+  })
+
+  it('un mob grande da pasos más largos: los mismos 3 m no le llegan', () => {
+    const { audio, played } = setup()
+    const colossus = mob(1, 'colossus', 4)
+    audio.enemySteps([colossus], listener, land)
+    walk(audio, [colossus], 30)
+    expect(ENEMY_DEFS.colossus.scale * STRIDE).toBeGreaterThan(3)
+    expect(played).toEqual([])
+  })
+
+  it('con la manada encima suenan dos como mucho, los más cercanos', () => {
+    const { audio, played } = setup()
+    // Un paso de perro es de 2,1 × 0,72 m: andando 1,6 m de golpe, los tres pisan a la vez.
+    const pack = [mob(1, 'dog', 2), mob(2, 'dog', 6), mob(3, 'dog', 12)]
+    audio.enemySteps(pack, listener, land)
+    for (const dog of pack) dog.pos.z += 1.6
+    audio.enemySteps(pack, listener, land)
+    expect(played.map((p) => p.name)).toEqual(Array(ENEMY_STEPS_PER_FRAME).fill('enemyStep'))
+    // El lejano es el que se cae: los dos que suenan están más cerca que él.
+    const far = spatialize(12, 1.6, 0, ENEMY_STEP_HEARING).gain * ENEMY_STEP_GAIN
+    for (const p of played) expect(p.options!.gain).toBeGreaterThan(far)
+  })
+
+  it('un muerto no anda y una corrección del servidor no es un paso', () => {
+    const { audio, played } = setup()
+    const dead = mob(1, 'goblin', 3, false)
+    audio.enemySteps([dead], listener, land)
+    walk(audio, [dead], 30)
+    expect(played).toEqual([])
+
+    const jumped = mob(2, 'goblin', 3)
+    audio.enemySteps([jumped], listener, land)
+    jumped.pos.z += 30
+    audio.enemySteps([jumped], listener, land)
+    expect(played).toEqual([])
+    // Vuelve a donde estaba (otra corrección) y sigue andando: sus pasos vuelven.
+    jumped.pos.z = 0
+    audio.enemySteps([jumped], listener, land)
+    walk(audio, [jumped], 30)
+    expect(played.map((p) => p.name)).toEqual(['enemyStep'])
+  })
+
+  it('nadando chapotea en vez de pisar, y fuera de su alcance no suena', () => {
+    const { audio, played } = setup()
+    const swimmer = mob(1, 'goblin', 3)
+    audio.enemySteps([swimmer], listener, () => true)
+    walk(audio, [swimmer], 30, () => true)
+    expect(played.map((p) => p.name)).toEqual(['stepWater'])
+
+    played.length = 0
+    const far = mob(2, 'goblin', ENEMY_STEP_HEARING + 4)
+    audio.enemySteps([far], listener, land)
+    walk(audio, [far], 40)
     expect(played).toEqual([])
   })
 })
