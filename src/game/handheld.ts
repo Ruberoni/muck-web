@@ -2,15 +2,19 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Sky } from '../scene'
 import type { ItemId } from '../sim/inventory'
-import { isSword, swingCooldown } from '../sim/tiers'
+import type { WeaponClass } from '../sim/constants'
+import { isSword, swingCooldown, swingImpact, weaponClass } from '../sim/tiers'
+import { weaponModel } from '../view/weapons'
 
 /** Animaciones del objeto en la mano. */
 export type HandAction = 'swing' | 'eat' | 'place'
 
-// El golpe, más corto que la cadencia más lenta: manteniendo el clic queda una pausa entre golpe y golpe.
+// El golpe de las animaciones sin objeto (los demás jugadores de cajas); el de cada arma va por su cadencia.
 export const ACTION_DURATION: Record<HandAction, number> = { swing: 0.32, eat: 0.45, place: 0.3 }
-/** Cuánto dura el golpe de `item`: con más cadencia, más corto, para que no se empalme con el siguiente. */
-export const swingDuration = (item: ItemId | null) => Math.min(ACTION_DURATION.swing, swingCooldown(item) * 0.8)
+/** Lo que dura el golpe de `item`: casi su cadencia entera, para que se vea con peso sin empalmarse con el siguiente. */
+export const swingDuration = (item: ItemId | null) => swingCooldown(item) * 0.95
+/** En qué fracción del golpe de `item` pega (`swingImpact`): la animación llega abajo justo entonces. */
+export const swingImpactAt = (item: ItemId | null) => swingImpact(item) / swingDuration(item)
 const SWAP_DURATION = 0.18
 const SWAP_DROP = 0.45
 // FOV propio: el objeto no se deforma aunque cambie el de la cámara del mundo.
@@ -25,9 +29,6 @@ const BOB_RATE = 1.6
 // La mano se ve aunque sea de noche cerrada.
 const MIN_AMBIENT = 0.35
 // La estela del golpe de espada: un arco delante de la cámara que aparece al golpear y se apaga enseguida.
-const TRAIL_START = 0.2
-const TRAIL_PEAK = 0.4
-const TRAIL_END = 0.75
 const TRAIL_OPACITY = 0.4
 // El escudo, abajo a la izquierda; al bloquear, delante y al centro, tapando parte de la vista.
 const SHIELD_REST = new THREE.Vector3(-0.58, -0.56, -0.62)
@@ -39,6 +40,7 @@ const SHIELD_RATE = 14
 
 export interface HandPose {
   rx: number
+  ry?: number
   rz: number
   x: number
   y: number
@@ -48,9 +50,65 @@ export interface HandPose {
 const smooth = (t: number) => t * t * (3 - 2 * t)
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t))
 
+/** Dónde está el objeto al echarse atrás (`wind`) y al pegar (`hit`), relativo al reposo. */
+interface SwingKeys {
+  wind: Required<HandPose>
+  hit: Required<HandPose>
+}
+const pose = (rx: number, ry: number, rz: number, x: number, y: number, z: number): Required<HandPose> => ({ rx, ry, rz, x, y, z })
+
+/**
+ * Dos golpes por clase de arma, casi iguales pero con otro recorrido, que se van turnando: la espada, un tajo en
+ * diagonal y un revés; el hacha, de arriba y en diagonal; el pico, de arriba y otro más corto; a mano, un empujón.
+ */
+export const SWING_KEYS: Record<WeaponClass, readonly SwingKeys[]> = {
+  sword: [
+    { wind: pose(0.3, 0.3, -0.5, 0.12, 0.08, 0.05), hit: pose(-0.5, -0.4, 0.6, -0.25, -0.1, -0.2) },
+    { wind: pose(0.25, -0.35, 0.55, -0.2, 0.06, 0), hit: pose(-0.45, 0.35, -0.5, 0.12, -0.12, -0.2) },
+  ],
+  axe: [
+    { wind: pose(0.7, 0, 0.1, 0, 0.12, 0.08), hit: pose(-0.75, 0, 0.15, -0.08, -0.12, -0.2) },
+    { wind: pose(0.5, 0.2, -0.45, 0.1, 0.1, 0.05), hit: pose(-0.6, -0.2, 0.5, -0.18, -0.1, -0.18) },
+  ],
+  pickaxe: [
+    { wind: pose(0.8, 0, 0, 0, 0.14, 0.1), hit: pose(-0.85, 0, 0.05, -0.04, -0.14, -0.22) },
+    { wind: pose(0.45, 0.1, 0.2, 0, 0.06, 0.04), hit: pose(-0.6, -0.1, 0.25, -0.06, -0.08, -0.16) },
+  ],
+  hand: [{ wind: pose(0.15, 0, 0, 0, 0, 0.08), hit: pose(-0.25, 0, 0.1, -0.05, -0.02, -0.25) }],
+}
+
+/**
+ * El golpe de `item` (la variante `variant` de su clase) en el instante `p` (0 a 1 de su duración): se echa atrás,
+ * acelera hasta pegar justo en `swingImpactAt(item)` y vuelve despacio al reposo.
+ */
+export function swingPose(item: ItemId | null, variant: number, p: number, out: HandPose = { rx: 0, rz: 0, x: 0, y: 0, z: 0 }): HandPose {
+  const variants = SWING_KEYS[weaponClass(item)]
+  const { wind, hit } = variants[variant % variants.length]
+  const impact = swingImpactAt(item)
+  const windEnd = impact * 0.55
+  p = clamp01(p)
+  const mix = (a: Required<HandPose>, b: Required<HandPose>, t: number) => {
+    out.rx = a.rx + (b.rx - a.rx) * t
+    out.ry = a.ry + (b.ry - a.ry) * t
+    out.rz = a.rz + (b.rz - a.rz) * t
+    out.x = a.x + (b.x - a.x) * t
+    out.y = a.y + (b.y - a.y) * t
+    out.z = a.z + (b.z - a.z) * t
+  }
+  if (p < windEnd) mix(REST_POSE, wind, smooth(p / windEnd))
+  else if (p < impact) {
+    const t = (p - windEnd) / (impact - windEnd)
+    // Cada vez más deprisa: el peso cae al final.
+    mix(wind, hit, t * t)
+  } else mix(hit, REST_POSE, smooth((p - impact) / (1 - impact)))
+  return out
+}
+const REST_POSE = pose(0, 0, 0, 0, 0, 0)
+
 /** Pose relativa al reposo para una animación en el instante `p` (0 a 1 de su duración). */
 export function actionPose(action: HandAction, p: number, out: HandPose = { rx: 0, rz: 0, x: 0, y: 0, z: 0 }): HandPose {
   out.rx = out.rz = out.x = out.y = out.z = 0
+  out.ry = 0
   p = clamp01(p)
   if (action === 'swing') {
     // Echa el brazo atrás, golpea hacia delante y abajo y vuelve.
@@ -87,8 +145,6 @@ export function actionPose(action: HandAction, p: number, out: HandPose = { rx: 
 }
 
 const mat = (color: string) => new THREE.MeshStandardMaterial({ color, flatShading: true })
-const skin = mat('#e0ad84')
-const sleeve = mat('#3f6a8c')
 const handle = mat('#8a5a32')
 const woodHead = mat('#c8955a')
 const stoneHead = mat('#9a978a')
@@ -368,13 +424,13 @@ function amulet() {
 export function itemModel(item: ItemId): THREE.Group {
   switch (item) {
     case 'wood_axe':
-      return axe(woodHead)
+      return weaponModel('Hacha', woodHead) ?? axe(woodHead)
     case 'stone_axe':
-      return axe(stoneHead)
+      return weaponModel('Hacha', stoneHead) ?? axe(stoneHead)
     case 'iron_axe':
-      return axe(ironHead)
+      return weaponModel('Hacha', ironHead) ?? axe(ironHead)
     case 'mithril_axe':
-      return axe(mithrilHead)
+      return weaponModel('Hacha', mithrilHead) ?? axe(mithrilHead)
     case 'wood_pickaxe':
       return pickaxe(woodHead)
     case 'stone_pickaxe':
@@ -384,15 +440,15 @@ export function itemModel(item: ItemId): THREE.Group {
     case 'mithril_pickaxe':
       return pickaxe(mithrilHead)
     case 'wood_sword':
-      return sword(woodHead)
+      return weaponModel('Espada', woodHead) ?? sword(woodHead)
     case 'stone_sword':
-      return sword(stoneHead)
+      return weaponModel('Espada', stoneHead) ?? sword(stoneHead)
     case 'iron_sword':
-      return sword(ironHead)
+      return weaponModel('Espadon', ironHead) ?? sword(ironHead)
     case 'mithril_sword':
-      return sword(mithrilHead)
+      return weaponModel('Espadon', mithrilHead) ?? sword(mithrilHead)
     case 'meteor_sword':
-      return sword(meteorHead)
+      return weaponModel('Espadon', meteorHead) ?? sword(meteorHead)
     case 'meteor_fragment':
       return oreChunk(meteorRock, meteorVein)
     case 'wood':
@@ -490,18 +546,6 @@ function coin() {
   return g
 }
 
-/** Antebrazo del codo al puño, y el puño. */
-function arm() {
-  const g = new THREE.Group()
-  const length = FIST.length()
-  const forearm = part(new THREE.BoxGeometry(0.09, 0.09, length).translate(0, 0, -length / 2), sleeve)
-  forearm.lookAt(FIST.clone().negate())
-  const fist = part(new THREE.BoxGeometry(0.09, 0.09, 0.1), skin)
-  fist.position.copy(FIST)
-  g.add(forearm, fist)
-  return g
-}
-
 /**
  * Objeto seleccionado en primera persona, en su propia escena y cámara: se dibuja encima del
  * mundo (sin atravesar árboles) y con su propio FOV.
@@ -522,6 +566,9 @@ export class Handheld {
   private root = new THREE.Group()
   private holder = new THREE.Group()
   private models = new Map<ItemId, THREE.Group>()
+  /** Cuántos golpes lleva con cada clase de arma: se turnan sus dos golpes. */
+  private swings: Partial<Record<WeaponClass, number>> = {}
+  private variant = 0
   private hemi = new THREE.HemisphereLight()
   private ambient = new THREE.AmbientLight('#ffffff', MIN_AMBIENT)
   private light = new THREE.DirectionalLight()
@@ -536,8 +583,8 @@ export class Handheld {
     this.camera = new THREE.PerspectiveCamera(HAND_FOV, aspect, 0.01, 10)
     // Luz fija respecto a la cámara: de arriba a la izquierda y algo por detrás.
     this.light.position.set(-1, 2, 1.5)
-    this.root.add(arm(), this.holder)
-    // El objeto sale del puño, algo inclinado hacia delante y hacia el centro.
+    // Solo el objeto, sin la mano: donde estaría el puño, algo inclinado hacia delante y hacia el centro.
+    this.root.add(this.holder)
     this.holder.position.copy(FIST)
     this.holder.rotation.set(-0.35, 0, 0.15)
     this.holder.scale.setScalar(0.75)
@@ -590,10 +637,36 @@ export class Handheld {
     this.actionTime = 0
     if (item !== undefined) this.show(item)
     this.actionLength = action === 'swing' ? swingDuration(this.item) : ACTION_DURATION[action]
+    if (action === 'swing') {
+      const cls = weaponClass(this.item)
+      this.variant = this.swings[cls] ?? 0
+      this.swings[cls] = this.variant + 1
+    }
+  }
+
+  /** La variante del golpe en curso (se turnan): para las pruebas. */
+  get swingVariant() {
+    return this.variant
+  }
+
+  /** Vuelve a hacer los modelos (al llegar las armas de verdad, en vez de las hechas en código). */
+  refresh() {
+    const item = this.item
+    const shield = this.shieldItem
+    this.models.clear()
+    this.item = null
+    this.shieldItem = null
+    this.show(item)
+    if (shield) this.setShield(shield, this.blocking)
   }
 
   private updateTrail() {
     const p = this.action === 'swing' && isSword(this.item) ? this.actionTime / this.actionLength : 0
+    // La estela culmina cuando pega.
+    const impact = swingImpactAt(this.item)
+    const TRAIL_START = impact * 0.5
+    const TRAIL_PEAK = impact
+    const TRAIL_END = Math.min(0.95, impact + 0.35)
     const visible = p > TRAIL_START && p < TRAIL_END
     this.trail.visible = visible
     if (!visible) return
@@ -629,14 +702,15 @@ export class Handheld {
     this.bob += dt * speed * BOB_RATE
 
     const pose = this.pose
-    if (this.action) actionPose(this.action, this.actionTime / this.actionLength, pose)
-    else pose.rx = pose.rz = pose.x = pose.y = pose.z = 0
+    if (this.action === 'swing') swingPose(this.item, this.variant, this.actionTime / this.actionLength, pose)
+    else if (this.action) actionPose(this.action, this.actionTime / this.actionLength, pose)
+    else pose.rx = pose.ry = pose.rz = pose.x = pose.y = pose.z = 0
     const bobX = Math.sin(this.bob) * BOB_AMOUNT * this.bobWeight
     const bobY = -Math.abs(Math.cos(this.bob)) * BOB_AMOUNT * this.bobWeight
     const drop = (1 - smooth(this.swap)) * SWAP_DROP
 
     this.root.position.set(REST.x + pose.x + bobX, REST.y + pose.y + bobY - drop, REST.z + pose.z)
-    this.root.rotation.set(REST_ROTATION.x + pose.rx, REST_ROTATION.y, REST_ROTATION.z + pose.rz)
+    this.root.rotation.set(REST_ROTATION.x + pose.rx, REST_ROTATION.y + (pose.ry ?? 0), REST_ROTATION.z + pose.rz)
 
     this.shieldUp = THREE.MathUtils.damp(this.shieldUp, this.blocking ? 1 : 0, SHIELD_RATE, dt)
     const up = smooth(this.shieldUp)

@@ -14,3 +14,5 @@
 | `lanzarrocas/Lanzarrocas.glb` | Hecho aquí desde cero (`golem.mjs`, como el gólem) sobre el esqueleto de las skins de Quaternius | CC0      |
 
 `arte/fuentes/Casual.glb` y `arte/fuentes/Medieval.glb` son las skins de Ultimate Modular Women de Quaternius (CC0), de donde salen el personaje y el trasgo: ya no se usan en el juego.
+
+`public/models/weapons.glb` (hacha, espada y espadón del juego) sale de `arte/muestras/armas` con `arte/taller/armas.mjs`: modelos hechos con Rollpoly que dejó el usuario. **Falta confirmar su licencia** (si los hizo él, son suyos).

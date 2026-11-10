@@ -5,6 +5,7 @@ import { createScene, updateSky, type Sky } from '../scene'
 import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
 import { EnemyModels } from '../view/enemyModels'
+import { loadWeapons } from '../view/weapons'
 import { PickupView } from '../view/PickupView'
 import { MeteorView } from '../view/MeteorView'
 import { SpawnSmokeView } from '../view/SpawnSmokeView'
@@ -309,6 +310,8 @@ export class Game {
 
     // Los trasgos salen la primera noche: que su modelo ya esté al anochecer.
     this.enemyModels.preload(['goblin', 'spearGoblin'])
+    // Las armas de verdad: hasta que llegan se ven las hechas en código.
+    void loadWeapons().then(() => this.handheld.refresh(), () => {})
     this.renderer.setAnimationLoop((time) => this.frame(time))
   }
 
