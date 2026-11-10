@@ -53,10 +53,10 @@ function setup(day = 6) {
 }
 
 describe('el faro', () => {
-  it('la cuenta del diseño: un destilador da tres cuartos de lo que pide una noche iluminada', () => {
+  it('la cuenta del diseño: un destilador no llega a lo que pide una noche iluminada', () => {
     const needed = (players: number) => Math.ceil((clockOf(players).bell * LIT_SHARE) / OIL_SECONDS)
     const perDistiller = (players: number) => Math.floor(clockOf(players).bell / 60)
-    expect([1, 2, 3, 4, 5].map(needed)).toEqual([8, 8, 7, 6, 6])
+    expect([1, 2, 3, 4, 5].map(needed)).toEqual([7, 6, 6, 5, 5])
     expect([1, 2, 3, 4, 5].map(perDistiller)).toEqual([6, 5, 5, 4, 4])
     for (const players of [1, 2, 3, 4, 5]) expect(perDistiller(players)).toBeLessThan(needed(players))
   })

@@ -389,7 +389,9 @@ describe('equilibrio: el combustible', () => {
       })
     }
     const smelt = (bars.iron_bar ?? 0) * 15 + (bars.mithril_bar ?? 0) * 25
-    // Una noche iluminada en la Noche Eterna pide unas 7 unidades, de 60 s de destilador cada una.
+    // Una noche iluminada en la Noche Eterna pide unas 7 unidades, de 60 s de destilador cada una. Con
+    // OIL_SECONDS = 39 hacen menos, pero se deja la cifra alta a propósito: el margen de combustible no debe
+    // relajarse solo porque el aceite dure más.
     const oil = 10 * 7 * 60
     const { coal, wood, dry_wood } = supply()
     expect((coal! * FUEL_SECONDS.coal!) / (smelt + oil)).toBeGreaterThan(1.5)

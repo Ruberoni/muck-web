@@ -621,8 +621,11 @@ export const ENEMY_WANDER_SPIN = 0.35
 export const PLACE_DISTANCE = 2.2
 // Alcance de una estación al fabricar: en horizontal, del centro del jugador al borde de la estación.
 export const STATION_RANGE = 3.5
-/** Segundos de luz de una unidad de aceite, cuánto dura menos con cada campana y cuántas guarda el faro. */
-export const OIL_SECONDS = 30
+/**
+ * Segundos de luz de una unidad de aceite, cuánto dura menos con cada campana y cuántas guarda el faro. 39 es el
+ * tope que mantiene que un destilador no baste para una noche iluminada (lighthouse.test.ts); con 40 ya empatan.
+ */
+export const OIL_SECONDS = 39
 export const OIL_WEAR = 0.9
 export const OIL_MAX = 10
 /** Parte del tiempo entre campanas que debe arder el faro para que la noche cuente como iluminada. */
