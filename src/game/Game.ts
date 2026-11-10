@@ -45,7 +45,7 @@ import { Handheld } from './handheld'
 import { CameraShake } from './shake'
 import { Input, RIGHT_CLICK } from './input'
 import { holdsFood, stepActions, type InventoryFocus } from './actions'
-import { anyOf } from './bindings'
+import { anyOf, bindingLabel } from './bindings'
 import { acceptsKeys, afterLockChange, escapeResumes, inGame, POINTER_LOCK_COOLDOWN_MS, showsCrosshair, type GameState } from './states'
 import { loadSettings, saveSettings, SETTING_RANGES, type Settings } from './settings'
 import { interpolate, NO_INPUT, rotatePlayer, type PlayerInput, type Vec3 } from '../sim/player'
@@ -179,6 +179,8 @@ export class Game {
   private craftWorld = clientCraftWorld(() => this.sim.structures.list)
   /** Dónde un mob ya no hace pie y nada (la regla de la simulación): ahí sus pasos son chapoteos. */
   private mobSwimming = (x: number, z: number) => this.sim.island.heightAt(x, z) < WATER_LEVEL - WADE_DEPTH
+  /** El nombre de la tecla de uso en los avisos: se calcula al asignarla, no en cada frame. */
+  private useKey = bindingLabel(this.settings.bindings.use)
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
   private worldVersion = -1
   /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
@@ -465,6 +467,7 @@ export class Game {
   applyBindings() {
     this.input.setBindings(this.settings.bindings)
     this.hud.inventory.setBindings(this.settings.bindings)
+    this.useKey = bindingLabel(this.settings.bindings.use)
   }
 
   /** Zoom del minimapa: +1 acerca (cabe menos mundo en el mapa), −1 aleja. Se guarda con los demás ajustes. */
@@ -1135,6 +1138,8 @@ export class Game {
     // Se va antes de tiempo si ya se lleva en la mano lo que hacía falta.
     const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)
     const usable = this.state === 'playing' ? usableNear(structures.list, p.pos) : null
+    // El contorno va en lo que se puede usar ahora: con la tecla de uso (cerca) o abriéndolo con el clic derecho (mirándolo).
+    this.structureView.setOutline(usable ?? (this.state === 'playing' ? aimedStation(structures.list, p.pos, this.look.yaw, CLIENT_STATION_RANGE) : null))
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating' && !net) this.hud.setPrompt(this.waitingToRespawn())
@@ -1142,8 +1147,8 @@ export class Game {
     else if (placing && spot) this.hud.setPrompt(spot.valid ? PLACE_PROMPT[placing.kind] : 'No se puede colocar aquí')
     else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
-    else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules, sim.threat.state.totem))
-    else if (!slot.target && nearestProcessor(structures.list, p.pos, CLIENT_STATION_RANGE)?.shop) this.hud.setPrompt('Mercader — E para comprar y vender')
+    else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules, sim.threat.state.totem, this.useKey))
+    else if (!slot.target && nearestProcessor(structures.list, p.pos, CLIENT_STATION_RANGE)?.shop) this.hud.setPrompt(`Mercader — ${this.useKey} para comprar y vender`)
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') {
       this.hud.inventory.updateRecipes(this.craftWorld, p.pos)

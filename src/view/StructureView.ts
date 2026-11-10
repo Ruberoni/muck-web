@@ -357,6 +357,34 @@ const MODELS: Record<StructureKind, (m: MaterialFor, shadows: boolean) => Struct
 const own: MaterialFor = (material) => material
 
 /**
+ * El contorno de lo que se puede usar: blanco semitransparente y dibujado del revés, para que de la copia inflada solo
+ * se vea lo que asoma por fuera de la silueta (una línea por el borde, nunca sobre las caras ni las aristas interiores).
+ */
+export const outlineMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.4, side: THREE.BackSide, depthWrite: false })
+
+/** Grosor del contorno: una parte de cada pieza, con un suelo para que se vea y un techo para que no sea un borrón. */
+const OUTLINE_SHARE = 0.02
+const OUTLINE_MIN = 0.012
+const OUTLINE_MAX = 0.18
+
+/**
+ * La geometría empujada hacia fuera por sus normales: es lo que da el grosor del contorno. Se clona, porque las de los
+ * modelos son compartidas entre estructuras y con las vistas previas.
+ */
+function hullOf(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  geometry.computeBoundingSphere()
+  const hull = geometry.clone()
+  const thickness = THREE.MathUtils.clamp(geometry.boundingSphere!.radius * OUTLINE_SHARE, OUTLINE_MIN, OUTLINE_MAX)
+  const position = hull.getAttribute('position') as THREE.BufferAttribute
+  const normal = hull.getAttribute('normal') as THREE.BufferAttribute
+  for (let i = 0; i < position.count; i++) {
+    position.setXYZ(i, position.getX(i) + normal.getX(i) * thickness, position.getY(i) + normal.getY(i) * thickness, position.getZ(i) + normal.getZ(i) * thickness)
+  }
+  position.needsUpdate = true
+  return hull
+}
+
+/**
  * Las estructuras dibujadas: un modelo por estructura de la simulación, la vista previa al colocar y un grupo
  * fijo de luces para las fogatas más cercanas.
  */
@@ -367,6 +395,12 @@ export class StructureView {
   /** Una vista previa por tipo, creada la primera vez que hace falta; solo se ve una a la vez. */
   private ghosts = new Map<StructureKind, THREE.Group>()
   private ghostMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false })
+  /** Geometrías infladas por la de origen: el contorno de cada pieza se calcula una vez y se reutiliza. */
+  private hulls = new Map<THREE.BufferGeometry, THREE.BufferGeometry>()
+  /** Los contornos puestos ahora; cada uno es hijo de la pieza que contornea. */
+  private outline: { parent: THREE.Object3D; hull: THREE.Mesh }[] = []
+  /** La estructura contorneada ahora (null: ninguna). */
+  private outlineId: number | null = null
   private lights: THREE.PointLight[] = []
   /** La luz que los haces del faro pasean por el suelo. */
   private sweeps: THREE.SpotLight[] = []
@@ -412,6 +446,37 @@ export class StructureView {
     model.position.set(spot.x, spot.y - 0.05, spot.z)
     model.rotation.y = STRUCTURE_DEFS[kind].facesPlacer ? ghost.yaw : 0
     this.ghostMaterial.color.set(spot.valid ? '#7dff8a' : '#ff5a4f')
+  }
+
+  /**
+   * El contorno blanco de la estructura con la que se puede hacer algo ahora (`null` lo quita). Cada pieza sólida se
+   * contornea con una copia inflada dibujada del revés, y va como hija suya: hereda su transformación y lo que aún no
+   * está construido (fases de una obra, la hélice del avión) tampoco se contornea. Los haces y resplandores, que son
+   * transparentes, se dejan fuera: el contorno es de lo sólido.
+   */
+  setOutline(structure: { id: number } | null) {
+    const id = structure?.id ?? null
+    if (id === this.outlineId) return
+    this.clearOutline()
+    if (id === null) return
+    const model = this.models.get(id)
+    if (!model) return
+    this.outlineId = id
+    model.root.traverse((node) => {
+      const piece = node as THREE.Mesh
+      if (!piece.isMesh || (piece.material as THREE.Material).transparent) return
+      let hull = this.hulls.get(piece.geometry)
+      if (!hull) this.hulls.set(piece.geometry, (hull = hullOf(piece.geometry)))
+      const outline = new THREE.Mesh(hull, outlineMaterial)
+      piece.add(outline)
+      this.outline.push({ parent: piece, hull: outline })
+    })
+  }
+
+  private clearOutline() {
+    for (const { parent, hull } of this.outline) parent.remove(hull)
+    this.outline.length = 0
+    this.outlineId = null
   }
 
   /** Por frame: modelos de las estructuras, parpadeo de llamas y luces, que iluminan más cuanto más oscuro está. */
@@ -487,6 +552,7 @@ export class StructureView {
 
   /** Reinicio de partida: sin estructuras, luces apagadas y sin vista previa. */
   reset() {
+    this.clearOutline()
     for (const { root } of this.models.values()) this.group.remove(root)
     this.models.clear()
     for (const light of [...this.lights, ...this.sweeps]) light.intensity = 0
@@ -502,6 +568,8 @@ export class StructureView {
       // Un id que vuelve con otro tipo o en otro sitio (otra partida) es otra estructura.
       if (old && old.kind === s.kind && old.root.position.x === s.x && old.root.position.z === s.z) continue
       if (old) this.group.remove(old.root)
+      // El modelo contorneado se rehace: su contorno se va con él y se vuelve a poner en cuanto se dibuje el nuevo.
+      if (s.id === this.outlineId) this.clearOutline()
       const model = { ...MODELS[s.kind](own, true), kind: s.kind }
       model.root.position.set(s.x, s.y - 0.05, s.z)
       model.root.rotation.y = s.rotY
@@ -510,6 +578,7 @@ export class StructureView {
     }
     for (const [id, { root }] of this.models) {
       if (this.seen.has(id)) continue
+      if (id === this.outlineId) this.clearOutline()
       this.models.delete(id)
       this.group.remove(root)
     }

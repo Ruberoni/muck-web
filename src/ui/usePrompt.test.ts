@@ -9,17 +9,23 @@ const lighthouse = (fire: Structure['fire']) =>
 
 describe('el aviso del faro', () => {
   it('sin aceite no ofrece encenderlo', () => {
-    const text = usePrompt(lighthouse({ oil: 0, burning: false, left: 0, lit: 0 }), DEFAULT_RULES, false)
+    const text = usePrompt(lighthouse({ oil: 0, burning: false, left: 0, lit: 0 }), DEFAULT_RULES, false, 'E')
     expect(text).toContain('Sin aceite')
     expect(text).not.toContain('encenderlo')
   })
 
   it('con aceite se puede encender, y encendido, apagar', () => {
-    expect(usePrompt(lighthouse({ oil: 2, burning: false, left: 0, lit: 0 }), DEFAULT_RULES, false)).toContain('encenderlo')
-    expect(usePrompt(lighthouse({ oil: 0, burning: true, left: 10, lit: 0 }), DEFAULT_RULES, false)).toContain('apagarlo')
+    expect(usePrompt(lighthouse({ oil: 2, burning: false, left: 0, lit: 0 }), DEFAULT_RULES, false, 'E')).toContain('encenderlo')
+    expect(usePrompt(lighthouse({ oil: 0, burning: true, left: 10, lit: 0 }), DEFAULT_RULES, false, 'E')).toContain('apagarlo')
   })
 
   it('apagado a medias, lo que queda de la unidad aún lo enciende', () => {
-    expect(usePrompt(lighthouse({ oil: 0, burning: false, left: 10, lit: 0 }), DEFAULT_RULES, false)).toContain('encenderlo')
+    expect(usePrompt(lighthouse({ oil: 0, burning: false, left: 10, lit: 0 }), DEFAULT_RULES, false, 'E')).toContain('encenderlo')
+  })
+
+  it('la tecla del aviso es la que se haya asignado, no siempre E', () => {
+    const oil = { oil: 2, burning: false, left: 0, lit: 0 } as const
+    expect(usePrompt(lighthouse(oil), DEFAULT_RULES, false, 'Espacio')).toContain('Espacio para cargar aceite')
+    expect(usePrompt(lighthouse(oil), DEFAULT_RULES, false, 'E')).not.toContain('Espacio')
   })
 })

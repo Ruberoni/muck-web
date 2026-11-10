@@ -27,6 +27,8 @@ npm run preview   # sirve dist/ en http://localhost:4173/
 
 Haz clic en la pantalla para empezar (captura el ratón). Las teclas de la tabla son las de por defecto: se cambian en los ajustes (ver [Sonido y ajustes](#sonido-y-ajustes)).
 
+Lo que se puede usar ahora se marca con un contorno blanco tenue: una línea que recorre su silueta por fuera del modelo, sin marcar las caras ni las aristas de dentro, y que no se ve a través de nada. Va en el faro, el tótem, el avión y la tumba cuando se está a su lado (**E**), y en la fogata, las estaciones y el puesto del mercader cuando se los mira de cerca (clic derecho). El aviso bajo la mira dice qué se puede hacer y con qué tecla, que es la que se tenga asignada (`setOutline` en `src/view/StructureView.ts`: cada pieza sólida lleva una copia inflada por sus normales y dibujada del revés).
+
 | Tecla | Acción |
 | --- | --- |
 | **W A S D** | moverse |
