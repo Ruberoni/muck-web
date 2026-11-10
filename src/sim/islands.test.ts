@@ -21,15 +21,22 @@ describe('islas aleatorias', () => {
     expect(createIsland(island.seed).heightAt(13, -27)).toBe(island.heightAt(13, -27))
   })
 
-  it('cada semilla da otra isla: otro terreno, otros biomas y otros props', () => {
-    const islands = SEEDS.map(pickIsland)
-    expect(new Set(islands.map((i) => i.seed)).size).toBe(SEEDS.length)
-    expect(new Set(islands.map((i) => i.heightAt(20, 30).toFixed(3))).size).toBeGreaterThan(SEEDS.length / 2)
-    const firstTrees = islands.map((i) => generatePropPlacements(i).find((p) => p.kind === 'tree')!)
-    expect(new Set(firstTrees.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`)).size).toBe(SEEDS.length)
-    const spawns = islands.map((i) => findSpawn(createPropWorld(generatePropPlacements(i)).grid, i))
-    expect(new Set(spawns.map((s) => `${s.x.toFixed(1)},${s.z.toFixed(1)}`)).size).toBeGreaterThan(1)
-  })
+  // Genera y valida las 8 islas enteras, con sus props y su punto de aparición: solo eso ya roza los 2 s, y con la
+  // suite en paralelo los workers se pelean por la CPU y se pasaba de los 5 s por defecto. El timeout holgado evita
+  // un rojo intermitente que taparía un fallo real; la lógica de la isla no cambia.
+  it(
+    'cada semilla da otra isla: otro terreno, otros biomas y otros props',
+    () => {
+      const islands = SEEDS.map(pickIsland)
+      expect(new Set(islands.map((i) => i.seed)).size).toBe(SEEDS.length)
+      expect(new Set(islands.map((i) => i.heightAt(20, 30).toFixed(3))).size).toBeGreaterThan(SEEDS.length / 2)
+      const firstTrees = islands.map((i) => generatePropPlacements(i).find((p) => p.kind === 'tree')!)
+      expect(new Set(firstTrees.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`)).size).toBe(SEEDS.length)
+      const spawns = islands.map((i) => findSpawn(createPropWorld(generatePropPlacements(i)).grid, i))
+      expect(new Set(spawns.map((s) => `${s.x.toFixed(1)},${s.z.toFixed(1)}`)).size).toBeGreaterThan(1)
+    },
+    20_000,
+  )
 
   it('una partida en otra isla cambia todo lo que sale de ella y sigue con el mismo tick y los mismos jugadores', () => {
     const sim = new Simulation(1)

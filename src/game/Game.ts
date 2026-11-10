@@ -280,10 +280,12 @@ export class Game {
       if (document.hidden) leave()
     })
 
-    // Esc también reanuda, además del clic en el overlay. Va antes que el listener de la pantalla de inventario
-    // (que se engancha al abrirse), así que desde allí Esc pausa y no reanuda en la misma pulsación.
-    window.addEventListener('keydown', (e) => {
-      if (e.code !== 'Escape' || e.repeat) return
+    // Esc también reanuda, además del clic en el overlay. Va en `keyup` y no en `keydown`: Chrome suelta la captura
+    // con el Esc aún pulsado, y si se le pide recapturar mientras ese mismo evento sigue en curso la concede y la
+    // suelta al instante (la pausa parpadea y no se sale de ella). Al soltar la tecla ya ha terminado. Va antes que
+    // el listener de la pantalla de inventario, así que desde allí Esc pausa y no reanuda en la misma pulsación.
+    window.addEventListener('keyup', (e) => {
+      if (e.code !== 'Escape') return
       if (escapeResumes(this.state, performance.now() - this.pausedAt)) void this.resumeByEscape()
     })
 
