@@ -3,9 +3,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
 import { enemyFloor } from '../sim/world/terrain'
 import { ENEMY_BODY_LIFT, ENEMY_BODY_RADIUS, ENEMY_BODY_SCALE } from '../sim/aim'
-import { ENEMY_DEFS, type EnemyType, type HitEfficacy } from '../sim/constants'
+import { ENEMY_DEFS, enemyScale, type EnemyType, type HitEfficacy, type MobLook } from '../sim/constants'
 import type { ChargeState, EnemyData } from '../sim/enemies'
 import type { SimEventData } from '../sim/events'
+import { ENEMY_MODELS, type EnemyModelSource } from './enemyModels'
+import { EnemyRig } from './EnemyRig'
 
 const HURT_FLASH = 0.15
 const LUNGE_TIME = 0.2
@@ -17,6 +19,11 @@ const AIM_LEAN = -0.2
 const DAZED_TILT = 0.3
 // Por debajo de esta fracción de su velocidad no se considera que ande (los empujones entre ellos no lo hacen botar).
 const WALK_MIN_SPEED = 0.1
+/** Con modelo, tras el clip de muerte se hunde en el suelo durante este tiempo. */
+const SINK_TIME = 0.6
+const SINK_DEPTH = 1.2
+/** Rapidez con que la velocidad que ve el modelo sigue a la de verdad: sin saltos de un frame a otro. */
+const SPEED_SMOOTHING = 10
 
 // El cuerpo es también la hitbox (sim/aim.ts).
 const bodyGeometry = new THREE.IcosahedronGeometry(ENEMY_BODY_RADIUS, 0)
@@ -141,7 +148,12 @@ const LOOKS: Record<EnemyType, EnemyLook> = {
 /** Modelo de un enemigo y sus animaciones, que solo existen en la vista. */
 interface EnemyModel {
   type: EnemyType
+  look: MobLook
   object: THREE.Group
+  /** El modelo animado, en cuanto ha cargado; mientras, se ve el de cajas. */
+  rig: EnemyRig | null
+  /** A qué velocidad se mueve (m/s, suavizada): para andar o correr. */
+  speed: number
   body: THREE.Mesh
   held: THREE.Mesh | null
   /** Dónde se dibujó en el último frame (al morir se queda ahí). */
@@ -174,6 +186,9 @@ export class EnemyView {
   private models = new Map<number, EnemyModel>()
   private seen = new Set<number>()
 
+  /** `source`: de dónde salen los modelos animados (sin ella, solo los de cajas). */
+  constructor(private source: EnemyModelSource | null = null) {}
+
   /** Aplica lo que ha pasado en un paso. */
   present(events: readonly SimEventData[]) {
     for (const e of events) {
@@ -184,8 +199,26 @@ export class EnemyView {
             model.hurt = HURT_FLASH
             model.efficacy = e.efficacy
             // Si lo ha aguantado (sin empujón), sigue andando.
-            if (e.kx !== 0 || e.kz !== 0) model.stagger = ENEMY_DEFS[model.type].stagger
+            if (e.kx !== 0 || e.kz !== 0) {
+              model.stagger = ENEMY_DEFS[model.type].stagger
+              const hit = ENEMY_MODELS[model.type].clips.hit
+              if (model.rig && hit && !model.rig.busy) model.rig.play(hit, model.rig.duration(hit) / Math.max(0.2, model.stagger * 2))
+            }
           }
+          break
+        }
+        case 'enemySwing': {
+          // El golpe empieza: el clip va a la velocidad que hace que pegue justo cuando pega de verdad.
+          const model = this.models.get(e.id)
+          const { attack, impact = 0.5 } = model ? ENEMY_MODELS[model.type].clips : {}
+          const strike = model ? ENEMY_DEFS[model.type].strike : undefined
+          if (model?.rig && attack && strike) model.rig.play(attack, model.rig.mark(attack, 'golpe', impact) / strike)
+          break
+        }
+        case 'enemySpecial': {
+          // Cada ataque especial tiene su clip, que dura lo que el aviso y lo agotado: se suelta al acabar.
+          const model = this.models.get(e.id)
+          if (model?.rig?.has(e.attack)) model.rig.play(e.attack, 1, true)
           break
         }
         case 'enemyDied': {
@@ -195,7 +228,14 @@ export class EnemyView {
         }
         case 'enemyCharge': {
           const model = this.models.get(e.id)
-          if (model) model.charge = e.state
+          if (!model) break
+          model.charge = e.state
+          const rig = model.rig
+          if (!rig) break
+          const { throw: toss } = ENEMY_MODELS[model.type].clips
+          // El lancero apunta: el clip suelta la lanza en su `soltar`, justo cuando la suelta de verdad.
+          if (e.state === 'aim' && toss) rig.play(toss, rig.mark(toss, 'soltar', ENEMY_DEFS[model.type].windup) / ENEMY_DEFS[model.type].windup)
+          if (e.state === 'idle' && !toss) rig.release()
           break
         }
         case 'enemyAttack': {
@@ -216,16 +256,23 @@ export class EnemyView {
       const x = e.prev.x + (e.pos.x - e.prev.x) * alpha
       const z = e.prev.z + (e.pos.z - e.prev.z) * alpha
       if (!model) {
-        model = this.create(e.id, e.type, x, z)
-      } else if (model.stagger <= 0 && dt > 0 && Math.hypot(x - model.x, z - model.z) > WALK_MIN_SPEED * ENEMY_DEFS[e.type].speed * dt) {
-        model.walk += dt
+        model = this.create(e.id, e.type, e.look ?? 0, x, z)
+      } else if (dt > 0) {
+        const moved = Math.hypot(x - model.x, z - model.z)
+        if (model.stagger <= 0 && moved > WALK_MIN_SPEED * ENEMY_DEFS[e.type].speed * dt) model.walk += dt
+        model.speed += (moved / dt - model.speed) * Math.min(1, dt * SPEED_SMOOTHING)
       }
+      if (!model.rig && this.source) this.dress(model)
       model.x = x
       model.z = z
       model.yaw = e.yaw
     }
     for (const [id, model] of this.models) {
-      if (model.dying === null && !this.seen.has(id)) model.dying = DEATH_TIME
+      if (model.dying === null && !this.seen.has(id)) {
+        model.dying = model.rig ? model.rig.deathTime + SINK_TIME : DEATH_TIME
+        model.rig?.die()
+      }
+      model.rig?.update(dt, model.speed)
       model.hurt = Math.max(0, model.hurt - dt)
       model.lunge = Math.max(0, model.lunge - dt)
       model.stagger = Math.max(0, model.stagger - dt)
@@ -246,7 +293,19 @@ export class EnemyView {
     for (const [id, model] of this.models) this.remove(id, model)
   }
 
-  private create(id: number, type: EnemyType, x: number, z: number): EnemyModel {
+  /** En cuanto está su modelo, lo pone en lugar del de cajas (que se queda, oculto, para el raycast de los tests). */
+  private dress(model: EnemyModel) {
+    if (model.dying !== null) return
+    const template = this.source!.get(model.type, model.look)
+    if (!template) return
+    const rig = new EnemyRig(template, ENEMY_MODELS[model.type].clips, enemyScale(model.type, model.look))
+    for (const child of model.object.children) child.visible = false
+    // El de cajas va escalado por su tipo; el modelo, por su ajuste a la hitbox (el objeto ya lleva la escala).
+    model.object.add(rig.root)
+    model.rig = rig
+  }
+
+  private create(id: number, type: EnemyType, mobLook: MobLook, x: number, z: number): EnemyModel {
     const look = LOOKS[type]
     const object = new THREE.Group()
     const body = new THREE.Mesh(look.body, look.material)
@@ -267,7 +326,7 @@ export class EnemyView {
       object.add(held)
     }
     this.group.add(object)
-    const model: EnemyModel = { type, object, body, held, x, z, yaw: 0, walk: 0, hurt: 0, efficacy: 'normal', lunge: 0, charge: 'idle', stagger: 0, dying: null }
+    const model: EnemyModel = { type, look: mobLook, object, rig: null, speed: 0, body, held, x, z, yaw: 0, walk: 0, hurt: 0, efficacy: 'normal', lunge: 0, charge: 'idle', stagger: 0, dying: null }
     this.models.set(id, model)
     return model
   }
@@ -278,6 +337,7 @@ export class EnemyView {
   }
 
   private place(model: EnemyModel) {
+    if (model.rig) return this.placeRig(model, model.rig)
     const { x, z, yaw } = model
     const bob = Math.abs(Math.sin(model.walk * 9)) * 0.12
     // Al atacar se lanza un poco hacia delante.
@@ -299,5 +359,17 @@ export class EnemyView {
     const look = LOOKS[model.type]
     const warning = charge === 'crouch' || charge === 'aim'
     model.body.material = warning ? look.flashes.normal : charge === 'dazed' ? look.flashes.effective : model.hurt > 0 ? look.flashes[model.efficacy] : look.material
+  }
+
+  /** Con modelo: las animaciones hacen el resto; aquí solo dónde está, su tamaño, cómo se hunde al morir y su destello. */
+  private placeRig(model: EnemyModel, rig: EnemyRig) {
+    const { x, z, yaw } = model
+    const o = model.object
+    const sink = model.dying !== null && model.dying < SINK_TIME ? (1 - model.dying / SINK_TIME) * SINK_DEPTH : 0
+    o.position.set(x, enemyFloor(this.island, x, z) - sink, z)
+    o.rotation.set(0, yaw, 0)
+    o.scale.setScalar(enemyScale(model.type, model.look))
+    const { charge } = model
+    rig.setFlash(charge === 'crouch' || charge === 'aim' ? 'warn' : charge === 'dazed' ? 'effective' : model.hurt > 0 ? model.efficacy : null)
   }
 }

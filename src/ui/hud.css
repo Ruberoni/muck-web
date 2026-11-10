@@ -703,3 +703,10 @@ kbd {
 .shop-tabs { display: flex; gap: 6px; }
 .shop-tab { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgb(255 255 255 / 0.3); background: rgb(255 255 255 / 0.08); color: inherit; cursor: pointer; }
 .shop-tab.active { background: #ffd866; border-color: #ffd866; color: #1d2230; }
+
+.credits {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.6;
+}

@@ -8,3 +8,5 @@ dist
 # Lo que se descarga para el taller de arte no se sube: solo las carpetas
 arte/muestras/*/*
 !arte/muestras/*/.gitkeep
+# Los modelos aprobados pesan: al juego van exportados (arte/taller/exportar.mjs → public/models/mobs)
+arte/listas/**/*.glb

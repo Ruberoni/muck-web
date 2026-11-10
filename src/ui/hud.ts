@@ -45,6 +45,11 @@ const CONTROLS = `
     <li><kbd>Esc</kbd> pausa</li>
   </ul>`
 
+/** Lo que piden las licencias de los modelos (el LICENSE.txt de cada carpeta de public/models). */
+const CREDITS = `
+  <p class="credits">Modelos: Quaternius (CC0); Guardián del meteorito a partir de "Colossus" de Darwin Yamamoto
+  (CC-BY 3.0); Coloso de Cristal a partir de LOWPO Golem Pack de Standout 7.</p>`
+
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement) => {
   const node = document.createElement(tag)
   node.className = className
@@ -136,7 +141,7 @@ export class Hud {
     this.overlayTitle = el('p', 'action', panel)
     this.results = el('div', 'results', panel)
     this.results.hidden = true
-    panel.insertAdjacentHTML('beforeend', CONTROLS)
+    panel.insertAdjacentHTML('beforeend', CONTROLS + CREDITS)
     if (!matchMedia('(any-pointer: fine)').matches) {
       el('p', 'warning', panel).textContent = 'Necesitas teclado y ratón para jugar.'
     }

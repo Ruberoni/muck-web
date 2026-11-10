@@ -4,6 +4,7 @@ import { Enemies } from '../sim/enemies'
 import { DAY_FRACTION } from '../sim/world/daycycle'
 import { ENEMY_DEFS, ENEMY_TYPES, STEP } from '../sim/constants'
 import { EnemyView } from './EnemyView'
+import { buildTemplate, HITBOX_HEIGHT, type EnemyModelSource } from './enemyModels'
 
 const HURT = new THREE.Color('#ff3b2f')
 
@@ -196,6 +197,62 @@ describe('EnemyView', () => {
     frame()
     enemies.reset()
     view.reset()
+    expect(view.group.children).toHaveLength(0)
+  })
+})
+
+describe('EnemyView con modelos', () => {
+  /** Un modelo de mentira: una caja de 2 m por apariencia, y clips vacíos con los nombres de los de verdad. */
+  function fakeSource(): EnemyModelSource & { asked: string[] } {
+    const clip = (name: string, duration: number, extras: Record<string, number> = {}) => {
+      const c = new THREE.AnimationClip(name, duration, [])
+      c.userData = extras
+      return c
+    }
+    const clips = [clip('Idle', 1), clip('Walk', 1), clip('Run', 1), clip('Sword_Slash', 1.2), clip('HitRecieve', 0.6), clip('Death', 1.5)]
+    const asked: string[] = []
+    return {
+      asked,
+      get(type, look) {
+        asked.push(`${type}:${look}`)
+        const scene = new THREE.Group()
+        for (const v of ['base', 'noche']) {
+          const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1).translate(0, 1, 0), new THREE.MeshStandardMaterial())
+          mesh.name = `${v}__Cuerpo`
+          scene.add(mesh)
+        }
+        return buildTemplate(scene, clips, look, (o) => o.clone())
+      },
+    }
+  }
+
+  it('en cuanto está el modelo lo pone, del alto de la hitbox, y deja el de cajas oculto para el raycast', () => {
+    const source = fakeSource()
+    const enemies = new Enemies([])
+    const view = new EnemyView(source)
+    const e = enemies.spawnAt(0, 0)
+    e.look = 1
+    view.update(STEP, enemies.list, 1)
+    expect(source.asked).toEqual(['goblin:1'])
+    const object = view.group.children[0] as THREE.Group
+    const rig = object.children.at(-1)!
+    expect(object.children.slice(0, -1).every((c) => !c.visible)).toBe(true)
+    expect(object.children[0].userData.enemy).toBe(e.id)
+    // Solo las piezas de su apariencia.
+    expect(rig.children.map((c) => c.name)).toEqual(['noche__Cuerpo'])
+    expect(rig.scale.x).toBeCloseTo(HITBOX_HEIGHT / 2)
+  })
+
+  it('al morir enseña su muerte, se hunde y luego desaparece', () => {
+    const enemies = new Enemies([])
+    const view = new EnemyView(fakeSource())
+    const e = enemies.spawnAt(0, 0)
+    view.update(STEP, enemies.list, 1)
+    enemies.hit(e, e.hp, { x: 1, z: 0 }, 0)
+    view.update(STEP, enemies.list, 1)
+    for (let t = 0; t < 1.5; t += STEP) view.update(STEP, enemies.list, 1)
+    expect(view.group.children).toHaveLength(1)
+    for (let t = 0; t < 1; t += STEP) view.update(STEP, enemies.list, 1)
     expect(view.group.children).toHaveLength(0)
   })
 })

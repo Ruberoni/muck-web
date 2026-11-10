@@ -4,6 +4,7 @@ import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
 import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
+import { EnemyModels } from '../view/enemyModels'
 import { PickupView } from '../view/PickupView'
 import { MeteorView } from '../view/MeteorView'
 import { SpawnSmokeView } from '../view/SpawnSmokeView'
@@ -123,7 +124,9 @@ export class Game {
   private decor: DecorView | null = null
   readonly hud: Hud
   readonly input: Input
-  readonly enemyView = new EnemyView()
+  /** Los modelos animados de los mobs: se descargan la primera vez que sale uno de cada tipo (los trasgos, ya al empezar). */
+  private enemyModels = new EnemyModels()
+  readonly enemyView = new EnemyView(this.enemyModels)
   readonly pickupView = new PickupView()
   readonly projectileView = new ProjectileView()
   readonly meteorView = new MeteorView()
@@ -304,6 +307,8 @@ export class Game {
       this.renderer.setSize(window.innerWidth, window.innerHeight)
     })
 
+    // Los trasgos salen la primera noche: que su modelo ya esté al anochecer.
+    this.enemyModels.preload(['goblin', 'spearGoblin'])
     this.renderer.setAnimationLoop((time) => this.frame(time))
   }
 
