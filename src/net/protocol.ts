@@ -1,6 +1,7 @@
 import { ALL_BUTTONS, type Action, type ActionData, type Move } from '../sim/commands'
 import { EQUIP_SLOTS, type EquipSlot } from '../sim/equipment'
 import { ENEMY_DEFS, ENEMY_TYPES, MAX_PITCH, PROP_DEFS, type EnemyType } from '../sim/constants'
+import { isBoostId, isBoostPayment } from '../sim/boosts'
 import { isRecipeId } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { Combat } from '../sim/interaction'
@@ -18,7 +19,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 60
+export const PROTOCOL_VERSION = 61
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -583,7 +584,13 @@ function parseAction(a: unknown): Action | null {
       data = { kind: 'station', id: a.id, slot: a.slot as StationSlot, from: a.from as number | null, all: a.all }
       break
     case 'shop':
-      if (!isInt(a.id, 0, Number.MAX_SAFE_INTEGER) || (a.op !== 'buy' && a.op !== 'sell') || !(Object.keys(ITEM_NAMES) as unknown[]).includes(a.item)) return null
+      if (!isInt(a.id, 0, Number.MAX_SAFE_INTEGER)) return null
+      if (a.op === 'boost') {
+        if (!isBoostId(a.boost) || !isBoostPayment(a.pay)) return null
+        data = { kind: 'shop', id: a.id, op: 'boost', boost: a.boost, pay: a.pay }
+        break
+      }
+      if ((a.op !== 'buy' && a.op !== 'sell') || !ITEMS.includes(a.item as ItemId)) return null
       data = { kind: 'shop', id: a.id, op: a.op, item: a.item as ItemId }
       break
     case 'craft':

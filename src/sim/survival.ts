@@ -1,5 +1,4 @@
 import {
-  HEALTH_MAX,
   STAMINA_MAX,
   STAMINA_RECOVER_THRESHOLD,
   HEALTH_REGEN_DELAY,
@@ -10,6 +9,7 @@ import {
   STARVE_DAMAGE_PER_SEC,
   type ConsumableDef,
 } from './constants'
+import { boostFactor, maxHealthOf, type BoostLevels } from './boosts'
 
 export interface Vitals {
   health: number
@@ -25,6 +25,8 @@ export interface Vitals {
   speedMul: number
   guardLeft: number
   guardMul: number
+  /** Las mejoras del mercader, que cambian estas tasas y la vida máxima (ver boosts.ts). */
+  boosts?: BoostLevels
 }
 
 /** Lo que se recupera de la resistencia al tomar algo que la devuelve (los campos del jugador). */
@@ -43,13 +45,16 @@ export const guardFactor = (v: Vitals) => (v.guardLeft > 0 ? v.guardMul : 1)
 
 /**
  * Un paso fijo: el hambre baja siempre; a cero quita vida y por encima del umbral la regenera, salvo justo después
- * de recibir daño. La curación de un consumible va aparte y no se pausa: es para mitad de una pelea.
+ * de recibir daño. La curación de un consumible va aparte y no se pausa: es para mitad de una pelea. Las mejoras del
+ * mercader (`boosts`) multiplican estas tasas y la vida máxima.
  */
 export function stepSurvival(v: Vitals, dt: number) {
-  v.hunger = Math.max(0, v.hunger - HUNGER_DRAIN_PER_SEC * dt)
+  const maxHealth = maxHealthOf(v.boosts)
+  v.hunger = Math.max(0, v.hunger - HUNGER_DRAIN_PER_SEC * boostFactor(v.boosts, 'hunger') * dt)
   v.healDelay = Math.max(0, v.healDelay - dt)
   if (v.hunger <= 0) v.health = Math.max(0, v.health - STARVE_DAMAGE_PER_SEC * dt)
-  else if (v.hunger > HEALTH_REGEN_HUNGER && v.healDelay <= 0) v.health = Math.min(HEALTH_MAX, v.health + HEALTH_REGEN_PER_SEC * dt)
+  else if (v.hunger > HEALTH_REGEN_HUNGER && v.healDelay <= 0)
+    v.health = Math.min(maxHealth, v.health + HEALTH_REGEN_PER_SEC * boostFactor(v.boosts, 'regen') * dt)
   v.breathLeft = Math.max(0, v.breathLeft - dt)
   v.speedLeft = Math.max(0, v.speedLeft - dt)
   if (v.speedLeft <= 0) v.speedMul = 1
@@ -57,7 +62,7 @@ export function stepSurvival(v: Vitals, dt: number) {
   if (v.guardLeft <= 0) v.guardMul = 1
   if (v.regenLeft <= 0 || v.health <= 0) return
   v.regenLeft = Math.max(0, v.regenLeft - dt)
-  v.health = Math.min(HEALTH_MAX, v.health + v.regenPerSec * dt)
+  v.health = Math.min(maxHealth, v.health + v.regenPerSec * dt)
   if (v.regenLeft <= 0) v.regenPerSec = 0
 }
 
@@ -72,8 +77,9 @@ export function hurt(v: Vitals, damage: number) {
  * que falta o da un efecto con tiempo. Si no, no se gasta.
  */
 export function eat(v: Vitals & Partial<Breath>, def: ConsumableDef): boolean {
+  const maxHealth = maxHealthOf(v.boosts)
   const feeds = def.food > 0 && v.hunger < HUNGER_MAX
-  const heals = v.health < HEALTH_MAX && (def.heal !== undefined || def.regen !== undefined)
+  const heals = v.health < maxHealth && (def.heal !== undefined || def.regen !== undefined)
   const rests = def.stamina !== undefined && v.stamina !== undefined && v.stamina < STAMINA_MAX
   const effect = def.breath !== undefined || def.speed !== undefined || def.guard !== undefined || def.world !== undefined
   if (!feeds && !heals && !rests && !effect) return false
@@ -93,7 +99,7 @@ export function eat(v: Vitals & Partial<Breath>, def: ConsumableDef): boolean {
     v.guardMul = def.guard.factor
   }
   v.hunger = Math.min(HUNGER_MAX, v.hunger + def.food)
-  if (def.heal !== undefined) v.health = Math.min(HEALTH_MAX, v.health + def.heal)
+  if (def.heal !== undefined) v.health = Math.min(maxHealth, v.health + def.heal)
   if (def.regen) {
     v.regenLeft = def.regen.seconds
     v.regenPerSec = def.regen.perSec

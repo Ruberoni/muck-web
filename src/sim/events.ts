@@ -3,6 +3,7 @@ import type { Hazard } from './hazards'
 import type { StationState } from './stations'
 import type { RecipeId } from './crafting'
 import type { BuildState } from './builds'
+import type { BoostId } from './boosts'
 import type { ChargeState } from './enemies'
 import type { ItemId } from './inventory'
 import type { MatchResult } from './match'
@@ -57,7 +58,8 @@ export type SimEventData =
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
-  | { type: 'playerTraded'; id: PlayerId; op: 'buy' | 'sell'; item: ItemId }
+  /** Comprar o vender en el mercader; con `op` 'boost', comprar un nivel de una mejora pagándolo con `item`. */
+  | { type: 'playerTraded'; id: PlayerId; op: 'buy' | 'sell' | 'boost'; item: ItemId; boost?: BoostId }
   /** Ha colocado `item` (la estructura llega en su `structurePlaced`). */
   | { type: 'playerPlaced'; id: PlayerId; item: ItemId }
   /** Ha tirado `amount` de `item` (el objeto del suelo llega en su `pickupSpawn`). */

@@ -20,6 +20,7 @@ import {
   WORLD_BOUND_FACTOR,
 } from './constants'
 import { BLOCK_SPEED_FACTOR } from './equipment'
+import { boostFactor } from './boosts'
 import { NO_HEALING, speedFactor, type Vitals } from './survival'
 
 export interface Vec3 {
@@ -90,6 +91,7 @@ export function createPlayer(env: PlayerEnv, x: number, z: number, yaw = 0): Pla
     blocking: false,
     health: HEALTH_MAX,
     hunger: HUNGER_MAX,
+    boosts: {},
     ...NO_HEALING,
   }
 }
@@ -186,7 +188,7 @@ export function stepPlayer(player: Player, input: PlayerInput, env: PlayerEnv, d
 
   if (spent) player.regenDelay = STAMINA_REGEN_DELAY
   else if (player.regenDelay > 0) player.regenDelay = Math.max(0, player.regenDelay - dt)
-  else if (!player.blocking) player.stamina = Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN_PER_SEC * dt)
+  else if (!player.blocking) player.stamina = Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN_PER_SEC * boostFactor(player.boosts, 'stamina') * dt)
 
   if (player.exhausted && player.stamina >= STAMINA_RECOVER_THRESHOLD) player.exhausted = false
 

@@ -24,6 +24,7 @@ import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
 import { usableNear } from '../sim/builds'
+import { maxHealthOf } from '../sim/boosts'
 import { clockTexts, lightText, planeText, threatText } from '../ui/clockText'
 import { usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
@@ -1130,7 +1131,7 @@ export class Game {
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot, sim.island) : null
     this.structureView.setGhost(placing && spot && { kind: placing.kind, spot, yaw: look.yaw })
 
-    this.hud.setHealth(p.health, HEALTH_MAX, p.regenLeft)
+    this.hud.setHealth(p.health, maxHealthOf(p.boosts), p.regenLeft)
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft })
@@ -1156,7 +1157,7 @@ export class Game {
       const station = this.openStationId === null ? undefined : this.sim.structures.byId(this.openStationId)
       const near = station && Math.hypot(station.x - p.pos.x, station.z - p.pos.z) - station.radius <= CLIENT_STATION_RANGE
       if (!near) this.openStationId = null
-      this.hud.inventory.setStation(near ? station : null, this.sim.threat.canForget)
+      this.hud.inventory.setStation(near ? station : null, this.sim.threat.canForget, p.boosts)
     }
     this.hud.setClock(clockTexts(sim.clock))
     const boss = enemies.list.find((e) => ENEMY_DEFS[e.type].boss)

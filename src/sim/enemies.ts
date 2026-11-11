@@ -696,8 +696,8 @@ export class Enemies {
     return e
   }
 
-  /** Golpe de `by` desde `from` (la posición del atacante). Devuelve true si lo mata. */
-  hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId, efficacy: HitEfficacy = 'normal', weapon: WeaponClass = 'hand'): boolean {
+  /** Golpe de `by` desde `from` (la posición del atacante). `knock`: por cuánto se multiplica su empuje. Devuelve true si lo mata. */
+  hit(e: EnemyData, damage: number, from: { x: number; z: number }, by: PlayerId, efficacy: HitEfficacy = 'normal', weapon: WeaponClass = 'hand', knock = 1): boolean {
     if (!e.alive) return false
     if (e.shell > 0) {
       // El pico rompe la coraza; lo demás apenas le hace nada.
@@ -725,8 +725,8 @@ export class Enemies {
     const dx = e.pos.x - from.x
     const dz = e.pos.z - from.z
     const d = Math.hypot(dx, dz) || 1
-    e.knock.x = (dx / d) * def.knockback
-    e.knock.z = (dz / d) * def.knockback
+    e.knock.x = (dx / d) * def.knockback * knock
+    e.knock.z = (dz / d) * def.knockback * knock
     e.stagger = def.stagger
     e.staggerGuard = def.stagger + def.staggerGap
     e.attackCooldown = Math.max(e.attackCooldown, def.windup)

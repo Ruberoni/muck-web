@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PlayerCommands } from './commands'
+import { maxHealthOf } from './boosts'
 import { GAME_OVER_DELAY, HEALTH_MAX, RESPAWN_DAY_DELAY, RESPAWN_SHIELD, STEP } from './constants'
 import type { PlayerId, SimEvent } from './events'
 import { DIFFICULTIES, DIFFICULTY_DEFS, type Difficulty } from './match'
@@ -74,6 +75,17 @@ describe('muerte en una sala', () => {
     expect(slot.player).toMatchObject({ health: HEALTH_MAX, pos: expect.objectContaining({ x: slot.spawn.x, z: slot.spawn.z }) })
     // Sigue mirando a donde miraba: la orientación es del ratón del cliente.
     expect(slot.player.yaw).toBe(1.2)
+  })
+
+  it('las mejoras del mercader sobreviven a la muerte, y se reaparece con su vida máxima', () => {
+    const sim = withPlayers(2)
+    const { player } = sim.slot(1)
+    player.boosts = { damage: 2, health: 1 }
+    kill(sim, 1)
+    until(sim, 'playerRespawn', DAY_TICKS + 1)
+    expect(player.boosts).toEqual({ damage: 2, health: 1 })
+    expect(player.health).toBe(maxHealthOf(player.boosts))
+    expect(player.health).toBeGreaterThan(HEALTH_MAX)
   })
 
   it('al reaparecer pasa 3 s sin recibir daño ni ser objetivo, aunque tenga un enemigo encima', () => {

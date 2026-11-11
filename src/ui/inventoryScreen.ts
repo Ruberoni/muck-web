@@ -10,9 +10,23 @@ import { slotFor, STATION_DEFS, STATION_SLOTS, stationStall, type StationSlot } 
 import type { Structure } from '../sim/structures'
 import { EQUIP_SLOTS, equipSlotOf, type EquipSlot } from '../sim/equipment'
 import { buyProblem, OFFERS, priceOf, PURCHASES, sellProblem } from '../sim/merchant'
+import { BOOST_DEFS, BOOST_IDS, BOOST_PAYMENTS, boostCostText, boostFactor, boostProblem, levelOf, type BoostId, type BoostLevels, type BoostPayment } from '../sim/boosts'
 
 const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { chest: 'Pecho', shield: 'Escudo' }
 const PURCHASE_ITEMS = Object.keys(PURCHASES) as ItemId[]
+
+/** El icono de cada mejora: el de un objeto que ya existe y la recuerda (así no hay dibujos nuevos). */
+const BOOST_ICONS: Record<BoostId, ItemId> = {
+  damage: 'meteor_sword',
+  health: 'healing_potion',
+  regen: 'berry_infusion',
+  stamina: 'stamina_potion',
+  hunger: 'cooked_meat',
+  knockback: 'stone',
+}
+const PAYMENT_NAMES: Record<BoostPayment, string> = { coin: 'Monedas', mithril_bar: 'Mithril', iron_bar: 'Hierro' }
+const SHOP_HINT = 'Clic: comprar o vender uno'
+const BOOST_HINT = 'Clic: comprar un nivel · duran lo que la partida y cada nivel multiplica el anterior'
 
 const STATION_SLOT_NAMES: Record<StationSlot, string> = { input: 'Entrada', fuel: 'Combustible', output: 'Salida' }
 const STATION_HINT = 'Clic en una casilla: meter la pila · Clic derecho: meter una · Arrastrar a una ranura · Clic en una ranura: sacarla'
@@ -108,8 +122,14 @@ export class InventoryScreen {
   private shopColumn!: HTMLElement
   private shopCoins!: HTMLElement
   private shopList!: HTMLElement
-  private shopTabs!: { buy: HTMLElement; sell: HTMLElement }
-  private shopMode: 'buy' | 'sell' = 'buy'
+  private shopTabs!: Record<'buy' | 'sell' | 'boost', HTMLElement>
+  private shopMode: 'buy' | 'sell' | 'boost' = 'buy'
+  /** Con qué se pagan las mejoras y cuáles se tienen compradas (las del jugador, no las del puesto). */
+  private shopPayRow!: HTMLElement
+  private shopPayTabs!: Record<BoostPayment, HTMLElement>
+  private shopPay: BoostPayment = 'coin'
+  private shopHint!: HTMLElement
+  private boosts: BoostLevels = {}
   /** Lo que enseña ahora la tienda, como texto (para no rehacerla si no cambia). */
   private shopKey = ''
 
@@ -289,9 +309,10 @@ export class InventoryScreen {
 
   /**
    * La estación abierta (o null): con una de procesar se ven sus ranuras en vez de las recetas. Se llama cada frame con
-   * la pantalla abierta, con la estación tal como está ahora.
+   * la pantalla abierta, con la estación tal como está ahora y las mejoras que se tienen compradas.
    */
-  setStation(station: Structure | null, canForget = false) {
+  setStation(station: Structure | null, canForget = false, boosts: BoostLevels = {}) {
+    this.boosts = boosts
     this.setShop(station?.shop ? station : null, canForget)
     const showing = station?.station ? station : null
     if (showing?.id !== this.station?.id) this.dragged = null
@@ -326,7 +347,7 @@ export class InventoryScreen {
     el('h2', 'title', this.shopColumn).textContent = 'Mercader'
     this.shopCoins = el('p', 'shop-coins', this.shopColumn)
     const tabs = el('div', 'shop-tabs', this.shopColumn)
-    const tab = (mode: 'buy' | 'sell', text: string) => {
+    const tab = (mode: 'buy' | 'sell' | 'boost', text: string) => {
       const button = el('button', 'shop-tab', tabs)
       button.type = 'button'
       button.textContent = text
@@ -337,9 +358,24 @@ export class InventoryScreen {
       })
       return button
     }
-    this.shopTabs = { buy: tab('buy', 'Comprar'), sell: tab('sell', 'Vender') }
+    this.shopTabs = { buy: tab('buy', 'Comprar'), sell: tab('sell', 'Vender'), boost: tab('boost', 'Mejoras') }
+    // Con qué se paga la mejora que se elija: solo se ve en la pestaña de mejoras.
+    this.shopPayRow = el('div', 'shop-tabs', this.shopColumn)
+    const pay = (payment: BoostPayment) => {
+      const button = el('button', 'shop-tab', this.shopPayRow)
+      button.type = 'button'
+      button.textContent = PAYMENT_NAMES[payment]
+      button.tabIndex = -1
+      button.addEventListener('click', () => {
+        this.shopPay = payment
+        this.shopKey = ''
+      })
+      return button
+    }
+    this.shopPayTabs = { coin: pay('coin'), mithril_bar: pay('mithril_bar'), iron_bar: pay('iron_bar') }
     this.shopList = el('div', 'recipe-list shop-list', this.shopColumn)
-    el('p', 'hint', this.shopColumn).textContent = 'Clic: comprar o vender uno'
+    this.shopHint = el('p', 'hint', this.shopColumn)
+    this.shopHint.textContent = SHOP_HINT
   }
 
   /** El puesto abierto (o null): se llama cada frame con la pantalla abierta. `canForget`: si el amuleto haría algo. */
@@ -350,20 +386,22 @@ export class InventoryScreen {
     if (!shop?.shop || !inventory) return
     const state = shop.shop
     const coins = inventory.count('coin')
-    const key = `${this.shopMode}|${coins}|${canForget}|${JSON.stringify(state.bought)}|${inventory.slots.join()}|${PURCHASE_ITEMS.map((i) => inventory.count(i)).join()}`
+    const key = `${this.shopMode}|${this.shopPay}|${coins}|${canForget}|${JSON.stringify(state.bought)}|${JSON.stringify(this.boosts)}|${inventory.slots.join()}|${PURCHASE_ITEMS.map((i) => inventory.count(i)).join()}`
     if (key === this.shopKey) return
     this.shopKey = key
     this.shopCoins.textContent = `Monedas: ${coins}`
-    this.shopTabs.buy.classList.toggle('active', this.shopMode === 'buy')
-    this.shopTabs.sell.classList.toggle('active', this.shopMode === 'sell')
+    for (const mode of ['buy', 'sell', 'boost'] as const) this.shopTabs[mode].classList.toggle('active', this.shopMode === mode)
+    this.shopPayRow.hidden = this.shopMode !== 'boost'
+    for (const payment of BOOST_PAYMENTS) this.shopPayTabs[payment].classList.toggle('active', this.shopPay === payment)
+    this.shopHint.textContent = this.shopMode === 'boost' ? BOOST_HINT : SHOP_HINT
     const rows: HTMLElement[] = []
-    const row = (item: ItemId, cost: string, problem: string | null, onclick: () => void) => {
+    const row = (icon: ItemId, name: string, cost: string, problem: string | null, onclick: () => void, title = name) => {
       const root = document.createElement('div')
       root.className = 'recipe'
       root.classList.toggle('available', !problem)
-      root.title = ITEM_NAMES[item]
-      el('div', 'icon', root).innerHTML = ICONS[item]
-      el('span', 'name', root).textContent = ITEM_NAMES[item]
+      root.title = title
+      el('div', 'icon', root).innerHTML = ICONS[icon]
+      el('span', 'name', root).textContent = name
       el('span', 'cost', root).textContent = cost
       const reason = el('span', 'reason', root)
       reason.textContent = problem ?? ''
@@ -373,18 +411,33 @@ export class InventoryScreen {
       })
       rows.push(root)
     }
-    if (this.shopMode === 'buy') {
+    if (this.shopMode === 'boost') {
+      for (const boost of BOOST_IDS) {
+        const def = BOOST_DEFS[boost]
+        const level = levelOf(this.boosts, boost)
+        const problem = boostProblem(this.boosts, boost, this.shopPay, inventory)
+        // Lo que se ve es lo que se consigue con este nivel, no lo que ya se tiene.
+        row(
+          BOOST_ICONS[boost],
+          `${def.name}${level ? ` · nivel ${level}` : ''}`,
+          `${def.show(boostFactor(this.boosts, boost) * def.factor)} · ${boostCostText(this.boosts, boost, this.shopPay)}`,
+          problem,
+          () => this.onshop?.({ kind: 'shop', id: shop.id, op: 'boost', boost, pay: this.shopPay }),
+          def.text,
+        )
+      }
+    } else if (this.shopMode === 'buy') {
       for (const offer of OFFERS) {
         const available = offer.item !== 'forget_amulet' || canForget
         const price = priceOf(offer, state)
-        row(offer.item, `${price} monedas${offer.rise ? ' · sube con cada compra' : ''}`, buyProblem(offer, state, inventory, available), () =>
+        row(offer.item, ITEM_NAMES[offer.item], `${price} monedas${offer.rise ? ' · sube con cada compra' : ''}`, buyProblem(offer, state, inventory, available), () =>
           this.onshop?.({ kind: 'shop', id: shop.id, op: 'buy', item: offer.item }),
         )
       }
     } else {
       for (const item of PURCHASE_ITEMS) {
         const deal = PURCHASES[item]!
-        row(item, `${deal.amount} por ${deal.coins} ${deal.coins === 1 ? 'moneda' : 'monedas'} · tienes ${inventory.count(item)}`, sellProblem(item, inventory), () =>
+        row(item, ITEM_NAMES[item], `${deal.amount} por ${deal.coins} ${deal.coins === 1 ? 'moneda' : 'monedas'} · tienes ${inventory.count(item)}`, sellProblem(item, inventory), () =>
           this.onshop?.({ kind: 'shop', id: shop.id, op: 'sell', item }),
         )
       }

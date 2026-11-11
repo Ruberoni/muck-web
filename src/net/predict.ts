@@ -1,4 +1,5 @@
 import { missingMove, MOVE_REPEAT, type Action, type ActionData, type Move, type PlayerCommands } from '../sim/commands'
+import { BOOST_IDS, levelOf } from '../sim/boosts'
 import { NO_EMIT, type SimEvent, type SimEventData } from '../sim/events'
 import type { Combat } from '../sim/interaction'
 import type { InventoryState } from '../sim/inventory'
@@ -207,6 +208,8 @@ function samePlayer(a: Player, b: PlayerState): boolean {
   return (Object.keys(b) as (keyof Player)[]).every((key) => {
     if (key === 'prev' || key === 'yaw' || key === 'pitch') return true
     if (key === 'pos' || key === 'vel') return same(a[key], (b as Player)[key])
+    // Las mejoras son un objeto: compararlas por la referencia daría siempre distinto.
+    if (key === 'boosts') return BOOST_IDS.every((id) => levelOf(a.boosts, id) === levelOf(b.boosts, id))
     return a[key] === (b as Player)[key]
   })
 }

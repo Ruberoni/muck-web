@@ -37,12 +37,13 @@ export interface Intent {
   drops: { item: ItemId; amount: number }[]
   /** Lo que mete o saca de las estaciones: lo hace la simulación, que tiene las estaciones (la predicción no). */
   stations: StationOp[]
-  /** Lo que compra o vende al mercader: también lo hace la simulación. */
+  /** Lo que compra, vende o mejora en el mercader: también lo hace la simulación. */
   trades: TradeOp[]
 }
 
 export type StationOp = Omit<Extract<ActionData, { kind: 'station' }>, 'kind'>
-export type TradeOp = Omit<Extract<ActionData, { kind: 'shop' }>, 'kind'>
+/** Una compra, una venta o un nivel de una mejora en el mercader. */
+export type TradeOp = Extract<ActionData, { kind: 'shop' }>
 
 /**
  * Aplica una vez y en orden de `seq` las acciones nuevas: elegir casilla, mover casillas, fabricar y tirar en el
@@ -79,7 +80,7 @@ export function applyActions(actor: Actor, command: PlayerCommands | undefined, 
         intent.stations.push({ id: action.id, slot: action.slot, from: action.from, all: action.all })
         break
       case 'shop':
-        intent.trades.push({ id: action.id, op: action.op, item: action.item })
+        intent.trades.push(action)
         break
       case 'drop': {
         const dropped = dropFromSlot(actor, action.slot, action.all, emit)

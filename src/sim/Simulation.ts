@@ -1,4 +1,5 @@
 import type { PlayerCommands } from './commands'
+import { buyBoost, maxHealthOf } from './boosts'
 import { isBuilt, usableNear } from './builds'
 import { findLandmarks } from './landmarks'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
@@ -829,11 +830,18 @@ export class Simulation {
     this.structures.place({ x, y: this.island.heightAt(x, z), z, valid: true }, 'merchant')
   }
 
-  /** Comprar o vender en el puesto del mercader, a su alcance. */
-  private trade(slot: PlayerSlot, { id, op, item }: TradeOp) {
-    const structure = this.structures.byId(id)
+  /** Comprar, vender o comprar una mejora en el puesto del mercader, a su alcance. */
+  private trade(slot: PlayerSlot, action: TradeOp) {
+    const structure = this.structures.byId(action.id)
     const { pos } = slot.player
     if (!structure?.shop || Math.hypot(structure.x - pos.x, structure.z - pos.z) - structure.radius > STATION_RANGE) return
+    // Las mejoras son de cada uno (no del puesto) y no se predicen: las paga el servidor y llegan en el `you`.
+    if (action.op === 'boost') {
+      if (buyBoost(slot.player, action.boost, action.pay, slot.inventory) === null) return
+      this.events.emit({ type: 'playerTraded', id: slot.id, op: 'boost', item: action.pay, boost: action.boost })
+      return
+    }
+    const { op, item } = action
     const available = item !== 'forget_amulet' || this.threat.canForget
     const before = structure.shop.bought[item] ?? 0
     if (!trade(structure.shop, slot.inventory, { op, item }, available)) return
@@ -970,10 +978,13 @@ export class Simulation {
 
   /** Vuelve vivo a su punto de aparición o junto al faro encendido, con la vida y el hambre llenas y el inventario vacío. */
   private respawn(slot: PlayerSlot) {
-    const { yaw, pitch } = slot.player
+    const { yaw, pitch, boosts } = slot.player
     const lighthouse = this.structures.burning
     const at = lighthouse ? { x: lighthouse.x + lighthouse.radius + 1, z: lighthouse.z } : slot.spawn
-    Object.assign(slot.player, createPlayer(this.env, at.x, at.z, yaw), { pitch })
+    // Las mejoras del mercader duran toda la partida: morir no las quita (el inventario, sí).
+    Object.assign(slot.player, createPlayer(this.env, at.x, at.z, yaw), { pitch, boosts })
+    // "Con la vida llena" es su máximo, que con vitalidad es mayor que el de siempre.
+    slot.player.health = maxHealthOf(boosts)
     slot.alive = true
     slot.respawnAt = null
     slot.shieldUntil = this.tick + Math.round(RESPAWN_SHIELD / STEP)

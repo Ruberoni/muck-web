@@ -1,6 +1,7 @@
 import type { RecipeId } from './crafting'
 import type { EquipSlot } from './equipment'
 import type { StationSlot } from './stations'
+import type { BoostId, BoostPayment } from './boosts'
 import type { ItemId } from './inventory'
 import type { TargetRef } from './events'
 import type { PlayerInput } from './player'
@@ -42,6 +43,8 @@ export type ActionData =
   | { kind: 'station'; id: number; slot: StationSlot; from: number | null; all: boolean }
   /** Comprar o vender en el puesto del mercader `id` (merchant.ts). */
   | { kind: 'shop'; id: number; op: 'buy' | 'sell'; item: ItemId }
+  /** Comprar un nivel de la mejora `boost` en el puesto `id`, pagándolo con `pay` (monedas o un material). */
+  | { kind: 'shop'; id: number; op: 'boost'; boost: BoostId; pay: BoostPayment }
   | { kind: 'equip'; slot: number }
   | { kind: 'unequip'; which: EquipSlot }
   | { kind: 'eat' }

@@ -167,7 +167,8 @@ export class GameAudio {
           s.play('bell')
           break
         case 'playerTraded':
-          if (e.id === me) s.play('pickup')
+          // Una mejora es un paso adelante, no una recogida: suena como fabricar.
+          if (e.id === me) s.play(e.op === 'boost' ? 'craft' : 'pickup')
           break
         // Como un golpe al aire.
         case 'projectileThrown':

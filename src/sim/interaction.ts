@@ -1,4 +1,5 @@
 import { aimRay, createPropHitboxes, pickTarget, type AimRay, type PropHitboxes } from './aim'
+import { boostFactor, boostedDamage } from './boosts'
 import { resetProp, startRegrow, type PropData, type PropWorld } from './props'
 import { DEFAULT_ISLAND, type Island } from './world/island'
 import { enemyFloor } from './world/terrain'
@@ -24,7 +25,7 @@ export interface Combat {
 /** Lo que Interaction necesita de un jugador para que golpee (un PlayerSlot lo cumple). */
 export interface Fighter {
   id: PlayerId
-  player: Pick<Player, 'pos' | 'yaw' | 'pitch'>
+  player: Pick<Player, 'pos' | 'yaw' | 'pitch' | 'boosts'>
   inventory: Inventory
   combat: Combat
   /** Lo que tiene delante, a su alcance (lo calcula `updateTarget`). */
@@ -152,7 +153,8 @@ export class Interaction {
     // Sin la herramienta que pide (§2.4 del plan) el golpe se da, pero no le hace nada: ni vida ni `propHit`.
     const damage = propDamage(fighter.inventory.selectedItem, prop.kind)
     if (damage <= 0) return false
-    prop.hp = Math.max(0, prop.hp - damage)
+    // La fuerza del mercader también recolecta más deprisa.
+    prop.hp = Math.max(0, prop.hp - boostedDamage(damage, fighter.player.boosts))
     if (prop.hp <= 0) this.destroy(fighter, prop)
     else this.emit({ type: 'propHit', id: prop.id, hp: prop.hp, by: fighter.id })
     return !prop.alive
@@ -160,9 +162,10 @@ export class Interaction {
 
   private hitEnemy(fighter: Fighter, enemy: EnemyData): boolean {
     // El retroceso es en sentido contrario al atacante.
-    const { pos } = fighter.player
+    const { pos, boosts } = fighter.player
     const item = fighter.inventory.selectedItem
-    if (!this.enemies?.hit(enemy, attackDamage(item, enemy.type), pos, fighter.id, hitEfficacy(item, enemy.type), weaponClass(item))) return false
+    const damage = boostedDamage(attackDamage(item, enemy.type), boosts)
+    if (!this.enemies?.hit(enemy, damage, pos, fighter.id, hitEfficacy(item, enemy.type), weaponClass(item), boostFactor(boosts, 'knockback'))) return false
     if (fighter.target === enemy) fighter.target = null
     const { x, z } = enemy.pos
     const def = ENEMY_DEFS[enemy.type]

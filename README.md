@@ -243,6 +243,19 @@ Lo que sube de precio sube para todos en la sala y se guarda con la partida. Se 
 
 **Compra**, barato y en lotes: 10 de madera o de piedra, o 3 de carne cruda, por 1 moneda; un lingote de hierro por 1 y uno de mithril por 3. No compra nada de lo que vende, ni lo que no se puede perder (piezas del avión, trofeos, fragmentos de meteorito): vender sirve para sacar algo de lo que sobra, pero las monedas salen sobre todo de los mobs.
 
+**Mejoras** (la tercera pestaña de la tienda): seis mejoras que se apilan multiplicando y duran lo que la partida (una isla nueva empieza de cero). El primer nivel cuesta 100 monedas y cada uno siguiente suma 50 (100 → 150 → 200…), o su equivalente en materiales: 25 lingotes de mithril o 60 de hierro el primero, escalados igual. Con cuál se paga se elige encima de la lista.
+
+| Mejora | Cada nivel |
+| --- | --- |
+| Fuerza | ×1,5 al daño de cada golpe, con armas y con herramientas: también se recolecta más deprisa |
+| Vitalidad | ×1,5 a la vida máxima (100 → 150 → 225), y al comprarla se cura lo que sube |
+| Recuperación | ×1,5 a la regeneración natural de vida (sigue pidiendo hambre por encima de 30 y 8 s sin recibir daño) |
+| Aguante | ×1,5 a la recuperación de resistencia |
+| Metabolismo | ×0,5 al ritmo al que baja el hambre |
+| Empuje | ×2 al empujón que reciben los enemigos al golpearlos |
+
+Las mejoras son de cada jugador, no del puesto: el precio sube con los niveles que tenga cada uno. Las paga el servidor y llegan con su estado, así que la predicción del cliente no las adivina (`src/sim/boosts.ts`).
+
 ## Meteoritos
 
 Desde el día 2 cae un meteorito al día, a media mañana o a mediodía, a la hora que toque en cada partida; en la Noche Eterna, con cada campana. Se anuncia 6 s antes con una bola de fuego en el cielo, un silbido, el aviso "¡Cae un meteorito al norte!" (según dónde estés) y una marca roja en el suelo. Cae en hierba libre, entre 40 y 70 m de un jugador vivo, y quien esté a menos de 4 m recibe 20 de daño. Deja un cráter y una roca que no se puede atravesar, con su rombo en el minimapa, y junto a ella aparece su guardián. Mientras viva, la roca sigue al rojo y no cae otro; al morir, la roca se enfría y desaparece al amanecer siguiente. Los decide `src/sim/worldEvents.ts`, y en red el cliente sigue sus eventos.

@@ -96,6 +96,10 @@ describe('protocolo', () => {
       { seq: 10, tick: 13, kind: 'station', id: 0, slot: 'output', from: null, all: false },
       { seq: 11, tick: 13, kind: 'equip', slot: INVENTORY_SIZE - 1 },
       { seq: 12, tick: 13, kind: 'unequip', which: 'shield' },
+      { seq: 13, tick: 14, kind: 'shop', id: 2, op: 'sell', item: 'wood', junk: true },
+      { seq: 14, tick: 14, kind: 'shop', id: 2, op: 'buy', item: 'healing_potion' },
+      { seq: 15, tick: 14, kind: 'shop', id: 2, op: 'boost', boost: 'damage', pay: 'coin' },
+      { seq: 16, tick: 14, kind: 'shop', id: 2, op: 'boost', boost: 'hunger', pay: 'mithril_bar' },
     ]
     const moves = [
       { ...move, n: 4, aim: { kind: 'prop', id: 3 } },
@@ -148,6 +152,14 @@ describe('protocolo', () => {
       { seq: 1, tick: 1, kind: 'equip' },
       { seq: 1, tick: 1, kind: 'unequip', which: 'legs' },
       { seq: 1, tick: 1, kind: 'unequip' },
+      { seq: 1, tick: 1, kind: 'shop', id: -1, op: 'buy', item: 'coin' },
+      { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'nada', item: 'coin' },
+      { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'buy', item: 'nada' },
+      { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'buy', item: 'toString' },
+      { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'boost', boost: 'speed', pay: 'coin' },
+      { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'boost', boost: 'toString', pay: 'coin' },
+      { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'boost', boost: 'damage', pay: 'wood' },
+      { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'boost', boost: 'damage' },
       { seq: 1, tick: 1, kind: 'fly' },
       { seq: 1, kind: 'eat' },
     ]
