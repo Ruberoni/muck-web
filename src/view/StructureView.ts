@@ -464,7 +464,8 @@ export class StructureView {
     this.outlineId = id
     model.root.traverse((node) => {
       const piece = node as THREE.Mesh
-      if (!piece.isMesh || (piece.material as THREE.Material).transparent) return
+      // Un contorno ya puesto no se contornea: el recorrido visita los hijos que acaba de añadir.
+      if (!piece.isMesh || piece.material === outlineMaterial || (piece.material as THREE.Material).transparent) return
       let hull = this.hulls.get(piece.geometry)
       if (!hull) this.hulls.set(piece.geometry, (hull = hullOf(piece.geometry)))
       const outline = new THREE.Mesh(hull, outlineMaterial)
