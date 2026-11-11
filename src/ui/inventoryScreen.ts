@@ -12,7 +12,7 @@ import { EQUIP_SLOTS, equipSlotOf, type EquipSlot } from '../sim/equipment'
 import { buyProblem, OFFERS, priceOf, PURCHASES, sellProblem } from '../sim/merchant'
 import { BOOST_DEFS, BOOST_IDS, BOOST_PAYMENTS, boostCostText, boostFactor, boostProblem, levelOf, type BoostId, type BoostLevels, type BoostPayment } from '../sim/boosts'
 
-const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { chest: 'Pecho', shield: 'Escudo' }
+const EQUIP_SLOT_NAMES: Record<EquipSlot, string> = { head: 'Cabeza', chest: 'Pecho', legs: 'Piernas', feet: 'Pies', shield: 'Escudo' }
 const PURCHASE_ITEMS = Object.keys(PURCHASES) as ItemId[]
 
 /** El icono de cada mejora: el de un objeto que ya existe y la recuerda (así no hay dibujos nuevos). */

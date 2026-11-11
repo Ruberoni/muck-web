@@ -40,8 +40,14 @@ describe('recetas en la pantalla de inventario', () => {
         'meteor_sword',
         'iron_shield',
         'crystal_shield',
+        'iron_helmet',
         'iron_chestplate',
+        'iron_leggings',
+        'iron_boots',
+        'mithril_helmet',
         'mithril_chestplate',
+        'mithril_leggings',
+        'mithril_boots',
       ],
     ])
   })

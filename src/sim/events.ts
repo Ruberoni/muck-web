@@ -48,6 +48,8 @@ export type SimEventData =
   | { type: 'enemyIncoming'; enemy: EnemyType; x: number; z: number }
   /** `kx`, `kz`: el empujón del golpe; a 0 si lo ha aguantado sin aturdirse. */
   | { type: 'enemyHit'; id: number; hp: number; kx: number; kz: number; by: PlayerId; efficacy: HitEfficacy }
+  /** Un mob empieza un golpe cuerpo a cuerpo: pega `EnemyDef.strike` segundos después (`enemyAttack`) si no falla. */
+  | { type: 'enemySwing'; id: number; target: PlayerId }
   | { type: 'enemyAttack'; id: number; target: PlayerId }
   /** Embestida: se agacha (`crouch`), carga (`rush`) y acaba (`idle`). */
   | { type: 'enemyCharge'; id: number; state: ChargeState }
@@ -55,7 +57,14 @@ export type SimEventData =
   /** Sale un proyectil: con esto el cliente sigue su trayectoria (ver `Projectiles`). */
   | { type: 'projectileThrown'; id: number; kind: ProjectileKind; x: number; y: number; z: number; vx: number; vy: number; vz: number }
   | { type: 'projectileHit'; id: number; x: number; y: number; z: number; end: ProjectileEnd }
+  /** Empieza un golpe: la animación. Pega `swingImpact` segundos después (`playerStrike`), si no se pierde. */
   | { type: 'playerSwing'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
+  /** El golpe pega, contra lo que tiene delante ahora (o al aire): el daño y el sonido del impacto. */
+  | { type: 'playerStrike'; id: PlayerId; item: ItemId | null; target: TargetRef | null }
+  /** Empieza a comer o beber `item`: tarda `seconds`, y al acabar llega `playerAte` con su efecto. */
+  | { type: 'playerEating'; id: PlayerId; item: ItemId; seconds: number }
+  /** Lo que estaba comiendo se queda sin comer (cambió de casilla o ya no lo tiene): no lo gasta. */
+  | { type: 'playerEatCancelled'; id: PlayerId }
   | { type: 'playerAte'; id: PlayerId; item: ItemId }
   | { type: 'playerCrafted'; id: PlayerId; recipe: RecipeId }
   /** Comprar o vender en el mercader; con `op` 'boost', comprar un nivel de una mejora pagándolo con `item`. */

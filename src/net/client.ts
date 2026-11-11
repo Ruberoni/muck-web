@@ -1,6 +1,6 @@
 import type { Clock } from '../../server/room'
 import type { ActionData, Move } from '../sim/commands'
-import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType } from '../sim/constants'
+import { ENEMY_DEFS, STATION_RANGE, STEP, type EnemyType, type MobLook } from '../sim/constants'
 import { NO_CHARGE, NO_SPECIAL, type EnemyData } from '../sim/enemies'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
@@ -63,6 +63,8 @@ export interface RemotePlayer {
   /** El escudo en la mano izquierda, si lleva, y si lo tiene arriba. */
   shield: ItemId | null
   blocking: boolean
+  /** La armadura que lleva puesta (`armorCode`). */
+  armor: number
   health: number
   alive: boolean
   connection: Connection
@@ -74,6 +76,7 @@ export interface RemoteEnemy {
   type: EnemyType
   hp: number
   maxHp: number
+  look: MobLook
 }
 
 /** Un objeto del suelo del espejo: se dibuja con sus muestras de `movingPickups` (quieto, en la última). */
@@ -91,13 +94,16 @@ const SNAP_TICKS = 3
 const spinOf = (id: number) => (id * 2.39996) % (2 * Math.PI)
 
 /** Lo que el jugador local ya ha presentado al predecirlo: el servidor se lo repite, pero no se presenta otra vez. */
-const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerAte', 'playerCrafted', 'playerPlaced', 'playerDropped', 'playerEquipped'])
+const PREDICTED = new Set<SimEvent['type']>(['playerSwing', 'playerStrike', 'playerEating', 'playerEatCancelled', 'playerAte', 'playerCrafted', 'playerPlaced', 'playerDropped', 'playerEquipped'])
 
 /** Un evento que trata del jugador `me` (lo que le pasa o lo que ha provocado), o del mundo entero. */
 function concerns(e: SimEvent, me: PlayerId): boolean {
   if ('by' in e) return e.by === me
   switch (e.type) {
     case 'playerSwing':
+    case 'playerStrike':
+    case 'playerEating':
+    case 'playerEatCancelled':
     case 'playerAte':
     case 'playerCrafted':
     case 'playerTraded':
@@ -515,15 +521,15 @@ export class NetClient {
   private pushRemote(tick: number, players: readonly PlayerSnap[], enemies: readonly EnemySnap[]) {
     this.players.push(
       tick,
-      players.map(({ id, pos, yaw, pitch, item, health, alive, connection, ping, shield, blocking }) => ({
+      players.map(({ id, pos, yaw, pitch, item, health, alive, connection, ping, armor, shield, blocking }) => ({
         id,
         pose: { ...pos, yaw, pitch },
-        data: { item, shield: shield ?? null, blocking: blocking === true, health, alive, connection, ping },
+        data: { item, shield: shield ?? null, blocking: blocking === true, armor: armor ?? 0, health, alive, connection, ping },
       })),
     )
     this.enemies.push(
       tick,
-      enemies.map(({ id, type, pos, yaw, hp, maxHp }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { type, hp, maxHp } })),
+      enemies.map(({ id, type, pos, yaw, hp, maxHp, look }) => ({ id, pose: { x: pos.x, y: 0, z: pos.z, yaw, pitch: 0 }, data: { type, hp, maxHp, look: look ?? 0 } })),
     )
   }
 
@@ -548,6 +554,7 @@ export class NetClient {
       enemy.yaw = pose.yaw
       enemy.hp = data.hp
       enemy.maxHp = data.maxHp
+      enemy.look = data.look
       list.push(enemy)
     }
     if (this.mirrorEnemies.size > list.length) {
@@ -736,6 +743,8 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
     retarget: 0,
     // El espejo no decide a quién persigue ni vaga: solo se dibuja y se apunta.
     wander: 0,
+    strike: 0,
+    look: 0,
   }
 }
 

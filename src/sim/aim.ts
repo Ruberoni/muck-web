@@ -1,4 +1,4 @@
-import { ENEMY_DEFS, EYE_HEIGHT, PROP_DEFS, REACH, type EnemyType, type PropFamily } from './constants'
+import { enemyScale, EYE_HEIGHT, PROP_DEFS, REACH, type EnemyType, type MobLook, type PropFamily } from './constants'
 import type { Collider, SpatialGrid } from './collision'
 import {
   BUSH_LIFT,
@@ -21,7 +21,8 @@ import {
 import { DEFAULT_ISLAND } from './world/island'
 import { enemyFloor, type Terrain } from './world/terrain'
 
-// Cuerpo del enemigo: un icosaedro estirado sobre el suelo, y el modelo entero escalado (ENEMY_DEFS[tipo].scale).
+// Cuerpo del enemigo: un icosaedro estirado sobre el suelo, y el modelo entero escalado (`enemyScale`: la escala de su
+// tipo por lo que crece en su apariencia).
 // Los cuernos, los pies y los ojos son detalles de la vista y no cuentan para apuntar.
 export const ENEMY_BODY_RADIUS = 0.5
 export const ENEMY_BODY_SCALE = { x: 1, y: 1.25, z: 0.9 }
@@ -175,15 +176,18 @@ export function createPropHitboxes(placements: readonly PropPlacement[]): PropHi
   return { boxes, reach }
 }
 
-/** Hitbox de un enemigo de tipo `type` en (x, z) mirando a `yaw`, sobre el suelo: sin el bote al andar ni la embestida. */
-export function enemyHitbox(x: number, z: number, yaw: number, type: EnemyType, out?: Hitbox, terrain: Terrain = DEFAULT_ISLAND): Hitbox {
+/**
+ * Hitbox de un enemigo de tipo `type` con la apariencia `look` en (x, z) mirando a `yaw`, sobre el suelo: sin el bote
+ * al andar ni la embestida.
+ */
+export function enemyHitbox(x: number, z: number, yaw: number, type: EnemyType, out?: Hitbox, terrain: Terrain = DEFAULT_ISLAND, look: MobLook = 0): Hitbox {
   const box = out ?? { x, y: 0, z, cosX: 1, sinX: 0, cosY: 1, sinY: 0, sx: 1, sy: 1, sz: 1, parts: ENEMY_SHAPE }
   box.x = x
   box.y = enemyFloor(terrain, x, z)
   box.z = z
   box.cosY = Math.cos(yaw)
   box.sinY = Math.sin(yaw)
-  box.sx = box.sy = box.sz = ENEMY_DEFS[type].scale
+  box.sx = box.sy = box.sz = enemyScale(type, look)
   return box
 }
 
@@ -242,7 +246,7 @@ function rayConvex(o: Vec, d: Vec, planes: Convex): number {
  * Lo primero que toca el rayo a como mucho `far` metros: un prop vivo o un enemigo vivo.
  * Los muertos no tapan lo que hay detrás.
  */
-export function pickTarget<P extends Collider & { id: number }, E extends { alive: boolean; type: EnemyType; pos: { x: number; z: number }; yaw: number }>(
+export function pickTarget<P extends Collider & { id: number }, E extends { alive: boolean; type: EnemyType; pos: { x: number; z: number }; yaw: number; look?: MobLook }>(
   ray: AimRay,
   grid: SpatialGrid<P>,
   hitboxes: PropHitboxes,
@@ -262,7 +266,7 @@ export function pickTarget<P extends Collider & { id: number }, E extends { aliv
   }
   for (const enemy of enemies) {
     if (!enemy.alive) continue
-    const d = rayDistance(ray, enemyHitbox(enemy.pos.x, enemy.pos.z, enemy.yaw, enemy.type, ENEMY_BOX, terrain))
+    const d = rayDistance(ray, enemyHitbox(enemy.pos.x, enemy.pos.z, enemy.yaw, enemy.type, ENEMY_BOX, terrain, enemy.look))
     if (d <= bestDistance) {
       best = enemy
       bestDistance = d

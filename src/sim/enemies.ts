@@ -5,6 +5,7 @@ import { DAY_FRACTION, DAY_LENGTH, isNight } from './world/daycycle'
 import { enemyFloor, WATER_LEVEL } from './world/terrain'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
+import type { ProjectileKind } from './projectiles'
 import {
   BOSS_DELAY,
   BOSS_EVERY,
@@ -29,8 +30,10 @@ import {
   ENEMY_SPAWN_MAX,
   ENEMY_SPAWN_MIN,
   ENEMY_TYPES,
+  enemyScale,
   PLAYER_RADIUS,
   SHELL_RESIST,
+  SPEAR_GOBLIN_SHARE,
   SHELL_BROKEN_PACE,
   SPAWN_WARN,
   SPECIAL_GAP,
@@ -42,6 +45,8 @@ import {
   type EnemyType,
   type GuardDef,
   type HitEfficacy,
+  type KeepDef,
+  type MobLook,
   type RangedDef,
   type SpecialDef,
   type SpecialId,
@@ -53,13 +58,21 @@ const SPAWN_ATTEMPTS = 12
 const SPAWN_RAMP = 3
 /** Los jefes, por turnos: el de la noche 3, el de la 6, y vuelta a empezar. */
 const BOSSES: readonly EnemyType[] = ['giant', 'thrower']
-/** Altura del centro del cuerpo de un tipo de enemigo: a donde apunta aimAtEnemy. */
-export const enemyAimHeight = (type: EnemyType) => 0.8 * ENEMY_DEFS[type].scale
+/** Altura del centro del cuerpo de un tipo de enemigo con su apariencia: a donde apunta aimAtEnemy. */
+export const enemyAimHeight = (type: EnemyType, look: MobLook = 0) => 0.8 * enemyScale(type, look)
 /** Distancia entre centros a la que un enemigo de este tipo toca a un jugador. */
 const contactOf = (type: EnemyType) => PLAYER_RADIUS + ENEMY_DEFS[type].radius
+/**
+ * Metros de más sobre su alcance a los que todavía le da al acabar el golpe. Mientras golpea sigue persiguiendo, así
+ * que quien solo anda se lo come: se esquiva corriendo o apartándose de lado.
+ */
+const STRIKE_SLACK = 0.8
 
-/** `crouch` y `rush`: la embestida. `dazed`: aturdido tras ella. `aim`: preparando un lanzamiento. */
-export type ChargeState = 'idle' | 'crouch' | 'rush' | 'dazed' | 'aim'
+/**
+ * `crouch` y `rush`: la embestida. `dazed`: aturdido tras ella. `aim`: preparando un lanzamiento. `throw`: acabando el
+ * de un mob común, quieto pero sin recibir el doble.
+ */
+export type ChargeState = 'idle' | 'crouch' | 'rush' | 'dazed' | 'aim' | 'throw'
 
 /** Por dónde va una embestida o un lanzamiento. */
 export interface EnemyCharge {
@@ -84,6 +97,9 @@ export interface EnemySpecial {
   gap: number
   /** Segundos hasta poder repetir cada uno. */
   cooldowns: Partial<Record<SpecialId, number>>
+  /** Con `repeat`: cuántas veces más ataca y en cuántos segundos la próxima. */
+  shots?: number
+  shotTime?: number
 }
 
 export const NO_SPECIAL: EnemySpecial = { id: null, time: 0, recover: false, gap: 0, cooldowns: {} }
@@ -127,10 +143,14 @@ export interface EnemyData {
   retarget: number
   /** Rumbo al que vaga mientras no persigue a nadie (radianes); gira despacio, distinto en cada enemigo. */
   wander: number
+  /** Segundos hasta que pega el golpe que ha empezado (`EnemyDef.strike`); 0: no está golpeando. */
+  strike: number
+  /** Su apariencia, la de cuando salió (MobLook). */
+  look: MobLook
 }
 
-/** Lanza una roca desde `from` hacia el jugador `target`. */
-export type ThrowRock = (from: { x: number; y: number; z: number }, target: PlayerId, damage: number) => void
+/** Lanza `kind` desde `from` a `speed` m/s hacia donde está el jugador `target`. */
+export type Throw = (kind: ProjectileKind, from: { x: number; y: number; z: number }, target: PlayerId, damage: number, speed: number) => void
 
 /** Lo que los enemigos ven de un jugador que está en el mundo. Los muertos y quien acaba de reaparecer no son objetivo, pero cuentan para N. */
 export interface EnemyPrey {
@@ -180,8 +200,10 @@ const copyEnemy = (e: EnemyData): EnemyData => ({
   knock: { ...e.knock },
   charge: { ...e.charge },
   special: { ...(e.special ?? NO_SPECIAL), cooldowns: { ...(e.special?.cooldowns ?? {}) } },
-  // Las partidas guardadas antes de que existiera no lo llevan.
+  // Las partidas guardadas antes de que existieran no los llevan.
   wander: e.wander ?? 0,
+  strike: e.strike ?? 0,
+  look: e.look ?? 0,
 })
 
 export const NO_CHARGE: EnemyCharge = { state: 'idle', time: 0, cooldown: 0, dx: 0, dz: 0 }
@@ -223,11 +245,15 @@ export function spawnChance(type: EnemyType, day: number, biome: Biome): number 
 
 /** El tipo que aparece con la tirada `roll` (de 0 a 1): lo que sobra de las probabilidades son trasgos. */
 export function spawnType(roll: number, day: number, biome: Biome): EnemyType {
+  let left = 1
   for (const type of ENEMY_TYPES) {
-    roll -= spawnChance(type, day, biome)
+    const chance = spawnChance(type, day, biome)
+    roll -= chance
+    left -= chance
     if (roll < 0) return type
   }
-  return 'goblin'
+  // Lo que sobra son trasgos, y de ellos una parte, lanceros: con lo que queda de la misma tirada.
+  return roll < left * SPEAR_GOBLIN_SHARE ? 'spearGoblin' : 'goblin'
 }
 
 /**
@@ -254,6 +280,8 @@ export class Enemies {
   decoy: EnemyPrey | null = null
   /** Con el faro encendido no se anuncian mobs comunes nuevos (los ya anunciados salen igual). */
   calm = false
+  /** La apariencia con la que salen los mobs comunes: la pone la simulación según la amenaza. */
+  look: MobLook = 0
   /** Anunciados que aún no han salido: cuentan para el tope. */
   private pending: PendingSpawn[] = []
 
@@ -265,7 +293,7 @@ export class Enemies {
     private grids: SpatialGrid<Collider>[],
     private rng: () => number = Math.random,
     private emit: Emit = NO_EMIT,
-    private throwRock: ThrowRock = () => {},
+    private throwAt: Throw = () => {},
     private island: Island = DEFAULT_ISLAND,
     private onSpecial: OnSpecial = () => {},
   ) {}
@@ -300,7 +328,10 @@ export class Enemies {
       e.prev.z = e.pos.z
       const target = this.decoy && isCommon(e.type) ? this.decoy : this.chooseTarget(e, prey, dt)
       if (!this.chase(e, target, dt) || !target) continue
-      const dealt = isCommon(e.type) ? Math.round(ENEMY_DEFS[e.type].damage * this.scaling.damage) : ENEMY_DEFS[e.type].damage
+      const def = ENEMY_DEFS[e.type]
+      // Si alcanza al final de una embestida, el golpe de la embestida (más fuerte, si tiene).
+      const base = e.charge.state === 'dazed' && def.charge?.damage ? def.charge.damage : def.damage
+      const dealt = isCommon(e.type) ? Math.round(base * this.scaling.damage) : base
       damage.push({ playerId: target.id, damage: dealt, from: { x: e.pos.x, z: e.pos.z } })
     }
     this.separate(prey)
@@ -365,6 +396,7 @@ export class Enemies {
       return false
     }
     if (!prey) {
+      e.strike = 0
       e.attackCooldown = Math.max(e.attackCooldown - dt, def.windup)
       if (def.guard) this.goHome(e, def.speed * dt)
       else if (isCommon(e.type)) this.wander(e, def.speed, dt)
@@ -375,21 +407,51 @@ export class Enemies {
     const dz = player.z - e.pos.z
     const dist = Math.hypot(dx, dz)
     if (dist > 1e-6) e.yaw = Math.atan2(dx, dz)
-    if (def.specials && this.specials(e, def.specials, prey, dist, dt)) return false
-    if (def.charge) {
-      const hit = this.charge(e, def.charge, prey, dist, dt)
-      if (hit !== null) return hit
+    if (def.specials) {
+      const special = this.specials(e, def, def.specials, prey, dist, dt)
+      if (special !== null) return special
+    }
+    // Los jefes y los guardianes no tienen ataque normal: solo sus ataques especiales. Mientras no les toca ninguno,
+    // se acercan o guardan las distancias.
+    if (!isCommon(e.type)) {
+      this.approach(e, def, prey, dx, dz, dist, dt)
+      return false
     }
     if (def.ranged) {
       this.ranged(e, def.ranged, prey, dist, dt)
       return false
     }
+    return this.melee(e, def, prey, dx, dz, dist, dt)
+  }
+
+  /** Hacia el jugador hasta dejar su hueco, o guardando las distancias (`keep`). */
+  private approach(e: EnemyData, def: EnemyDef, prey: EnemyPrey, dx: number, dz: number, dist: number, dt: number) {
+    if (def.keep) return this.keepDistance(e, def.keep, prey, dist, dt)
     const contact = contactOf(e.type) + (prey.radius ?? 0)
-    if (dist > contact + def.gap) {
-      const speed = isCommon(e.type) ? Math.min(def.speed * this.scaling.speed, MOB_MAX_SPEED) : def.speed
-      const step = Math.min(speed * dt, dist - contact - def.gap)
-      this.move(e, (dx / dist) * step, (dz / dist) * step)
+    if (dist <= contact + def.gap) return
+    const speed = isCommon(e.type) ? Math.min(def.speed * this.scaling.speed, MOB_MAX_SPEED) : def.speed
+    const step = Math.min(speed * dt, dist - contact - def.gap)
+    this.move(e, (dx / dist) * step, (dz / dist) * step)
+  }
+
+  /**
+   * Cuerpo a cuerpo: al llegar espera `windup` y, cada `attackInterval`, empieza un golpe (`enemySwing`) que pega
+   * `strike` segundos después si el jugador sigue a su alcance. Devuelve si pega en este paso.
+   */
+  private melee(e: EnemyData, def: EnemyDef, prey: EnemyPrey, dx: number, dz: number, dist: number, dt: number): boolean {
+    const contact = contactOf(e.type) + (prey.radius ?? 0)
+    if (e.strike > 0) {
+      // El intervalo cuenta desde que empezó el golpe.
+      e.attackCooldown -= dt
+      this.approach(e, def, prey, dx, dz, dist, dt)
+      e.strike -= dt
+      if (e.strike > 1e-9) return false
+      e.strike = 0
+      if (dist > contact + def.reach + STRIKE_SLACK) return false
+      this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+      return true
     }
+    this.approach(e, def, prey, dx, dz, dist, dt)
     if (dist > contact + def.reach) {
       // Al llegar de lejos espera `windup`; el empujón de un golpe no cuenta como irse.
       e.attackCooldown = Math.max(e.attackCooldown - dt, e.staggerGuard > 0 ? 0 : def.windup)
@@ -398,45 +460,78 @@ export class Enemies {
     e.attackCooldown -= dt
     if (e.attackCooldown > 1e-9) return false
     e.attackCooldown = isCommon(e.type) ? def.attackInterval * this.scaling.attackInterval : def.attackInterval
+    if (def.strike) {
+      e.strike = def.strike
+      this.emit({ type: 'enemySwing', id: e.id, target: prey.id })
+      return false
+    }
     this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return true
   }
 
   /**
-   * Los ataques especiales: devuelve si está haciendo uno (avisando o agotado) y no hace nada más en este paso. Empieza
-   * uno solo sin embestir ni lanzar, el primero que esté listo y a su distancia.
+   * Los ataques especiales. null: no está haciendo ninguno y queda libre para lo demás; si no, si pega en este paso
+   * (solo la embestida pega ella misma: los otros lo hacen con `onSpecial`). Empieza uno solo, el primero que esté
+   * listo y a su distancia.
    */
-  private specials(e: EnemyData, list: readonly SpecialDef[], prey: EnemyPrey, dist: number, dt: number): boolean {
+  private specials(e: EnemyData, enemy: EnemyDef, list: readonly SpecialDef[], prey: EnemyPrey, dist: number, dt: number): boolean | null {
     const s = (e.special ??= { ...NO_SPECIAL, cooldowns: {} })
     s.gap = Math.max(0, s.gap - dt)
     for (const key of Object.keys(s.cooldowns) as SpecialId[]) s.cooldowns[key] = Math.max(0, (s.cooldowns[key] ?? 0) - dt)
+    if (s.id === 'charge' && enemy.charge) {
+      const def = list.find((d) => d.id === 'charge')!
+      const hit = this.charge(e, enemy.charge, def, prey, dist, dt)
+      s.recover = e.charge.state === 'dazed'
+      if (e.charge.state !== 'idle') return hit
+      s.id = null
+      s.recover = false
+      s.gap = SPECIAL_GAP
+      return hit || null
+    }
     if (s.id) {
       const def = list.find((d) => d.id === s.id)!
       s.time -= dt
-      if (s.time > 1e-9) return true
+      // Los demás ataques de una tanda (las flechas del gigante), mientras ya está agotado.
+      if (s.recover && (s.shots ?? 0) > 0) {
+        s.shotTime = (s.shotTime ?? 0) - dt
+        if (s.shotTime <= 1e-9) {
+          s.shots = (s.shots ?? 0) - 1
+          s.shotTime = def.repeat!.every
+          this.onSpecial(e, s.id, prey)
+          this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+        }
+      }
+      if (s.time > 1e-9) return false
       if (!s.recover) {
         this.onSpecial(e, s.id, prey)
         this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
         s.recover = true
         s.time = def.recover
+        s.shots = def.repeat ? def.repeat.count - 1 : 0
+        s.shotTime = def.repeat?.every ?? 0
         this.emit({ type: 'enemyCharge', id: e.id, state: 'dazed' })
-        return true
+        return false
       }
       s.id = null
       s.recover = false
+      s.shots = 0
       s.gap = SPECIAL_GAP
       this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
-      return false
+      return null
     }
-    if (s.gap > 1e-9 || e.charge.state !== 'idle') return false
-    const ready = list.find((d) => (s.cooldowns[d.id] ?? 0) <= 1e-9 && dist >= d.min && dist <= d.max)
-    if (!ready) return false
+    if (s.gap > 1e-9 || e.charge.state !== 'idle') return null
+    const ready = list.find((d) => (s.cooldowns[d.id] ?? 0) <= 1e-9 && dist >= d.min && dist <= d.max && (d.id !== 'charge' || enemy.charge))
+    if (!ready) return null
     s.id = ready.id
     s.time = ready.windup
-    s.cooldowns[ready.id] = ready.cooldown * (ENEMY_DEFS[e.type].shell && e.shell <= 0 ? SHELL_BROKEN_PACE : 1)
+    s.cooldowns[ready.id] = ready.cooldown * (enemy.shell && e.shell <= 0 ? SHELL_BROKEN_PACE : 1)
+    if (ready.id === 'charge') {
+      e.charge.state = 'crouch'
+      e.charge.time = ready.windup
+    }
     this.emit({ type: 'enemyCharge', id: e.id, state: ready.look })
     this.emit({ type: 'enemySpecial', id: e.id, attack: ready.id })
-    return true
+    return false
   }
 
   /** Sin nadie a quien perseguir, un guardián vuelve a su sitio. La vida que le hayan quitado no la recupera. */
@@ -465,26 +560,18 @@ export class Enemies {
   }
 
   /**
-   * La embestida: null si sigue andando como cualquiera; si no, si alcanza al jugador en este paso. Agachado sigue
-   * mirando al jugador, pero la dirección se fija al salir: apartándose se esquiva. Se para al chocar con algo, y
-   * entonces queda aturdido: es el momento de golpearlo.
+   * La embestida (el ataque especial `charge`), ya agachado: si alcanza al jugador en este paso. Agachado sigue
+   * mirando al jugador, pero la dirección se fija al salir: apartándose se esquiva. Se para al chocar con algo o al
+   * alcanzarle, y entonces queda aturdido `special.recover` segundos: es el momento de golpearlo.
    */
-  private charge(e: EnemyData, def: ChargeDef, prey: EnemyPrey, dist: number, dt: number): boolean | null {
+  private charge(e: EnemyData, def: ChargeDef, special: SpecialDef, prey: EnemyPrey, dist: number, dt: number): boolean {
     const c = e.charge
-    c.cooldown = Math.max(0, c.cooldown - dt)
-    if (c.state === 'idle') {
-      if (c.cooldown > 1e-9 || dist < def.min || dist > def.max) return null
-      c.state = 'crouch'
-      c.time = def.windup
-      this.emit({ type: 'enemyCharge', id: e.id, state: 'crouch' })
-      return false
-    }
     c.time -= dt
     if (c.state === 'dazed') {
       if (c.time > 1e-9) return false
       c.state = 'idle'
       this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
-      return null
+      return false
     }
     if (c.state === 'crouch') {
       if (c.time > 1e-9) return false
@@ -503,38 +590,54 @@ export class Enemies {
     const hit = Math.hypot(prey.pos.x - e.pos.x, prey.pos.z - e.pos.z) <= contactOf(e.type) + ENEMY_DEFS[e.type].reach
     if (!hit && !blocked && c.time > 1e-9) return false
     c.state = 'dazed'
-    c.time = def.dazed
-    c.cooldown = def.cooldown
-    e.attackCooldown = Math.max(e.attackCooldown, ENEMY_DEFS[e.type].attackInterval)
+    c.time = special.recover
     this.emit({ type: 'enemyCharge', id: e.id, state: 'dazed' })
     if (hit) this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
     return hit
   }
 
   /**
-   * A distancia: mantiene las distancias y cada `attackInterval` segundos se para, avisa y lanza una roca hacia donde
-   * está el jugador al soltarla. Su daño lo hace la roca al llegar, no este paso.
+   * A distancia: mantiene las distancias y cada `attackInterval` (más algo, según el enemigo) se para, apunta
+   * `windup` segundos y lanza hacia donde está el jugador al soltarlo; luego queda `recover` segundos quieto, acabando
+   * el lanzamiento. Su daño lo hace lo lanzado al llegar, no este paso.
    */
   private ranged(e: EnemyData, def: RangedDef, prey: EnemyPrey, dist: number, dt: number) {
     const c = e.charge
-    const { attackInterval, damage, speed, windup } = ENEMY_DEFS[e.type]
+    const { attackInterval, damage, windup } = ENEMY_DEFS[e.type]
     c.cooldown = Math.max(0, c.cooldown - dt)
     if (c.state === 'aim') {
       c.time -= dt
       if (c.time > 1e-9) return
+      c.state = 'throw'
+      c.time = def.recover
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'throw' })
+      this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
+      const dealt = Math.round(damage * this.scaling.damage)
+      this.throwAt(def.projectile, { x: e.pos.x, y: enemyFloor(this.island, e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, dealt, def.speed)
+      return
+    }
+    if (c.state === 'throw') {
+      c.time -= dt
+      if (c.time > 1e-9) return
       c.state = 'idle'
       this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
-      this.emit({ type: 'enemyAttack', id: e.id, target: prey.id })
-      this.throwRock({ x: e.pos.x, y: enemyFloor(this.island, e.pos.x, e.pos.z) + def.height, z: e.pos.z }, prey.id, damage)
       return
     }
     if (c.cooldown <= 1e-9 && dist <= def.range) {
       c.state = 'aim'
       c.time = windup
-      c.cooldown = attackInterval
+      // Cada uno a su ritmo: de `attackInterval` a `attackInterval + jitter`, fijo por enemigo y sin tirar dados.
+      c.cooldown = (attackInterval + def.jitter * ((e.id * 0.618034) % 1)) * this.scaling.attackInterval
       this.emit({ type: 'enemyCharge', id: e.id, state: 'aim' })
       return
     }
+    const { keep } = ENEMY_DEFS[e.type]
+    if (keep) this.keepDistance(e, keep, prey, dist, dt)
+  }
+
+  /** Se acerca hasta `max` metros y retrocede si tiene al jugador a menos de `flee`, sin dejar de mirarle. */
+  private keepDistance(e: EnemyData, def: KeepDef, prey: EnemyPrey, dist: number, dt: number) {
+    const { speed } = ENEMY_DEFS[e.type]
     const away = dist < def.flee ? Math.min(speed * dt, def.flee - dist) : dist > def.max ? -Math.min(speed * dt, dist - def.max) : 0
     if (away !== 0 && dist > 1e-6) this.move(e, ((e.pos.x - prey.pos.x) / dist) * away, ((e.pos.z - prey.pos.z) / dist) * away)
   }
@@ -690,6 +793,8 @@ export class Enemies {
       target: null,
       retarget: 0,
       wander: 0,
+      strike: 0,
+      look: isCommon(type) ? this.look : 0,
     }
     this.list.push(e)
     this.emit({ type: 'enemySpawn', id: e.id, enemy: type, x, z })
@@ -729,7 +834,15 @@ export class Enemies {
     e.knock.z = (dz / d) * def.knockback * knock
     e.stagger = def.stagger
     e.staggerGuard = def.stagger + def.staggerGap
-    e.attackCooldown = Math.max(e.attackCooldown, def.windup)
+    // Aturdido mientras apunta, no lanza: lo vuelve a intentar tras su espera.
+    if (e.charge.state === 'aim' && def.ranged) {
+      e.charge.state = 'idle'
+      e.charge.cooldown = def.windup
+      this.emit({ type: 'enemyCharge', id: e.id, state: 'idle' })
+    }
+    // Un golpe que lo aturde le interrumpe el suyo, que vuelve a intentar tras su espera.
+    e.attackCooldown = e.strike > 0 ? def.windup : Math.max(e.attackCooldown, def.windup)
+    e.strike = 0
     this.emit({ type: 'enemyHit', id: e.id, hp: e.hp, kx: e.knock.x, kz: e.knock.z, by, efficacy })
     return false
   }

@@ -4,6 +4,8 @@ import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
 import { PropView } from '../view/PropView'
 import { EnemyView } from '../view/EnemyView'
+import { EnemyModels } from '../view/enemyModels'
+import { loadWeapons } from '../view/weapons'
 import { PickupView } from '../view/PickupView'
 import { MeteorView } from '../view/MeteorView'
 import { SpawnSmokeView } from '../view/SpawnSmokeView'
@@ -37,7 +39,7 @@ import type { Island } from '../sim/world/island'
 import { createTerrain } from '../world/terrain'
 import { WATER_LEVEL } from '../sim/world/terrain'
 import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
-import { ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH } from '../sim/constants'
+import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
@@ -124,7 +126,9 @@ export class Game {
   private decor: DecorView | null = null
   readonly hud: Hud
   readonly input: Input
-  readonly enemyView = new EnemyView()
+  /** Los modelos animados de los mobs: se descargan la primera vez que sale uno de cada tipo (los trasgos, ya al empezar). */
+  private enemyModels = new EnemyModels()
+  readonly enemyView = new EnemyView(this.enemyModels)
   readonly pickupView = new PickupView()
   readonly projectileView = new ProjectileView()
   readonly meteorView = new MeteorView()
@@ -309,6 +313,10 @@ export class Game {
       this.renderer.setSize(window.innerWidth, window.innerHeight)
     })
 
+    // Los trasgos salen la primera noche: que su modelo ya esté al anochecer.
+    this.enemyModels.preload(['goblin', 'spearGoblin'])
+    // Las armas de verdad: hasta que llegan se ven las hechas en código.
+    void loadWeapons().then(() => this.handheld.refresh(), () => {})
     this.renderer.setAnimationLoop((time) => this.frame(time))
   }
 
@@ -773,15 +781,20 @@ export class Game {
           break
         case 'playerSwing':
           if (e.id === slot.id) this.handheld.play('swing')
+          break
+        case 'playerStrike':
           this.swingAtProp(e)
           break
         case 'playerPlaced':
         case 'playerDropped':
           if (e.id === slot.id) this.handheld.play('place', e.item)
           break
-        case 'playerAte':
-          // Se come aunque se tenga otra cosa en la mano: la animación se hace con lo que se come.
-          if (e.id === slot.id) this.handheld.play('eat', e.item)
+        case 'playerEating':
+          // Se come aunque se tenga otra cosa en la mano: la animación se hace con lo que se come, lo que tarda.
+          if (e.id === slot.id) this.handheld.play('eat', e.item, e.seconds)
+          break
+        case 'playerEatCancelled':
+          if (e.id === slot.id) this.handheld.stop('eat')
           break
         case 'matchEnded':
           // En una sala se vuelve al lobby con el `match` que viene detrás (ver followMatch).
@@ -863,7 +876,7 @@ export class Game {
    * Un golpe a un prop que no le hace nada (sin la herramienta que pide) no tiene evento propio: el cliente lo
    * decide con el objeto del golpe y el tipo del prop. Tiembla igual y, si es propio, se avisa de qué hace falta.
    */
-  private swingAtProp(e: Extract<SimEvent, { type: 'playerSwing' }>) {
+  private swingAtProp(e: Extract<SimEvent, { type: 'playerStrike' }>) {
     if (e.target?.kind !== 'prop') return
     const prop = this.sim.world.props[e.target.id]
     if (!prop) return
@@ -889,6 +902,7 @@ export class Game {
         case 'enemyDied':
           return sim.enemies.list.find((en) => en.id === e.id)?.pos ?? playerAt(e.by)
         case 'playerSwing':
+        case 'playerStrike':
         case 'playerHurt':
         case 'playerDied':
         case 'playerAte':
@@ -1135,6 +1149,8 @@ export class Game {
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
     this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft })
+    const eating = p.eatItem && CONSUMABLE_DEFS[p.eatItem]
+    this.hud.setEating(eating && p.eatLeft > 0 ? 1 - p.eatLeft / eating.time : null)
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)
     // Se va antes de tiempo si ya se lleva en la mano lo que hacía falta.
     const missing = this.toolWarning.left > 0 && this.toolWarning.kind && missingTool(slot.inventory.selectedItem, this.toolWarning.kind)

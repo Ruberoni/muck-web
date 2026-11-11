@@ -1,28 +1,63 @@
 import { describe, expect, it } from 'vitest'
-import { ACTION_DURATION, actionPose, Handheld, swingDuration, type HandAction } from './handheld'
+import { ACTION_DURATION, actionPose, Handheld, swingDuration, swingImpactAt, swingPose, type HandAction } from './handheld'
 import { ITEM_NAMES, type ItemId } from '../sim/inventory'
 import { swingCooldown } from '../sim/tiers'
 
 describe('golpe según el arma', () => {
-  it('la espada golpea más rápido que su cadencia y deja una estela; las herramientas, no', () => {
-    expect(swingDuration('wood_sword')).toBeLessThan(swingCooldown('wood_sword'))
-    expect(swingDuration('wood_axe')).toBe(ACTION_DURATION.swing)
-    expect(swingDuration(null)).toBe(ACTION_DURATION.swing)
-
+  it('dura casi su cadencia, y la espada deja una estela que culmina al pegar; las herramientas, no', () => {
+    for (const item of [null, 'wood_sword', 'wood_axe', 'stone_pickaxe'] as const) {
+      expect(swingDuration(item)).toBeLessThan(swingCooldown(item))
+      expect(swingDuration(item)).toBeGreaterThan(swingCooldown(item) * 0.9)
+    }
     const hand = new Handheld(1)
     hand.setItem('wood_sword')
     hand.play('swing')
-    hand.update(swingDuration('wood_sword') * 0.4, 0, true)
+    hand.update(swingDuration('wood_sword') * swingImpactAt('wood_sword'), 0, true)
     expect(hand.trail.visible).toBe(true)
-    expect(hand.trail.material.opacity).toBeGreaterThan(0)
+    expect(hand.trail.material.opacity).toBeGreaterThan(0.3)
     hand.update(swingDuration('wood_sword'), 0, true)
     expect(hand.action).toBeNull()
     expect(hand.trail.visible).toBe(false)
 
     hand.setItem('wood_axe')
     hand.play('swing')
-    hand.update(ACTION_DURATION.swing * 0.4, 0, true)
+    hand.update(swingDuration('wood_axe') * 0.4, 0, true)
     expect(hand.trail.visible).toBe(false)
+  })
+
+  it('pega cuando la simulación: el golpe llega abajo justo en swingImpact', () => {
+    for (const item of [null, 'wood_sword', 'iron_axe', 'mithril_pickaxe'] as const) {
+      for (const variant of [0, 1]) {
+        const at = (p: number) => swingPose(item, variant, p).rx
+        const impact = swingImpactAt(item)
+        // Lo más bajo del golpe, justo al pegar.
+        expect(at(impact)).toBeLessThan(at(impact - 0.05))
+        expect(at(impact)).toBeLessThan(at(impact + 0.05))
+        expect(at(0)).toBeCloseTo(0)
+        expect(at(1)).toBeCloseTo(0)
+      }
+    }
+  })
+
+  it('se turnan los dos golpes de cada arma', () => {
+    const hand = new Handheld(1)
+    hand.setItem('iron_sword')
+    const seen = [0, 1, 2, 3].map(() => {
+      hand.play('swing')
+      return hand.swingVariant % 2
+    })
+    expect(seen).toEqual([0, 1, 0, 1])
+    expect(swingPose('iron_sword', 0, 0.3)).not.toEqual(swingPose('iron_sword', 1, 0.3))
+  })
+
+  it('no se ve la mano: solo el objeto', () => {
+    const hand = new Handheld(1)
+    hand.setItem(null)
+    let meshes = 0
+    hand.scene.traverse((o) => {
+      if ((o as { isMesh?: boolean }).isMesh && o !== hand.trail) meshes++
+    })
+    expect(meshes).toBe(0)
   })
 })
 

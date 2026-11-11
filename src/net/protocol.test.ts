@@ -150,7 +150,7 @@ describe('protocolo', () => {
       { seq: 1, tick: 1, kind: 'station', id: 0, slot: 'fuel', from: 0 },
       { seq: 1, tick: 1, kind: 'equip', slot: INVENTORY_SIZE },
       { seq: 1, tick: 1, kind: 'equip' },
-      { seq: 1, tick: 1, kind: 'unequip', which: 'legs' },
+      { seq: 1, tick: 1, kind: 'unequip', which: 'hands' },
       { seq: 1, tick: 1, kind: 'unequip' },
       { seq: 1, tick: 1, kind: 'shop', id: -1, op: 'buy', item: 'coin' },
       { seq: 1, tick: 1, kind: 'shop', id: 0, op: 'nada', item: 'coin' },
@@ -238,9 +238,9 @@ describe('snap en el cable', () => {
   const pickup: PickupSnap = { id: 4, pos: { x: 1, y: 2, z: 3 }, grounded: true }
   const inventory: InventoryState = { slots: ['wood', ...Array<null>(INVENTORY_SIZE - 1).fill(null)], counts: { wood: 3 }, selected: 0 }
   const you = (withInventory: boolean): SnapWire['you'] => ({
-    player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, blocking: false, health: 100, hunger: 90, healDelay: 0, regenLeft: 0, regenPerSec: 0, breathLeft: 0, speedLeft: 0, speedMul: 1, guardLeft: 0, guardMul: 1 },
+    player: { pos: { x: 1, y: 2, z: 3 }, vel: { x: 0, y: 0, z: 0 }, grounded: true, inWater: false, floating: false, stamina: 100, exhausted: false, sprintLocked: false, regenDelay: 0, blocking: false, health: 100, hunger: 90, healDelay: 0, regenLeft: 0, regenPerSec: 0, breathLeft: 0, speedLeft: 0, speedMul: 1, guardLeft: 0, guardMul: 1, eatLeft: 0, eatItem: null },
     ...(withInventory ? { inventory: { ...inventory, slots: [...inventory.slots], counts: { ...inventory.counts } } } : {}),
-    combat: { cooldown: 0, pendingSwing: false },
+    combat: { cooldown: 0, pendingSwing: false, strikeLeft: 0, strikeItem: null },
     inventoryFull: false,
     alive: true,
     respawnAt: null,
@@ -268,13 +268,30 @@ describe('snap en el cable', () => {
     expect(snap).toMatchObject({ enemies: [enemy, boss] })
   })
 
+  it('la apariencia de un mob solo viaja si no es la de siempre, y llega igual', () => {
+    const night: EnemySnap = { ...enemy, look: 1 }
+    const totem: EnemySnap = { ...enemy, id: 10, look: 2 }
+    expect(enemyTuple(night)).toHaveLength(8)
+    const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), enemies: [enemyTuple(enemy), enemyTuple(night), enemyTuple(totem)] }))
+    expect(snap).toMatchObject({ enemies: [enemy, night, totem] })
+    if (snap.type !== 'snap') throw new Error('no es un snap')
+    expect(snap.enemies[0].look).toBeUndefined()
+  })
+
   it('el escudo solo viaja si lo lleva, con si está bloqueando', () => {
-    expect(playerTuple(player)).toHaveLength(11)
+    expect(playerTuple(player)).toHaveLength(12)
     const guarded: PlayerSnap = { ...player, shield: 'iron_shield', blocking: true }
-    expect(playerTuple(guarded)).toHaveLength(13)
+    expect(playerTuple(guarded)).toHaveLength(14)
     const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), players: [playerTuple(player), playerTuple(guarded)] }))
     expect(snap).toMatchObject({ players: [player, guarded] })
     expect(snap.type === 'snap' && snap.players[0]).not.toHaveProperty('shield')
+  })
+
+  it('la armadura de los demás viaja en un número, y sin ella no se manda nada', () => {
+    const armored: PlayerSnap = { ...player, armor: 41, shield: 'wood_shield', blocking: false }
+    const snap = new ServerDecoder().decode(JSON.stringify({ ...wire(true), players: [playerTuple(player), playerTuple(armored)] }))
+    expect(snap).toMatchObject({ players: [player, armored] })
+    expect(snap.type === 'snap' && snap.players[0]).not.toHaveProperty('armor')
   })
 
   it('las tuplas se leen como los objetos de los que salen', () => {

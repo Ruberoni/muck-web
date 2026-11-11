@@ -198,6 +198,8 @@ function samePrediction(a: Predicted, you: SnapYou): boolean {
     sameInventory(a.inventory, you.inventory) &&
     a.combat.cooldown === you.combat.cooldown &&
     a.combat.pendingSwing === you.combat.pendingSwing &&
+    a.combat.strikeLeft === you.combat.strikeLeft &&
+    a.combat.strikeItem === you.combat.strikeItem &&
     a.alive === you.alive &&
     a.appliedSeq === you.appliedSeq
   )

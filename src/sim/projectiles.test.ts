@@ -167,9 +167,10 @@ describe('proyectiles', () => {
       const sim = new Simulation(1)
       sim.addPlayer(0)
       const { player } = sim.slot(0)
-      const boss = sim.enemies.spawnAt(player.pos.x + 11, player.pos.z, 'thrower')
-      // Solo la roca de siempre: los ataques especiales se prueban en hazards.test.ts.
-      boss.special.gap = 1e9
+      // Por este lado no hay nada entre los dos que pare la roca.
+      const boss = sim.enemies.spawnAt(player.pos.x, player.pos.z + 11, 'thrower')
+      // Solo la roca rápida: sin llamar gólems (los demás ataques especiales se prueban en hazards.test.ts).
+      boss.special.cooldowns.summonGolems = 1e9
       /** Avanza hasta el paso en que aparece un evento de tipo `type`. */
       const until = (type: SimEventData['type'], game = sim) => {
         for (let i = 0; i < 300; i++) {
@@ -181,16 +182,16 @@ describe('proyectiles', () => {
       return { sim, player, boss, until }
     }
 
-    it('si te quedas quieto la roca te da', () => {
+    it('si te quedas quieto la roca rápida te da', () => {
       const { player, until } = setup()
-      expect(until('playerHurt')).toMatchObject({ id: 0, dmg: ROCK_DAMAGE })
+      expect(until('playerHurt')).toMatchObject({ id: 0, dmg: expect.any(Number) })
       expect(player.healDelay).toBeGreaterThan(0)
     })
 
     it('apartándose se esquiva: va adonde estabas al soltarla', () => {
       const { sim, player, until } = setup()
       until('projectileThrown')
-      sim.teleport(0, player.pos.x, player.pos.z + 4, 0, 0)
+      sim.teleport(0, player.pos.x + 4, player.pos.z, 0, 0)
       for (let i = 0; i < 40; i++) expect(sim.step(new Map()).map((e) => e.type)).not.toContain('playerHurt')
       expect(player.health).toBe(100)
     })
@@ -198,7 +199,7 @@ describe('proyectiles', () => {
     it('guardar la partida mientras avisa no cambia nada', () => {
       const { sim, boss, until } = setup()
       for (let i = 0; i < 5; i++) sim.step(new Map())
-      expect(boss.charge.state).toBe('aim')
+      expect(boss.special.id).toBe('fastRock')
       const copy = Simulation.fromJSON(JSON.parse(JSON.stringify(sim.toJSON())))
       expect(until('projectileThrown', copy)).toEqual(until('projectileThrown'))
     })

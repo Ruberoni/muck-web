@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visor de modelos</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #20242b; color: #eee; font: 14px system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  #side { position: fixed; top: 8px; left: 8px; bottom: 52px; width: 230px; overflow: auto; background: #2a2f38e0; border: 1px solid #4a5260; border-radius: 8px; padding: 6px 8px; }
+  #side h3 { margin: 8px 0 4px; font-size: 12px; color: #aab; text-transform: uppercase; letter-spacing: .05em; }
+  #side h4 { margin: 6px 0 2px; font-size: 12px; color: #ccd; }
+  #side label { display: block; padding: 1px 0 1px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #side .vacio { color: #778; padding-left: 6px; font-style: italic; }
+  #info { position: fixed; top: 44px; right: 8px; max-width: 300px; background: #2a2f38e0; border: 1px solid #4a5260; border-radius: 8px; padding: 6px 10px; font-size: 12px; white-space: pre-line; }
+  #info:empty { display: none; }
+  #panelsBtn { position: fixed; top: 8px; right: 8px; z-index: 2; width: 30px; height: 30px; border-radius: 6px; border: 1px solid #4a5260; background: #2a2f38e0; color: #eee; cursor: pointer; opacity: 0.7; }
+  #panelsBtn:hover { opacity: 1; }
+  #tour { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 10px; background: #2a2f38e0; border: 1px solid #4a5260; border-radius: 8px; padding: 4px 8px; font-weight: 600; }
+  #tour button { background: #5a7bd6; color: #fff; border: 0; border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 15px; }
+  #tour span { min-width: 150px; text-align: center; }
+  #labels { position: fixed; inset: 0; pointer-events: none; }
+  #labels div { position: absolute; transform: translate(-50%, 0); font-weight: 600; font-size: 12px; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+  #anims { position: fixed; bottom: 8px; left: 8px; right: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  #anims button { background: #333a45; color: #eee; border: 1px solid #4a5260; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  #anims button.on { background: #5a7bd6; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="side"></div>
+<div id="tour"><button id="prev">◀</button><span id="tourName"></span><button id="next">▶</button></div>
+<div id="info"></div>
+<button id="panelsBtn" title="Mostrar u ocultar la lista y los datos (H)">☰</button>
+<div id="labels"></div>
+<div id="anims"></div>
+<script type="module">
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { clone } from 'three/addons/utils/SkeletonUtils.js'
+
+// Muestra los .glb de arte/muestras, arte/listas y las skins del juego, lado a lado.
+// ?m=ruta1,ruta2 (relativas a la raíz del proyecto) elige cuáles; ?a=Walk la animación; ?spin=0 quieto; ?rot=90 girados; ?variante=noche solo esa.
+const q = new URLSearchParams(location.search)
+const ROOT = '../../'
+const FOLDERS = [
+  ['Muestras', 'arte/muestras/'],
+  ['Listas', 'arte/listas/'],
+  ['En el juego', 'public/models/'],
+]
+
+/** Recorre el listado de carpetas del servidor buscando .glb. */
+async function crawl(dir) {
+  const html = await (await fetch(ROOT + dir)).text()
+  const hrefs = [...html.matchAll(/href="([^"?#]+)"/g)].map((m) => decodeURIComponent(m[1])).filter((h) => !h.startsWith('/') && !h.startsWith('..') && !h.startsWith('.'))
+  const out = []
+  for (const h of hrefs) {
+    if (h.endsWith('/')) out.push(...(await crawl(dir + h)))
+    else if (/\.glb$/i.test(h)) out.push(dir + h)
+  }
+  return out
+}
+
+const selected = new Set((q.get('m') || '').split(',').filter(Boolean))
+// ?galeria=0, 1, 2…: recorre de a uno los modelos de arte/listas, con botones para pasar al anterior o al siguiente.
+if (q.has('galeria')) {
+  const files = await crawl('arte/listas/')
+  const i = ((Number(q.get('galeria')) || 0) % files.length + files.length) % files.length
+  selected.clear()
+  selected.add(files[i])
+  const go = (d) => { q.set('galeria', (i + d + files.length) % files.length); q.delete('a'); location.search = q }
+  document.getElementById('tour').style.display = 'flex'
+  document.getElementById('tourName').textContent = `${files[i].split('/').slice(-2, -1)[0]}  ·  ${i + 1} de ${files.length}`
+  document.getElementById('prev').onclick = () => go(-1)
+  document.getElementById('next').onclick = () => go(1)
+  addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1) })
+  document.getElementById('side').style.display = 'none'
+}
+const side = document.getElementById('side')
+for (const [title, dir] of FOLDERS) {
+  const h = document.createElement('h3')
+  h.textContent = title
+  side.appendChild(h)
+  const files = await crawl(dir).catch(() => [])
+  if (!files.length) {
+    const p = document.createElement('div')
+    p.className = 'vacio'
+    p.textContent = 'vacía'
+    side.appendChild(p)
+  }
+  let group = null
+  for (const f of files) {
+    const rel = f.slice(dir.length)
+    const sub = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''
+    if (sub !== group) {
+      group = sub
+      if (sub) {
+        const h4 = document.createElement('h4')
+        h4.textContent = sub
+        side.appendChild(h4)
+      }
+    }
+    const label = document.createElement('label')
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    box.checked = selected.has(f)
+    box.onchange = () => {
+      box.checked ? selected.add(f) : selected.delete(f)
+      q.set('m', [...selected].join(','))
+      location.search = q
+    }
+    label.append(box, ' ', rel.slice(rel.lastIndexOf('/') + 1).replace(/\.glb$/i, ''))
+    label.title = f
+    side.appendChild(label)
+  }
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+renderer.setPixelRatio(devicePixelRatio)
+document.body.appendChild(renderer.domElement)
+const scene = new THREE.Scene()
+scene.background = new THREE.Color('#20242b')
+scene.add(new THREE.HemisphereLight('#dfe8ff', '#4a3f35', 2.2))
+const sun = new THREE.DirectionalLight('#fff4e0', 2.4)
+sun.position.set(3, 6, 5)
+scene.add(sun)
+const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 48), new THREE.MeshStandardMaterial({ color: '#2c323b' }))
+ground.rotation.x = -Math.PI / 2
+scene.add(ground)
+// Una persona de referencia (1,8 m) para comparar tamaños.
+const ref = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.36, 4, 8), new THREE.MeshStandardMaterial({ color: '#56606e', transparent: true, opacity: 0.35 }))
+ref.position.y = 0.9
+
+const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 500)
+const controls = new OrbitControls(camera, renderer.domElement)
+const loader = new GLTFLoader()
+const playerClips = loader.loadAsync(ROOT + 'public/models/animations.glb').then((g) => g.animations)
+
+const items = []
+const info = []
+let x = 0
+/** Pone en `obj` los materiales de la variante `name` (KHR_materials_variants; three.js no lo hace solo). */
+async function selectVariant(gltf, obj, name) {
+  const names = gltf.userData.gltfExtensions.KHR_materials_variants.variants.map((v) => v.name)
+  const index = names.indexOf(name)
+  const jobs = []
+  obj.traverse((o) => {
+    const ext = o.isMesh && o.userData.gltfExtensions?.KHR_materials_variants
+    if (!ext) return
+    const mapping = ext.mappings.find((m) => m.variants.includes(index))
+    if (mapping) jobs.push(gltf.parser.getDependency('material', mapping.material).then((m) => {
+      // Igual que GLTFLoader: con esqueleto y colores por vértice el material necesita esos ajustes.
+      const mat = m.clone()
+      if (o.geometry.attributes.color) mat.vertexColors = true
+      o.material = mat
+    }))
+  })
+  await Promise.all(jobs)
+}
+
+/** Tamaño real de un modelo con esqueleto, en su pose de reposo. */
+function measure(obj) {
+  obj.updateMatrixWorld(true)
+  const box = new THREE.Box3()
+  obj.traverse((o) => {
+    if (!o.isMesh || !o.visible) return
+    if (o.isSkinnedMesh) { o.skeleton.update(); o.computeBoundingBox(); box.union(o.boundingBox.clone().applyMatrix4(o.matrixWorld)) }
+    else { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)) }
+  })
+  return box
+}
+
+for (const path of selected) {
+  try {
+    const stamp = Date.now()
+    const gltf = await loader.loadAsync(`${ROOT}${path}?${stamp}`)
+    // Si no trae animaciones pero tiene el esqueleto del jugador, usa las del jugador.
+    let clips = gltf.animations
+    let borrowed = false
+    if (!clips.length && gltf.scene.getObjectByName('Hips') && gltf.scene.getObjectByName('Head')) { clips = await playerClips; borrowed = true }
+    // Con variantes (KHR_materials_variants) se ve una copia por variante. Las piezas `<variante>_algo` solo en la suya.
+    const variants = gltf.userData.gltfExtensions?.KHR_materials_variants?.variants.map((v) => v.name) ?? [null]
+    let tris = 0, bones = 0, size = null
+    const mats = new Set()
+    gltf.scene.traverse((o) => {
+      if (o.isSkinnedMesh && o.skeleton.bones.some((b) => !b)) return
+      if (o.isMesh) { tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; [o.material].flat().forEach((m) => mats.add(m.name || '(sin nombre)')) }
+      if (o.isBone) bones++
+    })
+    const solo = q.get('variante')
+    for (const variant of variants) {
+      if (solo && variant && variant !== solo) continue
+      // Cada copia se carga del archivo (de la caché): clonar falla con algunos esqueletos (huesos con nombres repetidos).
+      const copy = variant === variants[0] || !variant ? gltf : await loader.loadAsync(`${ROOT}${path}?${stamp}`)
+      const body = copy.scene
+      // Mallas metidas dos veces en la escena (pasa en algunos archivos): la copia queda sin huesos y se descarta.
+      const broken = []
+      body.traverse((o) => { if (o.isSkinnedMesh && o.skeleton.bones.some((b) => !b)) broken.push(o) })
+      for (const o of broken) o.removeFromParent()
+      if (variant) await selectVariant(gltf, body, variant)
+      body.traverse((o) => {
+        // El jugador por piezas: aquí se ve sin armadura (la armadura se prueba en armeria.html).
+        if (/^Armadura_/.test(o.name)) o.visible = false
+        const owner = variants.find((v) => v && o.name.startsWith(v + '_'))
+        if (owner && owner !== variant) o.visible = false
+        // `<variante>_X` reemplaza a `X` en su variante.
+        if (variant && !owner && o.name && body.getObjectByName(`${variant}_${o.name}`)) o.visible = false
+      })
+      // Variantes de otro tamaño (el trasgo de noche y de tótem): `extras.escala` de la escena, por variante.
+      const grow = body.userData?.escala?.[variant]
+      if (grow) body.scale.multiplyScalar(grow)
+      const holder = new THREE.Group()
+      holder.add(body)
+      let box = measure(holder)
+      size = box.getSize(new THREE.Vector3())
+      // Lo que viene a otra escala (centímetros, etc.) se ajusta a 1,8 m de alto para poder compararlo.
+      let rescaled = false
+      if (size.y > 8 || size.y < 0.05) {
+        body.scale.multiplyScalar(1.8 / size.y)
+        box = measure(holder)
+        size = box.getSize(new THREE.Vector3())
+        rescaled = true
+      }
+      body.position.y -= box.min.y
+      const w = Math.max(size.x, size.z, 0.6) * (q.get('rot') ? 1 : 1)
+      holder.position.x = x + w / 2
+      holder.rotation.y = (Number(q.get('rot')) || 0) * Math.PI / 180
+      x += w + 0.5
+      scene.add(holder)
+      const mixer = new THREE.AnimationMixer(body)
+      const name = path.split('/').pop().replace(/\.glb$/i, '')
+      items.push({ holder, mixer, clips, label: (variant ? `${name} · ${variant}` : name) + (rescaled ? ' (a escala)' : ''), size })
+    }
+    info.push(`${path.split('/').pop()}: ${Math.round(tris)} triángulos, ${bones} huesos, ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m` +
+      (variants[0] ? `\n  variantes: ${variants.join(', ')}` : '') +
+      `\n  animaciones: ${clips.length ? (borrowed ? 'las del jugador' : clips.map((c) => c.name).join(', ')) : 'ninguna'}\n  materiales: ${[...mats].join(', ')}`)
+  } catch (e) {
+    info.push(`${path}: no se pudo abrir (${e.message})`)
+  }
+}
+document.getElementById('info').textContent = info.join('\n\n')
+
+// Centrar la fila y poner la referencia al lado.
+const shift = x / 2
+for (const it of items) it.holder.position.x -= shift
+if (items.length) { ref.position.x = -shift - 0.6; scene.add(ref) }
+const height = Math.max(1.8, ...items.map((i) => i.size.y))
+const span = Math.max(x + 1.2, height * 1.4)
+// Corrida a la izquierda para que el panel de la izquierda no tape los modelos.
+const off = q.has('galeria') ? 0 : -span * 0.22
+controls.target.set(off, height * 0.5, 0)
+camera.position.set(off, height * 0.7, span * 1.1 + 1.5)
+controls.update()
+
+// Botones de animación: los nombres de todos los modelos juntos.
+const names = [...new Set(items.flatMap((i) => i.clips.map((c) => c.name)))]
+const want = q.get('a') || names.find((n) => n === 'Idle') || names.find((n) => /idle/i.test(n)) || names[0]
+const bar = document.getElementById('anims')
+function play(name) {
+  for (const it of items) {
+    it.mixer.stopAllAction()
+    const clip = it.clips.find((c) => c.name === name) || it.clips.find((c) => c.name === 'Idle') || it.clips[0]
+    if (clip) it.mixer.clipAction(clip).play()
+  }
+  for (const b of bar.children) b.className = b.textContent === name ? 'on' : ''
+}
+for (const n of names) {
+  const b = document.createElement('button')
+  b.textContent = n
+  b.onclick = () => { play(n); q.set('a', n); history.replaceState(null, '', '?' + q) }
+  bar.appendChild(b)
+}
+if (want) play(want)
+
+const labels = document.getElementById('labels')
+for (const it of items) { it.el = document.createElement('div'); it.el.textContent = it.label; labels.appendChild(it.el) }
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight)
+  camera.aspect = innerWidth / innerHeight
+  camera.updateProjectionMatrix()
+}
+addEventListener('resize', resize)
+resize()
+
+const spin = q.get('spin') !== '0'
+const clock = new THREE.Clock()
+const v = new THREE.Vector3()
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta()
+  for (const it of items) {
+    it.mixer.update(dt)
+    if (spin) it.holder.rotation.y += dt * 0.5
+    v.copy(it.holder.position).setY(-0.05).project(camera)
+    it.el.style.left = `${(v.x * 0.5 + 0.5) * innerWidth}px`
+    it.el.style.top = `${(-v.y * 0.5 + 0.5) * innerHeight}px`
+  }
+  renderer.render(scene, camera)
+})
+// Los paneles (la lista y el cuadro de datos) tapan los modelos: con ?m= (un enlace para mirar) empiezan escondidos.
+// La tecla H o el botón ☰ los muestran y los esconden.
+const panels = (show) => { for (const id of ['side', 'info']) document.getElementById(id).style.display = show ? '' : 'none' }
+if (q.has('m') && !q.has('paneles')) panels(false)
+const toggle = () => panels(document.getElementById('info').style.display === 'none')
+addEventListener('keydown', (e) => { if (e.key === 'h' || e.key === 'H') toggle() })
+document.getElementById('panelsBtn').addEventListener('click', toggle)
+window.items = items
+window.view = { camera, controls }
+window.ready = true
+</script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import { aimPose } from './sim/interaction'
 import type { Game } from './game/Game'
 import { INVENTORY_SIZE, SLOT_COUNT, type ItemId } from './sim/inventory'
+import type { EquipSlot } from './sim/equipment'
 import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
@@ -266,7 +267,7 @@ export function installDebug(game: Game) {
     /** Se pone el peto o el escudo de la casilla `slot` (en red, lo manda como cualquier acción). */
     equip: (slot: number) => game.queueAction({ kind: 'equip', slot }),
     /** Se quita lo del hueco `which` al inventario. */
-    unequip: (which: 'chest' | 'shield') => game.queueAction({ kind: 'unequip', which }),
+    unequip: (which: EquipSlot) => game.queueAction({ kind: 'unequip', which }),
     /** Lo que lleva puesto. */
     equipped: () => ({ ...inventory().equipped }),
     /** Tira uno de la casilla `slot` del inventario (0–8 hotbar, 9–26 mochila), o la pila entera con `all` (Q y Ctrl + Q). */
@@ -338,7 +339,7 @@ export function installDebug(game: Game) {
       const p = player()
       const dx = e.pos.x - p.pos.x
       const dz = e.pos.z - p.pos.z
-      const dy = enemyFloor(sim().island, e.pos.x, e.pos.z) + enemyAimHeight(e.type) - (p.pos.y + EYE_HEIGHT)
+      const dy = enemyFloor(sim().island, e.pos.x, e.pos.z) + enemyAimHeight(e.type, e.look) - (p.pos.y + EYE_HEIGHT)
       const yaw = Math.atan2(-dx, -dz)
       const pitch = Math.atan2(dy, Math.hypot(dx, dz))
       // En red solo cambia la mirada, que es del cliente: el objetivo sale del siguiente paso.

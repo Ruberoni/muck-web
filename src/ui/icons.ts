@@ -12,6 +12,12 @@ const shield = (face: string, rim: string, boss: string) =>
   `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="${rim}"/><circle cx="16" cy="16" r="10.5" fill="${face}"/><circle cx="16" cy="16" r="3.5" fill="${boss}"/></svg>`
 const chestplate = (metal: string, shade: string) =>
   `<svg viewBox="0 0 32 32"><path d="M5 8 L11 5 Q16 9 21 5 L27 8 L25 14 L23 13 L23 27 H9 V13 L7 14 Z" fill="${metal}"/><path d="M16 9 V27 H23 V13 L25 14 L27 8 L21 5 Q19 8 16 9" fill="${shade}"/><rect x="10" y="18" width="12" height="2" fill="#5f6670"/></svg>`
+const helmet = (metal: string, shade: string) =>
+  `<svg viewBox="0 0 32 32"><path d="M6 20 Q6 6 16 6 Q26 6 26 20 L26 25 L21 25 L21 19 L11 19 L11 25 L6 25 Z" fill="${metal}"/><path d="M16 6 Q26 6 26 20 L26 25 L21 25 L21 19 L16 19 Z" fill="${shade}"/><rect x="15" y="6" width="2" height="13" fill="#5f6670"/></svg>`
+const leggings = (metal: string, shade: string) =>
+  `<svg viewBox="0 0 32 32"><path d="M8 5 H24 L25 27 H18 L16 13 L14 27 H7 Z" fill="${metal}"/><path d="M16 13 L18 27 H25 L24 5 H16 Z" fill="${shade}"/><rect x="8" y="5" width="16" height="3" fill="#5f6670"/></svg>`
+const boots = (metal: string, shade: string) =>
+  `<svg viewBox="0 0 32 32"><path d="M5 9 H12 V22 H15 V27 H3 V24 L5 22 Z" fill="${metal}"/><path d="M18 9 H25 V22 H28 V27 H16 V24 L18 22 Z" fill="${shade}"/></svg>`
 /** Iconos SVG de cada objeto, para la hotbar, la pantalla de inventario y las recetas. */
 export const ICONS: Record<ItemId, string> = {
   healing_potion: `<svg viewBox="0 0 32 32"><rect x="13" y="3" width="6" height="4" rx="1" fill="#a87a4a"/><rect x="13.5" y="7" width="5" height="5" fill="#dff4ff" opacity="0.7"/><circle cx="16" cy="20" r="9" fill="#dff4ff" opacity="0.7"/><circle cx="16" cy="21" r="7" fill="#e0443a"/><circle cx="13" cy="18" r="1.6" fill="#fff" opacity="0.7"/></svg>`,
@@ -47,6 +53,12 @@ export const ICONS: Record<ItemId, string> = {
   crystal_shield: shield('#7ff0ff', '#dfe3e8', '#3cc8dc'),
   iron_chestplate: chestplate('#dfe3e8', '#9aa3ad'),
   mithril_chestplate: chestplate('#8fd0f2', '#4f9cc8'),
+  iron_helmet: helmet('#dfe3e8', '#9aa3ad'),
+  mithril_helmet: helmet('#8fd0f2', '#4f9cc8'),
+  iron_leggings: leggings('#dfe3e8', '#9aa3ad'),
+  mithril_leggings: leggings('#8fd0f2', '#4f9cc8'),
+  iron_boots: boots('#dfe3e8', '#9aa3ad'),
+  mithril_boots: boots('#8fd0f2', '#4f9cc8'),
   coin: `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="#d9a632"/><circle cx="16" cy="16" r="8" fill="#ffd23f"/><rect x="14" y="10" width="4" height="12" rx="1" fill="#d9a632"/></svg>`,
   plane_engine: `<svg viewBox="0 0 32 32"><rect x="7" y="10" width="16" height="12" rx="2" fill="#7f8c8d"/><rect x="11" y="6" width="8" height="4" fill="#5c636d"/><rect x="23" y="13" width="4" height="6" fill="#5c636d"/><circle cx="14" cy="16" r="3" fill="#2a2320"/></svg>`,
   boss_trophy: `<svg viewBox="0 0 32 32"><path d="M9 5 H23 V12 A7 7 0 0 1 9 12 Z" fill="#ffd23f"/><rect x="14" y="18" width="4" height="5" fill="#d9a632"/><rect x="10" y="23" width="12" height="4" fill="#8a5a32"/></svg>`,

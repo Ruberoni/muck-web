@@ -32,6 +32,7 @@ import { DEFAULT_RULES, type Difficulty, type MatchResult, type MatchRules } fro
 import { pickIsland } from '../src/sim/islands'
 import { DEFAULT_ISLAND } from '../src/sim/world/island'
 import { Simulation, type PlayerSlot, type SimState } from '../src/sim/Simulation'
+import { armorCode } from '../src/sim/equipment'
 import { autoSkin } from '../src/net/skins'
 
 // --- Lo que la sala necesita de la plataforma (Durable Object, Node o los tests) ---
@@ -547,7 +548,7 @@ export class Room {
     if (events.length) this.broadcast({ type: 'ev', list: events })
     const players = this.playerSnaps()
     const tuples = players.map(playerTuple)
-    const enemies = sim.enemies.list.map((e) => enemyTuple({ id: e.id, type: e.type, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp, maxHp: e.maxHp }))
+    const enemies = sim.enemies.list.map((e) => enemyTuple({ id: e.id, type: e.type, pos: { x: cm(e.pos.x), z: cm(e.pos.z) }, yaw: cm(e.yaw), hp: e.hp, maxHp: e.maxHp, look: e.look }))
     const movingPickups = sim.pickups.list
       .filter((p) => this.movedPickups.has(p.id))
       .map((p) => pickupTuple({ id: p.id, pos: { x: cm(p.pos.x), y: cm(p.pos.y), z: cm(p.pos.z) }, grounded: p.grounded }))
@@ -790,6 +791,7 @@ export class Room {
       yaw: cm(player.yaw),
       pitch: cm(player.pitch),
       item: inventory.selectedItem,
+      armor: armorCode(inventory.equipped),
       ...(inventory.equipped.shield ? { shield: inventory.equipped.shield, blocking: player.blocking } : {}),
       health: Math.round(player.health),
       alive,

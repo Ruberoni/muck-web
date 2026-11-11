@@ -118,8 +118,8 @@ describe('NetClient con la sala en memoria (100 ms ± 30)', () => {
       if (at === 10) actions.push({ kind: 'craft', recipe: 'campfire' })
       if (at === 20) actions.push({ kind: 'select', slot: 3 })
       if (at === 30) actions.push({ kind: 'place' })
-      // Dos veces en el mismo tick serían un solo bocado.
-      if (at === 40 || at === 45) actions.push({ kind: 'eat' })
+      // Comer tarda: mientras se come no empieza otro, así que el segundo bocado va al acabar el primero.
+      if (at === 40 || at === 90) actions.push({ kind: 'eat' })
       if (at === 60) actions.push({ kind: 'craft', recipe: 'wood_axe' }, { kind: 'select', slot: 0 })
       // Mueve casillas a la mochila y entre ellas; lo siguiente que se fabrica ocupa la primera libre.
       if (at === 70) actions.push({ kind: 'move', from: 0, to: 20 }, { kind: 'move', from: 1, to: 0 })

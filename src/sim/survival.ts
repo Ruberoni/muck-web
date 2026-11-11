@@ -76,6 +76,9 @@ export function hurt(v: Vitals, damage: number) {
  * Toma un consumible si mejora algo: llena y el hambre no está llena, cura y la vida no lo está, devuelve resistencia
  * que falta o da un efecto con tiempo. Si no, no se gasta.
  */
+/** Si comerlo serviría de algo ahora (sin hambre ni heridas, una baya no): sin cambiar nada. */
+export const useful = (v: Vitals & Partial<Breath>, def: ConsumableDef) => eat({ ...v }, def)
+
 export function eat(v: Vitals & Partial<Breath>, def: ConsumableDef): boolean {
   const maxHealth = maxHealthOf(v.boosts)
   const feeds = def.food > 0 && v.hunger < HUNGER_MAX

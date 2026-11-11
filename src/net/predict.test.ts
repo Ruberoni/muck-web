@@ -80,7 +80,7 @@ describe('Predictor', () => {
 
   it('comer y curarse poco a poco se predicen sin correcciones', () => {
     const { raw_meat } = CONSUMABLE_DEFS
-    CONSUMABLE_DEFS.raw_meat = { food: 5, heal: 10, regen: { perSec: 2, seconds: 0.5 } }
+    CONSUMABLE_DEFS.raw_meat = { time: 1, food: 5, heal: 10, regen: { perSec: 2, seconds: 0.5 } }
     const { server, predictor, slot, states, serverStep } = setup()
     for (const s of [server.slot(0), slot]) {
       s.inventory.add('raw_meat', 2)
@@ -88,9 +88,10 @@ describe('Predictor', () => {
       s.player.hunger = 60
     }
     predictor.start(server.tick, youOf(server.slot(0)))
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 160; i++) {
       const tick = predictor.tick + 1
-      const actions: ActionData[] = i === 10 || i === 30 ? [{ kind: 'eat' }] : []
+      // Comer tarda (1 s aquí): el segundo, al acabar el primero.
+      const actions: ActionData[] = i === 10 || i === 75 ? [{ kind: 'eat' }] : []
       predictor.step(tick, walk(tick), actions)
       serverStep({ ...walk(tick), tick }, predictor.pending.filter((a) => a.tick === tick))
       if (tick > 12 && tick % 3 === 0) predictor.reconcile(tick - 12, states.get(tick - 12)!)

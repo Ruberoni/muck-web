@@ -36,7 +36,7 @@ import { Inventory, KEY_ITEMS, type InventoryState, type ItemId } from './invent
 import { clockOf, DEFAULT_RULES, DIFFICULTY_DEFS, workFactor, type MatchEnd, type MatchResult, type MatchRules } from './match'
 import { Pickups, type PickupsState } from './pickups'
 import { createPlayer, teleportPlayer, type Player, type PlayerEnv } from './player'
-import { aimedVelocity, Projectiles, type Projectile, type ProjectileEnd, type ProjectilesState } from './projectiles'
+import { aimedVelocity, Projectiles, type ProjectileKind, type ProjectilesState } from './projectiles'
 import { Hazards, ticks, type HazardsState } from './hazards'
 import type { SpecialId } from './constants'
 import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type Actor, type Intent, type StationOp, type TradeOp } from './playerTick'
@@ -68,16 +68,20 @@ const STOMP_RADIUS = 7
 const STOMP_SPEED = 12
 const STOMP_WIDTH = 1.2
 const STOMP_DAMAGE = 20
-const TOSS_SPEED = 11
-const TOSS_DAMAGE = 15
-const RAIN_ROCKS = 5
-const RAIN_RADIUS = 1.8
-const RAIN_WARNING = 1.2
-const RAIN_DAMAGE = 15
-const BOULDER_SPEED = 9
-const BOULDER_DAMAGE = 25
-const BOULDER_BLAST = 3
-const BOULDER_BLAST_DAMAGE = 15
+const ARROW_SPEED = 30
+const ARROW_DAMAGE = 20
+const ARROW_HEIGHT = 2.6
+const SMASH_REACH = 2
+const SMASH_RADIUS = 2.6
+const SMASH_DAMAGE = 35
+/** Gólems que llama el lanzarrocas cada vez, cuántos puede tener a la vez a su alrededor (SUMMON_AREA) y a qué distancia salen. */
+const SUMMON_COUNT = 2
+const SUMMON_MAX = 3
+const SUMMON_AREA = 20
+const SUMMON_RING = 3.5
+const FAST_ROCK_SPEED = 30
+const FAST_ROCK_DAMAGE = 28
+const FAST_ROCK_HEIGHT = 3.2
 const FIRE_RING_RADIUS = 9
 const FIRE_RING_SPEED = 8
 const FIRE_RING_WIDTH = 1.4
@@ -277,9 +281,9 @@ export class Simulation {
       alive: (id) => this.enemies.list.some((e) => e.id === id),
     }, island)
     this.obstacles = [world.grid, this.structures.grid, this.worldEvents.grid]
-    this.enemies = new Enemies(this.obstacles, this.rng, emit, (from, target, damage) => this.launchRock(from, target, damage), island, (e, id, target) => this.special(e, id, target))
+    this.enemies = new Enemies(this.obstacles, this.rng, emit, (kind, from, target, damage, speed) => this.launchAt(kind, from, target, damage, speed), island, (e, id, target) => this.special(e, id, target))
     this.pickups = new Pickups(this.obstacles, this.rng, emit, island)
-    this.projectiles = new Projectiles(this.obstacles, emit, island, (p, end) => this.landed(p, end))
+    this.projectiles = new Projectiles(this.obstacles, emit, island)
     this.interaction = new Interaction(world, this.pickups, this.enemies, emit, island)
     this.spawnCenter = findSpawn(world.grid, island)
     for (const slot of this.players.values()) slot.spawn = this.spawnPoint(slot.id)
@@ -404,6 +408,8 @@ export class Simulation {
     this.enemies.decoy = flying ? { id: PLANE_TARGET, pos: flying, alive: true, radius: flying.radius } : null
     // Con el faro encendido no aparecen mobs comunes en toda la isla.
     this.enemies.calm = this.structures.burning !== undefined
+    // Los que salgan ahora, con la apariencia de la amenaza: la del tótem, la de la Noche Eterna o la de siempre.
+    this.enemies.look = this.threat.state.totem ? 2 : this.threat.state.eternal ? 1 : 0
     // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
     const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
@@ -455,7 +461,9 @@ export class Simulation {
       else this.interaction.validateAim(slot, intent.aim)
       this.use(slot, intent.use)
       const hands = useHands(slot, intent)
-      if (hands.swing) this.interaction.strike(slot)
+      // Lo que pega ahora, contra lo que tiene delante en este paso; y lo que empieza, que pegará después.
+      if (hands.strike) this.interaction.strike(slot)
+      if (hands.swing) this.interaction.swing(slot)
       if (hands.place) this.place(slot)
       for (const { item, amount } of intent.drops) this.toss(slot, item, amount)
       for (const op of intent.stations) this.tendStation(slot, op)
@@ -562,13 +570,13 @@ export class Simulation {
 
   /** Lanza una roca desde (x, z), a la altura del pecho, hacia el jugador `id`. */
   throwRock(x: number, z: number, id: PlayerId) {
-    this.launchRock({ x, y: this.island.heightAt(x, z) + THROW_HEIGHT, z }, id, ENEMY_DEFS.thrower.damage)
+    this.launchAt('rock', { x, y: this.island.heightAt(x, z) + THROW_HEIGHT, z }, id, ENEMY_DEFS.thrower.damage, ROCK_SPEED)
   }
 
-  /** Una roca hacia donde está ahora el jugador `id`. */
-  private launchRock(from: { x: number; y: number; z: number }, id: PlayerId, damage: number) {
+  /** Lanza `kind` a `speed` m/s hacia donde está ahora el jugador `id`, al pecho. */
+  private launchAt(kind: ProjectileKind, from: { x: number; y: number; z: number }, id: PlayerId, damage: number, speed: number) {
     const { pos } = this.slot(id).player
-    this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, ROCK_SPEED), damage)
+    this.projectiles.launch(this.tick, kind, from, aimedVelocity(from, { x: pos.x, y: pos.y + EYE_HEIGHT / 2, z: pos.z }, speed), damage)
   }
 
   /** Un ataque especial de un jefe al acabar su aviso, contra `target` (ver SPECIALS en constants.ts). */
@@ -580,24 +588,39 @@ export class Simulation {
       case 'stomp':
         this.hazards.add({ look: 'stomp', x, z, radius: STOMP_RADIUS, startTick: this.tick, hitTick: this.tick, damage: STOMP_DAMAGE, ring: { speed: STOMP_SPEED, width: STOMP_WIDTH } })
         break
-      case 'tossGoblin': {
-        const from = { x, y: floor + 2.6, z }
-        this.projectiles.launch(this.tick, 'goblin', from, aimedVelocity(from, aim(0.5), TOSS_SPEED), TOSS_DAMAGE)
+      case 'arrowVolley': {
+        // Una flecha (de tres) hacia donde está ahora: rápida y casi recta.
+        const from = { x, y: floor + ARROW_HEIGHT, z }
+        this.projectiles.launch(this.tick, 'arrow', from, aimedVelocity(from, aim(EYE_HEIGHT / 2), ARROW_SPEED), ARROW_DAMAGE)
         break
       }
-      case 'rockRain':
-        // Una justo donde está y las demás alrededor: quedarse quieto es lo peor.
-        for (let i = 0; i < RAIN_ROCKS; i++) {
-          const angle = this.rng() * Math.PI * 2
-          const r = i === 0 ? 0 : 1.5 + this.rng() * 3.5
-          const hx = target.pos.x + Math.cos(angle) * r
-          const hz = target.pos.z + Math.sin(angle) * r
-          this.hazards.add({ look: 'rock', x: hx, z: hz, radius: RAIN_RADIUS, startTick: this.tick, hitTick: this.tick + ticks(RAIN_WARNING), damage: RAIN_DAMAGE })
+      case 'smash': {
+        // Golpea el suelo delante, hacia el jugador: alejarse durante el aviso lo esquiva.
+        const dx = target.pos.x - x
+        const dz = target.pos.z - z
+        const length = Math.hypot(dx, dz) || 1
+        const at = { x: x + (dx / length) * SMASH_REACH, z: z + (dz / length) * SMASH_REACH }
+        this.hazards.add({ look: 'rock', ...at, radius: SMASH_RADIUS, startTick: this.tick, hitTick: this.tick, damage: SMASH_DAMAGE })
+        break
+      }
+      case 'summonGolems': {
+        // Salen del suelo a su alrededor, en tierra, sin pasar de SUMMON_MAX gólems cerca.
+        const near = this.enemies.list.filter((g) => g.alive && g.type === 'golem' && Math.hypot(g.pos.x - x, g.pos.z - z) < SUMMON_AREA).length
+        const count = Math.min(SUMMON_COUNT, SUMMON_MAX - near)
+        const start = this.rng() * Math.PI * 2
+        for (let i = 0, made = 0; i < 8 && made < count; i++) {
+          const angle = start + (i * Math.PI * 2) / 8
+          const gx = x + Math.cos(angle) * SUMMON_RING
+          const gz = z + Math.sin(angle) * SUMMON_RING
+          if (this.island.heightAt(gx, gz) <= WATER_LEVEL) continue
+          this.enemies.spawnAt(gx, gz, 'golem')
+          made++
         }
         break
-      case 'boulder': {
-        const from = { x, y: floor + 3.2, z }
-        this.projectiles.launch(this.tick, 'boulder', from, aimedVelocity(from, aim(0.3), BOULDER_SPEED), BOULDER_DAMAGE)
+      }
+      case 'fastRock': {
+        const from = { x, y: floor + FAST_ROCK_HEIGHT, z }
+        this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, aim(EYE_HEIGHT / 2), FAST_ROCK_SPEED), FAST_ROCK_DAMAGE)
         break
       }
       case 'fireRing':
@@ -652,15 +675,6 @@ export class Simulation {
         break
       }
     }
-  }
-
-  /** Donde acaba un proyectil: la roca gorda estalla y el trasgo lanzado se levanta (si cae en tierra). */
-  private landed(p: Projectile, end: ProjectileEnd) {
-    const { x, z } = p.pos
-    if (p.kind === 'boulder' && end !== 'player' && end !== 'expired') {
-      this.hazards.add({ look: 'rock', x, z, radius: BOULDER_BLAST, startTick: this.tick, hitTick: this.tick, damage: BOULDER_BLAST_DAMAGE })
-    }
-    if (p.kind === 'goblin' && end !== 'expired' && this.island.heightAt(x, z) > WATER_LEVEL) this.enemies.spawnAt(x, z, 'goblin')
   }
 
   /** Hace caer un meteorito ya (para probarlo): en (x, z) o, sin ellos, donde toque. */

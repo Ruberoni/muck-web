@@ -1,0 +1,30 @@
+Modelos de los enemigos de muck-web (salen de arte/listas con arte/taller/exportar.mjs)
+
+Trasgo.glb, TrasgoLanza.glb
+  Skin Casual de Ultimate Modular Women/Men de Quaternius (CC0 1.0); taparrabo, corona de
+  plumas, pintura, armas y músculos hechos para el juego. CC0 1.0.
+
+Golem.glb, Espiritu.glb, Lanzarrocas.glb
+  Hechos para el juego sobre el esqueleto de las skins de Quaternius. CC0 1.0.
+
+Perro.glb
+  Wolf de Quaternius (poly.pizza). CC0 1.0.
+
+TrasgoGigante.glb
+  Superhero Male y Hair_Long de Universal Base Characters de Quaternius (quaternius.com,
+  CC0 1.0); pintura, tocado, collares, arco, lanza, carcaj, taparrabo y animaciones hechos
+  para el juego. CC0 1.0.
+
+Guardian.glb
+  "Colossus pre Tilt Brush" de Darwin Yamamoto (poly.pizza), con licencia
+  CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Esqueleto, animaciones,
+  meteorito, piernas de roca, espada y colores hechos para el juego.
+
+Coloso.glb
+  "Iron Golem" de LOWPO: Fantasy Low Poly Golem Pack, de Standout 7
+  (https://standout7.itch.io/lowpo-golem, versión gratis), con la licencia de Standout 7:
+  se puede usar en juegos, también comerciales, pero no revender ni repartir los archivos
+  del modelo sueltos, ni usarlo para NFT o para entrenar IA. Colores de cristal y
+  animaciones hechos para el juego.
+
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/

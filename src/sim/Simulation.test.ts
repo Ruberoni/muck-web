@@ -36,6 +36,20 @@ function step(sim: Simulation, { buttons = 0, yaw = sim.slot(0).player.yaw, pitc
   return sim.step(new Map([[0, { move, actions: actions.map((a): Action => ({ ...a, seq: ++seq, tick })) }]]))
 }
 
+/** Come (con `actions`, que acaban en `eat`) y sigue hasta que acaba de comer: todo lo que pasa entre tanto. */
+function eatNow(sim: Simulation, actions: ActionData[]) {
+  const events = step(sim, { actions })
+  for (let i = 0; i < 120 && sim.slot(0).player.eatLeft > 0; i++) events.push(...step(sim))
+  return events
+}
+
+/** Golpea con un clic (acción `swing`) y sigue hasta que el golpe pega (`swingImpact`): todo lo que pasa entre tanto. */
+function strike(sim: Simulation, { yaw, pitch }: Command = {}) {
+  const events = step(sim, { yaw, pitch, actions: [{ kind: 'swing' }] })
+  for (let i = 0; i < 30 && !events.some((e) => e.type === 'playerStrike'); i++) events.push(...step(sim, { yaw, pitch }))
+  return events
+}
+
 /** Teletransporta al jugador delante del prop, mirándolo, y devuelve la orientación para los `Move`. */
 function aimAt(sim: Simulation, prop: PropData) {
   const isFree = (x: number, z: number) => sim.world.props.every((o) => o === prop || !o.alive || Math.hypot(o.x - x, o.z - z) > o.radius + 0.4)
@@ -64,8 +78,9 @@ describe('Simulation', () => {
     const sim = solo(1)
     const tree = firstTree(sim)
     const look = aimAt(sim, tree)
-    const events = step(sim, { ...look, actions: [{ kind: 'swing' }] })
+    const events = strike(sim, look)
     expect(events.map((e) => e.type)).toContain('playerSwing')
+    expect(events.map((e) => e.type)).toContain('playerStrike')
     expect(tree.hp).toBe(tree.maxHp - 1)
   })
 
@@ -141,19 +156,20 @@ describe('Simulation', () => {
     inventory.add('wood', 1)
     player.hunger = 50
     // La carne, en la casilla elegida.
-    expect(step(sim, { actions: [{ kind: 'eat' }] })).toContainEqual(expect.objectContaining({ type: 'playerAte', id: 0, item: 'raw_meat' }))
+    expect(eatNow(sim, [{ kind: 'eat' }])).toContainEqual(expect.objectContaining({ type: 'playerAte', id: 0, item: 'raw_meat' }))
     expect(inventory.count('raw_meat')).toBe(1)
-    expect(player.hunger).toBeCloseTo(50 + CONSUMABLE_DEFS.raw_meat!.food, 1)
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.hunger - (50 + CONSUMABLE_DEFS.raw_meat!.food))).toBeLessThan(1)
     // Con madera en la mano, una baya aunque haya carne.
-    step(sim, { actions: [{ kind: 'select', slot: 2 }, { kind: 'eat' }] })
+    eatNow(sim, [{ kind: 'select', slot: 2 }, { kind: 'eat' }])
     expect(inventory.count('berry')).toBe(1)
     expect(inventory.count('raw_meat')).toBe(1)
     // Con la mano vacía y sin bayas, nada.
     inventory.remove('berry', 1)
-    expect(step(sim, { actions: [{ kind: 'select', slot: 5 }, { kind: 'eat' }] }).map((e) => e.type)).not.toContain('playerAte')
+    expect(eatNow(sim, [{ kind: 'select', slot: 5 }, { kind: 'eat' }]).map((e) => e.type)).not.toContain('playerAte')
     // Lleno: no se gasta.
     player.hunger = HUNGER_MAX
-    expect(step(sim, { actions: [{ kind: 'select', slot: 0 }, { kind: 'eat' }] }).map((e) => e.type)).not.toContain('playerAte')
+    expect(eatNow(sim, [{ kind: 'select', slot: 0 }, { kind: 'eat' }]).map((e) => e.type)).not.toContain('playerAte')
     expect(inventory.count('raw_meat')).toBe(1)
   })
 
@@ -179,11 +195,13 @@ describe('Simulation', () => {
     expect(cooked.food).toBeGreaterThan(CONSUMABLE_DEFS.raw_meat!.food * 5)
     player.hunger = 40
     player.health = 50
-    step(sim, { actions: [{ kind: 'select', slot: inventory.slots.indexOf('cooked_meat') }, { kind: 'eat' }] })
-    expect(player.hunger).toBeCloseTo(40 + cooked.food, 1)
-    expect(player.health).toBeCloseTo(50 + cooked.heal!, 1)
+    eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('cooked_meat') }, { kind: 'eat' }])
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.hunger - (40 + cooked.food))).toBeLessThan(1)
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.health - (50 + cooked.heal!))).toBeLessThan(1)
 
-    step(sim, { actions: [{ kind: 'select', slot: inventory.slots.indexOf('berry_infusion') }, { kind: 'eat' }] })
+    eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('berry_infusion') }, { kind: 'eat' }])
     expect(player.regenLeft).toBeCloseTo(20, 1)
     expect(player.regenPerSec).toBe(2)
     expect(inventory.count('berry_infusion')).toBe(0)
@@ -194,7 +212,7 @@ describe('Simulation', () => {
     const { inventory, player } = sim.slot(0)
     const herb = sim.world.props.find((p) => p.kind === 'healing_herb')!
     const look = aimAt(sim, herb)
-    expect(step(sim, { ...look, actions: [{ kind: 'swing' }] })).toContainEqual(expect.objectContaining({ type: 'berryTaken', id: herb.id, hp: 0 }))
+    expect(strike(sim, look)).toContainEqual(expect.objectContaining({ type: 'berryTaken', id: herb.id, hp: 0 }))
     expect(inventory.count('healing_herb')).toBe(1)
     expect(herb).toMatchObject({ hp: 0, alive: true })
     // Sin hierba no da nada, ni se rompe.
@@ -203,8 +221,9 @@ describe('Simulation', () => {
     expect(herb.alive).toBe(true)
 
     player.health = 40
-    step(sim, { actions: [{ kind: 'eat' }] })
-    expect(player.health).toBeCloseTo(40 + CONSUMABLE_DEFS.healing_herb!.heal!, 1)
+    eatNow(sim, [{ kind: 'eat' }])
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    expect(Math.abs(player.health - (40 + CONSUMABLE_DEFS.healing_herb!.heal!))).toBeLessThan(1)
     expect(inventory.count('healing_herb')).toBe(0)
 
     const regrow = PROP_DEFS.healing_herb.harvest!.regrow
@@ -236,7 +255,7 @@ describe('Simulation', () => {
       if (item) slot.inventory.add(item, 1)
       const { x, z } = slot.player.pos
       const enemies = spots.map(([dx, dz]) => sim.enemies.spawnAt(x + dx, z + dz))
-      return { sim, enemies, swing: () => step(sim, { actions: [{ kind: 'swing' }] }) }
+      return { sim, enemies, swing: () => strike(sim) }
     }
 
     it('la espada daña a todos los que tiene delante, aunque el golpe vaya al aire', () => {
@@ -273,7 +292,7 @@ describe('Simulation', () => {
       const look = aimAt(sim, tree)
       const hp = tree.hp
       sim.enemies.spawnAt(sim.slot(0).player.pos.x, sim.slot(0).player.pos.z + 40)
-      step(sim, { ...look, actions: [{ kind: 'swing' }] })
+      strike(sim, look)
       // Como a mano: un golpe de 1.
       expect(tree.hp).toBe(hp - 1)
     })
@@ -311,7 +330,11 @@ describe('Simulation', () => {
     slot.player.hunger = 50
     sim.enemies.spawnAt(slot.player.pos.x + 1, slot.player.pos.z)
     const events: string[] = []
-    for (let i = 0; i < 120 && slot.alive; i++) events.push(...step(sim).map((e) => e.type))
+    for (let i = 0; i < 120 && slot.alive; i++) {
+      // Sin que se cure mientras el trasgo prepara el golpe.
+      slot.player.health = Math.min(slot.player.health, ENEMY_DEFS.goblin.damage)
+      events.push(...step(sim).map((e) => e.type))
+    }
     expect(slot.alive).toBe(false)
     expect(slot.player.health).toBe(0)
     expect(events).toContain('playerDied')
@@ -406,7 +429,7 @@ describe('Simulation', () => {
       for (const e of eventsA) seen.add(e.type)
     }
     // Tras el corte siguen pasando cosas que dependen del estado restaurado.
-    expect([...seen]).toEqual(expect.arrayContaining(['enemySpawn', 'enemyAttack', 'playerHurt', 'playerSwing']))
+    expect([...seen]).toEqual(expect.arrayContaining(['enemySpawn', 'enemySwing', 'playerSwing']))
     expect(JSON.stringify(b.toJSON())).toBe(JSON.stringify(a.toJSON()))
     expect(b.slot(0).inventory.slots).toEqual(a.slot(0).inventory.slots)
   })

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Armería</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #20242b; color: #eee; font: 14px system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  #panel { position: fixed; top: 8px; left: 8px; background: #2a2f38e0; border: 1px solid #4a5260; border-radius: 8px; padding: 8px 10px; display: grid; grid-template-columns: auto auto; gap: 6px 10px; align-items: center; }
+  #panel h3 { grid-column: 1 / 3; margin: 0 0 2px; font-size: 13px; color: #aab; font-weight: 600; }
+  select { background: #333a45; color: #eee; border: 1px solid #4a5260; border-radius: 5px; padding: 2px 4px; }
+  #anims { position: fixed; bottom: 8px; left: 8px; right: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  #anims button { background: #333a45; color: #eee; border: 1px solid #4a5260; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  #anims button.on { background: #5a7bd6; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="panel"><h3>Equipo</h3></div>
+<div id="anims"></div>
+<script type="module">
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
+// ?casco=hierro&peto=mithril&pantalon=no&botas=cuero&a=Walk&spin=0
+const q = new URLSearchParams(location.search)
+
+/** Los materiales de la armadura: el color que tiñe cada pieza y cuánto brilla. "cuero" deja el color original. */
+const MATERIALES = {
+  cuero: null,
+  hierro: { color: '#c3c9d1', metalness: 0.55, roughness: 0.4 },
+  mithril: { color: '#8fd0f2', metalness: 0.5, roughness: 0.3 },
+}
+/** Cada pieza de armadura y la parte del cuerpo que tapa. */
+const PIEZAS = { Casco: 'Pelo', Peto: 'Torso', Pantalon: 'Piernas', Botas: 'Pies' }
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+renderer.setPixelRatio(devicePixelRatio)
+document.body.appendChild(renderer.domElement)
+const scene = new THREE.Scene()
+scene.background = new THREE.Color('#20242b')
+scene.add(new THREE.HemisphereLight('#dfe8ff', '#4a3f35', 2.2))
+const sun = new THREE.DirectionalLight('#fff4e0', 2.4)
+sun.position.set(3, 6, 5)
+scene.add(sun)
+const ground = new THREE.Mesh(new THREE.CircleGeometry(20, 48), new THREE.MeshStandardMaterial({ color: '#2c323b' }))
+ground.rotation.x = -Math.PI / 2
+scene.add(ground)
+
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.target.set(0, 0.95, 0)
+camera.position.set(0, 1.3, 4.4)
+controls.update()
+
+const loader = new GLTFLoader()
+const [gltf, anims] = await Promise.all([loader.loadAsync(`../listas/personaje/Jugador.glb?${Date.now()}`), loader.loadAsync('../../public/models/animations.glb')])
+const body = gltf.scene
+scene.add(body)
+window.body = body
+window.THREE = THREE
+const part = (name) => body.getObjectByName(name)
+const pieza = (n) => part(`Armadura_${n}`)
+const cuerpo = (n) => part(`Naufraga_${n}`)
+
+const tintOf = new Map()
+body.traverse((o) => {
+  if (!o.isMesh) return
+  if (o.material.name.endsWith('_Tinte')) {
+    o.material = o.material.clone()
+    tintOf.set(o.material.name.replace('_Tinte', ''), { material: o.material, original: o.material.color.clone() })
+  }
+})
+
+function apply(p, valor) {
+  const on = valor !== 'no'
+  pieza(p).visible = on
+  cuerpo(PIEZAS[p]).visible = !on
+  const t = tintOf.get(`Armadura_${p}`)
+  if (!t || !on) return
+  const m = MATERIALES[valor]
+  t.material.color.copy(m ? new THREE.Color(m.color) : t.original)
+  t.material.metalness = m ? m.metalness : 0
+  t.material.roughness = m ? m.roughness : 0.6
+}
+
+const panel = document.getElementById('panel')
+for (const pieza of Object.keys(PIEZAS)) {
+  const label = document.createElement('label')
+  label.textContent = pieza === 'Pantalon' ? 'Pantalón' : pieza
+  const sel = document.createElement('select')
+  for (const v of ['no', ...Object.keys(MATERIALES)]) sel.add(new Option(v === 'no' ? '— sin —' : v, v))
+  sel.value = q.get(pieza.toLowerCase()) || 'no'
+  sel.onchange = () => { apply(pieza, sel.value); q.set(pieza.toLowerCase(), sel.value); history.replaceState(null, '', '?' + q) }
+  panel.append(label, sel)
+  apply(pieza, sel.value)
+}
+
+const mixer = new THREE.AnimationMixer(body)
+let action
+const bar = document.getElementById('anims')
+function play(name) {
+  action?.stop()
+  action = mixer.clipAction(anims.animations.find((c) => c.name === name)).play()
+  for (const b of bar.children) b.className = b.textContent === name ? 'on' : ''
+}
+for (const c of anims.animations) {
+  const b = document.createElement('button')
+  b.textContent = c.name
+  b.onclick = () => { play(c.name); q.set('a', c.name); history.replaceState(null, '', '?' + q) }
+  bar.appendChild(b)
+}
+play(q.get('a') || 'Idle')
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight)
+  camera.aspect = innerWidth / innerHeight
+  camera.updateProjectionMatrix()
+}
+addEventListener('resize', resize)
+resize()
+
+const spin = q.get('spin') !== '0'
+const clock = new THREE.Clock()
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta()
+  mixer.update(dt)
+  if (spin) body.rotation.y += dt * 0.5
+  renderer.render(scene, camera)
+})
+window.ready = true
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import { ALL_BUTTONS, type Action, type ActionData, type Move } from '../sim/commands'
 import { EQUIP_SLOTS, type EquipSlot } from '../sim/equipment'
-import { ENEMY_DEFS, ENEMY_TYPES, MAX_PITCH, PROP_DEFS, type EnemyType } from '../sim/constants'
+import { ENEMY_DEFS, ENEMY_TYPES, MAX_PITCH, PROP_DEFS, type EnemyType, type MobLook } from '../sim/constants'
 import { isBoostId, isBoostPayment } from '../sim/boosts'
 import { isRecipeId } from '../sim/crafting'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
@@ -19,7 +19,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 61
+export const PROTOCOL_VERSION = 67
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -173,6 +173,8 @@ export interface PlayerSnap {
   connection: Connection
   /** El último RTT que contó (ms); 0 si aún no ha dicho ninguno. */
   ping: number
+  /** La armadura que lleva puesta, en un número (`armorCode`): sin ella, ninguna. */
+  armor?: number
   /** El escudo que lleva puesto, si lleva, y si lo tiene arriba. */
   shield?: ItemId
   blocking?: boolean
@@ -185,6 +187,8 @@ export interface EnemySnap {
   yaw: number
   hp: number
   maxHp: number
+  /** Su apariencia (MobLook); sin ella, la de siempre. */
+  look?: MobLook
 }
 
 /** Un objeto del suelo que se ha movido desde el último `snap` (cayendo o atraído por el imán). */
@@ -364,20 +368,24 @@ export interface SnapWire extends Omit<Snap, 'you' | 'players' | 'enemies' | 'mo
  * `[id, x, y, z, yaw, pitch, item, health, vivo (1/0), ausente (1/0), ping, escudo?, bloqueando (1/0)?]`: solo van los
  * que están en el mundo, y los dos últimos solo si lleva escudo.
  */
-export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number, ItemId?, (0 | 1)?]
-/** `[id, x, z, yaw, hp, tipo, maxHp]`, con `tipo` el índice en ENEMY_TYPES. `maxHp` solo va si no es la de su tipo (los jefes). */
-export type EnemyTuple = [number, number, number, number, number, number, number?]
+export type PlayerTuple = [PlayerId, number, number, number, number, number, ItemId | null, number, 0 | 1, 0 | 1, number, number, ItemId?, (0 | 1)?]
+/**
+ * `[id, x, z, yaw, hp, tipo, maxHp, apariencia]`, con `tipo` el índice en ENEMY_TYPES. `maxHp` solo va si no es la de
+ * su tipo (los jefes) o si detrás va la apariencia, y la apariencia solo si no es la de siempre.
+ */
+export type EnemyTuple = [number, number, number, number, number, number, number?, MobLook?]
 /** `[id, x, y, z, en el suelo (1/0)]` */
 export type PickupTuple = [number, number, number, number, 0 | 1]
 
 export function playerTuple(p: PlayerSnap): PlayerTuple {
-  const tuple: PlayerTuple = [p.id, p.pos.x, p.pos.y, p.pos.z, p.yaw, p.pitch, p.item, p.health, p.alive ? 1 : 0, p.connection === 'absent' ? 1 : 0, p.ping]
+  const tuple: PlayerTuple = [p.id, p.pos.x, p.pos.y, p.pos.z, p.yaw, p.pitch, p.item, p.health, p.alive ? 1 : 0, p.connection === 'absent' ? 1 : 0, p.ping, p.armor ?? 0]
   if (p.shield) tuple.push(p.shield, p.blocking ? 1 : 0)
   return tuple
 }
 export function enemyTuple(e: EnemySnap): EnemyTuple {
   const tuple: EnemyTuple = [e.id, e.pos.x, e.pos.z, e.yaw, e.hp, ENEMY_TYPES.indexOf(e.type)]
-  if (e.maxHp !== ENEMY_DEFS[e.type].hp) tuple.push(e.maxHp)
+  if (e.maxHp !== ENEMY_DEFS[e.type].hp || e.look) tuple.push(e.maxHp)
+  if (e.look) tuple.push(e.look)
   return tuple
 }
 export const pickupTuple = (p: PickupSnap): PickupTuple => [p.id, p.pos.x, p.pos.y, p.pos.z, p.grounded ? 1 : 0]
@@ -407,7 +415,7 @@ export class ServerDecoder {
         return {
           ...msg,
           you: { ...msg.you, inventory },
-          players: msg.players.map(([id, x, y, z, yaw, pitch, item, health, alive, absent, ping, shield, blocking]) => ({
+          players: msg.players.map(([id, x, y, z, yaw, pitch, item, health, alive, absent, ping, armor, shield, blocking]) => ({
             id,
             pos: { x, y, z },
             yaw,
@@ -417,11 +425,12 @@ export class ServerDecoder {
             alive: alive === 1,
             connection: absent === 1 ? 'absent' : 'present',
             ping,
+            ...(armor ? { armor } : {}),
             ...(shield ? { shield, blocking: blocking === 1 } : {}),
           })),
-          enemies: msg.enemies.map(([id, x, z, yaw, hp, index, maxHp]) => {
+          enemies: msg.enemies.map(([id, x, z, yaw, hp, index, maxHp, look]) => {
             const type = ENEMY_TYPES[index]
-            return { id, type, pos: { x, z }, yaw, hp, maxHp: maxHp ?? ENEMY_DEFS[type].hp }
+            return { id, type, pos: { x, z }, yaw, hp, maxHp: maxHp ?? ENEMY_DEFS[type].hp, ...(look ? { look } : {}) }
           }),
           movingPickups: msg.movingPickups.map(([id, x, y, z, grounded]) => ({ id, pos: { x, y, z }, grounded: grounded === 1 })),
         }

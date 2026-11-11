@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOAT_DEPTH, STEP } from './constants'
+import { EQUIP_DEFS } from './equipment'
 import { FISH_BITE, FISH_BITE_INTERVAL, FISH_BITE_SHALLOW, FISH_DELAY, Fishes } from './fish'
 import { pickIsland } from './islands'
 import { Simulation } from './Simulation'
@@ -59,7 +60,7 @@ describe('el pez', () => {
     expect(slot.player.floating).toBe(true)
     expect(events.map((e) => e.type)).toContain('fishAppeared')
     const bite = events.find((e) => e.type === 'playerHurt')!
-    expect(bite).toMatchObject({ dmg: expect.closeTo(FISH_BITE * 0.8, 6) })
+    expect(bite).toMatchObject({ dmg: expect.closeTo(FISH_BITE * (1 - EQUIP_DEFS.iron_chestplate!.reduce), 6) })
     expect(bite).not.toHaveProperty('blocked')
     expect(sim.enemies.list).toEqual([])
     // Se guarda con la partida.

@@ -57,35 +57,35 @@ describe('supervivencia', () => {
 
   it('comer sube el hambre hasta el máximo y no se come lleno', () => {
     const v = vitals(HEALTH_MAX, 50)
-    expect(eat(v, { food: 15 })).toBe(true)
+    expect(eat(v, { time: 1, food: 15 })).toBe(true)
     expect(v.hunger).toBe(65)
     v.hunger = HUNGER_MAX - 5
-    expect(eat(v, { food: 15 })).toBe(true)
+    expect(eat(v, { time: 1, food: 15 })).toBe(true)
     expect(v.hunger).toBe(HUNGER_MAX)
-    expect(eat(v, { food: 15 })).toBe(false)
+    expect(eat(v, { time: 1, food: 15 })).toBe(false)
   })
 
   it('lo que cura se puede tomar con el hambre llena si falta vida, y no se gasta si no mejora nada', () => {
     const v = vitals(50, HUNGER_MAX)
-    expect(eat(v, { food: 0, heal: 25 })).toBe(true)
+    expect(eat(v, { time: 1, food: 0, heal: 25 })).toBe(true)
     expect(v.health).toBe(75)
-    expect(eat(v, { food: 10, heal: 40 })).toBe(true)
+    expect(eat(v, { time: 1, food: 10, heal: 40 })).toBe(true)
     expect(v.health).toBe(HEALTH_MAX)
-    expect(eat(v, { food: 0, heal: 25 })).toBe(false)
+    expect(eat(v, { time: 1, food: 0, heal: 25 })).toBe(false)
     // Lo que solo llena no se come por faltar vida.
     v.health = 50
-    expect(eat(v, { food: 15 })).toBe(false)
+    expect(eat(v, { time: 1, food: 15 })).toBe(false)
   })
 
   it('lo que no llena no se gasta por tener hambre si la vida está llena', () => {
     const v = vitals(HEALTH_MAX, 50)
-    expect(eat(v, { food: 0, heal: 25 })).toBe(false)
-    expect(eat(v, { food: 0, regen: { perSec: 2, seconds: 5 } })).toBe(false)
+    expect(eat(v, { time: 1, food: 0, heal: 25 })).toBe(false)
+    expect(eat(v, { time: 1, food: 0, regen: { perSec: 2, seconds: 5 } })).toBe(false)
     expect(v.regenLeft).toBe(0)
   })
 
   it('lo que cura poco a poco se suma a la regeneración natural, acaba solo y otro solo renueva el tiempo', () => {
-    const regen = { food: 0, regen: { perSec: 2, seconds: 10 } }
+    const regen = { time: 1, food: 0, regen: { perSec: 2, seconds: 10 } }
     const v = vitals(20, HUNGER_MAX)
     expect(eat(v, regen)).toBe(true)
     run(v, 5)
@@ -119,7 +119,7 @@ describe('supervivencia', () => {
 
     const potion = vitals(50, HUNGER_MAX)
     hurt(potion, 10)
-    eat(potion, { food: 0, regen: { perSec: 2, seconds: 5 } })
+    eat(potion, { time: 1, food: 0, regen: { perSec: 2, seconds: 5 } })
     run(potion, 5)
     expect(potion.health).toBeCloseTo(50, 6)
 
@@ -131,7 +131,7 @@ describe('supervivencia', () => {
 
   it('muriendo de hambre, lo que cura poco a poco no salva si la vida llega a 0', () => {
     const v = vitals(0.01, 0)
-    eat(v, { food: 0, regen: { perSec: 1, seconds: 5 } })
+    eat(v, { time: 1, food: 0, regen: { perSec: 1, seconds: 5 } })
     stepSurvival(v, STEP)
     expect(isDead(v)).toBe(true)
   })
@@ -156,7 +156,7 @@ describe('supervivencia', () => {
 
   it('los efectos de velocidad y de piedra duran lo suyo y vuelven a 1', () => {
     const v = vitals(HEALTH_MAX, HUNGER_MAX)
-    expect(eat(v, { food: 0, speed: { factor: 1.3, seconds: 5 }, guard: { factor: 0.7, seconds: 3 } })).toBe(true)
+    expect(eat(v, { time: 1, food: 0, speed: { factor: 1.3, seconds: 5 }, guard: { factor: 0.7, seconds: 3 } })).toBe(true)
     expect(speedFactor(v)).toBe(1.3)
     expect(guardFactor(v)).toBe(0.7)
     run(v, 4)

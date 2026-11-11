@@ -16,8 +16,10 @@ import {
   BOSS_SPAWN_MIN,
   ENEMY_SPAWN_MIN,
   EYE_HEIGHT,
+  HIT_COOLDOWN,
   PLAYER_RADIUS,
   SPAWN_WARN,
+  SPEAR_GOBLIN_SHARE,
   STEP,
   WADE_DEPTH,
   WALK_SPEED,
@@ -192,12 +194,35 @@ describe('enemigos nocturnos', () => {
     expect(boss.target).toBe(0)
   })
 
-  it('pegado al jugador ataca tras la espera y luego a intervalos fijos', () => {
-    enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
-    expect(run(0.45)).toBe(0)
+  it('pegado al jugador empieza el golpe tras la espera, pega al impacto y luego a intervalos fijos', () => {
+    const events: SimEventData[] = []
+    enemies = new Enemies([world.grid], mulberry32(7), (e) => events.push(e))
+    const e = enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
+    const impact = GOBLIN.windup + GOBLIN.strike!
+    expect(run(GOBLIN.windup + 0.05)).toBe(0)
+    expect(events).toContainEqual({ type: 'enemySwing', id: e.id, target: 0 })
+    expect(run(impact - GOBLIN.windup - 0.1)).toBe(0)
     expect(run(0.1)).toBe(GOBLIN.damage)
     expect(run(GOBLIN.attackInterval - 0.1)).toBe(0)
     expect(run(0.1)).toBe(GOBLIN.damage)
+  })
+
+  it('el golpe se esquiva alejándose corriendo mientras lo prepara', () => {
+    const e = enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
+    run(GOBLIN.windup + 0.05)
+    expect(e.strike).toBeGreaterThan(0)
+    // Lo que se aleja corriendo mientras el trasgo, que le sigue, prepara el golpe.
+    player.x -= 6
+    expect(run(GOBLIN.strike!)).toBe(0)
+  })
+
+  it('un golpe que lo aturde le interrumpe el suyo', () => {
+    const e = enemies.spawnAt(player.x + CONTACT + 0.1, player.z)
+    run(GOBLIN.windup + 0.05)
+    expect(e.strike).toBeGreaterThan(0)
+    enemies.hit(e, 1, player, 0)
+    expect(e.strike).toBe(0)
+    expect(run(GOBLIN.strike!)).toBe(0)
   })
 
   it('nadan: en el agua van más despacio que el jugador, pero quien se queda en ella no está a salvo', () => {
@@ -226,10 +251,10 @@ describe('enemigos nocturnos', () => {
     expect(ENEMY_SWIM_MAX).toBeLessThan(WALK_SPEED * WATER_SPEED_FACTOR)
   })
 
-  it('la primera noche solo hay trasgos; desde la segunda, también gólems, espíritus y perros', () => {
+  it('la primera noche solo hay trasgos (también lanceros); desde la segunda, también gólems, espíritus y perros', () => {
     enemies = new Enemies([world.grid], mulberry32(7))
     run(60, NIGHT, 1)
-    expect(new Set(enemies.list.map((e) => e.type))).toEqual(new Set(['goblin']))
+    for (const e of enemies.list) expect(['goblin', 'spearGoblin']).toContain(e.type)
 
     enemies = new Enemies([world.grid], mulberry32(7))
     const seen = new Set<string>()
@@ -238,7 +263,7 @@ describe('enemigos nocturnos', () => {
       for (const e of enemies.list) seen.add(e.type)
       enemies.reset()
     }
-    expect(seen).toEqual(new Set(['goblin', 'golem', 'spirit', 'dog']))
+    expect(seen).toEqual(new Set(['goblin', 'spearGoblin', 'golem', 'spirit', 'dog']))
   })
 
   it('el gólem sale sobre todo en la montaña y el espíritu en el bosque, y cada noche más hasta su máximo', () => {
@@ -255,7 +280,20 @@ describe('enemigos nocturnos', () => {
     }
     expect(spawnType(0, 9, 'mountain')).toBe('golem')
     expect(spawnType(0.62, 9, 'mountain')).toBe('spirit')
-    expect(spawnType(0, 1, 'mountain')).toBe('goblin')
+    // De los trasgos, la parte baja de la tirada son lanceros.
+    expect(spawnType(0, 1, 'mountain')).toBe('spearGoblin')
+    expect(spawnType(0.5, 1, 'mountain')).toBe('goblin')
+  })
+
+  it('uno de cada tres trasgos es lancero, sin tirar más dados', () => {
+    let spears = 0
+    let goblins = 0
+    for (let i = 0; i < 10000; i++) {
+      const type = spawnType((i + 0.5) / 10000, 1, 'meadow')
+      if (type === 'spearGoblin') spears++
+      if (type === 'goblin') goblins++
+    }
+    expect(spears / (spears + goblins)).toBeCloseTo(SPEAR_GOBLIN_SHARE, 2)
   })
 
   it('el gólem nunca se aturde ni retrocede, y el espíritu sí', () => {
@@ -300,12 +338,13 @@ describe('enemigos nocturnos', () => {
       longest = Math.max(longest, tick - lastAttack)
       lastAttack = tick
     }
-    expect(attacks).toBeGreaterThan(5)
-    // Lo peor es un golpe justo antes de que ataque: su intervalo (1,2 s) más el aturdimiento y volver a su alcance.
-    expect(longest * STEP).toBeLessThanOrEqual(1.65)
+    expect(attacks).toBeGreaterThanOrEqual(5)
+    // Un golpe que lo aturde le interrumpe el suyo, pero lo vuelve a intentar tras su espera y aguanta un rato
+    // (staggerGap): lo peor es que lo aturdan justo antes de pegar.
+    expect(longest * STEP).toBeLessThanOrEqual(2)
   })
 
-  it.each([0.25, 0.3, 0.4, 0.5, 0.6, 1])('golpeado cada %s s nunca tarda más de 1,65 s en atacar', (every) => {
+  it.each([0.25, 0.3, 0.4, 0.5, 0.6, 1])('golpeado cada %s s nunca tarda más de 2 s en atacar', (every) => {
     const e = enemies.spawnAt(player.x + CONTACT + GOBLIN.gap, player.z)
     const period = Math.round(every / STEP)
     let lastAttack = 0
@@ -316,7 +355,7 @@ describe('enemigos nocturnos', () => {
       if (lastAttack) longest = Math.max(longest, tick - lastAttack)
       lastAttack = tick
     }
-    expect(longest * STEP).toBeLessThanOrEqual(1.65)
+    expect(longest * STEP).toBeLessThanOrEqual(2)
   })
 
   it('mientras aguanta, un golpe quita vida pero no lo aturde, no lo empuja ni le retrasa el ataque', () => {
@@ -410,7 +449,7 @@ describe('jefes', () => {
     expect(distance).toBeLessThanOrEqual(BOSS_SPAWN_MAX + 0.5)
     for (let i = 0; i < Math.round((SPAWN_WARN + 0.5) / STEP); i++) step(BOSS_PHASE, 3)
     expect(bosses()).toHaveLength(1)
-    expect(enemies.list.filter((e) => e.type === 'goblin').length).toBeGreaterThan(0)
+    expect(enemies.list.filter((e) => e.type === 'goblin' || e.type === 'spearGoblin').length).toBeGreaterThan(0)
     // Muerto no vuelve a salir esa noche, ni al recargar la partida.
     enemies.hit(boss, boss.hp, player, 0)
     const reloaded = new Enemies([world.grid], mulberry32(7))
@@ -472,13 +511,15 @@ describe('jefes', () => {
     it('apartándose se esquiva: la dirección se fija al salir', () => {
       const { boss } = facing(7)
       const CHARGE = GIANT.charge!
-      for (let i = 0; i < Math.round(CHARGE.windup / STEP) + 1; i++) step(0.3, 3)
+      const special = GIANT.specials!.find((s) => s.id === 'charge')!
+      for (let i = 0; i < Math.round(special.windup / STEP) + 1; i++) step(0.3, 3)
       expect(boss.charge.state).toBe('rush')
       player.z += 4
       let damage = 0
       for (let i = 0; i < Math.round(CHARGE.time / STEP); i++) for (const hit of step(0.3, 3)) damage += hit.damage
       expect(damage).toBe(0)
-      expect(boss.charge).toMatchObject({ state: 'dazed', cooldown: expect.any(Number) })
+      expect(boss.charge.state).toBe('dazed')
+      expect(boss.special.cooldowns.charge).toBeGreaterThan(0)
     })
 
     it('tras embestir queda aturdido, sin moverse ni atacar, y recibe el doble', () => {
@@ -491,7 +532,8 @@ describe('jefes', () => {
       expect(boss.hp).toBe(hp - 200)
       // Hasta que se recupera no hace nada.
       let damage = 0
-      for (let i = 0; i < Math.round(GIANT.charge!.dazed / STEP) - 2; i++) for (const hit of step(0.3, 3)) damage += hit.damage
+      const special = GIANT.specials!.find((s) => s.id === 'charge')!
+      for (let i = 0; i < Math.round(special.recover / STEP) - 2; i++) for (const hit of step(0.3, 3)) damage += hit.damage
       expect(damage).toBe(0)
       expect(boss.pos).toEqual({ x, z })
       charge()
@@ -527,9 +569,7 @@ describe('jefes', () => {
 
   describe('lanzarrocas', () => {
     const THROWER = ENEMY_DEFS.thrower
-    const RANGED = THROWER.ranged!
-    const INTERVAL = Math.round(THROWER.attackInterval / STEP)
-    const WINDUP = Math.round(THROWER.windup / STEP)
+    const KEEP = THROWER.keep!
     let events: SimEventData[]
     let rocks: { tick: number; from: { x: number; y: number; z: number }; target: number; damage: number }[]
     let tick: number
@@ -538,7 +578,7 @@ describe('jefes', () => {
       events = []
       rocks = []
       tick = 0
-      enemies = new Enemies([], mulberry32(7), (e) => events.push(e), (from, target, damage) => rocks.push({ tick, from, target, damage }))
+      enemies = new Enemies([], mulberry32(7), (e) => events.push(e), (_kind, from, target, damage) => rocks.push({ tick, from, target, damage }))
     })
 
     /** Un lanzarrocas a `distance` metros, sin aparición de otros: es de día. Sin ataques especiales (hazards.test.ts). */
@@ -564,7 +604,7 @@ describe('jefes', () => {
       const boss = facing(30)
       holdFire(boss)
       run(60 * 6)
-      expect(dist(boss, player)).toBeCloseTo(RANGED.max, 3)
+      expect(dist(boss, player)).toBeCloseTo(KEEP.max, 3)
     })
 
     it('entre medias se queda donde está', () => {
@@ -581,38 +621,16 @@ describe('jefes', () => {
       run(1)
       expect(boss.yaw).toBeCloseTo(-Math.PI / 2, 6)
       run(60 * 2)
-      expect(dist(boss, player)).toBeCloseTo(RANGED.flee, 3)
+      expect(dist(boss, player)).toBeCloseTo(KEEP.flee, 3)
       expect(THROWER.speed).toBeLessThan(WALK_SPEED)
     })
 
-    it('cada 2,5 s se para, avisa 0,7 s y lanza; no pega por su cuenta', () => {
+    it('sin sus ataques especiales no lanza ni pega: ya no tiene ataque normal', () => {
       const boss = facing(12)
-      run(1)
-      expect(boss.charge.state).toBe('aim')
-      expect(events).toContainEqual({ type: 'enemyCharge', id: boss.id, state: 'aim' })
-      expect(run(WINDUP - 1)).toBe(0)
+      expect(run(60 * 8)).toBe(0)
       expect(rocks).toEqual([])
-      run(1)
       expect(boss.charge.state).toBe('idle')
-      expect(rocks).toEqual([{ tick: WINDUP + 1, from: { x: boss.pos.x, y: heightAt(boss.pos.x, boss.pos.z) + RANGED.height, z: boss.pos.z }, target: 0, damage: THROWER.damage }])
-      expect(events.at(-1)).toEqual({ type: 'enemyAttack', id: boss.id, target: 0 })
-      expect(run(INTERVAL * 2)).toBe(0)
-      expect(rocks.map((r) => r.tick)).toEqual([WINDUP + 1, WINDUP + 1 + INTERVAL, WINDUP + 1 + INTERVAL * 2])
-    })
-
-    it('mientras avisa no se mueve', () => {
-      const boss = facing(3)
-      run(1)
-      const { x, z } = boss.pos
-      run(WINDUP - 1)
-      expect(boss.charge.state).toBe('aim')
-      expect(boss.pos).toEqual({ x, z })
-    })
-
-    it('más allá de su alcance no lanza', () => {
-      const boss = facing(RANGED.range + 3)
-      run(10)
-      expect(boss.charge.state).toBe('idle')
+      expect(events.some((e) => e.type === 'enemyAttack')).toBe(false)
     })
 
     it('sin nadie a quien lanzar se queda quieto', () => {
@@ -621,15 +639,6 @@ describe('jefes', () => {
       enemies.step(STEP, [], 0.3, 6)
       expect(boss.charge.state).toBe('idle')
       expect(boss.pos).toEqual({ x, z })
-    })
-
-    it('un golpe no lo interrumpe', () => {
-      const boss = facing(12)
-      run(1)
-      enemies.hit(boss, 10, player, 0)
-      expect(boss.charge.state).toBe('aim')
-      run(WINDUP)
-      expect(rocks).toHaveLength(1)
     })
   })
 })
@@ -668,12 +677,11 @@ describe('guardián', () => {
     expect(guardian.pos.x).toBeGreaterThan(spot.x)
   })
 
-  it('persigue y pega como cualquiera, también de noche', () => {
+  it('persigue también de noche, pero sin sus ataques especiales no pega: no tiene ataque normal', () => {
     player.x = spot.x + 6
-    expect(run(60 * 4)).toBeGreaterThanOrEqual(GUARDIAN.damage)
+    expect(run(60 * 4)).toBe(0)
     expect(dist(guardian, player)).toBeLessThan(3)
-    guardian.attackCooldown = 0
-    expect(run(60 * 2, NIGHT)).toBeGreaterThanOrEqual(GUARDIAN.damage)
+    expect(run(60 * 2, NIGHT)).toBe(0)
   })
 
   it('más lento que andar: se le puede dejar atrás', () => {
@@ -763,6 +771,11 @@ describe('combate', () => {
         interaction.updateTarget(fighter)
         interaction.step(fighter, STEP, true)
       }
+      // El último golpe que empezó pega un poco después (swingImpact): se espera a que caiga.
+      for (let i = 0; i < 60 && fighter.combat.strikeLeft > 0; i++) {
+        interaction.updateTarget(fighter)
+        interaction.step(fighter, STEP, false)
+      }
     }
     const equip = (item: ItemId) => {
       inventory.add(item, 1)
@@ -803,7 +816,7 @@ describe('combate', () => {
 
   it('a mano hacen falta 7 golpes', () => {
     const { enemy, hold, meat } = setup()
-    hold(0.4 * 6 + STEP)
+    hold(HIT_COOLDOWN * 6 + STEP)
     expect(enemy.hp).toBe(0)
     expect(meat()).toHaveLength(1)
   })
@@ -859,7 +872,7 @@ describe('combate', () => {
     GOBLIN.loot = [{ item: 'raw_meat', amount: 1 }, { item: 'stone', amount: 2 }]
     const { hold, equip, pickups } = setup()
     equip('mithril_axe')
-    hold(0.4 + STEP)
+    hold(HIT_COOLDOWN + STEP)
     GOBLIN.loot = loot
     expect(pickups.list.map((p) => p.item).sort()).toEqual(['raw_meat', 'stone', 'stone'])
   })
@@ -891,7 +904,7 @@ describe('los enemigos salen de ENEMY_DEFS', () => {
   })
 
   it('vida, velocidad, daño y ritmo de ataque son los de su tipo', () => {
-    Object.assign(GOBLIN, { hp: 100, speed: 8, damage: 33, attackInterval: 0.5, windup: 0 })
+    Object.assign(GOBLIN, { hp: 100, speed: 8, damage: 33, attackInterval: 0.5, windup: 0, strike: 0 })
     const enemies = new Enemies([world.grid], mulberry32(7))
     const e = enemies.spawnAt(spot.x + 6, spot.z)
     expect(e).toMatchObject({ type: 'goblin', hp: 100, maxHp: 100 })
@@ -921,5 +934,87 @@ describe('los enemigos salen de ENEMY_DEFS', () => {
     enemies.hit(e, 1, player, 0)
     expect(e.knock.x).toBeCloseTo(12)
     expect(e.stagger).toBe(0.6)
+  })
+})
+
+describe('trasgo lancero', () => {
+  const SPEAR = ENEMY_DEFS.spearGoblin
+  const RANGED = SPEAR.ranged!
+  const KEEP = SPEAR.keep!
+  let enemies: Enemies
+  let events: SimEventData[]
+  let throws: { tick: number; kind: string; target: number; damage: number; speed: number }[]
+  let tick: number
+  const player = { ...spot }
+
+  beforeEach(() => {
+    events = []
+    throws = []
+    tick = 0
+    enemies = new Enemies([], mulberry32(7), (e) => events.push(e), (kind, _from, target, damage, speed) => throws.push({ tick, kind, target, damage, speed }))
+  })
+
+  /** De día: no salen otros. */
+  const run = (steps: number) => {
+    for (let i = 0; i < steps; i++) {
+      tick++
+      enemies.step(STEP, [{ id: 0, pos: player, alive: true }], 0.3, 2)
+    }
+  }
+  const at = (distance: number) => enemies.spawnAt(player.x + distance, player.z, 'spearGoblin')
+
+  it('se queda a 8–14 m: se acerca hasta 14 y retrocede si llegas a menos de 8', () => {
+    const far = at(30)
+    far.charge.cooldown = 1e9
+    run(60 * 6)
+    expect(dist(far, player)).toBeCloseTo(KEEP.max, 3)
+    enemies.reset()
+    const near = at(4)
+    near.charge.cooldown = 1e9
+    run(60 * 3)
+    expect(dist(near, player)).toBeCloseTo(KEEP.flee, 3)
+  })
+
+  it('apunta 0,62 s, suelta la lanza, queda quieto acabando el lanzamiento y no repite hasta 4–5 s después', () => {
+    const e = at(11)
+    run(1)
+    expect(e.charge.state).toBe('aim')
+    expect(events).toContainEqual({ type: 'enemyCharge', id: e.id, state: 'aim' })
+    // Apunta `windup` segundos enteros: suelta en el primer paso en que ya han pasado.
+    const release = Math.ceil(SPEAR.windup / STEP - 1e-6)
+    run(release - 1)
+    expect(throws).toEqual([])
+    run(1)
+    expect(throws).toEqual([{ tick: release + 1, kind: 'spear', target: 0, damage: SPEAR.damage, speed: RANGED.speed }])
+    expect(e.charge.state).toBe('throw')
+    const { x, z } = e.pos
+    run(Math.ceil(RANGED.recover / STEP - 1e-6) - 1)
+    expect(e.pos).toEqual({ x, z })
+    run(1)
+    expect(e.charge.state).toBe('idle')
+    run(Math.round(10 / STEP))
+    const gaps = throws.slice(1).map((t, i) => (t.tick - throws[i].tick) * STEP)
+    expect(gaps.length).toBeGreaterThan(0)
+    for (const gap of gaps) {
+      expect(gap).toBeGreaterThanOrEqual(SPEAR.attackInterval - 1e-6)
+      expect(gap).toBeLessThanOrEqual(SPEAR.attackInterval + RANGED.jitter + 1e-6)
+    }
+  })
+
+  it('más allá de su alcance no lanza', () => {
+    const e = at(RANGED.range + 3)
+    e.pos.x = player.x + RANGED.range + 3
+    run(1)
+    expect(e.charge.state).toBe('idle')
+  })
+
+  it('aturdido mientras apunta, no lanza', () => {
+    const e = at(11)
+    run(1)
+    expect(e.charge.state).toBe('aim')
+    enemies.hit(e, 1, player, 0)
+    expect(e.charge.state).toBe('idle')
+    run(Math.round(SPEAR.windup / STEP))
+    expect(throws).toEqual([])
   })
 })

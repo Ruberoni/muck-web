@@ -92,9 +92,9 @@ describe('equilibrio de recursos (§2.2 del plan)', () => {
     for (const item of Object.keys(need) as ItemId[]) expect(have[item]! / need[item]!, item).toBeGreaterThanOrEqual(1.25)
   })
 
-  it(`con ${MAX_PLAYERS} jugadores, el mejor peto y el mejor escudo para cada uno también caben`, () => {
+  it(`con ${MAX_PLAYERS} jugadores, la mejor armadura entera y el mejor escudo para cada uno también caben`, () => {
     const need: Amounts = {}
-    for (const r of [...PER_PLAYER, 'mithril_chestplate', 'crystal_shield'] as const) rawCost(r, need, MAX_PLAYERS)
+    for (const r of [...PER_PLAYER, 'mithril_helmet', 'mithril_chestplate', 'mithril_leggings', 'mithril_boots', 'crystal_shield'] as const) rawCost(r, need, MAX_PLAYERS)
     for (const r of SHARED) rawCost(r, need)
     const have = supply()
     for (const item of Object.keys(need) as ItemId[]) expect(need[item], item).toBeLessThanOrEqual(have[item]!)
@@ -177,9 +177,9 @@ describe('equilibrio de las prioridades', () => {
 describe('equilibrio del combate: la espada, el arma más versátil', () => {
   it('la tabla de tiempos para matar a un trasgo', () => {
     expect(timeToKill(null, 'goblin')).toBeCloseTo(6 * HIT_COOLDOWN, 6)
-    expect(LEVELS.map(([tool]) => timeToKill(tool, 'goblin'))).toEqual([1.2000000000000002, 0.8, 0.4, 0.4])
-    expect(LEVELS.map(([, sword]) => timeToKill(sword, 'goblin'))).toEqual([1, 0.5, 0.25, 0.25])
-    expect(timeToKill('meteor_sword', 'goblin')).toBeCloseTo(0.22, 6)
+    LEVELS.forEach(([tool], i) => expect(timeToKill(tool, 'goblin'), tool).toBeCloseTo([1.35, 0.9, 0.45, 0.45][i], 6))
+    LEVELS.forEach(([, sword], i) => expect(timeToKill(sword, 'goblin'), sword).toBeCloseTo([1.12, 0.56, 0.28, 0.28][i], 6))
+    expect(timeToKill('meteor_sword', 'goblin')).toBeCloseTo(0.25, 6)
   })
 
   it.each(LEVELS)('contra un trasgo, %s mata más despacio que %s', (tool, sword) => {
@@ -241,10 +241,10 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
 
   // Tiempo para matar acertando el 40 % del tiempo, con la espada de cada nivel: la tabla del diseño.
   it.each([
-    ['giant', 75, 45, 28, 18],
-    ['thrower', 44, 29, 19, 13],
-    ['guardian', 63, 38, 23, 15],
-    ['colossus', 188, 94, 54, 33],
+    ['giant', 84, 50, 32, 20],
+    ['thrower', 49, 33, 22, 15],
+    ['guardian', 70, 42, 26, 17],
+    ['colossus', 210, 105, 60, 38],
   ] as const)('%s, con un jugador, tarda lo que debe', (type, stone, iron, mithril, meteor) => {
     const seconds = (item: ItemId) => Math.round(ENEMY_DEFS[type].hp / ((attackDamage(item, type) / swingCooldown(item)) * 0.4))
     expect((['stone_sword', 'iron_sword', 'mithril_sword', 'meteor_sword'] as const).map(seconds)).toEqual([stone, iron, mithril, meteor])
@@ -271,9 +271,9 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
   })
 
   it('ejemplo: el gólem con equipo de piedra', () => {
-    expect(timeToKill('stone_pickaxe', 'golem')).toBeCloseTo(0.8, 6)
-    expect(timeToKill('stone_sword', 'golem')).toBeCloseTo(1.5, 6)
-    expect(timeToKill('stone_axe', 'golem')).toBeCloseTo(4.4, 6)
+    expect(timeToKill('stone_pickaxe', 'golem')).toBeCloseTo(0.9, 6)
+    expect(timeToKill('stone_sword', 'golem')).toBeCloseTo(1.68, 6)
+    expect(timeToKill('stone_axe', 'golem')).toBeCloseTo(4.95, 6)
   })
 
   it('la mano siempre es lo peor, contra todos', () => {

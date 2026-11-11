@@ -36,6 +36,12 @@ export type RecipeId =
   | 'crystal_shield'
   | 'iron_chestplate'
   | 'mithril_chestplate'
+  | 'iron_helmet'
+  | 'iron_leggings'
+  | 'iron_boots'
+  | 'mithril_helmet'
+  | 'mithril_leggings'
+  | 'mithril_boots'
   | 'distiller'
 
 export interface Recipe {
@@ -72,8 +78,15 @@ export const RECIPES: readonly Recipe[] = [
   { id: 'meteor_sword', result: 'meteor_sword', cost: [{ item: 'meteor_fragment', amount: 3 }, { item: 'dark_wood', amount: 2 }], station: 'anvil' },
   { id: 'iron_shield', result: 'iron_shield', cost: [{ item: 'iron_bar', amount: 4 }, { item: 'birch_wood', amount: 2 }], station: 'anvil' },
   { id: 'crystal_shield', result: 'crystal_shield', cost: [{ item: 'crystal', amount: 4 }, { item: 'iron_bar', amount: 2 }], station: 'anvil' },
-  { id: 'iron_chestplate', result: 'iron_chestplate', cost: [{ item: 'iron_bar', amount: 6 }], station: 'anvil' },
-  { id: 'mithril_chestplate', result: 'mithril_chestplate', cost: [{ item: 'mithril_bar', amount: 6 }], station: 'anvil' },
+  // La armadura, en cuatro piezas: 14 lingotes el juego entero.
+  { id: 'iron_helmet', result: 'iron_helmet', cost: [{ item: 'iron_bar', amount: 3 }], station: 'anvil' },
+  { id: 'iron_chestplate', result: 'iron_chestplate', cost: [{ item: 'iron_bar', amount: 5 }], station: 'anvil' },
+  { id: 'iron_leggings', result: 'iron_leggings', cost: [{ item: 'iron_bar', amount: 4 }], station: 'anvil' },
+  { id: 'iron_boots', result: 'iron_boots', cost: [{ item: 'iron_bar', amount: 2 }], station: 'anvil' },
+  { id: 'mithril_helmet', result: 'mithril_helmet', cost: [{ item: 'mithril_bar', amount: 3 }], station: 'anvil' },
+  { id: 'mithril_chestplate', result: 'mithril_chestplate', cost: [{ item: 'mithril_bar', amount: 5 }], station: 'anvil' },
+  { id: 'mithril_leggings', result: 'mithril_leggings', cost: [{ item: 'mithril_bar', amount: 4 }], station: 'anvil' },
+  { id: 'mithril_boots', result: 'mithril_boots', cost: [{ item: 'mithril_bar', amount: 2 }], station: 'anvil' },
 ]
 
 const BY_ID = new Map<string, Recipe>(RECIPES.map((r) => [r.id, r]))

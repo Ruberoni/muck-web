@@ -2,11 +2,11 @@ import { buttonsInput, Btn, type ActionData, type PlayerCommands } from './comma
 import { CONSUMABLE_DEFS, STEP } from './constants'
 import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
-import { startSwing, type Fighter } from './interaction'
+import { startSwing, stepStrike, type Fighter } from './interaction'
 import type { Inventory, ItemId } from './inventory'
 import { stepPlayer, type Player, type PlayerEnv } from './player'
 import { placeableOf } from './structures'
-import { eat, isDead, stepSurvival } from './survival'
+import { eat, isDead, stepSurvival, useful } from './survival'
 
 // La parte de un tick que toca solo al jugador y que el cliente predice: acciones sobre su inventario,
 // movimiento, espera entre golpes, comer y hambre. `Simulation.step` la ejecuta por trozos alrededor de lo que
@@ -133,21 +133,26 @@ export function movePlayer(actor: Actor, command: PlayerCommands | undefined, en
     player.pitch = command.move.pitch
   }
   const input = buttonsInput(command?.move.buttons ?? 0)
-  input.block &&= actor.inventory.equipped.shield !== null
+  // Comiendo no se levanta el escudo.
+  input.block &&= actor.inventory.equipped.shield !== null && player.eatLeft <= 0
   stepPlayer(player, input, env, STEP)
 }
 
 /**
- * Lo que hacen las manos en este paso: si empieza un golpe y si toca colocar lo que se lleva. Con algo colocable
- * en la mano (PLACEABLE_DEFS) el clic lo coloca en vez de golpear, y no queda ningún golpe pendiente.
+ * Lo que hacen las manos en este paso: si empieza un golpe, si pega el que estaba en el aire y si toca colocar lo
+ * que se lleva. Con algo colocable en la mano (PLACEABLE_DEFS) el clic lo coloca en vez de golpear, y no queda
+ * ningún golpe pendiente.
  */
-export function useHands(actor: Actor, intent: Intent): { swing: boolean; place: boolean } {
-  const placing = placeableOf(actor.inventory.selectedItem) !== null
-  // Con el escudo arriba no se golpea ni se coloca, y no queda ningún golpe pendiente para cuando baje.
-  const busy = placing || actor.player.blocking
+export function useHands(actor: Actor, intent: Intent): { swing: boolean; strike: boolean; place: boolean } {
+  const item = actor.inventory.selectedItem
+  const placing = placeableOf(item) !== null
+  // Con el escudo arriba o comiendo no se golpea ni se coloca, y no queda ningún golpe pendiente para después.
+  const eating = actor.player.eatLeft > 0
+  const busy = placing || actor.player.blocking || eating
   if (busy) actor.combat.pendingSwing = false
-  const swing = startSwing(actor.combat, STEP, !busy && intent.attack, !busy && intent.swing, actor.inventory.selectedItem)
-  return { swing, place: placing && !actor.player.blocking && intent.place }
+  const strike = stepStrike(actor.combat, STEP, item, actor.player.blocking || eating)
+  const swing = startSwing(actor.combat, STEP, !busy && intent.attack, !busy && intent.swing, item)
+  return { swing, strike, place: placing && !actor.player.blocking && !eating && intent.place }
 }
 
 /**
@@ -156,7 +161,8 @@ export function useHands(actor: Actor, intent: Intent): { swing: boolean; place:
  */
 export function finishPlayerTick(actor: Actor, intent: Intent, emit: Emit) {
   if (isDead(actor.player)) return
-  if (intent.eat) consume(actor, emit)
+  stepEating(actor, emit)
+  if (intent.eat && actor.player.eatLeft <= 0 && !actor.player.blocking && actor.combat.strikeLeft <= 0) startEating(actor, emit)
   stepSurvival(actor.player, STEP)
 }
 
@@ -167,12 +173,39 @@ export function nextFood(inventory: Inventory): ItemId | null {
   return inventory.has('berry') ? 'berry' : null
 }
 
-function consume(actor: Actor, emit: Emit) {
+/** Empieza a comer lo que toca (`nextFood`), si sirve de algo: tarda su `time`, y no se gasta hasta acabar. */
+function startEating(actor: Actor, emit: Emit) {
   const { inventory, player, id } = actor
   const item = nextFood(inventory)
-  if (!item || !eat(player, CONSUMABLE_DEFS[item]!)) return
+  const def = item && CONSUMABLE_DEFS[item]
+  if (!item || !def || !useful(player, def)) return
+  player.eatItem = item
+  player.eatLeft = def.time
+  emit({ type: 'playerEating', id, item, seconds: def.time })
+}
+
+/**
+ * Lo que está comiendo, un paso: al acabar, si aún sirve, se lo come (el efecto y `playerAte`). Si cambia de casilla
+ * (ya no es lo que se comería) o lo pierde, se queda sin comer y no lo gasta.
+ */
+function stepEating(actor: Actor, emit: Emit) {
+  const { inventory, player, id } = actor
+  if (player.eatLeft <= 0) return
+  const item = player.eatItem
+  if (!item || nextFood(inventory) !== item) return cancelEating(actor, emit)
+  player.eatLeft -= STEP
+  if (player.eatLeft > 1e-9) return
+  player.eatLeft = 0
+  player.eatItem = null
+  if (!eat(player, CONSUMABLE_DEFS[item]!)) return emit({ type: 'playerEatCancelled', id })
   inventory.remove(item, 1)
   emit({ type: 'playerAte', id, item })
+}
+
+function cancelEating({ player, id }: Actor, emit: Emit) {
+  player.eatLeft = 0
+  player.eatItem = null
+  emit({ type: 'playerEatCancelled', id })
 }
 
 /** Lo que la predicción necesita del mundo del cliente: `nearStation` mira las estaciones de su espejo. */
@@ -196,6 +229,7 @@ export function predictPlayer(actor: Actor, command: PlayerCommands | undefined,
   if (!actor.alive) return false
   movePlayer(actor, command, world.env)
   const hands = useHands(actor, intent)
+  if (hands.strike) world.emit({ type: 'playerStrike', id: actor.id, item: actor.inventory.selectedItem, target: intent.aim ?? null })
   if (hands.swing) world.emit({ type: 'playerSwing', id: actor.id, item: actor.inventory.selectedItem, target: intent.aim ?? null })
   const placed = hands.place ? placeableOf(actor.inventory.selectedItem) : null
   if (placed && world.canPlace(actor.player, placed.radius)) {

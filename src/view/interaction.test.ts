@@ -9,6 +9,7 @@ import { aimPose, createCombat, Interaction, type Fighter } from '../sim/interac
 import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from '../sim/pickups'
 import { quickProps } from '../sim/quickProps'
+import { swingImpact } from '../sim/tiers'
 
 function setup() {
   const world = createPropWorld()
@@ -41,6 +42,22 @@ function setup() {
       interaction.updateTarget(fighter)
       step(true)
     }
+    // El último golpe que empezó pega un poco después (swingImpact): se espera a que caiga.
+    for (let i = 0; i < 60 && fighter.combat.strikeLeft > 0; i++) {
+      interaction.updateTarget(fighter)
+      step(false)
+    }
+  }
+  /** Un golpe (con el cooldown ya acabado): empieza y, unos pasos después, pega. Lo que devuelve al pegar. */
+  const once = () => {
+    fighter.combat.cooldown = 0
+    interaction.updateTarget(fighter)
+    let landed = interaction.step(fighter, STEP, true)
+    for (let i = 0; i < 60 && !landed; i++) {
+      interaction.updateTarget(fighter)
+      landed = interaction.step(fighter, STEP, false)
+    }
+    return landed
   }
   /** Un paso fijo: rebrote y golpe, en el orden de Game. */
   const step = (attack: boolean) => {
@@ -60,7 +77,7 @@ function setup() {
     inventory.add(item, 1)
     inventory.select(inventory.slots.indexOf(item))
   }
-  return { world, view, inventory, pickups, events, interaction, viewer, fighter, aimAt, hold, step, onGround, reset, equip }
+  return { world, view, inventory, pickups, events, interaction, viewer, fighter, aimAt, hold, once, step, onGround, reset, equip }
 }
 
 describe('recolección', () => {
@@ -100,8 +117,13 @@ describe('recolección', () => {
 
   it('sin objetivo también golpea al aire y espera el cooldown', () => {
     ctx.fighter.target = null
-    expect(ctx.interaction.step(ctx.fighter, STEP, true)).toEqual({ target: null, dropped: false })
+    // Empieza el golpe; pega un poco después (swingImpact), al aire, y hasta acabar la espera no empieza otro.
     expect(ctx.interaction.step(ctx.fighter, STEP, true)).toBeNull()
+    let landed = null
+    for (let i = 0; i < 60 && !landed; i++) landed = ctx.interaction.step(ctx.fighter, STEP, false)
+    expect(landed).toEqual({ target: null, dropped: false })
+    expect(ctx.interaction.step(ctx.fighter, STEP, true)).toBeNull()
+    expect(ctx.fighter.combat.strikeLeft).toBe(0)
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     ctx.interaction.step(ctx.fighter, STEP, true)
@@ -134,7 +156,7 @@ describe('recolección', () => {
   it('un wobble activo no revive un prop destruido', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
-    ctx.hold(0.81) // 3 golpes: el último llega con el wobble del segundo aún activo
+    ctx.hold(HIT_COOLDOWN * 2 + STEP) // 3 golpes: el último llega con el wobble del segundo aún activo
     expect(tree.alive).toBe(false)
     ctx.view.update(0.05)
     ctx.view.update(0.2)
@@ -204,7 +226,7 @@ describe('bayas', () => {
     const bush = firstBush()
     ctx.aimAt(bush)
     vi.spyOn(ctx.inventory, 'canAdd').mockReturnValue(false)
-    expect(ctx.interaction.step(ctx.fighter, STEP, true)).toEqual({ target: bush, dropped: false })
+    expect(ctx.once()).toEqual({ target: bush, dropped: false })
     expect(bush.hp).toBe(BERRIES_PER_BUSH)
     expect(visibleBerries(bush)).toBe(BERRIES_PER_BUSH)
     expect(ctx.inventory.count('berry')).toBe(0)
@@ -236,10 +258,10 @@ describe('bayas', () => {
     ctx.aimAt(bush)
     ctx.hold(HIT_COOLDOWN * BERRIES_PER_BUSH)
     expect(bush.hp).toBe(0)
-    // El primer rebrote cuenta desde la primera baya recogida.
+    // El primer rebrote cuenta desde la primera baya recogida, que se coge al pegar el golpe (swingImpact).
     wait(BERRY_REGROW - HIT_COOLDOWN * BERRIES_PER_BUSH - 0.1)
     expect(bush.hp).toBe(0)
-    wait(0.2)
+    wait(0.2 + swingImpact(null))
     expect(bush.hp).toBe(1)
     expect(visibleBerries(bush)).toBe(1)
     wait(BERRY_REGROW)
@@ -274,9 +296,9 @@ describe('bayas', () => {
     ctx.hold(1.2)
     ctx.equip('wood_pickaxe')
     ctx.aimAt(rock)
-    ctx.hold(STEP)
+    ctx.once()
     ctx.aimAt(bush)
-    ctx.hold(STEP)
+    ctx.once()
     expect(rock.hp).toBe(rock.maxHp - 2)
 
     ctx.reset()
