@@ -19,7 +19,7 @@ const MOON_HALO = 3.2
 /** Las estrellas: cuántas, a qué distancia, de qué tamaño en píxeles (CSS) y con qué semilla. */
 export const STAR_COUNT = 800
 const STAR_DISTANCE = 420
-const STAR_SIZE = [1.4, 3]
+const STAR_SIZE = [2, 3.5]
 const STAR_SEED = 0x5747
 const MOON_LIT = new THREE.Color('#f6f3e8')
 const MOON_CRATER = new THREE.Color('#d5d2c6')
@@ -139,12 +139,14 @@ attribute float seed;
 uniform float pixelRatio;
 uniform float time;
 varying float vBright;
+varying float vSize;
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   float up = normalize(world.xyz - cameraPosition).y;
   float twinkle = step(0.7, seed) * 0.35 * sin(time * (1.5 + seed * 3.0) + seed * 40.0);
   vBright = smoothstep(0.0, 0.12, up) * (0.65 + 0.35 * fract(seed * 7.13) + twinkle);
-  gl_PointSize = size * pixelRatio;
+  vSize = size * pixelRatio;
+  gl_PointSize = vSize;
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `
@@ -152,10 +154,14 @@ void main() {
 const starFragment = /* glsl */ `
 uniform float opacity;
 varying float vBright;
+varying float vSize;
 void main() {
-  vec2 d = gl_PointCoord - 0.5;
-  if (dot(d, d) > 0.25 || vBright <= 0.0) discard;
-  gl_FragColor = vec4(vec3(1.0, 0.98, 0.92) * vBright * opacity, 1.0);
+  if (vBright <= 0.0) discard;
+  // Borde suave de un píxel: con un recorte duro, las pequeñas se apagarían enteras al caer entre píxeles.
+  float r = length(gl_PointCoord - 0.5) * vSize;
+  float edge = 1.0 - smoothstep(0.5 * vSize - 1.0, 0.5 * vSize, r);
+  if (edge <= 0.0) discard;
+  gl_FragColor = vec4(vec3(1.0, 0.98, 0.92) * vBright * opacity * edge, 1.0);
   #include <colorspace_fragment>
 }
 `
@@ -312,7 +318,8 @@ export class SkyView {
   /**
    * Coloca el cielo para la fase `phase` alrededor de la cámara `view`. `horizon` es el color de la niebla de ahora
    * (ya con la Noche Eterna), y `eternal` (0..1) oscurece el cénit y apaga el brillo y el sol igual que la niebla.
-   * `moonPhase` es la fase de la luna de esta noche (ver `moonPhaseOf`).
+   * `moonPhase` es la fase de la luna de esta noche (ver `moonPhaseOf`). La luna y las estrellas no se apagan con
+   * `eternal`: en la Noche Eterna se ven sobre el cielo negro.
    */
   update(state: SkyState, phase: number, view: THREE.Vector3, horizon: THREE.Color, eternal = 0, moonPhase = 0.5) {
     sunDirection(phase, this.sunDir)

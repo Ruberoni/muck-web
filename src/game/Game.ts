@@ -64,6 +64,8 @@ import { playerCss } from '../ui/playerColor'
 
 export type { GameState } from './states'
 
+/** Fase hasta la que la luna sigue asomando tras el amanecer (y aún es la de la noche anterior). */
+const MOON_SETTING = 0.05
 /** Segundos que tarda en cerrarse la niebla de la Noche Eterna. */
 const ETERNAL_FOG_TIME = 12
 /** El faro encendido abre la niebla en toda la isla, sea cual sea su tamaño: hasta aquí no hay, y desde aquí ya está cerrada. */
@@ -979,14 +981,18 @@ export class Game {
     )
   }
 
-  /** Cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1: con el faro encendido se abre. */
-  /** La luna de esta noche. Sin partida (el menú) el reloj no tiene Noche Eterna y la luna da vueltas a sus fases. */
+  /**
+   * La luna de esta noche. Sin partida (el menú) el reloj no tiene Noche Eterna y la luna da vueltas a sus fases.
+   * El día sube al amanecer, pero la luna tarda un poco en esconderse: hasta entonces es la de la noche anterior.
+   */
   private moonPhase() {
     const { clock } = this.sim
     const eternalDay = Number.isFinite(clock.eternalAt) ? clockOf(this.sim.rules.players).eternalDay : Infinity
-    return moonPhaseOf(clock.day, eternalDay)
+    const setting = !clock.eternal && clock.phase < MOON_SETTING
+    return moonPhaseOf(setting ? clock.day - 1 : clock.day, eternalDay)
   }
 
+  /** Cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1: con el faro encendido se abre. */
   private eternalFog() {
     const { clock, structures } = this.sim
     const closing = THREE.MathUtils.clamp((clock.elapsed - clock.eternalAt) / ETERNAL_FOG_TIME, 0, 1)
