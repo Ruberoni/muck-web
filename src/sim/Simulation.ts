@@ -16,6 +16,7 @@ import {
   OIL_SECONDS,
   OIL_WEAR,
   PLANE_BOARD,
+  PLANE_WAIT,
   PLANE_HP,
   PLANE_REPAIR_WOOD,
   TOTEM_HOLD,
@@ -43,7 +44,7 @@ import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type
 import { trade } from './merchant'
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, scaleProps, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
-import { placeableOf, stationNear, Structures, structureSpot, warmAt, type Structure, type StructuresState, type StructureSpot } from './structures'
+import { placeableOf, stationNear, Structures, structureSpot, warmAt, type PlaneState, type Structure, type StructuresState, type StructureSpot } from './structures'
 import { damageTaken, spendGuard } from './equipment'
 import { putInto, takeFrom } from './stations'
 import { guardFactor, hurt, isDead } from './survival'
@@ -54,6 +55,9 @@ import { enemyFloor, WATER_LEVEL } from './world/terrain'
 import { Fishes, type FishState } from './fish'
 import { WORLD_SEED } from './random'
 import { WorldEvents, type WorldEventsState } from './worldEvents'
+
+/** Segundos mínimos entre dos avisos de cuántos van a bordo del avión. */
+const PLANE_SENT_GAP = 0.5
 
 /** Los jugadores que no son el primero aparecen en un anillo a esta distancia del punto de aparición. */
 const SPAWN_RING = 2.5
@@ -239,6 +243,8 @@ export class Simulation {
   private nextPlayerId = 0
   /** Todos muertos: tick en que se acaba la partida. */
   private gameOverAt: number | null = null
+  /** Lo último que se dijo del avión a bordo (cuántos y cuándo), para no avisar en cada paso. */
+  private planeSent = { aboard: 0, expected: 0, tick: -Infinity }
   private spot: StructureSpot = { x: 0, y: 0, z: 0, valid: false }
   /** Las estaciones para fabricar son las estructuras colocadas. */
   private readonly craftWorld: CraftWorld = {
@@ -554,6 +560,7 @@ export class Simulation {
       Object.assign(slot.player, createPlayer(this.env, slot.spawn.x, slot.spawn.z))
     }
     this.gameOverAt = null
+    this.planeSent = { aboard: 0, expected: 0, tick: -Infinity }
     this.result = null
     this.worldStartTick = this.tick
     this.syncClock()
@@ -918,8 +925,9 @@ export class Simulation {
     } else if (!plane.running) {
       plane.running = true
       plane.heat = 0
+      this.stopBoarding(plane)
     }
-    this.structures.planeChanged(structure)
+    this.planeChanged(structure)
   }
 
   /** Con el motor en marcha todos van a por él; si le quitan toda la vida se apaga, pero no se destruye. */
@@ -931,19 +939,75 @@ export class Simulation {
     if (plane.hp <= 0) {
       plane.running = false
       plane.heat = 0
+      this.stopBoarding(plane)
     }
-    this.structures.planeChanged(structure)
+    this.planeChanged(structure)
   }
 
-  /** El motor calienta; al acabar despegan quienes estén vivos y a bordo. Si no hay nadie, espera. */
+  /**
+   * El motor calienta. Ya caliente, en cuanto sube alguien espera PLANE_WAIT segundos a los demás: si suben todos
+   * despega antes, y si se bajan todos la espera se cancela (y la próxima vez empieza entera). Si no hay nadie, espera.
+   * A quien se une, reaparece o vuelve durante la cuenta también se le espera, pero no la reinicia ni la alarga.
+   */
   private warmPlane(living: readonly PlayerSlot[]) {
     const structure = this.structures.flying
     if (!structure) return
     const plane = structure.plane!
     plane.heat = Math.min(MOTOR_TIME, plane.heat + STEP)
     if (plane.heat < MOTOR_TIME) return
-    const aboard = living.filter(({ player }) => Math.hypot(player.pos.x - structure.x, player.pos.z - structure.z) - structure.radius <= PLANE_BOARD)
-    if (aboard.length) this.finish('escaped', aboard.map((s) => s.id))
+    // Quien se ha quedado sin vida en este paso (muere después) ya no se salva.
+    const aboard = living.filter(
+      ({ player }) => !isDead(player) && Math.hypot(player.pos.x - structure.x, player.pos.z - structure.z) - structure.radius <= PLANE_BOARD,
+    )
+    // Los muertos que van a reaparecer impiden que se vaya antes de tiempo, pero no alargan la espera. Los `gone`, no.
+    const expected = this.inWorld().filter((s) => s.alive || s.respawnAt !== null)
+    plane.aboard = aboard.length
+    plane.expected = expected.length
+    if (!aboard.length) {
+      if (plane.until !== null) {
+        this.stopBoarding(plane)
+        plane.expected = expected.length
+        this.planeChanged(structure)
+      } else this.planeAboardChanged(structure)
+      return
+    }
+    const all = expected.every((s) => aboard.includes(s))
+    if (all || (plane.until !== null && this.tick >= plane.until)) {
+      this.finish('escaped', aboard.map((s) => s.id))
+      return
+    }
+    if (plane.until === null) {
+      plane.until = this.tick + Math.round(PLANE_WAIT / STEP)
+      plane.wait = PLANE_WAIT
+      this.planeChanged(structure)
+      this.events.emit({ type: 'planeBoarding', id: structure.id, x: structure.x, z: structure.z })
+      return
+    }
+    plane.wait = (plane.until - this.tick) * STEP
+    this.planeAboardChanged(structure)
+  }
+
+  /** Sin cuenta atrás para despegar. A bordo se vuelve a contar en el próximo paso con el motor caliente. */
+  private stopBoarding(plane: PlaneState) {
+    plane.until = null
+    plane.wait = null
+    plane.aboard = 0
+    plane.expected = 0
+  }
+
+  /** Avisa del avión tal cual está y apunta lo que se ha dicho de quién va a bordo. */
+  private planeChanged(structure: Structure) {
+    const { aboard, expected } = structure.plane!
+    this.planeSent = { aboard, expected, tick: this.tick }
+    this.structures.planeChanged(structure)
+  }
+
+  /** Si ha cambiado cuántos van a bordo, avisa; como mucho dos veces por segundo, por quien se para justo en el borde. */
+  private planeAboardChanged(structure: Structure) {
+    const { aboard, expected } = structure.plane!
+    if (aboard === this.planeSent.aboard && expected === this.planeSent.expected) return
+    if (this.tick - this.planeSent.tick < Math.round(PLANE_SENT_GAP / STEP)) return
+    this.planeChanged(structure)
   }
 
   /** Un faro acabado: primero se carga lo que se lleve; si no, se enciende o se apaga. */
