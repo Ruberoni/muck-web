@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isLit, putInto } from './stations'
 import { Btn, type Action, type ActionData, type Move } from './commands'
-import { BERRY_REGROW, CAMPFIRE_HEAL_PER_SEC, CAMPFIRE_HEAL_RANGE, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HEALTH_REGEN_HUNGER, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
+import { BERRY_REGROW, CAMPFIRE_HEAL_PER_SEC, CAMPFIRE_HEAL_RANGE, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HEALTH_REGEN_HUNGER, HEALTH_REGEN_PER_SEC, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
 import { aimPose } from './interaction'
 import { generatePropPlacements, type PropData } from './props'
 import { quickProps } from './quickProps'
@@ -194,6 +194,8 @@ describe('Simulation', () => {
     // Otra fogata encendida al lado: sigue curando lo mismo.
     const other = sim.structures.place(structureSpot(player.pos, Math.PI, radius, [sim.world.grid, sim.structures.grid]), 'campfire')!
     putInto('campfire', other.station!, 'fuel', 'wood', 5)
+    expect(warmAt([other], player.pos)).toBe(true)
+    expect(isLit(other.station!)).toBe(true)
     expect(healed(2)).toBeCloseTo(CAMPFIRE_HEAL_PER_SEC * 2, 6)
 
     // Lejos de las dos (en horizontal, del jugador al borde), ya no.
@@ -232,10 +234,10 @@ describe('Simulation', () => {
     player.hunger = 40
     player.health = 50
     eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('cooked_meat') }, { kind: 'eat' }])
-    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco (al lado de la fogata
-    // encendida, también por el calor).
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco, la natural y (al lado de la
+    // fogata encendida) la del calor.
     expect(Math.abs(player.hunger - (40 + cooked.food))).toBeLessThan(1)
-    expect(Math.abs(player.health - (50 + cooked.heal!))).toBeLessThan(2)
+    expect(Math.abs(player.health - (50 + cooked.heal! + (HEALTH_REGEN_PER_SEC + CAMPFIRE_HEAL_PER_SEC) * cooked.time))).toBeLessThan(0.1)
 
     eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('berry_infusion') }, { kind: 'eat' }])
     expect(player.regenLeft).toBeCloseTo(20, 1)

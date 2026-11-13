@@ -10,8 +10,8 @@ import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
 import { createIsland } from '../sim/world/island'
-import { stationNear, structureSpot, warmAt } from '../sim/structures'
-import { copyStation } from '../sim/stations'
+import { stationNear, structureSpot, warmAt, type StructureKind } from '../sim/structures'
+import { copyStation, STATION_DEFS, followStation, type StationState } from '../sim/stations'
 import { isNight } from '../sim/world/daycycle'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
 import { InterpBuffer, Interpolator, PresentationQueue, type Shown } from './interp'
@@ -237,7 +237,11 @@ export class NetClient {
   /** Eventos del servidor que tratan del jugador local: se presentan en cuanto llegan. */
   private own: SimEvent[] = []
   private worldStartTick = 0
-  private lastRenderTick = 0
+  /**
+   * El tick del servidor al que va la copia de las estructuras (barras de las estaciones, fuego del faro): el del
+   * estado cargado y, desde que el render lo alcanza, el del render. Los `stationChanged` se llevan a este tick.
+   */
+  private structuresTick = 0
   private mirrorEnemies = new Map<number, EnemyData>()
   private pickups = new Map<number, MirrorPickup>()
 
@@ -341,8 +345,11 @@ export class NetClient {
     const sim = this.sim
     if (!sim) return { own, remote: [] }
     const tick = this.renderTick()
-    sim.structures.follow(Math.max(0, tick - this.lastRenderTick) * STEP, isNight(sim.clock.phase))
-    this.lastRenderTick = tick
+    // Tras cargar un estado la copia va por delante del render: espera a que la alcance (no descuenta lo de antes).
+    if (tick > this.structuresTick) {
+      sim.structures.follow((tick - this.structuresTick) * STEP, isNight(sim.clock.phase))
+      this.structuresTick = tick
+    }
     sim.clock.elapsed = (tick - this.worldStartTick) * STEP
     this.shownPlayers = this.players.sample(tick)
     this.syncEnemies(sim, this.enemies.sample(tick))
@@ -437,10 +444,10 @@ export class NetClient {
           canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, sim.obstacles, undefined, sim.island).valid,
           // Como en la simulación: las estaciones del espejo, con el mismo alcance.
           nearStation: (kind, pos) => stationNear(sim.structures.list, kind, pos, STATION_RANGE),
-          // La copia de las estaciones va al tick del render, por detrás de la predicción: la fogata que se habrá
+          // La copia de las estaciones va a `structuresTick`, por detrás de la predicción: la fogata que se habrá
           // apagado en el tick que se predice (o se repite al reconciliar) ya no calienta. Si no, cada apagado sería
           // una corrección de vida.
-          warm: (pos, tick) => warmAt(sim.structures.list, pos, Math.max(0, (tick ?? this.predictor!.tick + 1) - this.lastRenderTick) * STEP),
+          warm: (pos, tick) => warmAt(sim.structures.list, pos, Math.max(0, (tick ?? this.predictor!.tick + 1) - this.structuresTick) * STEP),
         })
         this.predictor.start(msg.serverTick, msg.you)
         this.clock.sync(now, msg.serverTick, msg)
@@ -595,6 +602,7 @@ export class NetClient {
     for (const prop of sim.world.props) resetProp(prop)
     for (const { id, hp, alive, regrowLeft } of state.props) Object.assign(sim.world.props[id], { hp, alive, regrowLeft })
     sim.structures.load(state.structures)
+    this.structuresTick = state.tick
     sim.projectiles.load(state.projectiles)
     sim.worldEvents.load(state.worldEvents)
     sim.threat.load(state.threat)
@@ -663,7 +671,7 @@ export class NetClient {
       }
       case 'stationChanged': {
         const structure = sim.structures.byId(e.id)
-        if (structure) structure.station = copyStation(e.station)
+        if (structure) structure.station = stationAt(structure.kind, copyStation(e.station), (this.structuresTick - e.tick) * STEP)
         break
       }
       case 'graveOpened': {
@@ -754,4 +762,17 @@ function mirrorEnemy(id: number, type: EnemyType): EnemyData {
 
 function mirrorPickup(id: number, item: ItemId, amount: number, spin: number, keep: boolean): Pickup {
   return { id, item, amount, pos: { x: 0, y: 0, z: 0 }, prev: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, grounded: false, age: 0, spin, claimedBy: null, droppedBy: null, keep }
+}
+
+/**
+ * Una estación del servidor en su tick, llevada `dt` segundos más tarde (o antes, si `dt` es negativo) para que
+ * quede al tick de la copia. Hacia atrás solo se devuelve lo que ardió la fogata, que arde sin procesar: así la
+ * predicción sabe cuándo se apaga (lo demás son barras que solo se ven y se corrigen solas). Sin tope: si la unidad
+ * se cogió después del tick de la copia, `burn` pasa un momento de `burnTotal` (la barra se acota al dibujarla), pero
+ * se apaga en el mismo tick que en el servidor.
+ */
+export function stationAt(kind: StructureKind, s: StationState, dt: number): StationState {
+  if (dt > 0) followStation(kind, s, dt)
+  else if (dt < 0 && STATION_DEFS[kind]?.alwaysBurns && s.burn > 1e-9) s.burn -= dt
+  return s
 }
