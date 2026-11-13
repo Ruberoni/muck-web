@@ -145,7 +145,7 @@ export class Sound implements SoundOut {
     if (this.ctx) this.master.gain.setTargetAtTime(this.volume * MASTER_HEADROOM, this.ctx.currentTime, 0.02)
   }
 
-  play(name: SoundName, { gain = 1, pan = 0, weight = 1 }: PlayOptions = {}) {
+  play(name: SoundName, { gain = 1, pan = 0, weight }: PlayOptions = {}) {
     const ctx = this.ctx
     if (!ctx || ctx.state !== 'running' || gain <= 0.001) return
     const bus = ctx.createGain()
@@ -344,7 +344,7 @@ const STEP_REFERENCE_SCALE = 1.25
  * el roce (~1,5 kHz) caen en la banda que sí reproducen los altavoces de portátil y móvil; el tono grave solo da cuerpo
  * con audífonos. Cuanto más grande, más grave, algo más fuerte y más largo: el Coloso retumba y el perro apenas roza.
  */
-export function enemyStepSound(s: Sound, scale: number) {
+export function enemyStepSound(s: Sound, scale = STEP_REFERENCE_SCALE) {
   const k = Math.min(2.2, Math.max(0.5, scale / STEP_REFERENCE_SCALE))
   const pitch = k ** -0.6
   const loud = k ** 0.7
@@ -357,7 +357,7 @@ export function enemyStepSound(s: Sound, scale: number) {
 }
 
 // Cada efecto suena por el bus del momento y devuelve su duración en segundos. `weight` es el de `PlayOptions`.
-const EFFECTS: Record<SoundName, (s: Sound, weight: number) => number> = {
+const EFFECTS: Record<SoundName, (s: Sound, weight?: number) => number> = {
   swing: (s) => s.noise(0.14, { filter: 'bandpass', freq: 700 + s.random() * 300, q: 0.7, gain: 0.25, attack: 0.05 }),
   hitWood: (s) =>
     Math.max(

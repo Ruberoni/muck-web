@@ -80,16 +80,16 @@ const page = (S, G) => {
   const db = (v, ref) => (10 * Math.log10(v / ref)).toFixed(1)
 
   /** Un paso de mob a `d` m con la ganancia que le da GameAudio (el oyente mira a -z, el mob a su derecha). */
-  function mobStep(type, d, look = 0) {
+  function mobStep(type, d, look = 0, water = false) {
     const plays = []
     const audio = new G.GameAudio({ play: (name, options) => plays.push({ name, options }) }, () => 0.5)
     const e = { id: 1, type, pos: { x: d, z: 0 }, alive: true, look }
     const listener = { x: 0, z: 0, yaw: 0 }
-    audio.enemySteps([e], listener, () => false)
+    audio.enemySteps([e], listener, () => water)
     while (!plays.length) {
       e.pos.z += 0.05
       e.pos.x = Math.sqrt(Math.max(0, d * d - e.pos.z * e.pos.z))
-      audio.enemySteps([e], listener, () => false)
+      audio.enemySteps([e], listener, () => water)
       if (e.pos.z > d + 20) return null
     }
     return plays[0]
@@ -99,15 +99,15 @@ const page = (S, G) => {
     const own = mono(await render([{ t: 0, name: 'step', options: { gain: 0.9 } }], 0.4))
     const ref = { e: energy(own), p: peak(own) ** 2, h: energy(highpass(own)) }
     const rows = [['paso propio', 0, 'goblin']]
-    for (const [label, d, type, look] of [
+    for (const [label, d, type, look, water] of [
       ['trasgo pegado', 0.8, 'goblin'], ['trasgo a 5 m', 5, 'goblin'], ['trasgo a 10 m', 10, 'goblin'],
-      ['trasgo a 15 m', 15, 'goblin'], ['trasgo a 18 m', 18, 'goblin'], ['trasgo (Noche Eterna) pegado', 0.8, 'goblin', 1],
+      ['trasgo a 15 m', 15, 'goblin'], ['trasgo a 18 m', 18, 'goblin'], ['trasgo nadando, pegado', 0.8, 'goblin', 0, true], ['trasgo nadando a 10 m', 10, 'goblin', 0, true], ['trasgo (Noche Eterna) pegado', 0.8, 'goblin', 1],
       ['perro pegado', 0.8, 'dog'], ['espíritu pegado', 0.8, 'spirit'], ['gólem pegado', 0.8, 'golem'],
-      ['Coloso pegado', 0.8, 'colossus'], ['Coloso a 10 m', 10, 'colossus'],
-    ]) rows.push([label, d, type, look])
+      ['Coloso a 3 m', 3, 'colossus'], ['Coloso a 10 m', 10, 'colossus'],
+    ]) rows.push([label, d, type, look, water])
     const lines = ['| | energía | pico | con paso alto a 300 Hz |', '|---|---|---|---|']
-    for (const [label, d, type, look] of rows) {
-      const play = d === 0 ? { name: 'step', options: { gain: 0.9 } } : mobStep(type, d, look)
+    for (const [label, d, type, look, water] of rows) {
+      const play = d === 0 ? { name: 'step', options: { gain: 0.9 } } : mobStep(type, d, look, water)
       if (!play) {
         lines.push(`| ${label} | no suena | | |`)
         continue

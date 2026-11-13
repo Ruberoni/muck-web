@@ -28,17 +28,24 @@ export const REMOTE_DEATH_GAIN = 0.35
 /** Hasta dónde se oyen los pasos de un mob: avisan de que llega, pero son muchos a la vez. */
 export const ENEMY_STEP_HEARING = 20
 /**
- * La ganancia de un paso de mob pegado a ti: con el efecto `enemyStep` de un trasgo, ~6 dB por debajo de un paso
- * propio (medido con `scripts/measure-enemy-steps.mjs`). Discreto, porque se repite muchísimo, pero se oye.
+ * La ganancia de un paso de mob pegado a ti: con el efecto `enemyStep` de un trasgo, a 0,8 m, ~4 dB por debajo de un
+ * paso propio en energía y ~8 dB con el paso alto a 300 Hz de un altavoz pequeño (medido con
+ * `scripts/measure-enemy-steps.mjs`). Discreto, porque se repite muchísimo, pero se oye.
  */
 export const ENEMY_STEP_GAIN = 0.62
 /**
  * Cómo cae con la distancia: `(1 − d/ENEMY_STEP_HEARING) ^ ENEMY_STEP_FALLOFF`. Más suave que el `near²` de
- * `spatialize`, para que a media distancia no desaparezca: a 10 m queda ~15 dB por debajo de un paso propio.
+ * `spatialize`, para que a media distancia no desaparezca: a 10 m queda ~17 dB por debajo de un paso propio (~20 dB
+ * en un altavoz pequeño). Por eso a 10 m un mob suena algo más que el paso de un compañero: a propósito, avisa.
  */
 export const ENEMY_STEP_FALLOFF = 1.5
 /** Mobs que pisan más suave que los demás de su tamaño: el espíritu casi flota. */
 export const ENEMY_STEP_SOFT: Partial<Record<EnemyType, number>> = { spirit: 0.55 }
+/**
+ * Un mob que nada chapotea con `stepWater`, el efecto del paso propio en el agua, que ya suena en la banda alta: se
+ * baja por esto para que quede como un paso de mob en tierra y no por encima de los tuyos.
+ */
+export const ENEMY_SWIM_GAIN = 0.25
 /** Pasos de mob que suenan como mucho en un paso fijo, los más cercanos: con la manada encima no deben saturar. */
 export const ENEMY_STEPS_PER_FRAME = 2
 
@@ -403,7 +410,9 @@ export class GameAudio {
     }
     for (let i = 0; i < picked; i++) {
       const { gain, pan, weight, water } = picks[i]
-      this.sound.play(water ? 'stepWater' : 'enemyStep', { gain: gain * (0.85 + this.rng() * 0.3), pan, weight })
+      const jitter = 0.85 + this.rng() * 0.3
+      if (water) this.sound.play('stepWater', { gain: gain * ENEMY_SWIM_GAIN * jitter, pan })
+      else this.sound.play('enemyStep', { gain: gain * jitter, pan, weight })
     }
     // El mapa no se queda con los que ya no están: se limpia solo cuando sobra, sin reservar un Set en cada frame.
     if (this.mobs.size > enemies.length) {

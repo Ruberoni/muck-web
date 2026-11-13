@@ -7,6 +7,7 @@ import {
   ENEMY_STEP_GAIN,
   ENEMY_STEP_HEARING,
   ENEMY_STEP_SOFT,
+  ENEMY_SWIM_GAIN,
   ENEMY_STEPS_PER_FRAME,
   enemyStepVolume,
   GameAudio,
@@ -334,8 +335,9 @@ describe('pasos de los mobs', () => {
     expect(played[0].options!.weight).toBe(ENEMY_DEFS.goblin.scale)
   })
 
-  it('pegado suena más flojo que un paso propio, y cae con la distancia hasta callarse en ENEMY_STEP_HEARING', () => {
-    // El paso propio suena con ganancia 0,8–1.
+  it('pegado con ganancia menor que la de un paso propio, y cae con la distancia hasta callarse en ENEMY_STEP_HEARING', () => {
+    // El paso propio suena con ganancia 0,8–1. Lo que suena de verdad (efectos distintos) lo mide
+    // scripts/measure-enemy-steps.mjs: trasgo a 0,8 m, −4 dB (−8 dB con paso alto a 300 Hz); a 10 m, −17 dB (−20 dB).
     expect(enemyStepVolume(0, 0, 0, 'goblin').gain).toBe(ENEMY_STEP_GAIN)
     expect(ENEMY_STEP_GAIN).toBeLessThan(0.8)
     const at = (d: number) => enemyStepVolume(d, 0, 0, 'goblin').gain
@@ -435,6 +437,9 @@ describe('pasos de los mobs', () => {
     audio.enemySteps([swimmer], listener, () => true)
     walk(audio, [swimmer], 30, () => true)
     expect(played.map((p) => p.name)).toEqual(['stepWater'])
+    // El chapoteo es el efecto del paso propio en el agua, que suena más: se baja para no pasar a los tuyos.
+    expect(played[0].options!.gain).toBeCloseTo(enemyStepVolume(3, 3, 0, 'goblin').gain * ENEMY_SWIM_GAIN, 1)
+    expect(played[0].options!.gain).toBeLessThan(ENEMY_STEP_GAIN * 0.5)
 
     played.length = 0
     const far = mob(2, 'goblin', ENEMY_STEP_HEARING + 4)
