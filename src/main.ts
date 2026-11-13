@@ -1,5 +1,6 @@
 import './style.css'
 import './ui/hud.css'
+import './ui/menu.css'
 import { Game } from './game/Game'
 
 const container = document.querySelector<HTMLDivElement>('#app')!

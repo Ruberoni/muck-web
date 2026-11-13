@@ -66,9 +66,10 @@ export class Input {
   ) {
     this.bindings = bindings
     window.addEventListener('keydown', (e) => {
-      // Saltar no debe desplazar la página, y con el ratón capturado la tecla del inventario no debe mover el foco
-      // (Tab cambia a quién mira el espectador). Se mira lo asignado, no unas teclas fijas.
-      if (binds(this.bindings.jump, e.code) || (this.locked && binds(this.bindings.inventory, e.code))) e.preventDefault()
+      // Con el ratón capturado, saltar no debe desplazar la página ni la tecla del inventario mover el foco (Tab
+      // cambia a quién mira el espectador). Sin capturarlo (el menú) no se toca: Espacio escribe en los campos y
+      // pulsa los botones. Se mira lo asignado, no unas teclas fijas.
+      if (this.locked && (binds(this.bindings.jump, e.code) || binds(this.bindings.inventory, e.code))) e.preventDefault()
       this.keys.add(e.code)
       if (e.repeat) return
       this.press(e.code)

@@ -6,6 +6,7 @@ import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from
 import { onVersionReject, reloadFor } from '../net/reload'
 import { LocalSession } from '../net/session'
 import { loadCharacter } from '../view/characters'
+import { backButton, button, field, logo, make, panel, subScreenButtons } from './menu/views'
 import { skinField } from './skinPicker'
 import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
@@ -47,108 +48,29 @@ function setRoomInUrl(code: string | null) {
   history.replaceState(null, '', url)
 }
 
-const button = (parent: HTMLElement, text: string, className = '') => {
-  const b = document.createElement('button')
-  b.type = 'button'
-  b.className = className
-  b.textContent = text
-  parent.appendChild(b)
-  return b
-}
-
-const div = (parent: HTMLElement, className: string) => {
-  const d = document.createElement('div')
-  d.className = className
-  parent.appendChild(d)
-  return d
-}
-
-/** Un desplegable de dificultad con su etiqueta. */
-function difficultyField(parent: HTMLElement) {
-  const row = document.createElement('label')
-  row.className = 'field'
-  row.append('Dificultad')
-  const select = document.createElement('select')
-  for (const difficulty of DIFFICULTIES) select.add(new Option(DIFFICULTY_DEFS[difficulty].name, difficulty, false, difficulty === 'normal'))
-  row.appendChild(select)
-  parent.appendChild(row)
-  return { row, select, value: () => select.value as Difficulty }
+/** El texto de la línea de estado de la conexión (vacío: nada que decir). */
+export function connectionStatus(s: {
+  busy: boolean
+  closed: string | null
+  reconnecting: string | null
+  waiting: string
+  error: string
+}): { text: string; error: boolean } {
+  if (s.busy) return { text: 'Conectando…', error: false }
+  if (s.closed !== null) return { text: s.closed, error: true }
+  if (s.reconnecting !== null) return { text: s.reconnecting, error: false }
+  if (s.waiting) return { text: s.waiting, error: false }
+  return { text: s.error, error: !!s.error }
 }
 
 /**
- * El lobby, dentro del panel del menú y la pausa (§8 del plan). Fuera de una sala: nombre (guardado como
- * `muck-web:name`), "Jugar solo", "Crear partida" y "Unirse" con un código; con `?room=` en la URL, el botón
- * principal es "Unirse a K7QX2". Dentro de una sala: su código, copiar el enlace, salir y, en la sala de espera, quién
- * está y, para el anfitrión, la dificultad y empezar. En partida, en la pausa: rendirse. Los clics no llegan al overlay
- * (que solo reanuda) y las teclas no llegan al juego.
+ * El lobby (§8 del plan del multijugador), repartido en las pantallas del menú: el inicio con el nombre (guardado
+ * como `muck-web:name`), "Jugar solo", "Crear partida" y "Unirse"; unirse con un código; la invitación de un enlace
+ * con `?room=`; y la sala de espera (código, copiar el enlace, quién está y, para el anfitrión, la dificultad y
+ * empezar). Aquí queda la lógica (la red, las esperas por versión); las pantallas solo la pintan.
  */
 export function installLobby(game: Game) {
-  const root = document.createElement('div')
-  root.className = 'lobby'
-  for (const type of ['click', 'mousedown', 'pointerdown'] as const) root.addEventListener(type, (e) => e.stopPropagation())
-  root.addEventListener('keydown', (e) => e.stopPropagation())
-  const { panel } = game.hud
-  // Bajo el texto del menú, antes de los controles.
-  panel.querySelector('.action')!.after(root)
-
-  // --- Fuera de una sala ---
-  const offline = div(root, 'lobby-offline')
-  const nameRow = document.createElement('label')
-  nameRow.className = 'field'
-  nameRow.append('Tu nombre')
-  const nameInput = document.createElement('input')
-  nameInput.maxLength = MAX_NAME
-  nameInput.placeholder = DEFAULT_NAME
-  nameInput.value = loadName()
-  nameInput.autocomplete = 'off'
-  nameRow.appendChild(nameInput)
-  offline.appendChild(nameRow)
-  const skin = skinField(offline, loadCharacter)
-
-  const soloDifficulty = difficultyField(offline)
-  const actions = div(offline, 'buttons')
-  const joinUrl = button(actions, '', 'primary')
-  const solo = button(actions, 'Jugar solo')
-  const create = button(actions, 'Crear partida')
-
-  const joinRow = div(offline, 'join')
-  const codeInput = document.createElement('input')
-  codeInput.placeholder = 'Código'
-  codeInput.maxLength = ROOM_CODE_LENGTH
-  codeInput.autocapitalize = 'characters'
-  codeInput.spellcheck = false
-  joinRow.appendChild(codeInput)
-  const join = button(joinRow, 'Unirse')
-
-  // --- Dentro de una sala ---
-  const online = div(root, 'lobby-room')
-  const roomLine = div(online, 'room')
-  roomLine.append('Sala ')
-  const roomCode = document.createElement('code')
-  roomLine.appendChild(roomCode)
-  const waitingRoom = div(online, 'lobby-room')
-  const playerList = document.createElement('ul')
-  playerList.className = 'players'
-  waitingRoom.appendChild(playerList)
-  const roomDifficulty = difficultyField(waitingRoom)
-  const startButton = button(waitingRoom, 'Empezar partida', 'primary')
-  const waitingHost = div(waitingRoom, 'waiting')
-  waitingHost.textContent = 'Esperando a que el anfitrión empiece la partida…'
-  const onlineButtons = div(online, 'buttons')
-  const copy = button(onlineButtons, 'Copiar enlace')
-  const leave = button(onlineButtons, 'Salir de la sala')
-
-  // --- En partida ---
-  const inMatch = div(root, 'buttons')
-  const surrender = button(inMatch, 'Rendirse')
-  /** Ya se ha votado en esta partida. */
-  let voted = false
-
-  const status = document.createElement('p')
-  status.className = 'status'
-  status.setAttribute('role', 'status')
-  root.appendChild(status)
-
+  const { menu } = game
   let busy = false
   let error = ''
   /** Esperando por versión (recarga o reintento pendiente): el aviso y cómo cancelarlo si se elige otra cosa. */
@@ -156,48 +78,219 @@ export function installLobby(game: Game) {
   let cancelWait: (() => void) | null = null
   /** Desde cuándo (Date.now()) el servidor es más viejo que el cliente en los intentos de entrar. */
   let oldServerSince: number | null = null
-  let copiedTimer: ReturnType<typeof setTimeout> | null = null
-  const urlRoom = () => roomFromUrl()
-  const name = () => cleanName(nameInput.value) || DEFAULT_NAME
+  let nameValue = loadName()
+  let roomDifficulty: Difficulty = 'normal'
+  /** Cuántos intentos de entrar se han empezado: uno que termina después de abandonarlo (volver al inicio) no cuenta. */
+  let attempts = 0
+  const name = () => cleanName(nameValue) || DEFAULT_NAME
+  // La vista previa del personaje (hasta el PR 2 del menú, con su propio lienzo), a la derecha del tablón.
+  const skin = skinField(menu.preview, loadCharacter)
 
-  function update() {
+  const status = () => {
     const net = game.net
-    const inRoom = net !== null
-    const match = net?.client.match ?? null
-    const paused = game.state === 'paused'
-    // Solo en el menú se elige cómo jugar; en la pausa de un jugador, rendirse y los ajustes.
-    root.hidden = !inRoom && game.state !== 'menu' && !paused
-    offline.hidden = inRoom || game.state !== 'menu'
-    online.hidden = !inRoom
-    const lobby = match?.phase === 'lobby'
-    waitingRoom.hidden = !lobby
-    if (lobby) {
-      voted = false
-      const isHost = match.host === net!.me
-      playerList.replaceChildren(
-        ...match.players.map(({ id, name: who }) => Object.assign(document.createElement('li'), { textContent: id === match.host ? `${who} (anfitrión)` : who })),
-      )
-      roomDifficulty.row.hidden = startButton.hidden = !isHost
-      waitingHost.hidden = isHost
+    return connectionStatus({
+      busy,
+      closed: net?.closed ? (net.closeReason ?? 'Sin conexión con el servidor.') : null,
+      reconnecting: net?.status === 'reconnecting' ? (net.waitReason ?? 'Se ha cortado la conexión. Reconectando…') : null,
+      waiting,
+      error,
+    })
+  }
+
+  /** La línea de estado de una pantalla, que se repinta con ella. */
+  const statusLine = (parent: HTMLElement) => {
+    const line = make('p', 'menu-status', parent)
+    line.setAttribute('role', 'status')
+    return () => {
+      const { text, error } = status()
+      line.textContent = text
+      line.classList.toggle('error', error)
+      line.hidden = !text
     }
-    inMatch.hidden = !paused || (inRoom && match?.phase !== 'playing')
-    surrender.disabled = voted
-    surrender.textContent = !inRoom ? 'Rendirse' : voted ? `Has votado rendirse (${match?.votes ?? 0}/${match?.players.length ?? 0})` : `Votar rendirse (${match?.votes ?? 0}/${match?.players.length ?? 0})`
-    const fromUrl = urlRoom()
-    joinUrl.hidden = !fromUrl
-    joinUrl.textContent = fromUrl ? `Unirse a ${fromUrl} como ${name()}` : ''
-    for (const b of [joinUrl, solo, create, join, leave]) b.disabled = busy
-    join.disabled = busy || !isRoomCode(codeInput.value)
-    if (net) roomCode.textContent = net.room
-    status.classList.toggle('error', !!error || !!net?.closed)
-    status.textContent = busy
-      ? 'Conectando…'
-      : net?.closed
-        ? (net.closeReason ?? 'Sin conexión con el servidor.')
-        : net?.status === 'reconnecting'
-          ? (net.waitReason ?? 'Se ha cortado la conexión. Reconectando…')
-          : waiting || error
-    status.hidden = !status.textContent
+  }
+
+  const nameField = (parent: HTMLElement) => {
+    const input = make('input', 'menu-input', undefined)
+    input.maxLength = MAX_NAME
+    input.placeholder = DEFAULT_NAME
+    input.value = nameValue
+    input.autocomplete = 'off'
+    input.addEventListener('input', () => {
+      nameValue = input.value
+      saveName(input.value.trim())
+    })
+    field(parent, 'Tu nombre', input)
+    return input
+  }
+
+  /** Mientras se conecta no se puede pedir otra cosa. */
+  const lockWhileBusy = (...buttons: HTMLButtonElement[]) => () => {
+    for (const b of buttons) b.disabled = busy
+  }
+
+  menu.register('home', (menu) => {
+    const root = panel()
+    logo(root)
+    nameField(root)
+    const actions = make('div', 'menu-stack', root)
+    const solo = button(actions, 'Jugar solo', 'primary', () => menu.go('solo-difficulty'))
+    const create = button(actions, 'Crear partida', '', () => void enter(() => NetSession.create(name(), skin.value()), ''))
+    const join = button(actions, 'Unirse', '', () => {
+      error = ''
+      menu.go('join')
+    })
+    solo.dataset.autofocus = ''
+    const paint = statusLine(root)
+    subScreenButtons(make('div', 'menu-foot', root), menu)
+    const lock = lockWhileBusy(solo, create, join)
+    return { root, update: () => (paint(), lock()) }
+  })
+
+  menu.register('join', (menu) => {
+    const root = panel()
+    backButton(root, menu)
+    make('h1', 'menu-title', root).textContent = 'Unirse a una sala'
+    const code = make('input', 'menu-input code', undefined)
+    code.maxLength = ROOM_CODE_LENGTH
+    code.autocapitalize = 'characters'
+    code.autocomplete = 'off'
+    code.spellcheck = false
+    code.dataset.autofocus = ''
+    field(root, 'Código', code)
+    const paint = statusLine(root)
+    const join = button(make('div', 'menu-foot menu-stack', root), 'Unirse', 'primary', () => {
+      if (isRoomCode(code.value)) void enter(() => NetSession.open('join', code.value, name(), skin.value()), code.value)
+    })
+    const update = () => {
+      paint()
+      join.disabled = busy || !isRoomCode(code.value)
+    }
+    code.addEventListener('input', () => {
+      code.value = normalizeCode(code.value)
+      error = ''
+      update()
+    })
+    code.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !join.disabled) join.click()
+    })
+    return { root, update }
+  })
+
+  menu.register('invite', (menu) => {
+    const root = panel()
+    logo(root, false)
+    const box = make('div', 'room-code', root)
+    make('span', '', box).textContent = 'Te han invitado a la sala'
+    const code = make('code', '', box)
+    nameField(root)
+    const accept = button(root, 'Unirse a la sala', 'primary', () => {
+      const room = roomFromUrl()
+      if (room) void enter(() => NetSession.open('join', room, name(), skin.value()), room)
+    })
+    accept.dataset.autofocus = ''
+    const paint = statusLine(root)
+    const home = make('button', 'menu-link menu-foot', root)
+    home.type = 'button'
+    home.textContent = 'Ir al menú principal'
+    home.addEventListener('click', () => {
+      cancel()
+      setRoomInUrl(null)
+      menu.refresh()
+    })
+    const update = () => {
+      code.textContent = roomFromUrl() ?? ''
+      paint()
+      accept.disabled = busy
+    }
+    return { root, update }
+  })
+
+  // La sala de espera. Se repinta cada medio segundo y con cada `match`: sin rehacerla, para no robar el foco.
+  menu.register('room', (menu) => {
+    const root = panel()
+    const box = make('div', 'room-code', root)
+    make('span', '', box).textContent = 'Sala'
+    const code = make('code', '', box)
+    const copy = button(root, 'Copiar enlace', 'small', () => void copyLink())
+    const linkField = make('input', 'menu-input room-link', root)
+    linkField.readOnly = true
+    linkField.hidden = true
+    linkField.setAttribute('aria-label', 'Enlace de la sala')
+    const players = make('ul', 'room-players', root)
+    const difficulty = make('select', 'menu-select', undefined)
+    for (const d of DIFFICULTIES) difficulty.add(new Option(DIFFICULTY_DEFS[d].name, d, false, d === roomDifficulty))
+    difficulty.addEventListener('change', () => (roomDifficulty = difficulty.value as Difficulty))
+    const difficultyRow = make('label', 'menu-field', root)
+    make('span', '', difficultyRow).textContent = 'Dificultad'
+    difficultyRow.appendChild(difficulty)
+    const foot = make('div', 'menu-foot menu-stack', root)
+    const start = button(foot, 'Empezar partida', 'primary', () => {
+      game.net?.client.start(roomDifficulty)
+      // El clic es el gesto que permite capturar el ratón: a los demás les toca el suyo.
+      void game.play()
+    })
+    const back = button(foot, 'Volver a la partida', 'primary', () => void game.play())
+    const waitingHost = make('p', 'menu-text', foot)
+    waitingHost.textContent = 'Esperando al anfitrión'
+    const paint = statusLine(foot)
+    button(foot, 'Salir de la sala', 'ghost', leave)
+    let copiedTimer: ReturnType<typeof setTimeout> | null = null
+    let playerKey = ''
+
+    async function copyLink() {
+      const link = location.href
+      try {
+        await navigator.clipboard.writeText(link)
+      } catch {
+        // Sin portapapeles (p. ej. sin HTTPS): el enlace, seleccionado, para copiarlo a mano.
+        linkField.value = link
+        linkField.hidden = false
+        linkField.focus()
+        linkField.select()
+        return
+      }
+      copy.textContent = '¡Copiado!'
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => (copy.textContent = 'Copiar enlace'), COPIED_MS)
+    }
+
+    const update = () => {
+      const net = game.net
+      if (!net) return
+      const match = net.client.match
+      code.textContent = net.room
+      const lobby = match?.phase === 'lobby'
+      const isHost = !!match && match.host === net.me
+      if (lobby) menu.voted = false
+      const key = match ? match.players.map((p) => `${p.id}:${p.name}`).join('|') + `#${match.host}` : ''
+      if (key !== playerKey) {
+        playerKey = key
+        players.replaceChildren(
+          ...(match?.players ?? []).map(({ id, name: who }) => {
+            const li = make('li', id === match!.host ? 'host' : '')
+            li.textContent = id === match!.host ? `${who} (anfitrión)` : who
+            return li
+          }),
+        )
+      }
+      players.hidden = !lobby
+      difficultyRow.hidden = start.hidden = !lobby || !isHost
+      waitingHost.hidden = !lobby || isHost
+      back.hidden = match?.phase !== 'playing'
+      paint()
+    }
+    return {
+      root,
+      update,
+      dispose: () => {
+        if (copiedTimer) clearTimeout(copiedTimer)
+      },
+    }
+  })
+
+  /** Repinta la pantalla del menú que se vea (o cambia a la que toque). */
+  function update() {
+    menu.refresh()
   }
 
   /** Otra elección del jugador: se olvida la espera por versión que hubiera. */
@@ -213,21 +306,36 @@ export function installLobby(game: Game) {
     await attempt(open, room)
   }
 
+  /** Deja lo que se estuviera intentando (conectar, esperar por versión) y el error que hubiera. */
+  function cancel() {
+    attempts++
+    stopWaiting()
+    busy = false
+    error = ''
+  }
+
   async function attempt(open: () => Promise<NetSession>, room: string) {
+    const id = ++attempts
     busy = true
     error = ''
     update()
     try {
       const session = await open()
+      if (id !== attempts) {
+        session.close()
+        return
+      }
       oldServerSince = null
       game.setSession(session)
       setRoomInUrl(session.room)
       session.client.onmatch = update
       busy = false
+      menu.choice = null
       update()
       // En la sala de espera se está en el menú hasta que empiece la partida.
       if (session.client.match?.phase === 'playing') await game.play()
     } catch (e) {
+      if (id !== attempts) return
       busy = false
       if (!waitForVersion(e, open, room)) error = await failureMessage(e, room)
       update()
@@ -272,72 +380,31 @@ export function installLobby(game: Game) {
     cancelWait = () => clearTimeout(timer)
   }
 
-  nameInput.addEventListener('input', () => {
-    saveName(nameInput.value.trim())
-    update()
-  })
-  codeInput.addEventListener('input', () => {
-    codeInput.value = normalizeCode(codeInput.value)
-    update()
-  })
-  codeInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !join.disabled) join.click()
-  })
-  solo.addEventListener('click', () => {
-    stopWaiting()
-    error = ''
-    setRoomInUrl(null)
-    update()
-    void game.playSolo(soloDifficulty.value())
-  })
-  startButton.addEventListener('click', () => {
-    game.net?.client.start(roomDifficulty.value())
-    // El clic es el gesto que permite capturar el ratón: a los demás les toca el suyo.
-    void game.play()
-  })
-  surrender.addEventListener('click', () => {
-    voted = game.net !== null
-    game.surrender()
-    update()
-  })
-  create.addEventListener('click', () => void enter(() => NetSession.create(name(), skin.value()), ''))
-  joinUrl.addEventListener('click', () => {
-    const code = urlRoom()
-    if (code) void enter(() => NetSession.open('join', code, name(), skin.value()), code)
-  })
-  join.addEventListener('click', () => {
-    const code = codeInput.value
-    if (isRoomCode(code)) void enter(() => NetSession.open('join', code, name(), skin.value()), code)
-  })
-  copy.addEventListener('click', async () => {
-    const link = location.href
-    let copied = false
-    try {
-      await navigator.clipboard.writeText(link)
-      copied = true
-    } catch {
-      // Sin portapapeles (p. ej. sin HTTPS): se enseña el enlace para copiarlo a mano.
-    }
-    copy.textContent = copied ? '¡Copiado!' : link
-    if (copiedTimer) clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => (copy.textContent = 'Copiar enlace'), copied ? COPIED_MS : COPIED_MS * 4)
-  })
-  leave.addEventListener('click', () => {
+  function leave() {
     stopWaiting()
     game.setSession(new LocalSession())
     setRoomInUrl(null)
     error = ''
+    menu.choice = null
     game.setState('menu')
-  })
+  }
 
-  game.menuClickStarts = false
-  game.hud.menuText = 'Elige cómo jugar'
+  menu.lobby = {
+    inviteCode: () => roomFromUrl(),
+    leave,
+    cancel,
+    status,
+    beforeSolo: () => {
+      stopWaiting()
+      error = ''
+      setRoomInUrl(null)
+    },
+  }
   game.onchange = update
-  // El estado de la conexión cambia sin avisar a Game: se mira de vez en cuando mientras se ve el panel (fuera de
+  // El estado de la conexión cambia sin avisar a Game: se mira de vez en cuando mientras se ve el menú (fuera de
   // partida: jugando, de espectador o con el inventario abierto no se ve).
   setInterval(() => {
     if (!inGame(game.state)) update()
   }, 500)
-  if (game.state === 'menu') game.hud.showOverlay('menu')
   update()
 }
