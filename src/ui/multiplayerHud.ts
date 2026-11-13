@@ -162,10 +162,13 @@ export class MultiplayerHud {
     }
     if (!this.docked) return
     this.docked = false
-    this.chatBox.classList.remove('docked')
+    this.chatBox.classList.remove('docked', 'open')
     this.chatHome.appendChild(this.chatBox)
-    this.chatInput.hidden = false
-    this.closeChat()
+    // Cerrado, pero sin perder lo que se estaba escribiendo (p. ej. al abrir "Cambiar" en la sala y volver).
+    if (document.activeElement === this.chatInput) this.chatInput.blur()
+    this.chatInput.hidden = true
+    // Lo que ya se leyó en la sala no vuelve a aparecer en la partida.
+    for (const line of this.chatLog.children) line.classList.add('seen')
   }
 
   /** Abre la caja de chat (Enter en una sala) con el foco en ella. */
@@ -196,6 +199,7 @@ export class MultiplayerHud {
     who.textContent = `${name}: `
     who.style.color = playerCss(id)
     line.append(text)
+    if (this.docked) this.chatLog.scrollTop = this.chatLog.scrollHeight
   }
 
   /** Fuera de una sala no se ve nada (y se olvida lo que había). */

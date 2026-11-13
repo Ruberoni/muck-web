@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SpatialGrid, type Collider } from '../sim/collision'
 import { DEFAULT_ISLAND } from '../sim/world/island'
 import { WATER_LEVEL } from '../sim/world/terrain'
-import { MenuStage, NARROW_WIDTH, ORBIT_RADIUS, orbitCamera, poseYaw, ROW_SPACING, rowOffsets, rowRadius, stageScreenX, stageSpot, yawTowards } from './menuStage'
+import { MenuStage, NARROW_WIDTH, ORBIT_RADIUS, orbitCamera, poseYaw, ROW_SPACING, rowOffsets, rowLayout, stageScreenX, stageSpot, yawTowards } from './menuStage'
 import type { CharacterRig } from './CharacterRig'
 
 /** Una isla redonda de mentira: tierra plana (2 m) hasta 30 m del centro y mar más allá. */
@@ -193,10 +193,16 @@ describe('la fila de la sala', () => {
     }
   })
 
-  it('aleja la cámara lo justo para que quepan cinco, y nunca la acerca más que la órbita', () => {
-    expect(rowRadius(1, 70, 1.6, 0.39)).toBe(ORBIT_RADIUS)
-    expect(rowRadius(5, 70, 1.6, 0.39)).toBeGreaterThan(rowRadius(3, 70, 1.6, 0.39))
-    expect(rowRadius(5, 50, 1.6, 0.39)).toBeGreaterThan(rowRadius(5, 90, 1.6, 0.39))
+  it('aleja la cámara lo justo para que quepan cinco, sin salir del círculo libre, y si no basta los junta', () => {
+    const radius = (n: number, fov: number, screenX = 0.39) => rowLayout(n, fov, 1.6, screenX).radius
+    expect(radius(1, 70)).toBe(ORBIT_RADIUS)
+    expect(radius(5, 70)).toBeGreaterThan(radius(3, 70))
+    expect(radius(4, 50)).toBeGreaterThan(radius(4, 90))
+    expect(rowLayout(3, 70, 1.6, 0.39).spacing).toBe(ROW_SPACING)
+    // 960 px de ancho: el hueco es pequeño, la cámara no pasa del círculo libre y la fila se aprieta.
+    const tight = rowLayout(5, 70, 1.6, stageScreenX(960))
+    expect(tight.radius).toBeCloseTo(ORBIT_RADIUS + 1.5)
+    expect(tight.spacing).toBeLessThan(ROW_SPACING)
   })
 
   const rigFor = (loaded: CharacterRig[]) => async () => {

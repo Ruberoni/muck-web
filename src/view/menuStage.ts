@@ -65,7 +65,7 @@ export function stageSpot(terrain: Pick<Terrain, 'heightAt' | 'slopeAt'>, obstac
       const z = spawn.z + dz * r
       const y = terrain.heightAt(x, z)
       if (y < MIN_HEIGHT || y > MAX_HEIGHT || terrain.slopeAt(x, z) > MAX_SLOPE * 0.6) continue
-      if (obstacles.some((grid) => blocked(grid, x, z, ORBIT_RADIUS + 1.5))) continue
+      if (obstacles.some((grid) => blocked(grid, x, z, CLEAR_RADIUS))) continue
       // Lo más cerca posible del spawn (es la isla que se va a jugar), y mejor sin alejarse mucho de la orilla.
       const score = r + back * 0.5
       if (!best || score < best.score) best = { x, y, z, seaYaw: yawTowards(x, z, x + dx, z + dz), score }
@@ -134,12 +134,16 @@ export interface StageTag {
   top: number
 }
 
+/** Lo que `stageSpot` deja libre alrededor del personaje: la cámara de la fila no se aleja más. */
+const CLEAR_RADIUS = ORBIT_RADIUS + 1.5
 /** Metros entre los personajes de la fila. */
 export const ROW_SPACING = 1.15
+/** Lo más juntos que se ponen en una ventana poco ancha. */
+const MIN_SPACING = 0.75
 /** Medio hombro: lo que asoma el de cada punta más allá de su centro. */
 const ROW_MARGIN = 0.5
 /** Lo que se balancea la cámara delante de la fila (rad) y cada cuánto (rad/s de la fase). */
-const SWAY = 0.22
+const SWAY = 0.12
 const SWAY_SPEED = 0.12
 /** Dónde va la etiqueta del nombre: algo por encima de la cabeza. */
 const TAG_HEIGHT = 2.05
@@ -148,24 +152,29 @@ const SOLO = -1
 
 /**
  * Dónde va cada uno de la fila respecto al centro (x, z), de izquierda a derecha vistos desde una cámara con ese
- * `yaw`: en una línea perpendicular a su mirada.
+ * `yaw`: en una línea perpendicular a su mirada, a `spacing` metros uno de otro.
  */
-export function rowOffsets(count: number, yaw: number): { x: number; z: number }[] {
+export function rowOffsets(count: number, yaw: number, spacing = ROW_SPACING): { x: number; z: number }[] {
   // Adelante es (-sin, -cos) y la derecha (cos, -sin).
   const right = { x: Math.cos(yaw), z: -Math.sin(yaw) }
   return Array.from({ length: count }, (_, i) => {
-    const along = (i - (count - 1) / 2) * ROW_SPACING
+    const along = (i - (count - 1) / 2) * spacing
     return { x: right.x * along, z: right.z * along }
   })
 }
 
-/** La distancia de la cámara para que una fila de `count` quepa en el hueco de la pantalla (nunca menos que la órbita). */
-export function rowRadius(count: number, fov: number, aspect: number, screenX: number): number {
-  const half = ((count - 1) / 2) * ROW_SPACING + ROW_MARGIN
+/**
+ * Cómo cabe una fila de `count` en el hueco de la pantalla: la distancia de la cámara (nunca menos que la órbita ni
+ * más que el círculo libre de árboles y rocas de `stageSpot`) y, si ni así cabe, la fila más apretada.
+ */
+export function rowLayout(count: number, fov: number, aspect: number, screenX: number): { radius: number; spacing: number } {
   const halfWidth = Math.tan(THREE.MathUtils.degToRad(fov) / 2) * aspect
   // Lo que queda de pantalla entre el centro de la fila y el borde más cercano, con un poco de aire.
   const room = (1 - Math.abs(screenX)) * 0.6 * halfWidth
-  return Math.max(ORBIT_RADIUS, half / room)
+  const half = ((count - 1) / 2) * ROW_SPACING + ROW_MARGIN
+  const radius = Math.min(CLEAR_RADIUS, Math.max(ORBIT_RADIUS, half / room))
+  if (count < 2 || half <= room * radius) return { radius, spacing: ROW_SPACING }
+  return { radius, spacing: Math.max(MIN_SPACING, ((room * radius - ROW_MARGIN) * 2) / (count - 1)) }
 }
 
 interface Actor {
@@ -234,12 +243,13 @@ export class MenuStage {
     const screenX = stageScreenX(width)
     let angle: number
     let radius = ORBIT_RADIUS
+    let spacing = ROW_SPACING
     if (this.cast) {
       this.rowAngle ??= this.angle
       if (!still) this.swayTime += dt
       // Con el movimiento reducido el encuadre se queda fijo.
       angle = this.rowAngle + (still ? 0 : SWAY * Math.sin(this.swayTime * SWAY_SPEED))
-      radius = rowRadius(members.length, camera.fov, camera.aspect, screenX)
+      ;({ radius, spacing } = rowLayout(members.length, camera.fov, camera.aspect, screenX))
     } else {
       // Al salir de la sala la órbita sigue desde donde se quedó la fila.
       if (this.rowAngle !== null) this.angle = this.rowAngle
@@ -256,7 +266,7 @@ export class MenuStage {
     if (!this.group.visible) return true
     // La fila, perpendicular a la mirada de la cámara sin balanceo: así todos quedan a la misma distancia.
     const offsets = this.cast
-      ? rowOffsets(members.length, orbitCamera(spot, this.rowAngle!, terrain.heightAt, camera.fov, camera.aspect, screenX, radius).yaw)
+      ? rowOffsets(members.length, orbitCamera(spot, this.rowAngle!, terrain.heightAt, camera.fov, camera.aspect, screenX, radius).yaw, spacing)
       : [{ x: 0, z: 0 }]
     members.forEach((member, i) => {
       const rig = this.actors.get(member.id)?.rig

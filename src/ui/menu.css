@@ -347,6 +347,7 @@
 }
 
 .chat.docked { position: static; width: auto; gap: 8px; font-size: 14px; }
+.chat.docked .chat-log { max-height: calc(4 * 1.45em); overflow-y: auto; align-content: start; line-height: 1.45; }
 .chat.docked .chat-log:empty { display: none; }
 .chat.docked .chat-line { padding: 0; background: none; animation: none; opacity: 1; }
 .chat.docked .chat-input {
@@ -469,9 +470,13 @@
 
 /* --- Ventanas estrechas y bajas --- */
 
+/* Sin sitio a la derecha para el chat sin tapar la fila: dentro del tablón. */
+@media (max-width: 1200px) {
+  .room-chat { position: static; width: auto; padding: 0; background: none; }
+}
+
 @media (max-width: 900px) {
   .menu-panel, .menu-panel.wide, .menu-panel.full { left: 16px; right: 16px; width: auto; top: 16px; bottom: 16px; }
-  .room-chat { position: static; width: auto; padding: 0; background: none; }
   .stage-tags { display: none; }
   .controls-grid, .keys-grid { grid-template-columns: minmax(0, 1fr); }
   .setting { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 56px; }

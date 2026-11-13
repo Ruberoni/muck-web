@@ -171,7 +171,8 @@ export class MenuScreens {
         this.tags.set(tag.id, node)
       }
       if (node.textContent !== tag.name) node.textContent = tag.name
-      node.style.transform = `translate(${tag.left.toFixed(1)}px, ${tag.top.toFixed(1)}px) translate(-50%, -100%)`
+      const transform = `translate(${tag.left.toFixed(1)}px, ${tag.top.toFixed(1)}px) translate(-50%, -100%)`
+      if (node.style.transform !== transform) node.style.transform = transform
     }
     for (const [id, node] of this.tags) {
       if (seen.has(id)) continue

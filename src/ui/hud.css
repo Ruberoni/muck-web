@@ -482,6 +482,8 @@
 
 /* Con el chat abierto se ven las últimas líneas aunque ya se hubieran desvanecido. */
 .chat.open .chat-line { animation: none; opacity: 1; }
+/* Las de la sala de espera ya se leyeron: en partida solo se ven con el chat abierto. */
+.chat:not(.open) .chat-line.seen { animation: none; opacity: 0; }
 
 .chat-input {
   pointer-events: auto;
