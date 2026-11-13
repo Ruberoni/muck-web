@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { isLit } from './stations'
+import { isLit, putInto } from './stations'
 import { Btn, type Action, type ActionData, type Move } from './commands'
-import { BERRY_REGROW, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
+import { BERRY_REGROW, CAMPFIRE_HEAL_PER_SEC, CAMPFIRE_HEAL_RANGE, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HEALTH_REGEN_HUNGER, HEALTH_REGEN_PER_SEC, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
 import { aimPose } from './interaction'
 import { generatePropPlacements, type PropData } from './props'
 import { quickProps } from './quickProps'
 import { Simulation } from './Simulation'
-import { STRUCTURE_DEFS, structureSpot } from './structures'
+import { STRUCTURE_DEFS, structureSpot, warmAt } from './structures'
 import { DAY_FRACTION } from './world/daycycle'
 import { heightAt } from './world/terrain'
 
@@ -174,6 +174,37 @@ describe('Simulation', () => {
     expect(inventory.count('raw_meat')).toBe(1)
   })
 
+  it('al calor de una fogata encendida se cura: solo cerca y encendida, y dos fogatas no se suman', () => {
+    const sim = solo(1)
+    const { player } = sim.slot(0)
+    const radius = STRUCTURE_DEFS.campfire.radius
+    const fire = sim.structures.place(structureSpot(player.pos, 0, radius, [sim.world.grid, sim.structures.grid]), 'campfire')!
+    // Con poco hambre: la natural no cura, así que todo lo que sube es del calor.
+    const healed = (seconds: number) => {
+      player.health = 50
+      player.hunger = HEALTH_REGEN_HUNGER - 5
+      for (let i = 0; i < Math.round(seconds / STEP); i++) step(sim)
+      return player.health - 50
+    }
+    expect(warmAt(sim.structures.list, player.pos)).toBe(false)
+    expect(healed(2)).toBe(0)
+    putInto('campfire', fire.station!, 'fuel', 'wood', 5)
+    expect(healed(2)).toBeCloseTo(CAMPFIRE_HEAL_PER_SEC * 2, 6)
+
+    // Otra fogata encendida al lado: sigue curando lo mismo.
+    const other = sim.structures.place(structureSpot(player.pos, Math.PI, radius, [sim.world.grid, sim.structures.grid]), 'campfire')!
+    putInto('campfire', other.station!, 'fuel', 'wood', 5)
+    expect(warmAt([other], player.pos)).toBe(true)
+    expect(isLit(other.station!)).toBe(true)
+    expect(healed(2)).toBeCloseTo(CAMPFIRE_HEAL_PER_SEC * 2, 6)
+
+    // Lejos de las dos (en horizontal, del jugador al borde), ya no.
+    const far = { ...player.pos, x: fire.x + radius + CAMPFIRE_HEAL_RANGE + 0.01, z: fire.z }
+    expect(warmAt([fire], { ...far, x: far.x - 0.02 })).toBe(true)
+    expect(warmAt([fire], far)).toBe(false)
+    expect(warmAt(sim.structures.list, { ...player.pos, x: player.pos.x + 30 })).toBe(false)
+  })
+
   it('en una fogata con leña se cocina: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
     const sim = solo(1)
     const { inventory, player } = sim.slot(0)
@@ -203,10 +234,10 @@ describe('Simulation', () => {
     player.hunger = 40
     player.health = 50
     eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('cooked_meat') }, { kind: 'eat' }])
-    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
+    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco, la natural y (al lado de la
+    // fogata encendida) la del calor.
     expect(Math.abs(player.hunger - (40 + cooked.food))).toBeLessThan(1)
-    // Mientras come pasa algo de tiempo: el hambre baja y la vida se regenera un poco.
-    expect(Math.abs(player.health - (50 + cooked.heal!))).toBeLessThan(1)
+    expect(Math.abs(player.health - (50 + cooked.heal! + (HEALTH_REGEN_PER_SEC + CAMPFIRE_HEAL_PER_SEC) * cooked.time))).toBeLessThan(0.1)
 
     eatNow(sim, [{ kind: 'select', slot: inventory.slots.indexOf('berry_infusion') }, { kind: 'eat' }])
     expect(player.regenLeft).toBeCloseTo(20, 1)

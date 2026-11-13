@@ -43,7 +43,7 @@ import { applyActions, craftRecipe, finishPlayerTick, movePlayer, useHands, type
 import { trade } from './merchant'
 import { createPropWorld, findSpawn, generatePropPlacements, growBerries, scaleProps, type PropPlacement, type PropWorld } from './props'
 import { mulberry32, type Rng } from './random'
-import { placeableOf, stationNear, Structures, structureSpot, type Structure, type StructuresState, type StructureSpot } from './structures'
+import { placeableOf, stationNear, Structures, structureSpot, warmAt, type Structure, type StructuresState, type StructureSpot } from './structures'
 import { damageTaken, spendGuard } from './equipment'
 import { putInto, takeFrom } from './stations'
 import { guardFactor, hurt, isDead } from './survival'
@@ -476,11 +476,18 @@ export class Simulation {
     living.forEach((slot, i) => (slot.inventoryFull = collected[i].full))
 
     for (const slot of living) {
-      finishPlayerTick(slot, intents.get(slot)!, (e) => {
-        this.events.emit(e)
-        // Lo que se toma y hace algo en el mundo (el incienso, el amuleto) lo hace aquí, no quien lo toma.
-        if (e.type === 'playerAte') this.worldEffect(CONSUMABLE_DEFS[e.item]?.world)
-      })
+      // Después de que ardan las estaciones y de lo que se les echa en este paso: la leña recién echada ya calienta.
+      const warm = warmAt(this.structures.list, slot.player.pos)
+      finishPlayerTick(
+        slot,
+        intents.get(slot)!,
+        (e) => {
+          this.events.emit(e)
+          // Lo que se toma y hace algo en el mundo (el incienso, el amuleto) lo hace aquí, no quien lo toma.
+          if (e.type === 'playerAte') this.worldEffect(CONSUMABLE_DEFS[e.item]?.world)
+        },
+        warm,
+      )
       if (isDead(slot.player)) this.die(slot)
     }
     if (this.gameOverAt === null && this.result === null && present.length > 0 && present.every((s) => !s.alive && this.outOfLives(s))) {

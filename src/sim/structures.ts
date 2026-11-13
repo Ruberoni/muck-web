@@ -6,7 +6,7 @@ import { DEFAULT_ISLAND, type Island } from './world/island'
 import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { Inventory, ItemId } from './inventory'
-import { OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
+import { CAMPFIRE_HEAL_RANGE, OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
 import { copyStation, followStation, isLit, newStation, STATION_DEFS, stepStation, type StationState } from './stations'
 import type { Vec3 } from './player'
 import { copyShop, newShop, type ShopState } from './merchant'
@@ -148,13 +148,29 @@ export function structureSpot(
   return out
 }
 
+/** Si es una fogata encendida: solo así da luz, suena, cocina y cura. */
+export const isLitCampfire = (s: Structure): boolean => s.kind === 'campfire' && !!s.station && isLit(s.station)
+
+/**
+ * Si `pos` está al calor de una fogata encendida: a CAMPFIRE_HEAL_RANGE o menos, del centro del jugador al borde de
+ * la fogata. Lo usan la simulación, la predicción y el HUD. `lead`: segundos que van por delante de la copia de las
+ * estaciones (la predicción del cliente), para dar ya por apagada la que se apagará antes de llegar a ese momento.
+ */
+export function warmAt(structures: readonly Structure[], pos: Vec3, lead = 0): boolean {
+  return structures.some(
+    (s) =>
+      s.kind === 'campfire' &&
+      !!s.station &&
+      (lead > 0 ? s.station.fuel !== null || s.station.burn > lead + 1e-9 : isLit(s.station)) &&
+      Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius <= CAMPFIRE_HEAL_RANGE,
+  )
+}
+
 /**
  * Si hay una estación `kind` al alcance desde `pos`: a `range` o menos en horizontal, del centro del jugador al
  * borde de la estación. La usan la simulación (con STATION_RANGE) y el cliente (con algo menos, para no fabricar en
  * el borde y acabar en una corrección).
  */
-/** Si es una fogata encendida: solo así da luz, suena y cocina. */
-export const isLitCampfire = (s: Structure): boolean => s.kind === 'campfire' && !!s.station && isLit(s.station)
 
 export function stationNear(structures: readonly Structure[], kind: StructureKind, pos: Vec3, range: number): boolean {
   return structures.some((s) => s.kind === kind && Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius <= range)

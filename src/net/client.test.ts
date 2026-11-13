@@ -8,7 +8,7 @@ import { isLit, putInto } from '../sim/stations'
 import { aimPose } from '../sim/interaction'
 import { quickProps } from '../sim/quickProps'
 import { mulberry32 } from '../sim/random'
-import { structureSpot } from '../sim/structures'
+import { structureSpot, warmAt } from '../sim/structures'
 import type { Simulation } from '../sim/Simulation'
 import { heightAt } from '../sim/world/terrain'
 import { clientCraftWorld, CLIENT_STATION_RANGE, sendableActions } from '../ui/recipes'
@@ -464,6 +464,65 @@ describe('el espejo de NetClient', () => {
     run(time, 61_000, [[client, idle]])
     expect(isLit(fire.station!)).toBe(false)
     expect(isLit(mirror())).toBe(false)
+  })
+
+  it.each([30, 100, 250])('el calor de la fogata se predice con %i ms: cura al encenderla y deja de curar al apagarse, sin corrección al apagarse', (latency) => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create', { latency, jitter: latency / 3, rng: mulberry32(latency) })
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const slot = sim.slot(client.id)
+    const fire = sim.structures.place(structureSpot(slot.player.pos, 0, 0.6, sim.obstacles), 'campfire')!
+    // Poca vida y poco hambre (sin regeneración natural): lo que sube es del calor.
+    slot.player.health = 10
+    slot.player.hunger = 29
+    run(time, 1000, [[client, idle]])
+    const predicted = client.predictor!.slot.player
+    expect(predicted.health).toBe(10)
+    resetStats(client)
+    putInto('campfire', fire.station!, 'fuel', 'wood', 1)
+    sim.structures.stationChanged(fire)
+    run(time, 10_000, [[client, idle]])
+    expect(slot.player.health).toBeGreaterThan(14)
+    expect(Math.abs(predicted.health - slot.player.health)).toBeLessThan(0.5)
+    // Encenderla cuesta como mucho la corrección de cuando llega el aviso (el cliente no predice la leña de otro).
+    expect(client.predictor!.stats.corrections).toBeLessThanOrEqual(1)
+    resetStats(client)
+    run(time, 55_000, [[client, idle]])
+    expect(isLit(fire.station!)).toBe(false)
+    const healed = slot.player.health
+    expect(healed).toBeCloseTo(10 + 60 * 0.5, 0)
+    // La copia lleva cada aviso a su tick y la predicción da la fogata por apagada en el tick que predice.
+    expect(client.predictor!.stats.corrections).toBe(0)
+    run(time, 3000, [[client, idle]])
+    expect(slot.player.health).toBe(healed)
+    expect(predicted.health).toBe(healed)
+  })
+
+  it('quien entra a mitad de partida junto a una fogata encendida la ve encendida y se cura sin correcciones', () => {
+    const { room, time, connect } = setup()
+    const { client: a } = connect('a', 'create')
+    run(time, 20_000, [[a, idle]])
+    const sim = room.sim!
+    const fire = sim.structures.place(structureSpot(sim.slot(a.id).player.pos, 0, 0.6, sim.obstacles), 'campfire')!
+    putInto('campfire', fire.station!, 'fuel', 'wood', 1)
+    sim.structures.stationChanged(fire)
+    run(time, 2000, [[a, idle]])
+    const { client: b } = connect('b')
+    run(time, 1000, [[a, idle], [b, idle]])
+    const slot = sim.slot(b.id)
+    expect(warmAt(sim.structures.list, slot.player.pos)).toBe(true)
+    slot.player.health = 10
+    slot.player.hunger = 29
+    run(time, 2000, [[a, idle], [b, idle]])
+    // La copia no descuenta el tiempo que pasó antes de entrar: arde lo mismo que en el servidor.
+    const mirror = b.sim!.structures.byId(fire.id)!.station!
+    expect(Math.abs(mirror.burn - fire.station!.burn)).toBeLessThan(0.5)
+    resetStats(b)
+    run(time, 20_000, [[a, idle], [b, idle]])
+    expect(b.predictor!.stats.corrections).toBe(0)
+    expect(b.predictor!.stats.reconciled).toBeGreaterThan(100)
+    expect(slot.player.health).toBeGreaterThan(20)
   })
 
   it('el espejo sigue lo que hay en las estaciones y la obra, y quien reconecta las recibe', () => {

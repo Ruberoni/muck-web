@@ -4,7 +4,7 @@ import { CONSUMABLE_DEFS } from '../sim/constants'
 import { NO_STATIONS } from '../sim/crafting'
 import { generatePropPlacements } from '../sim/props'
 import { Simulation, type PlayerSlot } from '../sim/Simulation'
-import { structureSpot } from '../sim/structures'
+import { structureSpot, warmAt } from '../sim/structures'
 import { Predictor, SMOOTH_MAX } from './predict'
 import type { You } from './protocol'
 
@@ -26,6 +26,7 @@ function setup() {
     env: mirror.env,
     canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, [mirror.world.grid, mirror.structures.grid]).valid,
     ...NO_STATIONS,
+    warm: (pos) => warmAt(mirror.structures.list, pos),
   })
   predictor.start(server.tick, youOf(server.slot(0)))
   /** Estado del servidor al final de cada tick, para reconciliar con retraso. */
