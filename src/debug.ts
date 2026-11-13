@@ -65,9 +65,10 @@ export function installDebug(game: Game) {
     async join(code: string, name = 'Jugador') {
       return enter(await NetSession.open('join', code.toUpperCase(), name))
     },
-    /** El anfitrión empieza la partida. */
-    start(difficulty: Difficulty = 'normal') {
-      game.net?.client.start(difficulty)
+    /** El anfitrión empieza la partida (con `difficulty`, la cambia antes). */
+    start(difficulty?: Difficulty) {
+      if (difficulty) game.net?.client.setDifficulty(difficulty)
+      game.net?.client.start()
     },
     match: () => game.net?.client.match ?? null,
     /** Sale de la sala y vuelve a jugar solo. */

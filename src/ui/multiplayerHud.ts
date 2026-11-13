@@ -86,8 +86,13 @@ export class MultiplayerHud {
   private banner: HTMLElement
   private bannerTitle: HTMLElement
   private bannerDetail: HTMLElement
+  private chatBox: HTMLElement
   private chatLog: HTMLElement
   private chatInput: HTMLInputElement
+  /** Dónde va el chat cuando no está en la sala (en el HUD). */
+  private chatHome: HTMLElement
+  /** En la sala de espera: el campo siempre a la vista y las líneas sin desvanecerse. */
+  private docked = false
   /** Al pulsar Enter con texto en el chat. */
   onsay: ((text: string) => void) | null = null
   private rows = new Map<PlayerId, { root: HTMLElement; key: string }>()
@@ -107,11 +112,15 @@ export class MultiplayerHud {
     this.banner = el('div', 'banner', parent)
     this.bannerTitle = el('div', 'title', this.banner)
     this.bannerDetail = el('div', 'detail', this.banner)
-    const chat = el('div', 'chat', parent)
+    this.chatHome = parent
+    const chat = (this.chatBox = el('div', 'chat', parent))
     this.chatLog = el('div', 'chat-log', chat)
+    this.chatLog.setAttribute('role', 'log')
     this.chatInput = el('input', 'chat-input', chat)
     this.chatInput.maxLength = MAX_CHAT
-    this.chatInput.placeholder = 'Escribe y pulsa Enter'
+    this.chatInput.placeholder = 'Mensaje'
+    this.chatInput.setAttribute('aria-label', 'Mensaje')
+    this.chatInput.autocomplete = 'off'
     this.chatInput.hidden = true
     // Lo que se teclea no mueve al jugador. keyup sí pasa: así no se queda pegada una tecla soltada escribiendo.
     this.chatInput.addEventListener('keydown', (e) => {
@@ -119,12 +128,18 @@ export class MultiplayerHud {
       if (e.key === 'Enter') {
         const text = this.chatInput.value.trim()
         if (text) this.onsay?.(text)
-        this.closeChat()
+        // En la sala se sigue escribiendo; en partida se vuelve a jugar.
+        if (this.docked) this.chatInput.value = ''
+        else this.closeChat()
       } else if (e.key === 'Escape') {
-        this.closeChat()
+        if (this.docked) this.chatInput.blur()
+        else this.closeChat()
       }
     })
-    this.chatInput.addEventListener('blur', () => this.closeChat())
+    // En la sala el campo no se cierra al pulsar otro botón.
+    this.chatInput.addEventListener('blur', () => {
+      if (!this.docked) this.closeChat()
+    })
     for (const type of ['click', 'mousedown', 'pointerdown'] as const) this.chatInput.addEventListener(type, (e) => e.stopPropagation())
     this.setVisible(false)
   }
@@ -133,8 +148,35 @@ export class MultiplayerHud {
     return !this.chatInput.hidden
   }
 
+  /**
+   * Lleva el chat a la sala de espera (dentro de `parent`), con el campo siempre a la vista y las líneas sin
+   * desvanecerse; null lo devuelve al HUD, cerrado.
+   */
+  dock(parent: HTMLElement | null) {
+    if (parent) {
+      this.docked = true
+      parent.appendChild(this.chatBox)
+      this.chatBox.classList.add('docked', 'open')
+      this.chatInput.hidden = false
+      return
+    }
+    if (!this.docked) return
+    this.docked = false
+    this.chatBox.classList.remove('docked', 'open')
+    this.chatHome.appendChild(this.chatBox)
+    // Cerrado, pero sin perder lo que se estaba escribiendo (p. ej. al abrir "Cambiar" en la sala y volver).
+    if (document.activeElement === this.chatInput) this.chatInput.blur()
+    this.chatInput.hidden = true
+    // Lo que ya se leyó en la sala no vuelve a aparecer en la partida.
+    for (const line of this.chatLog.children) line.classList.add('seen')
+  }
+
   /** Abre la caja de chat (Enter en una sala) con el foco en ella. */
   openChat() {
+    if (this.docked) {
+      this.chatInput.focus()
+      return
+    }
     if (this.root.hidden || this.chatOpen) return
     this.chatInput.hidden = false
     this.chatInput.parentElement!.classList.add('open')
@@ -142,7 +184,7 @@ export class MultiplayerHud {
   }
 
   closeChat() {
-    if (!this.chatOpen) return
+    if (!this.chatOpen || this.docked) return
     this.chatInput.value = ''
     this.chatInput.hidden = true
     this.chatInput.parentElement!.classList.remove('open')
@@ -157,6 +199,7 @@ export class MultiplayerHud {
     who.textContent = `${name}: `
     who.style.color = playerCss(id)
     line.append(text)
+    if (this.docked) this.chatLog.scrollTop = this.chatLog.scrollHeight
   }
 
   /** Fuera de una sala no se ve nada (y se olvida lo que había). */

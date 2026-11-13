@@ -263,9 +263,14 @@ export class NetClient {
     this.send({ type: 'hello', v: PROTOCOL_VERSION, t: this.time.now(), intent, room, name, tab, ...(token ? { token } : {}), ...(skin === undefined ? {} : { skin }) })
   }
 
-  /** Empieza la partida (solo vale del anfitrión). */
-  start(difficulty: Difficulty) {
-    this.send({ type: 'start', difficulty })
+  /** Empieza la partida con la dificultad de la sala (solo vale del anfitrión). */
+  start() {
+    this.send({ type: 'start' })
+  }
+
+  /** Cambia la dificultad de la sala (solo vale del anfitrión, en el lobby). */
+  setDifficulty(difficulty: Difficulty) {
+    this.send({ type: 'setDifficulty', difficulty })
   }
 
   /** Vota rendirse, o retira el voto. */

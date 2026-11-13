@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SpatialGrid, type Collider } from '../sim/collision'
 import { DEFAULT_ISLAND } from '../sim/world/island'
 import { WATER_LEVEL } from '../sim/world/terrain'
-import { MenuStage, NARROW_WIDTH, ORBIT_RADIUS, orbitCamera, poseYaw, stageScreenX, stageSpot, yawTowards } from './menuStage'
+import { MenuStage, NARROW_WIDTH, ORBIT_RADIUS, orbitCamera, poseYaw, ROW_SPACING, rowOffsets, rowLayout, stageScreenX, stageSpot, yawTowards } from './menuStage'
 import type { CharacterRig } from './CharacterRig'
 
 /** Una isla redonda de mentira: tierra plana (2 m) hasta 30 m del centro y mar más allá. */
@@ -178,5 +178,81 @@ describe('MenuStage', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('la fila de la sala', () => {
+  it('pone a todos en una línea perpendicular a la cámara, de izquierda a derecha', () => {
+    for (const yaw of [0, 1.3, 4]) {
+      const offsets = rowOffsets(3, yaw)
+      expect(offsets[1]!.x).toBeCloseTo(0)
+      expect(offsets[1]!.z).toBeCloseTo(0)
+      expect(Math.hypot(offsets[2]!.x - offsets[0]!.x, offsets[2]!.z - offsets[0]!.z)).toBeCloseTo(2 * ROW_SPACING)
+      // Perpendicular a la mirada (-sin(yaw), -cos(yaw)).
+      expect(offsets[2]!.x * Math.sin(yaw) + offsets[2]!.z * Math.cos(yaw)).toBeCloseTo(0)
+    }
+  })
+
+  it('aleja la cámara lo justo para que quepan cinco, sin salir del círculo libre, y si no basta los junta', () => {
+    const radius = (n: number, fov: number, screenX = 0.39) => rowLayout(n, fov, 1.6, screenX).radius
+    expect(radius(1, 70)).toBe(ORBIT_RADIUS)
+    expect(radius(5, 70)).toBeGreaterThan(radius(3, 70))
+    expect(radius(4, 50)).toBeGreaterThan(radius(4, 90))
+    expect(rowLayout(3, 70, 1.6, 0.39).spacing).toBe(ROW_SPACING)
+    // 960 px de ancho: el hueco es pequeño, la cámara no pasa del círculo libre y la fila se aprieta.
+    const tight = rowLayout(5, 70, 1.6, stageScreenX(960))
+    expect(tight.radius).toBeCloseTo(ORBIT_RADIUS + 1.5)
+    expect(tight.spacing).toBeLessThan(ROW_SPACING)
+  })
+
+  const rigFor = (loaded: CharacterRig[]) => async () => {
+    const rig = { object: new THREE.Group(), update: () => {} } as unknown as CharacterRig
+    loaded.push(rig)
+    return rig
+  }
+
+  it('con la sala, uno por jugador, todos a la vista a la derecha del tablón y con su nombre encima', async () => {
+    const loaded: CharacterRig[] = []
+    const stage = new MenuStage(rigFor(loaded), () => 0, () => true)
+    stage.setIsland(disc, [], { x: 0, z: 0 })
+    const camera = new THREE.PerspectiveCamera(70, 1280 / 800, 0.1, 600)
+    camera.rotation.order = 'YXZ'
+    const cast = ['Ana', 'Tomás', 'Lía', 'Bo', 'Eva'].map((name, id) => ({ id, name, skin: 0 }))
+    stage.setCast(cast)
+    stage.place(camera, 0.016, 1280)
+    await Promise.resolve()
+    await Promise.resolve()
+    stage.place(camera, 0.016, 1280)
+    expect(loaded).toHaveLength(5)
+    const tags = stage.tags(camera, 1280, 800)
+    expect(tags.map((t) => t.name)).toEqual(['Ana', 'Tomás', 'Lía', 'Bo', 'Eva'])
+    // De izquierda a derecha, todos en el hueco que deja el tablón (de 496 px al borde) y por encima de la mitad.
+    for (let i = 0; i < tags.length; i++) {
+      expect(tags[i]!.left).toBeGreaterThan(496)
+      expect(tags[i]!.left).toBeLessThan(1240)
+      expect(tags[i]!.top).toBeGreaterThan(0)
+      expect(tags[i]!.top).toBeLessThan(400)
+      if (i) expect(tags[i]!.left).toBeGreaterThan(tags[i - 1]!.left)
+    }
+
+    // Se va uno: se quita su personaje; fuera de la sala, solo el propio (y sin etiquetas).
+    stage.setCast(cast.slice(0, 4))
+    stage.place(camera, 0.016, 1280)
+    expect(stage.group.children).not.toContain(loaded[4]!.object)
+    stage.setCast(null)
+    stage.place(camera, 0.016, 1280)
+    expect(stage.tags(camera, 1280, 800)).toEqual([])
+    expect(stage.group.children.filter((c) => loaded.some((r) => r.object === c))).toEqual([])
+  })
+
+  it('en una ventana estrecha no hay ni personajes ni etiquetas', async () => {
+    const stage = new MenuStage(rigFor([]), () => 0, () => true)
+    stage.setIsland(disc, [], { x: 0, z: 0 })
+    const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 600)
+    stage.setCast([{ id: 0, name: 'Ana', skin: 0 }])
+    stage.place(camera, 0.016, NARROW_WIDTH)
+    await Promise.resolve()
+    stage.place(camera, 0.016, NARROW_WIDTH)
+    expect(stage.tags(camera, NARROW_WIDTH, 600)).toEqual([])
   })
 })

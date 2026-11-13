@@ -19,7 +19,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 70
+export const PROTOCOL_VERSION = 71
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -104,9 +104,14 @@ export interface Say {
   text: string
 }
 
-/** El anfitrión empieza la partida. */
+/** El anfitrión empieza la partida, con la dificultad elegida en la sala (`MatchInfo.difficulty`). */
 export interface Start {
   type: 'start'
+}
+
+/** El anfitrión cambia la dificultad en la sala: la sala se la cuenta a todos en el siguiente `match`. */
+export interface SetDifficulty {
+  type: 'setDifficulty'
   difficulty: Difficulty
 }
 
@@ -137,7 +142,7 @@ export type DevOp =
 
 export type Dev = { type: 'dev' } & DevOp
 
-export type ClientMessage = Hello | Cmds | Resync | Say | Start | Surrender | Dev
+export type ClientMessage = Hello | Cmds | Resync | Say | Start | SetDifficulty | Surrender | Dev
 
 // --- Servidor → cliente ---
 
@@ -211,6 +216,8 @@ export interface MatchInfo {
   host: PlayerId
   /** Las reglas de la partida en marcha o de la última. */
   rules: MatchRules
+  /** La dificultad elegida en la sala para la próxima partida (la ven todos, no solo el anfitrión). */
+  difficulty: Difficulty
   /** Conectados ahora. */
   players: { id: PlayerId; name: string }[]
   /** Votos para rendirse. */
@@ -496,7 +503,9 @@ export function parseClientMessage(data: string): Parsed {
       return text ? { ok: true, msg: { type: 'say', text } } : INVALID
     }
     case 'start':
-      return isDifficulty(raw.difficulty) ? { ok: true, msg: { type: 'start', difficulty: raw.difficulty } } : INVALID
+      return { ok: true, msg: { type: 'start' } }
+    case 'setDifficulty':
+      return isDifficulty(raw.difficulty) ? { ok: true, msg: { type: 'setDifficulty', difficulty: raw.difficulty } } : INVALID
     case 'surrender':
       return typeof raw.yes === 'boolean' ? { ok: true, msg: { type: 'surrender', yes: raw.yes } } : INVALID
     case 'dev': {

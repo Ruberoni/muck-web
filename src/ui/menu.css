@@ -289,17 +289,93 @@
   color: var(--accent);
 }
 
-.room-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+/* La sala de espera: el código y "Copiar enlace" en una fila. */
+.room-code.row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.room-code-text { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.room-code-text > span { font-size: 13px; font-weight: 700; color: var(--cream-dim); }
+.room-code.row code { font-size: 36px; }
+.room-code.row .btn.small { flex: 0 0 auto; height: 44px; padding: 0 14px; font-size: 15px; border-radius: 10px; box-shadow: 0 4px 0 var(--wood-shadow); }
+
+.room-seats { display: grid; gap: 8px; }
+.room-seats-title { font-size: 14px; font-weight: 700; color: var(--cream-dim); }
+
+.room-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .room-players li {
-  padding: 8px 12px;
-  font-size: 16px;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  font-size: 17px;
+  font-weight: 800;
   background: var(--wood-mid);
   border-radius: 10px;
 }
-.room-players .host { color: var(--accent); }
+.room-players .crown { flex: 0 0 20px; height: 20px; color: var(--accent); }
+.room-players .crown svg { width: 20px; height: 20px; display: block; }
+.room-players .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-players .note { margin-left: auto; flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--cream-dim); }
+.room-players li.empty {
+  height: 40px;
+  padding-left: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #bfae8e;
+  background: transparent;
+  border: 2px dashed var(--wood);
+}
+
+.room-difficulty { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 15px; color: var(--cream-dim); }
+.room-difficulty strong { color: var(--cream); }
+.btn.ghost.tiny { height: 36px; padding: 0 12px; font-size: 14px; border-radius: 10px; }
+
+.room-waiting { margin: 0; padding: 18px 0; text-align: center; font-size: 18px; font-weight: 800; color: var(--cream-dim); }
 
 .room-link { font-size: 14px; }
+
+/* El chat de la sala: abajo a la derecha, sobre la isla (en una ventana estrecha, dentro del tablón). */
+.room-chat {
+  position: fixed;
+  right: 40px;
+  bottom: 40px;
+  width: min(340px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px;
+  background: rgb(36 26 18 / 0.82);
+  border-radius: var(--radius);
+}
+
+.chat.docked { position: static; width: auto; gap: 8px; font-size: 14px; }
+.chat.docked .chat-log { max-height: calc(4 * 1.45em); overflow-y: auto; align-content: start; line-height: 1.45; }
+.chat.docked .chat-log:empty { display: none; }
+.chat.docked .chat-line { padding: 0; background: none; animation: none; opacity: 1; }
+.chat.docked .chat-input {
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  color: var(--cream);
+  background: var(--wood-darker);
+  border: 2px solid var(--wood);
+  border-radius: 8px;
+}
+.chat.docked .chat-input::placeholder { color: #bfae8e; }
+.chat.docked .chat-input:focus-visible { outline: 3px solid var(--cream); outline-offset: 2px; }
+
+/* Los nombres sobre los personajes de la sala, detrás del tablón. */
+.stage-tags { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.stage-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 5px 12px;
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: var(--cream);
+  background: rgb(36 26 18 / 0.8);
+  border-radius: 999px;
+}
 
 /* --- Resultados --- */
 
@@ -394,8 +470,14 @@
 
 /* --- Ventanas estrechas y bajas --- */
 
+/* Sin sitio a la derecha para el chat sin tapar la fila: dentro del tablón. */
+@media (max-width: 1200px) {
+  .room-chat { position: static; width: auto; padding: 0; background: none; }
+}
+
 @media (max-width: 900px) {
   .menu-panel, .menu-panel.wide, .menu-panel.full { left: 16px; right: 16px; width: auto; top: 16px; bottom: 16px; }
+  .stage-tags { display: none; }
   .controls-grid, .keys-grid { grid-template-columns: minmax(0, 1fr); }
   .setting { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 56px; }
 }
@@ -407,6 +489,12 @@
   .menu-logo h1 { font-size: 46px; }
   .menu-title { font-size: 30px; }
   .menu-input.code { height: 64px; font-size: 36px; }
+  .room-code.row { padding: 8px 12px; }
+  .room-code.row code { font-size: 28px; }
+  .room-seats, .room-players { gap: 5px; }
+  .room-players li { height: 34px; font-size: 15px; }
+  .room-players li.empty { height: 32px; font-size: 14px; }
+  .room-waiting { padding: 10px 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

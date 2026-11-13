@@ -41,6 +41,9 @@ const NOTICE_MS = 4000
 export class MenuScreens {
   readonly root: HTMLElement
   private notice: HTMLElement
+  /** Los nombres sobre los personajes de la sala, detrás del tablón. */
+  private tagLayer: HTMLElement
+  private tags = new Map<number, HTMLElement>()
   private noticeTimer: ReturnType<typeof setTimeout> | null = null
   private builders = new Map<Screen | SubScreen, ScreenBuilder>()
   private stack: SubScreen[] = []
@@ -70,7 +73,10 @@ export class MenuScreens {
     this.notice.className = 'menu-notice'
     this.notice.setAttribute('role', 'status')
     this.notice.hidden = true
-    this.root.append(this.notice)
+    this.tagLayer = document.createElement('div')
+    this.tagLayer.className = 'stage-tags'
+    this.tagLayer.setAttribute('aria-hidden', 'true')
+    this.root.append(this.tagLayer, this.notice)
     container.appendChild(this.root)
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || e.repeat) return
@@ -149,6 +155,30 @@ export class MenuScreens {
   setResults(results: { end: MatchEnd; lines: readonly string[] } | null) {
     this.results = results
     this.refresh()
+  }
+
+  /** Los nombres de la fila de la sala, en píxeles CSS (vacío: ninguno). Solo toca lo que cambia. */
+  setStageTags(tags: readonly { id: number; name: string; left: number; top: number }[]) {
+    if (!tags.length && !this.tags.size) return
+    const seen = new Set<number>()
+    for (const tag of tags) {
+      seen.add(tag.id)
+      let node = this.tags.get(tag.id)
+      if (!node) {
+        node = document.createElement('div')
+        node.className = 'stage-tag'
+        this.tagLayer.appendChild(node)
+        this.tags.set(tag.id, node)
+      }
+      if (node.textContent !== tag.name) node.textContent = tag.name
+      const transform = `translate(${tag.left.toFixed(1)}px, ${tag.top.toFixed(1)}px) translate(-50%, -100%)`
+      if (node.style.transform !== transform) node.style.transform = transform
+    }
+    for (const [id, node] of this.tags) {
+      if (seen.has(id)) continue
+      node.remove()
+      this.tags.delete(id)
+    }
   }
 
   /** No se pudo capturar el ratón: el botón principal de la pantalla en curso vuelve a pedirlo. */

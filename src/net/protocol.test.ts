@@ -188,9 +188,10 @@ describe('protocolo', () => {
     expect(dev({ op: 'setDay', day: 6 })).toEqual({ ok: true, msg: { type: 'dev', op: 'setDay', day: 6 } })
     expect(dev({ op: 'throwRock', x: 1, z: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'throwRock', x: 1, z: 2 } })
     expect(dev({ op: 'meteor' })).toEqual({ ok: true, msg: { type: 'dev', op: 'meteor' } })
-    expect(parseClientMessage(JSON.stringify({ type: 'start', difficulty: 'hard' }))).toEqual({ ok: true, msg: { type: 'start', difficulty: 'hard' } })
+    expect(parseClientMessage(JSON.stringify({ type: 'start' }))).toEqual({ ok: true, msg: { type: 'start' } })
+    expect(parseClientMessage(JSON.stringify({ type: 'setDifficulty', difficulty: 'hard' }))).toEqual({ ok: true, msg: { type: 'setDifficulty', difficulty: 'hard' } })
     expect(parseClientMessage(JSON.stringify({ type: 'surrender', yes: true }))).toEqual({ ok: true, msg: { type: 'surrender', yes: true } })
-    expect(parseClientMessage(JSON.stringify({ type: 'start', difficulty: 'imposible' })).ok).toBe(false)
+    expect(parseClientMessage(JSON.stringify({ type: 'setDifficulty', difficulty: 'imposible' })).ok).toBe(false)
     expect(parseClientMessage(JSON.stringify({ type: 'surrender' })).ok).toBe(false)
     expect(dev({ op: 'meteor', x: 1, z: 2 })).toEqual({ ok: true, msg: { type: 'dev', op: 'meteor', x: 1, z: 2 } })
     const bad = [
