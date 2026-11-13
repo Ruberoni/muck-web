@@ -27,7 +27,7 @@ import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
 import { usableNear } from '../sim/builds'
 import { maxHealthOf } from '../sim/boosts'
-import { clockTexts, lightText, planeText, threatText } from '../ui/clockText'
+import { boardingBanner, clockTexts, lightText, planeText, threatText } from '../ui/clockText'
 import { stationPrompt, usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
@@ -828,6 +828,10 @@ export class Game {
           this.hud.showBanner(`El avión ha caído al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}`)
           this.shake.start(Math.hypot(e.x - this.renderPos.x, e.z - this.renderPos.z))
           this.audio.meteorLanded(e.x, e.z, this.listener())
+          break
+        case 'planeBoarding':
+          this.hud.showBanner(boardingBanner(e.x - this.renderPos.x, e.z - this.renderPos.z, this.sim.structures.byId(e.id)?.radius ?? 0, this.slot.alive))
+          this.sound.play('bell')
           break
         case 'mobsRose':
           if (e.trait) this.hud.showBanner(`Campana · Los mobs suben: ${TRAIT_NAMES[e.trait]}`)

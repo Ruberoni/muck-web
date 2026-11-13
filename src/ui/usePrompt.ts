@@ -19,7 +19,13 @@ export function usePrompt(structure: Structure, rules: MatchRules, awake: boolea
     if (structure.kind === 'totem') return structure.awake ? `${def.name} · Despierto` : `${def.name} — Mantén ${key} ${TOTEM_HOLD} s para activarlo. No se puede deshacer`
     const { plane } = structure
     if (plane?.hp === 0) return `${def.name} · Averiado — ${key} para repararlo (${PLANE_REPAIR_WOOD} de madera)`
-    if (plane?.running) return plane.heat >= MOTOR_TIME ? `${def.name} · Listo para despegar` : `${def.name} · Calentando el motor`
+    if (plane?.running) {
+      if (plane.heat < MOTOR_TIME) return `${def.name} · Calentando el motor`
+      if (plane.wait !== null && plane.wait <= 0) return `${def.name} · Despegando…`
+      if (plane.wait !== null) return `${def.name} · Despega en ${Math.ceil(plane.wait - 1e-9)} s · ${plane.aboard}/${plane.expected} a bordo`
+      // Solo se ve un instante (aquí cerca ya se está a bordo y el servidor arranca la cuenta o despega en ese paso).
+      return `${def.name} · Listo para despegar`
+    }
     if (plane) return `${def.name} — ${key} para arrancar el motor`
     if (!fire) return def.name
     if (!fire.burning && fire.left <= 0 && fire.oil === 0) return `${def.name} · Sin aceite — hazlo en el destilador y cárgalo con ${key}`
