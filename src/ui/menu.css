@@ -329,6 +329,8 @@
 /* El aviso breve de arriba (no se pudo capturar el ratón). */
 .menu-notice {
   position: absolute;
+  /* Por encima de las losetas de Controles y Ajustes. */
+  z-index: 2;
   left: 50%;
   top: 16px;
   transform: translateX(-50%);
@@ -581,8 +583,9 @@
 
 @media (max-width: 900px) {
   .menu-panel, .menu-panel.wide, .menu-panel.full { left: 16px; right: 16px; width: auto; top: 16px; bottom: 16px; }
-  /* Sin sitio fuera del tablón: en su esquina de arriba a la derecha, en fila. */
-  .menu-tools { left: auto; right: calc(16px + 4px + 16px); top: calc(16px + 4px + 16px); bottom: auto; flex-direction: row; gap: 8px; }
+  /* Sin sitio fuera del tablón: dentro, en su esquina de arriba a la derecha y en fila; lo de arriba les deja hueco. */
+  .menu-panel > .menu-tools { left: auto; right: 16px; top: 16px; bottom: auto; flex-direction: row; gap: 8px; z-index: 1; }
+  .menu-panel > .menu-tools:not([hidden]) + * { margin-right: 84px; }
   .menu-tool { width: 44px; height: 44px; border-width: 2px; box-shadow: none; }
   .menu-tool:hover, .menu-tool:active { box-shadow: none; }
   .stage-tags { display: none; }

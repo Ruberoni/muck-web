@@ -258,6 +258,36 @@ describe('Controles y Ajustes desde la sala', () => {
     expect([...document.querySelectorAll('.menu-panel button')].map((b) => b.textContent)).not.toContain('Ajustes')
   })
 
+  it('en la invitación también; el foco vuelve a la loseta al cerrar Controles', () => {
+    const { game, menu } = room()
+    ;(game as { net: unknown }).net = null
+    history.replaceState(null, '', '?room=K7QXP')
+    try {
+      menu.refresh()
+      expect(menu.screen).toBe('invite')
+      expect(document.querySelector<HTMLElement>('.menu-tools')!.hidden).toBe(false)
+      tool('Controles').click()
+      expect(menu.top).toBe('controls')
+      menu.back()
+      expect(document.activeElement).toBe(tool('Controles'))
+    } finally {
+      history.replaceState(null, '', location.pathname)
+    }
+  })
+
+  it('en una ventana estrecha van dentro del tablón, las primeras, sin quitarle el foco a la pantalla', () => {
+    const real = window.matchMedia
+    window.matchMedia = ((query: string) => ({ ...real(query), matches: true, addEventListener() {} })) as typeof matchMedia
+    try {
+      room()
+      const panel = document.querySelector('.menu-panel')!
+      expect(panel.firstElementChild!.classList.contains('menu-tools')).toBe(true)
+      expect(document.activeElement?.classList.contains('menu-tool')).toBe(false)
+    } finally {
+      window.matchMedia = real
+    }
+  })
+
   it('en la pausa no hay losetas: siguen los botones de texto', () => {
     const { game, menu } = room()
     game.state = 'paused'

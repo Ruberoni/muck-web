@@ -260,7 +260,7 @@ export function installLobby(game: Game) {
       if (startTimer) return
       startTimer = setTimeout(() => {
         startTimer = null
-        menu.refresh()
+        if (menu.screen === 'room') menu.refresh()
       }, START_RETRY_MS)
       paintStart()
       game.net?.client.start()

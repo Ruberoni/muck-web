@@ -53,8 +53,10 @@ const NOTICE_MS = 4000
 export class MenuScreens {
   readonly root: HTMLElement
   private notice: HTMLElement
-  /** Las losetas de Controles y Ajustes, fuera del tablón. */
+  /** Las losetas de Controles y Ajustes, fuera del tablón (dentro, en su esquina, en una ventana estrecha). */
   private tools: HTMLElement
+  /** Ventana estrecha: el tablón ocupa todo el ancho (como `@media (max-width: 900px)` en menu.css). */
+  private narrow: MediaQueryList | null = typeof matchMedia === 'function' ? matchMedia('(max-width: 900px)') : null
   /** Los nombres sobre los personajes de la sala, detrás del tablón. */
   private tagLayer: HTMLElement
   private tags = new Map<number, HTMLElement>()
@@ -112,6 +114,7 @@ export class MenuScreens {
       this.tools.appendChild(b)
     }
     this.root.append(this.tagLayer, this.notice, this.tools)
+    this.narrow?.addEventListener('change', () => this.placeTools())
     container.appendChild(this.root)
     // El toc de cada botón del menú (respeta el volumen: va por el mismo master que los efectos). El clic también
     // despierta el audio, así la cuenta atrás ya suena.
@@ -265,6 +268,19 @@ export class MenuScreens {
     return !used && escapeAction(this.base, this.stack.length) === 'resume'
   }
 
+  /**
+   * Las losetas van fuera del tablón; en una ventana estrecha no queda sitio fuera y van dentro, las primeras (así
+   * también van primero al tabular), en su esquina y moviéndose con lo que haga scroll.
+   */
+  private placeTools() {
+    const panel = this.shown?.view.root
+    if (this.narrow?.matches && panel) {
+      if (panel.firstChild !== this.tools) panel.prepend(this.tools)
+    } else if (this.tools.parentElement !== this.root) {
+      this.root.appendChild(this.tools)
+    }
+  }
+
   private rebuild() {
     const key = this.top ?? this.base
     const hadFocus = this.root.contains(document.activeElement)
@@ -294,11 +310,12 @@ export class MenuScreens {
     if (view.size) view.root.classList.add(view.size)
     this.root.insertBefore(view.root, this.notice)
     this.shown = { key, view }
+    this.placeTools()
     view.update?.()
     // El botón que abrió la sub-pantalla: en la pantalla o en las losetas de fuera.
     const selector = `[data-opens="${this.returnTo}"]`
     const opener = this.returnTo && (view.root.querySelector<HTMLElement>(selector) ?? (this.tools.hidden ? null : this.tools.querySelector<HTMLElement>(selector)))
-    const first = opener || view.root.querySelector<HTMLElement>('[data-autofocus]') || view.root.querySelector<HTMLElement>('button:not(:disabled), input, select')
+    const first = opener || view.root.querySelector<HTMLElement>('[data-autofocus]') || view.root.querySelector<HTMLElement>('button:not(:disabled):not(.menu-tool), input, select')
     first?.focus({ preventScroll: true })
   }
 }
