@@ -4,7 +4,7 @@ import { Btn, type ActionData } from '../sim/commands'
 import { EYE_HEIGHT, MAX_PITCH } from '../sim/constants'
 import { RECIPE_IDS } from '../sim/crafting'
 import { FISH_DELAY } from '../sim/fish'
-import { putInto } from '../sim/stations'
+import { isLit, putInto } from '../sim/stations'
 import { aimPose } from '../sim/interaction'
 import { quickProps } from '../sim/quickProps'
 import { mulberry32 } from '../sim/random'
@@ -446,6 +446,24 @@ describe('el espejo de NetClient', () => {
     b.surrender(true)
     run(time, 500, [[a, idle], [b, idle]])
     expect(b.match).toMatchObject({ phase: 'lobby', result: { end: 'surrendered' } })
+  })
+
+  it('el espejo ve encenderse la fogata con la leña y apagarse sola al acabarse, sin cocinar nada', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const fire = sim.structures.place(structureSpot(sim.slot(client.id).player.pos, 0, 0.6, sim.obstacles), 'campfire')!
+    run(time, 500, [[client, idle]])
+    const mirror = () => client.sim!.structures.byId(fire.id)!.station!
+    expect(isLit(mirror())).toBe(false)
+    putInto('campfire', fire.station!, 'fuel', 'wood', 1)
+    run(time, 500, [[client, idle]])
+    expect(isLit(mirror())).toBe(true)
+    expect(mirror().burnTotal).toBe(60)
+    run(time, 61_000, [[client, idle]])
+    expect(isLit(fire.station!)).toBe(false)
+    expect(isLit(mirror())).toBe(false)
   })
 
   it('el espejo sigue lo que hay en las estaciones y la obra, y quien reconecta las recibe', () => {

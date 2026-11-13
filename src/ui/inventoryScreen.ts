@@ -8,6 +8,8 @@ import { CRAFT_MANY, RECIPE_GROUPS, recipeStatus, STATION_NAMES } from './recipe
 import type { ActionData } from '../sim/commands'
 import { slotFor, STATION_DEFS, STATION_SLOTS, stationStall, type StationSlot } from '../sim/stations'
 import type { Structure } from '../sim/structures'
+import { DEFAULT_RULES, type MatchRules } from '../sim/match'
+import { stationProcessText } from './usePrompt'
 import { EQUIP_SLOTS, equipSlotOf, type EquipSlot } from '../sim/equipment'
 import { buyProblem, OFFERS, priceOf, PURCHASES, sellProblem } from '../sim/merchant'
 import { BOOST_DEFS, BOOST_IDS, BOOST_PAYMENTS, boostCostText, boostFactor, boostProblem, levelOf, type BoostId, type BoostLevels, type BoostPayment } from '../sim/boosts'
@@ -115,6 +117,7 @@ export class InventoryScreen {
   private stationBars: { progress: HTMLElement; burn: HTMLElement; fuelRow: HTMLElement }
   /** Por qué no trabaja la estación abierta. */
   private stationStall: HTMLElement
+  private stationProcesses!: HTMLElement
   /** Lo que se lleva puesto: un clic lo quita. */
   private equipSlots = new Map<EquipSlot, SlotView>()
   /** El puesto del mercader abierto: su tienda sustituye a las recetas. */
@@ -228,6 +231,7 @@ export class InventoryScreen {
     this.stationColumn = el('div', 'inventory-station', panel)
     this.stationColumn.hidden = true
     this.stationTitle = el('h2', 'title', this.stationColumn)
+    this.stationProcesses = el('p', 'station-processes', this.stationColumn)
     const machine = el('div', 'station-machine', this.stationColumn)
     const progressTrack = el('div', 'station-bar', machine)
     const fuelRow = el('div', 'station-fuel', this.stationColumn)
@@ -311,7 +315,7 @@ export class InventoryScreen {
    * La estación abierta (o null): con una de procesar se ven sus ranuras en vez de las recetas. Se llama cada frame con
    * la pantalla abierta, con la estación tal como está ahora y las mejoras que se tienen compradas.
    */
-  setStation(station: Structure | null, canForget = false, boosts: BoostLevels = {}) {
+  setStation(station: Structure | null, canForget = false, boosts: BoostLevels = {}, rules: MatchRules = DEFAULT_RULES) {
     this.boosts = boosts
     this.setShop(station?.shop ? station : null, canForget)
     const showing = station?.station ? station : null
@@ -321,6 +325,7 @@ export class InventoryScreen {
     this.recipesColumn.hidden = !!showing || !!this.shop
     if (!showing?.station) return
     this.stationTitle.textContent = STATION_NAMES[showing.kind]
+    this.stationProcesses.textContent = stationProcessText(showing.kind, rules)
     const { station: state } = showing
     for (const [slot, view] of this.stationSlots) {
       const stack = state[slot]
@@ -338,7 +343,7 @@ export class InventoryScreen {
     this.stationStall.textContent = stall ?? ''
     this.stationStall.hidden = !stall
     this.stationBars.progress.style.width = `${state.time > 0 ? Math.min(100, (state.progress / state.time) * 100) : 0}%`
-    this.stationBars.burn.style.width = `${Math.min(100, (state.burn / 60) * 100)}%`
+    this.stationBars.burn.style.width = `${state.burnTotal > 0 ? Math.min(100, (state.burn / state.burnTotal) * 100) : 0}%`
   }
 
   private buildShop(panel: HTMLElement) {

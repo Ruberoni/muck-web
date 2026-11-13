@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampToRim, compassName, teammateMark, toMinimap } from './minimap'
+import { clampToRim, compassName, STRUCTURE_MARKS, structureColor, teammateMark, toMinimap } from './minimap'
 import { ROCK_LEVEL, SAND_LEVEL } from '../sim/world/terrain'
 import { terrainColor } from '../world/ground'
 
@@ -114,5 +114,16 @@ describe('teammateMark', () => {
     expect(Math.hypot(mark.x, mark.y)).toBeCloseTo(60)
     expect(mark.y).toBeCloseTo(60)
     expect(Math.abs(mark.angle)).toBeCloseTo(Math.PI)
+  })
+})
+
+describe('las fogatas en el minimapa', () => {
+  it('encendida sale naranja y apagada, gris, de cerca y de lejos', () => {
+    const lit = { kind: 'campfire', x: 0, z: 0 } as const
+    expect(structureColor(lit, false)).toBe(STRUCTURE_MARKS.campfire.near)
+    expect(structureColor(lit, true)).toBe(STRUCTURE_MARKS.campfire.far)
+    const out = { ...lit, unlit: true }
+    expect(structureColor(out, false)).not.toBe(STRUCTURE_MARKS.campfire.near)
+    expect(structureColor(out, true)).not.toBe(STRUCTURE_MARKS.campfire.far)
   })
 })
