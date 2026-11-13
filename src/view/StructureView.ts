@@ -438,7 +438,10 @@ export class StructureView {
     let model = this.ghosts.get(kind)
     if (!model) {
       const g = this.ghostMaterial
-      model = MODELS[kind](() => g, false).root
+      const built = MODELS[kind](() => g, false)
+      model = built.root
+      // La fogata se coloca apagada: su vista previa, sin llama.
+      if (kind === 'campfire' && built.flame) built.flame.visible = false
       this.ghosts.set(kind, model)
       this.scene.add(model)
     }

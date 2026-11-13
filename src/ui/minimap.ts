@@ -1,5 +1,6 @@
 import { ENEMY_DEFS, type EnemyType } from '../sim/constants'
 import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
+import { isLit, type StationState } from '../sim/stations'
 import type { StructureKind } from '../sim/structures'
 import { biomeBlend, DEEP, terrainColor } from '../world/ground'
 
@@ -30,9 +31,10 @@ export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; n
 /** Una fogata apagada sale gris: así se ve desde lejos cuál hay que avivar. */
 const UNLIT_MARK = { near: '#8f8a84', far: '#bdb8b1' }
 
-/** El color de la marca de una estructura, de cerca o de lejos: `unlit`, si es una fogata apagada. */
+/** El color de la marca de una estructura, de cerca o de lejos: gris si es una fogata apagada. */
 export function structureColor(s: MinimapStructure, far: boolean): string {
-  const mark = s.unlit ? UNLIT_MARK : STRUCTURE_MARKS[s.kind]
+  const unlit = s.kind === 'campfire' && !(s.station && isLit(s.station))
+  const mark = unlit ? UNLIT_MARK : STRUCTURE_MARKS[s.kind]
   return far ? mark.far : mark.near
 }
 
@@ -41,8 +43,8 @@ export interface MinimapStructure {
   kind: StructureKind
   x: number
   z: number
-  /** Si es una fogata apagada. */
-  unlit?: boolean
+  /** Lo que hay dentro, si procesa: de una fogata dice si está encendida. */
+  station?: StationState | null
 }
 
 /** Cómo se marca el meteorito: como las estructuras, de cerca y de lejos. */

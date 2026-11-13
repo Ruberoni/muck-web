@@ -130,8 +130,10 @@ export function followStation(kind: StructureKind, s: StationState, dt: number) 
   }
   if (s.time <= 0) return
   if (def.fuel && s.burn <= 1e-9) return
+  // A saltos grandes, la unidad solo avanza lo que quedaba ardiendo: luego espera, como el servidor.
+  const worked = def.fuel ? Math.min(dt, s.burn) : dt
   if (def.fuel) s.burn = Math.max(0, s.burn - dt)
-  s.progress = Math.min(s.time, s.progress + dt)
+  s.progress = Math.min(s.time, s.progress + worked)
 }
 
 /**

@@ -236,6 +236,33 @@ describe('la fogata necesita leña', () => {
     expect(s.output!.amount).toBe(2)
   })
 
+  it('solo avisa al coger cada madera: ni en cada paso que arde ni apagada con algo a medias', () => {
+    const s = newStation()
+    putInto('campfire', s, 'fuel', 'wood', 2)
+    expect(run(s, 150, 'campfire')).toBe(2)
+    putInto('campfire', s, 'input', 'raw_meat', 1)
+    expect(run(s, 30, 'campfire')).toBe(0)
+    expect(s.output).toBeNull()
+  })
+
+  it('la copia del cliente acaba igual que el servidor aunque avance a saltos y la fogata se apague a media carne', () => {
+    for (const jump of [1, 3, 7]) {
+      const server = newStation()
+      putInto('campfire', server, 'fuel', 'wood', 1)
+      stepStation('campfire', server, 0.5, 1)
+      for (let i = 0; i < 106; i++) stepStation('campfire', server, 0.5, 1)
+      putInto('campfire', server, 'input', 'raw_meat', 1)
+      stepStation('campfire', server, 0.5, 1)
+      const copy = { ...server }
+      for (let i = 0; i < 40; i++) stepStation('campfire', server, 0.5, 1)
+      for (let i = 0; i < 40; i += jump) followStation('campfire', copy, 0.5 * Math.min(jump, 40 - i))
+      expect(isLit(server)).toBe(false)
+      expect(isLit(copy)).toBe(false)
+      expect(copy.progress).toBeCloseTo(server.progress)
+      expect(copy.time).toBe(server.time)
+    }
+  })
+
   it('lo que le queda de fuego cuenta la leña de la ranura', () => {
     const s = newStation()
     putInto('campfire', s, 'fuel', 'wood', 99)

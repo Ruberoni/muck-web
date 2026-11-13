@@ -184,8 +184,9 @@ describe('Simulation', () => {
     const tend = (slot: 'input' | 'fuel' | 'output', from: number | null, all: boolean) => step(sim, { actions: [{ kind: 'station', id: fire.id, slot, from, all }] })
     // Se coloca apagada: sin leña la carne no se haría.
     expect(isLit(fire.station!)).toBe(false)
-    tend('fuel', inventory.slots.indexOf('wood'), true)
+    expect(tend('fuel', inventory.slots.indexOf('wood'), true).map((e) => e.type)).toContain('stationChanged')
     expect(isLit(fire.station!)).toBe(true)
+    expect(inventory.count('wood')).toBe(0)
     // Una carne a la entrada: la fogata solo tiene una, así que las bayas esperan a que acabe.
     expect(tend('input', inventory.slots.indexOf('raw_meat'), false).map((e) => e.type)).toContain('stationChanged')
     expect(inventory.toJSON()).toEqual({ raw_meat: 1, berry: 4 })

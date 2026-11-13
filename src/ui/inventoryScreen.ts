@@ -118,6 +118,7 @@ export class InventoryScreen {
   /** Por qué no trabaja la estación abierta. */
   private stationStall: HTMLElement
   private stationProcesses!: HTMLElement
+  private processesKey = ''
   /** Lo que se lleva puesto: un clic lo quita. */
   private equipSlots = new Map<EquipSlot, SlotView>()
   /** El puesto del mercader abierto: su tienda sustituye a las recetas. */
@@ -325,7 +326,11 @@ export class InventoryScreen {
     this.recipesColumn.hidden = !!showing || !!this.shop
     if (!showing?.station) return
     this.stationTitle.textContent = STATION_NAMES[showing.kind]
-    this.stationProcesses.textContent = stationProcessText(showing.kind, rules)
+    const processesKey = `${showing.kind}|${rules.difficulty}`
+    if (processesKey !== this.processesKey) {
+      this.processesKey = processesKey
+      this.stationProcesses.textContent = stationProcessText(showing.kind, rules)
+    }
     const { station: state } = showing
     for (const [slot, view] of this.stationSlots) {
       const stack = state[slot]
