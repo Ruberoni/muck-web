@@ -10,6 +10,9 @@ import { backButton, button, difficultyCards, field, header, logo, make, panel, 
 import { roomModel, seatNote, seatsKey, type Seat } from './menu/room'
 import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
+/** Tras pulsar "Empezar partida", lo que se espera a la fase nueva antes de dejar volver a probar. */
+const START_RETRY_MS = 4000
+
 const NAME_KEY = 'muck-web:name'
 const DEFAULT_NAME = 'Jugador'
 const COPIED_MS = 2000
@@ -248,10 +251,18 @@ export function installLobby(game: Game) {
     const change = button(difficultyRow, 'Cambiar', 'ghost tiny', () => menu.push('difficulty-room'))
     change.dataset.opens = 'difficulty-room'
     const foot = make('div', 'menu-foot menu-stack', root)
+    // Sin capturar el ratón: como los demás, el anfitrión ve la cuenta atrás y entra con "¡Entrar!". Un doble clic
+    // no manda dos `start`; si el servidor no contesta, se puede volver a probar al rato. Con `aria-disabled` y no
+    // `disabled`, para que el botón no pierda el foco (en `body`, Enter abriría el chat).
+    let startTimer: ReturnType<typeof setTimeout> | null = null
     const start = button(foot, 'Empezar partida', 'primary', () => {
+      if (startTimer) return
+      start.setAttribute('aria-disabled', 'true')
+      startTimer = setTimeout(() => {
+        startTimer = null
+        start.removeAttribute('aria-disabled')
+      }, START_RETRY_MS)
       game.net?.client.start()
-      // El clic es el gesto que permite capturar el ratón: a los demás les toca el suyo.
-      void game.play()
     })
     const back = button(foot, 'Volver a la partida', 'primary', () => void game.play())
     const waitingHost = make('p', 'room-waiting', foot)
@@ -314,6 +325,7 @@ export function installLobby(game: Game) {
       update,
       dispose: () => {
         if (copiedTimer) clearTimeout(copiedTimer)
+        if (startTimer) clearTimeout(startTimer)
         window.removeEventListener('keydown', onKey)
         game.hud.net.dock(null)
       },

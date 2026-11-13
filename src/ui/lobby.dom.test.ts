@@ -5,6 +5,8 @@ import type { MatchInfo } from '../net/protocol'
 import { DEFAULT_RULES } from '../sim/match'
 import { installLobby } from './lobby'
 import { MenuScreens } from './menu/MenuScreens'
+import { installCoreScreens } from './menu/views'
+import { LoadTracker } from '../game/loadTracker'
 import { MultiplayerHud } from './multiplayerHud'
 
 const lobbyMatch = (over: Partial<MatchInfo> = {}): MatchInfo => ({
@@ -22,7 +24,7 @@ const lobbyMatch = (over: Partial<MatchInfo> = {}): MatchInfo => ({
 })
 
 /** Lo justo de `Game` para montar la sala: un estado, una sesión de red de mentira y el HUD de red. */
-function room(me = 1) {
+function room(me = 1, loads = new LoadTracker()) {
   document.body.replaceChildren()
   const hudRoot = document.createElement('div')
   document.body.append(hudRoot)
@@ -33,9 +35,12 @@ function room(me = 1) {
     hud: { net: new MultiplayerHud(hudRoot) },
     onchange: null,
     play: vi.fn(),
-  } as unknown as Game & { menu: MenuScreens }
+    loads,
+    sound: { unlock: vi.fn(), play: vi.fn() },
+  } as unknown as Game & { menu: MenuScreens; state: string; sound: { unlock: ReturnType<typeof vi.fn>; play: ReturnType<typeof vi.fn> } }
   game.hud.net.setVisible(true)
   ;(game as { menu: MenuScreens }).menu = new MenuScreens(document.body, game)
+  installCoreScreens(game.menu)
   installLobby(game)
   return { game, client, menu: game.menu, hudRoot }
 }
@@ -116,4 +121,101 @@ describe('la sala de espera', () => {
     expect(client.setDifficulty).toHaveBeenCalledWith('ultra')
     expect(menu.top).toBe(null)
   })
+})
+
+const buttonNamed = (text: string) => [...document.querySelectorAll('button')].find((b) => b.textContent === text)!
+
+describe('empezar, cuenta atrás y carga', () => {
+  it('"Empezar partida" manda el inicio sin capturar el ratón (el anfitrión también pasa por la cuenta atrás)', () => {
+    const { game, client } = room()
+    buttonNamed('Empezar partida').click()
+    expect(client.start).toHaveBeenCalledTimes(1)
+    expect(game.play).not.toHaveBeenCalled()
+    // Suena el clic del botón.
+    expect(game.sound.play).toHaveBeenCalledWith('uiClick')
+  })
+
+  it('3, 2, 1 con su tic y luego "¡Entrar!", que pide el ratón', () => {
+    vi.useFakeTimers()
+    const { game, menu } = room()
+    game.state = 'paused'
+    menu.overlay = 'ready'
+    menu.refresh()
+    expect(menu.screen).toBe('countdown')
+    const number = document.querySelector<HTMLElement>('.countdown-number')!
+    const enter = buttonNamed('¡Entrar!')
+    expect(number.textContent).toBe('3')
+    expect(enter.hidden).toBe(true)
+    vi.advanceTimersByTime(1100)
+    expect(number.textContent).toBe('2')
+    vi.advanceTimersByTime(2000)
+    expect(number.hidden).toBe(true)
+    expect(enter.hidden).toBe(false)
+    expect(document.activeElement).toBe(enter)
+    expect(game.sound.play.mock.calls.filter(([name]) => name === 'uiTick')).toHaveLength(3)
+    enter.click()
+    expect(game.play).toHaveBeenCalledTimes(1)
+    // Se desmonta (y para su reloj) al volver al menú.
+    game.state = 'menu'
+    menu.refresh()
+    expect(menu.screen).toBe('room')
+  })
+
+  it('"Empezar partida" no manda dos inicios ni pierde el foco', () => {
+    vi.useFakeTimers()
+    const { client } = room()
+    const start = buttonNamed('Empezar partida')
+    start.focus()
+    start.click()
+    start.click()
+    expect(client.start).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(start)
+    vi.advanceTimersByTime(5000)
+    start.click()
+    expect(client.start).toHaveBeenCalledTimes(2)
+  })
+
+  it('la carga tapa el menú hasta que llega todo; si todo falla, "Recargar" o seguir', async () => {
+    const loads = new LoadTracker()
+    let finish!: () => void
+    loads.track(new Promise<void>((resolve) => (finish = resolve)))
+    const { menu } = room(1, loads)
+    loads.onChange = () => menu.refresh()
+    expect(menu.screen).toBe('loading')
+    expect(document.querySelector('.load-tip')!.textContent).not.toBe('')
+    finish()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(menu.screen).toBe('room')
+
+    const failing = new LoadTracker()
+    failing.track(Promise.reject(new Error('sin red'))).catch(() => {})
+    const second = room(1, failing)
+    await Promise.resolve()
+    await Promise.resolve()
+    second.menu.refresh()
+    expect(second.menu.screen).toBe('loading')
+    // Pasado el tiempo sigue ahí: sin modelos se ofrece recargar.
+    second.menu.endLoading(false)
+    expect(second.menu.screen).toBe('loading')
+    expect(second.menu.screen).toBe('loading')
+    expect(buttonNamed('Recargar').closest('[hidden]')).toBeNull()
+    buttonNamed('Seguir sin ellos').click()
+    expect(second.menu.screen).toBe('room')
+  })
+})
+
+it('si todo falla después del tiempo, vuelve la carga con "Recargar"', async () => {
+  const loads = new LoadTracker()
+  let fail!: (e: Error) => void
+  loads.track(new Promise<void>((_, reject) => (fail = reject))).catch(() => {})
+  const { menu } = room(1, loads)
+  loads.onChange = () => menu.refresh()
+  menu.endLoading(false)
+  expect(menu.screen).toBe('room')
+  fail(new Error('sin red'))
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(menu.screen).toBe('loading')
+  expect(buttonNamed('Recargar').closest('[hidden]')).toBeNull()
 })

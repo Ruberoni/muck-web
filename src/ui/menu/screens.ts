@@ -28,18 +28,18 @@ export interface ScreenInput {
   inviteCode: string | null
   /** Lo elegido en el inicio, si se ha salido de él. */
   choice: Choice | null
-  /** Cargando los modelos. */
+  /** Cargando los modelos al abrir el juego (solo cuenta en el menú: no tapa una partida). */
   loading: boolean
 }
 
 /** La pantalla que toca. Las sub-pantallas (`SubScreen`) van aparte, en una pila encima de esta. */
 export function screenFor(input: ScreenInput): Screen | null {
   const { state } = input
-  if (input.loading) return 'loading'
   if (state === 'playing' || state === 'spectating' || state === 'inventory') return null
   if (state === 'paused') return input.overlay === 'ready' ? 'countdown' : 'pause'
   if (state === 'dead') return input.results && input.results !== 'lost' ? 'results' : 'dead'
   // menu
+  if (input.loading) return 'loading'
   if (input.hasLobby && input.inRoom) return input.results ? 'results' : 'room'
   if (input.choice === 'solo-difficulty') return 'solo-difficulty'
   if (input.hasLobby && input.choice === 'join') return 'join'

@@ -94,6 +94,7 @@
 }
 
 .menu-title.danger { color: var(--danger); }
+.menu-title.win { color: var(--accent); }
 
 .menu-head { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 
@@ -121,8 +122,17 @@
   overflow-wrap: anywhere;
 }
 
-.btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 3px 0 var(--wood-shadow); }
-.btn:disabled { opacity: 0.55; cursor: default; }
+.btn {
+  transition: transform 0.14s cubic-bezier(0.34, 1.8, 0.64, 1), box-shadow 0.14s ease, background-color 0.14s ease, filter 0.14s ease;
+}
+
+/* Rebote al pasar el ratón: sube un poco y la sombra crece, como si se levantara la tabla. */
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 0 var(--wood-shadow); filter: brightness(1.06); }
+.btn.primary:hover:not(:disabled) { box-shadow: 0 8px 0 var(--leaf-shadow); }
+.btn.ghost:hover:not(:disabled), .btn.danger:hover:not(:disabled) { box-shadow: none; background-color: rgb(255 255 255 / 0.06); }
+
+.btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 3px 0 var(--wood-shadow); transition-duration: 0.05s; }
+.btn:disabled, .btn[aria-disabled='true'] { opacity: 0.55; cursor: default; }
 
 .btn.primary { color: var(--leaf-ink); background: var(--leaf); box-shadow: 0 6px 0 var(--leaf-shadow); }
 .btn.primary:active:not(:disabled) { box-shadow: 0 3px 0 var(--leaf-shadow); }
@@ -151,7 +161,71 @@
   box-shadow: none;
 }
 
-.btn.ghost:active, .btn.danger:active { transform: none; }
+.btn.ghost:active:not(:disabled), .btn.danger:active:not(:disabled) { transform: translateY(1px); }
+
+.btn.big { height: 76px; font-size: 30px; }
+
+.difficulty { transition: transform 0.14s cubic-bezier(0.34, 1.8, 0.64, 1), background-color 0.14s ease; }
+.difficulty:hover { transform: translateX(3px); }
+.menu-back { transition: transform 0.14s ease; }
+.menu-back:hover { transform: translateX(-3px); }
+
+/* --- Entrar en pantalla --- */
+
+/* Cada pantalla nueva entra deslizándose (el tablón) o creciendo (la tarjeta); al repintarla no se repite. */
+@keyframes menu-panel-in {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes menu-card-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+@keyframes menu-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.menu-panel { animation: menu-panel-in 0.22s ease-out; }
+.menu.card .menu-panel { animation: menu-card-in 0.22s cubic-bezier(0.34, 1.5, 0.64, 1); }
+.menu.card { animation: menu-fade-in 0.2s ease-out; }
+
+/* --- Cuenta atrás --- */
+
+.countdown-number {
+  font-size: 120px;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--accent);
+  text-shadow: 0 8px 0 #1c130c;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes countdown-pop {
+  from { opacity: 0.2; transform: scale(1.6); }
+  to { opacity: 1; transform: none; }
+}
+.countdown-number.pop { animation: countdown-pop 0.4s cubic-bezier(0.34, 1.5, 0.64, 1); }
+
+/* --- Carga --- */
+
+.load-bar {
+  height: 18px;
+  padding: 3px;
+  box-sizing: border-box;
+  background: var(--wood-darker);
+  border: 2px solid var(--wood);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.load-fill {
+  width: 0;
+  height: 100%;
+  background: var(--leaf);
+  border-radius: 999px;
+  box-shadow: inset 0 -3px 0 var(--leaf-shadow);
+  transition: width 0.3s ease-out;
+}
+.load-tip { margin: 0; font-size: 16px; line-height: 1.45; color: var(--cream-dim); font-style: italic; }
+.menu.card .menu-logo { justify-items: center; }
 
 .menu-back, .menu-link {
   align-self: flex-start;
@@ -495,8 +569,13 @@
   .room-players li { height: 34px; font-size: 15px; }
   .room-players li.empty { height: 32px; font-size: 14px; }
   .room-waiting { padding: 10px 0; }
+  .btn.big { height: 60px; font-size: 24px; }
+  .countdown-number { font-size: 84px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn:active:not(:disabled) { transform: none; }
+  /* Sin rebote, sin transiciones y sin animar el número de la cuenta atrás. */
+  .menu *, .menu, .menu.card .menu-panel { transition: none !important; animation: none !important; }
+  .btn:hover:not(:disabled), .btn:active:not(:disabled), .btn.ghost:active:not(:disabled), .btn.danger:active:not(:disabled),
+  .difficulty:hover, .menu-back:hover { transform: none; }
 }

@@ -1,5 +1,6 @@
 import type { Game } from '../../game/Game'
 import type { MatchEnd } from '../../sim/match'
+import { allFailed, pendingOf } from '../../game/loadTracker'
 import { backFrom, escapeAction, screenFor, type Choice, type Screen, type SubScreen } from './screens'
 
 /** Una pantalla montada: su raíz y cómo repintarla sin rehacerla (la sala cambia mientras se mira). */
@@ -28,7 +29,7 @@ export interface LobbyHooks {
 }
 
 /** Las que son una tarjeta centrada sobre la partida; el resto, el tablón a la izquierda sobre la isla. */
-const CARDS: readonly Screen[] = ['pause', 'dead', 'results', 'countdown']
+const CARDS: readonly Screen[] = ['pause', 'dead', 'results', 'countdown', 'loading']
 
 const RETRY_TEXT = 'No se pudo capturar el ratón. Prueba otra vez.'
 const NOTICE_MS = 4000
@@ -53,6 +54,10 @@ export class MenuScreens {
   private escapeUsed = false
   /** La sub-pantalla que se acaba de cerrar: el foco vuelve al botón que la abrió. */
   private returnTo: SubScreen | null = null
+  /** La pantalla de carga del principio ya no se enseña (ha terminado o se ha pasado el tiempo). */
+  private loadingOver = false
+  /** Se ha elegido seguir sin los modelos: aunque todo haya fallado, no vuelve. */
+  private loadingSkipped = false
 
   choice: Choice | null = null
   /** `ready`: la partida de la sala ha empezado y falta entrar. Se borra al cambiar de estado. */
@@ -78,6 +83,15 @@ export class MenuScreens {
     this.tagLayer.setAttribute('aria-hidden', 'true')
     this.root.append(this.tagLayer, this.notice)
     container.appendChild(this.root)
+    // El toc de cada botón del menú (respeta el volumen: va por el mismo master que los efectos). El clic también
+    // despierta el audio, así la cuenta atrás ya suena.
+    this.root.addEventListener('click', (e) => {
+      const target = (e.target as HTMLElement | null)?.closest('button')
+      if (!target || target.disabled) return
+      game.sound.unlock()
+      game.sound.play('uiClick')
+      // En captura: antes que el botón, que puede desactivarse o quitarse de la pantalla al pulsarlo.
+    }, true)
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || e.repeat) return
       // Un keyup perdido (se cambió de ventana con Esc pulsado) no deja la marca puesta para la siguiente pausa.
@@ -116,7 +130,7 @@ export class MenuScreens {
       hasLobby: this.lobby !== null,
       inviteCode: this.lobby?.inviteCode() ?? null,
       choice: this.choice,
-      loading: false,
+      loading: this.loading,
     })
     if (base !== this.base) {
       this.base = base
@@ -125,6 +139,27 @@ export class MenuScreens {
     const key = this.top ?? base
     if (key !== (this.shown?.key ?? null)) this.rebuild()
     else this.shown?.view.update?.()
+  }
+
+  /**
+   * Si aún toca la pantalla de carga: hasta que no quede nada pendiente (o pase el tiempo). Si todo ha fallado se
+   * enseña (con "Recargar"), también si falla después del tiempo, hasta que se elija seguir sin los modelos.
+   */
+  private get loading(): boolean {
+    if (this.loadingSkipped) return false
+    const progress = this.game.loads.state
+    if (allFailed(progress)) return true
+    if (this.loadingOver) return false
+    if (pendingOf(progress) > 0) return true
+    this.loadingOver = true
+    return false
+  }
+
+  /** Deja de esperar a los modelos: `skip`, se ha elegido seguir sin ellos; si no, se ha pasado el tiempo. */
+  endLoading(skip = true) {
+    if (skip) this.loadingSkipped = true
+    this.loadingOver = true
+    this.refresh()
   }
 
   /** Abre una sub-pantalla encima. */
