@@ -19,3 +19,11 @@ describe('pantalla final', () => {
     expect(resultLines({ end: 'lost', day: 2, seconds: 5, players: [{ id: 0, deaths: 2, escaped: false }] }, nameOf)).toHaveLength(2)
   })
 })
+
+describe('pantalla final en solitario', () => {
+  it('en singular', () => {
+    const players = [{ id: 0, deaths: 0, escaped: false }]
+    expect(resultLines({ end: 'surrendered', day: 1, seconds: 5, players }, nameOf)[0]).toBe('Te has rendido')
+    expect(resultLines({ end: 'escaped', day: 1, seconds: 5, players: [{ id: 0, deaths: 0, escaped: true }] }, nameOf)[0]).toBe('¡Has escapado!')
+  })
+})

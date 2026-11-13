@@ -80,6 +80,8 @@ export function installLobby(game: Game) {
   let oldServerSince: number | null = null
   let nameValue = loadName()
   let roomDifficulty: Difficulty = 'normal'
+  /** Cuántos intentos de entrar se han empezado: uno que termina después de abandonarlo (volver al inicio) no cuenta. */
+  let attempts = 0
   const name = () => cleanName(nameValue) || DEFAULT_NAME
   // La vista previa del personaje (hasta el PR 2 del menú, con su propio lienzo), a la derecha del tablón.
   const skin = skinField(menu.preview, loadCharacter)
@@ -191,10 +193,9 @@ export function installLobby(game: Game) {
     home.type = 'button'
     home.textContent = 'Ir al menú principal'
     home.addEventListener('click', () => {
-      stopWaiting()
-      error = ''
+      cancel()
       setRoomInUrl(null)
-      menu.go(null)
+      menu.refresh()
     })
     const update = () => {
       code.textContent = roomFromUrl() ?? ''
@@ -305,12 +306,25 @@ export function installLobby(game: Game) {
     await attempt(open, room)
   }
 
+  /** Deja lo que se estuviera intentando (conectar, esperar por versión) y el error que hubiera. */
+  function cancel() {
+    attempts++
+    stopWaiting()
+    busy = false
+    error = ''
+  }
+
   async function attempt(open: () => Promise<NetSession>, room: string) {
+    const id = ++attempts
     busy = true
     error = ''
     update()
     try {
       const session = await open()
+      if (id !== attempts) {
+        session.close()
+        return
+      }
       oldServerSince = null
       game.setSession(session)
       setRoomInUrl(session.room)
@@ -321,6 +335,7 @@ export function installLobby(game: Game) {
       // En la sala de espera se está en el menú hasta que empiece la partida.
       if (session.client.match?.phase === 'playing') await game.play()
     } catch (e) {
+      if (id !== attempts) return
       busy = false
       if (!waitForVersion(e, open, room)) error = await failureMessage(e, room)
       update()
@@ -377,6 +392,8 @@ export function installLobby(game: Game) {
   menu.lobby = {
     inviteCode: () => roomFromUrl(),
     leave,
+    cancel,
+    status,
     beforeSolo: () => {
       stopWaiting()
       error = ''

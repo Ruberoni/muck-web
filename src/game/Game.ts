@@ -348,6 +348,7 @@ export class Game {
     this.gameOverDay = null
     this.matchPhase = this.net?.client.match?.phase ?? null
     this.menu.results = null
+    this.menu.voted = false
     this.lookFromPlayer()
     this.acc = 0
     this.snapPlayer = true
@@ -624,6 +625,8 @@ export class Game {
     const match = net.client.match
     if (!match || match.phase === this.matchPhase) return
     this.matchPhase = match.phase
+    // Cada partida de la sala tiene su votación.
+    this.menu.voted = false
     if (match.phase === 'playing') {
       this.menu.setResults(null)
       if (this.state !== 'menu') return

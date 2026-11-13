@@ -21,6 +21,10 @@ export interface LobbyHooks {
   leave(): void
   /** Antes de empezar en solitario: olvidar la sala de la URL y las esperas por versión. */
   beforeSolo(): void
+  /** Se ha vuelto al inicio desde unirse o la invitación: lo que estuviera conectando ya no cuenta. */
+  cancel(): void
+  /** La línea de estado de la conexión (en la pausa en red). */
+  status(): { text: string; error: boolean }
 }
 
 /** Las que son una tarjeta centrada sobre la partida; el resto, el tablón a la izquierda sobre la isla. */
@@ -46,6 +50,8 @@ export class MenuScreens {
   private shown: { key: Screen | SubScreen; view: ScreenView } | null = null
   /** El Esc que se acaba de usar para volver atrás: su keyup no debe reanudar. */
   private escapeUsed = false
+  /** La sub-pantalla que se acaba de cerrar: el foco vuelve al botón que la abrió. */
+  private returnTo: SubScreen | null = null
 
   choice: Choice | null = null
   /** `ready`: la partida de la sala ha empezado y falta entrar. Se borra al cambiar de estado. */
@@ -71,7 +77,10 @@ export class MenuScreens {
     this.root.append(this.preview, this.notice)
     container.appendChild(this.root)
     window.addEventListener('keydown', (e) => {
-      if (e.code !== 'Escape' || e.repeat || this.root.hidden) return
+      if (e.code !== 'Escape' || e.repeat) return
+      // Un keyup perdido (se cambió de ventana con Esc pulsado) no deja la marca puesta para la siguiente pausa.
+      this.escapeUsed = false
+      if (this.root.hidden) return
       const action = escapeAction(this.base, this.stack.length)
       if (action !== 'back') return
       this.escapeUsed = true
@@ -124,13 +133,18 @@ export class MenuScreens {
 
   /** Cierra la sub-pantalla de arriba o, sin ninguna, vuelve al inicio desde lo elegido en él. */
   back() {
-    if (this.stack.length) this.stack.pop()
-    else if (backFrom(this.base)) this.choice = null
+    if (this.stack.length) this.returnTo = this.stack.pop()!
+    else if (backFrom(this.base)) {
+      this.choice = null
+      this.lobby?.cancel()
+    }
     this.refresh()
+    this.returnTo = null
   }
 
   /** Va a lo elegido en el inicio (null: al inicio). */
   go(choice: Choice | null) {
+    if (choice === null && this.choice !== null) this.lobby?.cancel()
     this.choice = choice
     this.refresh()
   }
@@ -151,13 +165,13 @@ export class MenuScreens {
   }
 
   /**
-   * Si el keyup de Esc puede reanudar la pausa: no con una sub-pantalla abierta (Esc vuelve a la pausa) ni si su
-   * keydown ya se usó para volver atrás. Consume la marca de ese keydown.
+   * Si el keyup de Esc puede reanudar: solo en la pausa sin sub-pantallas (en la cuenta atrás, que también es
+   * `paused`, no), y no si su keydown ya se usó para volver atrás. Consume la marca de ese keydown.
    */
   escapeResumes(): boolean {
     const used = this.escapeUsed
     this.escapeUsed = false
-    return !used && this.stack.length === 0
+    return !used && escapeAction(this.base, this.stack.length) === 'resume'
   }
 
   private rebuild() {
@@ -188,7 +202,8 @@ export class MenuScreens {
     this.root.insertBefore(view.root, this.notice)
     this.shown = { key, view }
     view.update?.()
-    const first = view.root.querySelector<HTMLElement>('[data-autofocus]') ?? view.root.querySelector<HTMLElement>('button:not(:disabled), input, select')
+    const opener = this.returnTo && view.root.querySelector<HTMLElement>(`[data-opens="${this.returnTo}"]`)
+    const first = opener || view.root.querySelector<HTMLElement>('[data-autofocus]') || view.root.querySelector<HTMLElement>('button:not(:disabled), input, select')
     first?.focus({ preventScroll: true })
   }
 }

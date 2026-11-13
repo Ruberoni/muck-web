@@ -65,8 +65,8 @@ export function header(parent: HTMLElement, menu: MenuScreens, title: string) {
 /** Controles y Ajustes, uno al lado del otro (al pie del inicio). */
 export function subScreenButtons(parent: HTMLElement, menu: MenuScreens, kind = 'ghost') {
   const row = make('div', 'menu-row', parent)
-  button(row, 'Controles', kind, () => menu.push('controls'))
-  button(row, 'Ajustes', kind, () => menu.push('settings'))
+  button(row, 'Controles', kind, () => menu.push('controls')).dataset.opens = 'controls'
+  button(row, 'Ajustes', kind, () => menu.push('settings')).dataset.opens = 'settings'
   return row
 }
 
@@ -151,6 +151,8 @@ export function installCoreScreens(menu: MenuScreens) {
     difficultyCards(root, soloDifficulty, (d) => (soloDifficulty = d))
     const start = button(make('div', 'menu-foot menu-stack', root), 'Empezar', 'primary', () => {
       menu.lobby?.beforeSolo()
+      // Ya no se está eligiendo: si no se puede capturar el ratón se queda en el inicio, con el aviso.
+      menu.choice = null
       void game.playSolo(soloDifficulty)
     })
     start.dataset.primary = ''
@@ -171,10 +173,16 @@ export function installCoreScreens(menu: MenuScreens) {
       menu.refresh()
     })
     const leave = button(actions, 'Salir de la sala', 'ghost', () => menu.lobby?.leave())
+    const status = make('p', 'menu-status', root)
+    status.setAttribute('role', 'status')
     const update = () => {
       const net = game.net
       const match = net?.client.match ?? null
       online.hidden = !net
+      const line = net && menu.lobby ? menu.lobby.status() : { text: '', error: false }
+      status.textContent = line.text
+      status.classList.toggle('error', line.error)
+      status.hidden = !line.text
       leave.hidden = !net || !menu.lobby
       // En una sala solo se vota mientras se juega.
       surrender.hidden = !!net && match?.phase !== 'playing'
