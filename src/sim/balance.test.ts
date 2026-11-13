@@ -7,10 +7,10 @@ import type { ItemId } from './inventory'
 import { pickIsland } from './islands'
 import { clockOf, DIFFICULTIES, workFactor, type MatchRules } from './match'
 import { generatePropPlacements, propCounts, type PropKind } from './props'
-import { FUEL_SECONDS, STATION_DEFS } from './stations'
+import { fuelSeconds, STATION_DEFS } from './stations'
 import type { StructureKind } from './structures'
 import { attackDamage, propDamage, swingCooldown } from './tiers'
-import { DayClock } from './world/daycycle'
+import { DAY_LENGTH, DayClock, NIGHT_LENGTH } from './world/daycycle'
 
 /** Jugadores de una sala llena (MAX_PLAYERS en src/net/protocol.ts, que src/sim no importa). */
 const MAX_PLAYERS = 5
@@ -40,7 +40,8 @@ type Amounts = Partial<Record<ItemId, number>>
 function processCost(item: ItemId): Amounts | null {
   for (const def of Object.values(STATION_DEFS)) {
     const process = def!.processes.find((p) => p.output === item)
-    if (process) return { [process.input]: process.amount, ...(def!.fuel ? { wood: process.time / FUEL_SECONDS.wood! } : {}) }
+    // La fogata arde siempre, cocine o no: su leña va aparte (en el presupuesto del combustible), no en la carne asada.
+    if (process) return { [process.input]: process.amount, ...(def!.fuel && !def!.alwaysBurns ? { wood: process.time / def!.fuel.wood! } : {}) }
   }
   return null
 }
@@ -405,8 +406,17 @@ describe('equilibrio: el combustible', () => {
     // relajarse solo porque el aceite dure más.
     const oil = 10 * 7 * 60
     const { coal, wood, dry_wood } = supply()
-    expect((coal! * FUEL_SECONDS.coal!) / (smelt + oil)).toBeGreaterThan(1.5)
+    const sec = (item: ItemId) => fuelSeconds('furnace', item)!
+    expect((coal! * sec('coal')) / (smelt + oil)).toBeGreaterThan(1.5)
     // Sin carbón: la madera seca y la mitad de la madera de la isla también llegan (la otra mitad, para construir).
-    expect(dry_wood! * FUEL_SECONDS.dry_wood! + wood! * FUEL_SECONDS.wood! * 0.5).toBeGreaterThan(smelt + oil)
+    expect(dry_wood! * sec('dry_wood') + wood! * sec('wood') * 0.5).toBeGreaterThan(smelt + oil)
+  })
+
+  it('una fogata encendida todo el día gasta 6 maderas, y todas las noches de una partida larga caben en la madera de la isla', () => {
+    const night = NIGHT_LENGTH
+    expect(DAY_LENGTH / fuelSeconds('campfire', 'wood')!).toBe(6)
+    // Veinte noches con la fogata encendida, sin abedul ni madera oscura: no llega a la décima parte de la madera.
+    const nights = Math.ceil((20 * night) / fuelSeconds('campfire', 'wood')!)
+    expect(nights).toBeLessThan(supply().wood! * 0.1)
   })
 })

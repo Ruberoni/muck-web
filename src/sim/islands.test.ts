@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { islandProblems, pickIsland } from './islands'
 import { FLOAT_DEPTH, PROP_DEFS, WORLD_BOUND_FACTOR } from './constants'
 import { findSpawn, createPropWorld, generatePropPlacements, PROP_COUNTS, propCounts, type PropKind } from './props'
-import { FUEL_SECONDS } from './stations'
+import { fuelSeconds } from './stations'
 import { WATER_LEVEL, WORLD_SIZE } from './world/terrain'
 import { Simulation } from './Simulation'
 import { createIsland, DEFAULT_ISLAND, ISLAND_SIZE } from './world/island'
@@ -118,6 +118,7 @@ describe('islas de partida', () => {
     expect([...biomes].every((b) => b !== 'forest')).toBe(true)
     expect(biomes.has('beach') || biomes.has('mountain')).toBe(true)
     expect(PROP_DEFS.deadtree).toMatchObject({ tool: 'axe', tier: 2, drop: { item: 'dry_wood' } })
-    expect(FUEL_SECONDS.dry_wood).toBe(FUEL_SECONDS.wood! * 2)
+    expect(fuelSeconds('furnace', 'dry_wood')).toBe(fuelSeconds('furnace', 'wood')! * 2)
+    expect(fuelSeconds('campfire', 'dry_wood')).toBe(fuelSeconds('campfire', 'wood')! * 1.5)
   })
 })

@@ -19,7 +19,7 @@ import { STATION_SLOTS, type StationSlot } from '../sim/stations'
  * rechaza un `hello` de otra versión y descarta una isla guardada con otra. CI falla si un PR toca src/sim,
  * este archivo, server/ o package-lock.json sin subirla (scripts/check-protocol-version.sh).
  */
-export const PROTOCOL_VERSION = 67
+export const PROTOCOL_VERSION = 68
 
 /** Códigos de sala: 5 caracteres sin los que se confunden (0/O, 1/I/L). */
 export const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'

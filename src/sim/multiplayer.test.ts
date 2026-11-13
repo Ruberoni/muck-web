@@ -12,7 +12,7 @@ import { createPropWorld, generatePropPlacements, type PropData } from './props'
 import { quickProps } from './quickProps'
 import { mulberry32 } from './random'
 import { Simulation } from './Simulation'
-import { FUEL_SECONDS, processOf } from './stations'
+import { fuelSeconds, processOf, STATION_DEFS } from './stations'
 import type { Structure } from './structures'
 import { DAY_FRACTION } from './world/daycycle'
 import { heightAt, ROCK_LEVEL, SAND_LEVEL } from './world/terrain'
@@ -70,7 +70,7 @@ function stepAll(sim: Simulation, commands: Record<PlayerId, Command> = {}) {
 function useStation(sim: Simulation, station: Structure, input: ItemId, amount: number, id: PlayerId = 0) {
   const { player, inventory } = sim.slot(id)
   const process = processOf(station.kind, input)!
-  const wood = Math.ceil((amount * process.time) / process.amount / FUEL_SECONDS.wood!)
+  const wood = STATION_DEFS[station.kind]!.fuel ? Math.ceil((amount * process.time) / process.amount / fuelSeconds(station.kind, 'wood')!) : 0
   const put = (item: ItemId, slot: 'input' | 'fuel', times: number): ActionData[] =>
     Array.from({ length: times }, () => ({ kind: 'station', id: station.id, slot, from: inventory.slots.indexOf(item), all: false }))
   stepAll(sim, { [id]: { actions: [...put(input, 'input', amount), ...(station.station!.fuel === null && wood ? put('wood', 'fuel', wood) : [])] } })

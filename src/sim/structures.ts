@@ -7,7 +7,7 @@ import { SpatialGrid, type Collider } from './collision'
 import { LOCAL_PLAYER, NO_EMIT, type Emit, type PlayerId } from './events'
 import type { Inventory, ItemId } from './inventory'
 import { OIL_MAX, PLACE_DISTANCE, PLANE_HP } from './constants'
-import { copyStation, followStation, newStation, STATION_DEFS, stepStation, type StationState } from './stations'
+import { copyStation, followStation, isLit, newStation, STATION_DEFS, stepStation, type StationState } from './stations'
 import type { Vec3 } from './player'
 import { copyShop, newShop, type ShopState } from './merchant'
 
@@ -153,6 +153,9 @@ export function structureSpot(
  * borde de la estación. La usan la simulación (con STATION_RANGE) y el cliente (con algo menos, para no fabricar en
  * el borde y acabar en una corrección).
  */
+/** Si es una fogata encendida: solo así da luz, suena y cocina. */
+export const isLitCampfire = (s: Structure): boolean => s.kind === 'campfire' && !!s.station && isLit(s.station)
+
 export function stationNear(structures: readonly Structure[], kind: StructureKind, pos: Vec3, range: number): boolean {
   return structures.some((s) => s.kind === kind && Math.hypot(s.x - pos.x, s.z - pos.z) - s.radius <= range)
 }

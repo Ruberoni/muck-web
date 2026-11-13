@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { isLit } from './stations'
 import { Btn, type Action, type ActionData, type Move } from './commands'
 import { BERRY_REGROW, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
 import { aimPose } from './interaction'
@@ -173,13 +174,19 @@ describe('Simulation', () => {
     expect(inventory.count('raw_meat')).toBe(1)
   })
 
-  it('en una fogata se cocina sola, sin combustible: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
+  it('en una fogata con leña se cocina: la carne asada llena el triple que las bayas y cura; la infusión cura poco a poco', () => {
     const sim = solo(1)
     const { inventory, player } = sim.slot(0)
     inventory.add('raw_meat', 2)
     inventory.add('berry', 4)
+    inventory.add('wood', 1)
     const fire = sim.structures.place(structureSpot(player.pos, 0, STRUCTURE_DEFS.campfire.radius, [sim.world.grid, sim.structures.grid]), 'campfire')!
-    const tend = (slot: 'input' | 'output', from: number | null, all: boolean) => step(sim, { actions: [{ kind: 'station', id: fire.id, slot, from, all }] })
+    const tend = (slot: 'input' | 'fuel' | 'output', from: number | null, all: boolean) => step(sim, { actions: [{ kind: 'station', id: fire.id, slot, from, all }] })
+    // Se coloca apagada: sin leña la carne no se haría.
+    expect(isLit(fire.station!)).toBe(false)
+    expect(tend('fuel', inventory.slots.indexOf('wood'), true).map((e) => e.type)).toContain('stationChanged')
+    expect(isLit(fire.station!)).toBe(true)
+    expect(inventory.count('wood')).toBe(0)
     // Una carne a la entrada: la fogata solo tiene una, así que las bayas esperan a que acabe.
     expect(tend('input', inventory.slots.indexOf('raw_meat'), false).map((e) => e.type)).toContain('stationChanged')
     expect(inventory.toJSON()).toEqual({ raw_meat: 1, berry: 4 })

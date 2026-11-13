@@ -28,7 +28,7 @@ import { compassName } from '../ui/minimap'
 import { usableNear } from '../sim/builds'
 import { maxHealthOf } from '../sim/boosts'
 import { clockTexts, lightText, planeText, threatText } from '../ui/clockText'
-import { usePrompt } from '../ui/usePrompt'
+import { stationPrompt, usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
@@ -38,7 +38,7 @@ import { BIOME_NAMES } from '../sim/world/biomes'
 import type { Island } from '../sim/world/island'
 import { createTerrain } from '../world/terrain'
 import { WATER_LEVEL } from '../sim/world/terrain'
-import { placeableOf, structureSpot, type StructureKind, type StructureSpot } from '../sim/structures'
+import { isLitCampfire, placeableOf, structureSpot, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
 import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
@@ -1157,6 +1157,7 @@ export class Game {
     const usable = this.state === 'playing' ? usableNear(structures.list, p.pos) : null
     // El contorno va en lo que se puede usar ahora: con la tecla de uso (cerca) o abriéndolo con el clic derecho (mirándolo).
     this.structureView.setOutline(usable ?? (this.state === 'playing' ? aimedStation(structures.list, p.pos, this.look.yaw, CLIENT_STATION_RANGE) : null))
+    let processor: Structure | null = null
     if (net?.closed) this.hud.setPrompt('Sin conexión con el servidor')
     else if (net?.status === 'reconnecting') this.hud.setPrompt(net.waitReason ?? 'Reconectando…')
     else if (this.state === 'spectating' && !net) this.hud.setPrompt(this.waitingToRespawn())
@@ -1165,7 +1166,9 @@ export class Game {
     else if (missing) this.hud.setPrompt(`Necesitas ${missing}`)
     else if (slot.inventoryFull && !slot.target) this.hud.setPrompt('Inventario lleno')
     else if (usable && !slot.target) this.hud.setPrompt(usePrompt(usable, sim.rules, sim.threat.state.totem, this.useKey))
-    else if (!slot.target && nearestProcessor(structures.list, p.pos, CLIENT_STATION_RANGE)?.shop) this.hud.setPrompt(`Mercader — ${this.useKey} para comprar y vender`)
+    // El mercader o la estación de al lado solo se buscan si no gana un aviso de antes.
+    else if (!slot.target && (processor = nearestProcessor(structures.list, p.pos, CLIENT_STATION_RANGE))?.shop) this.hud.setPrompt(`Mercader — ${this.useKey} para comprar y vender`)
+    else if (processor?.station) this.hud.setPrompt(stationPrompt(processor, this.useKey))
     else this.hud.setTarget(slot.target, slot.inventory.selectedItem)
     if (this.state === 'inventory') {
       this.hud.inventory.updateRecipes(this.craftWorld, p.pos)
@@ -1173,7 +1176,7 @@ export class Game {
       const station = this.openStationId === null ? undefined : this.sim.structures.byId(this.openStationId)
       const near = station && Math.hypot(station.x - p.pos.x, station.z - p.pos.z) - station.radius <= CLIENT_STATION_RANGE
       if (!near) this.openStationId = null
-      this.hud.inventory.setStation(near ? station : null, this.sim.threat.canForget, p.boosts)
+      this.hud.inventory.setStation(near ? station : null, this.sim.threat.canForget, p.boosts, sim.rules)
     }
     this.hud.setClock(clockTexts(sim.clock))
     const boss = enemies.list.find((e) => ENEMY_DEFS[e.type].boss)
@@ -1192,7 +1195,7 @@ export class Game {
       z: this.renderPos.z,
       yaw: look.yaw,
       // La tumba hay que encontrarla: en el mapa solo sale cuando la luz la delata.
-      structures: structures.list.filter((s) => s.kind !== 'grave' || sim.threat.state.totem),
+      structures: sim.threat.state.totem ? structures.list : structures.list.filter((s) => s.kind !== 'grave'),
       // En la Noche Eterna solo se ve lo que hay delante.
       enemies: sim.clock.eternal ? [] : enemies.list,
       meteor: sim.worldEvents.meteor,
@@ -1230,7 +1233,7 @@ export class Game {
     const { sim } = this
     let nearest = Infinity
     for (const s of sim.structures.list) {
-      if (s.kind === 'campfire') nearest = Math.min(nearest, Math.hypot(s.x - this.renderPos.x, s.z - this.renderPos.z))
+      if (isLitCampfire(s)) nearest = Math.min(nearest, Math.hypot(s.x - this.renderPos.x, s.z - this.renderPos.z))
     }
     // En una sala el mundo sigue en pausa, y su ambiente también. Con el inventario abierto también sigue.
     const online = this.net !== null && !this.net.closed

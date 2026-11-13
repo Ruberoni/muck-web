@@ -1,5 +1,6 @@
 import { ENEMY_DEFS, type EnemyType } from '../sim/constants'
 import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
+import { isLit, type StationState } from '../sim/stations'
 import type { StructureKind } from '../sim/structures'
 import { biomeBlend, DEEP, terrainColor } from '../world/ground'
 
@@ -27,6 +28,25 @@ export const STRUCTURE_MARKS: Record<StructureKind, { shape: 'dot' | 'square'; n
   merchant: { shape: 'dot', near: '#c46bff', far: '#e2b8ff' },
 }
 
+/** Una fogata apagada sale gris: así se ve desde lejos cuál hay que avivar. */
+const UNLIT_MARK = { near: '#8f8a84', far: '#bdb8b1' }
+
+/** El color de la marca de una estructura, de cerca o de lejos: gris si es una fogata apagada. */
+export function structureColor(s: MinimapStructure, far: boolean): string {
+  const unlit = s.kind === 'campfire' && !(s.station && isLit(s.station))
+  const mark = unlit ? UNLIT_MARK : STRUCTURE_MARKS[s.kind]
+  return far ? mark.far : mark.near
+}
+
+/** Una estructura en el minimapa. */
+export interface MinimapStructure {
+  kind: StructureKind
+  x: number
+  z: number
+  /** Lo que hay dentro, si procesa: de una fogata dice si está encendida. */
+  station?: StationState | null
+}
+
 /** Cómo se marca el meteorito: como las estructuras, de cerca y de lejos. */
 const METEOR_MARK = { near: '#ff7a1f', far: '#ffb347' }
 
@@ -52,7 +72,7 @@ export interface MinimapView {
   x: number
   z: number
   yaw: number
-  structures: readonly { kind: StructureKind; x: number; z: number }[]
+  structures: readonly MinimapStructure[]
   enemies: readonly { type: EnemyType; pos: { x: number; z: number } }[]
   /** El meteorito que haya, cayendo o en el suelo. */
   meteor: { x: number; z: number } | null
@@ -203,7 +223,7 @@ export class Minimap {
       toMinimap(s.x - view.x, s.z - view.z, view.yaw, p)
       const far = clampToRim(p, rim)
       const mark = STRUCTURE_MARKS[s.kind]
-      ctx.fillStyle = far ? mark.far : mark.near
+      ctx.fillStyle = structureColor(s, far)
       const r = far ? 3.5 : 4.5
       if (mark.shape === 'dot') this.dot(c + p.x * scale, c + p.y * scale, r)
       else this.square(c + p.x * scale, c + p.y * scale, r)

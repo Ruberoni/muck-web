@@ -18,7 +18,12 @@ function setup() {
   const scene = new THREE.Scene()
   const fires = new Structures()
   const view = new StructureView(scene)
-  const place = (spot: StructureSpot) => fires.place(spot, 'campfire')
+  // Las fogatas se colocan apagadas: estas ya tienen leña, salvo que se diga lo contrario.
+  const place = (spot: StructureSpot, lit = true) => {
+    const fire = fires.place(spot, 'campfire')!
+    if (lit) fire.station!.fuel = { item: 'wood', amount: 1 }
+    return fire
+  }
   const update = (phase = 0.8, viewer = { x: 0, z: 0 }) => view.update(0, phase, viewer, fires.list)
   return { scene, fires, view, update, place }
 }
@@ -66,6 +71,23 @@ describe('StructureView', () => {
     // La más lejana se queda sin luz.
     const farthest = 10 + CAMPFIRE_LIGHTS * 3
     expect(lights.some((l) => l.position.x === farthest)).toBe(false)
+  })
+
+  it('una fogata apagada no da luz ni enseña la llama, y la luz se va a la encendida aunque esté más lejos', () => {
+    const { scene, view, place, update } = setup()
+    const [light] = lightsOf(scene)
+    const out = place({ x: 0, y: 5, z: 0, valid: true }, false)
+    update()
+    expect(lightsOf(scene).every((l) => l.intensity === 0)).toBe(true)
+    expect(view.modelOf(out.id)!.flame!.visible).toBe(false)
+    const lit = place({ x: 8, y: 5, z: 0, valid: true })
+    update()
+    expect(light.intensity).toBeGreaterThan(0)
+    expect(light.position.x).toBe(8)
+    expect(view.modelOf(lit.id)!.flame!.visible).toBe(true)
+    out.station!.burn = 30
+    update()
+    expect(view.modelOf(out.id)!.flame!.visible).toBe(true)
   })
 
   it('de noche ilumina bastante más que a mediodía', () => {

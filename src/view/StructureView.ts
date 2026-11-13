@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { sunDirection } from '../world/daycycle'
 import { CAMPFIRE_LIGHT_DISTANCE, CAMPFIRE_LIGHT_INTENSITY, CAMPFIRE_LIGHTS } from '../sim/constants'
-import { STRUCTURE_DEFS, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
+import { isLitCampfire, STRUCTURE_DEFS, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
 import { ISLAND_SIZE } from '../sim/world/island'
 
 const LIGHT_HEIGHT = 0.8
@@ -438,7 +438,10 @@ export class StructureView {
     let model = this.ghosts.get(kind)
     if (!model) {
       const g = this.ghostMaterial
-      model = MODELS[kind](() => g, false).root
+      const built = MODELS[kind](() => g, false)
+      model = built.root
+      // La fogata se coloca apagada: su vista previa, sin llama.
+      if (kind === 'campfire' && built.flame) built.flame.visible = false
       this.ghosts.set(kind, model)
       this.scene.add(model)
     }
@@ -494,7 +497,12 @@ export class StructureView {
     for (const s of structures) {
       const model = this.models.get(s.id)!
       if (model.flame) model.flame.scale.set(1, flicker(s.id) + 0.1, 1)
-      if (s.kind === 'campfire') this.fires.push(s)
+      // Apagada, la fogata se queda en la leña: sin llama ni luz.
+      if (s.kind === 'campfire') {
+        const lit = isLitCampfire(s)
+        if (model.flame) model.flame.visible = lit
+        if (lit) this.fires.push(s)
+      }
       this.showProgress(model, s)
       if (model.beam) {
         model.beam.visible = s.kind === 'grave' ? awake && !s.opened : (s.fire?.burning ?? false)
