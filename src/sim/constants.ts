@@ -728,6 +728,8 @@ export const TOTEM_HOLD = 3
 export const PLANE_HP = 600
 export const MOTOR_TIME = 90
 export const PLANE_BOARD = 8
+/** Segundos que espera el avión, con el motor caliente, desde que sube el primero hasta despegar sin los que falten. */
+export const PLANE_WAIT = 60
 export const PLANE_REPAIR_WOOD = 10
 /** Segundos que hay que mantener la tecla de uso para abrir una tumba. */
 export const GRAVE_HOLD = 3

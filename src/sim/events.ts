@@ -104,6 +104,8 @@ export type SimEventData =
   /** Al activar el tótem cae el avión en llamas (la estructura llega en su `structurePlaced`). */
   | { type: 'planeCrashed'; id: number; x: number; z: number }
   | { type: 'planeChanged'; id: number; plane: PlaneState }
+  /** Alguien ha subido al avión con el motor caliente: empieza la espera de PLANE_WAIT segundos a los demás. */
+  | { type: 'planeBoarding'; id: number; x: number; z: number }
   /** Se ha abierto una tumba: ha nacido su jefe. */
   | { type: 'graveOpened'; id: number }
   /** Un pico ha roto la coraza de un jefe de luz. */
