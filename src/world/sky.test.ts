@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { DAY_FRACTION, DAY_LENGTH, DayClock, NIGHT_LENGTH } from '../sim/world/daycycle'
-import { createSkyState, moonPhaseOf, sampleSky, SKY_AXIS, skyPhase, sunDirection } from './daycycle'
+import { BLOOD_RAMP, bloodOf, createSkyState, moonPhaseOf, sampleSky, SKY_AXIS, skyPhase, sunDirection } from './daycycle'
 import { MOON_DISTANCE, STAR_COUNT, SUN_DISTANCE, SkyView, starsOf } from './sky'
 
 const eye = new THREE.Vector3(12, 30, -40)
@@ -205,16 +205,56 @@ describe('Noche Eterna en el cielo', () => {
   })
 
   it('parado, la luna queda a unos 60° hacia el lado donde culmina el sol, y las estrellas quietas', () => {
-    const moon = sunDirection(MIDNIGHT).negate()
+    const clock = eternalClock()
+    clock.elapsed = clock.eternalAt + NIGHT_LENGTH + 1
+    // El cielo se para justo donde se para el reloj.
+    expect(skyPhase(clock)).toBe(clock.phase)
+    const moon = sunDirection(skyPhase(clock)).negate()
     expect(THREE.MathUtils.radToDeg(Math.asin(moon.y))).toBeCloseTo(60, 6)
     expect(moon.z).toBeGreaterThan(0)
     expect(sunDirection(DAY_FRACTION / 2).z).toBeGreaterThan(0)
-    const a = viewAt(MIDNIGHT).view.stars.quaternion.clone()
-    const b = viewAt(MIDNIGHT).view.stars.quaternion
+    const a = viewAt(skyPhase(clock)).view.stars.quaternion.clone()
+    clock.elapsed += 500
+    const b = viewAt(skyPhase(clock)).view.stars.quaternion
     expect(a.equals(b)).toBe(true)
   })
 
-  it('la luna es roja si y solo si es luna de sangre, también junto al faro (sin niebla)', () => {
+  it('la luna de sangre sale del reloj: 0 en el menú y antes, 1 en la Noche Eterna, sin saltos', () => {
+    const menu = new DayClock()
+    for (const t of [0, 100, 1e5]) {
+      menu.elapsed = t
+      expect(bloodOf(menu)).toBe(0)
+      expect(skyPhase(menu)).toBe(menu.phase)
+    }
+    const clock = eternalClock()
+    clock.elapsed = clock.eternalAt - BLOOD_RAMP - 1
+    expect(bloodOf(clock)).toBe(0)
+    clock.elapsed = clock.eternalAt
+    expect(bloodOf(clock)).toBe(1)
+    clock.elapsed = clock.eternalAt + 5000
+    expect(bloodOf(clock)).toBe(1)
+    let prev = 0
+    for (let t = clock.eternalAt - BLOOD_RAMP; t <= clock.eternalAt; t += 0.05) {
+      clock.elapsed = t
+      expect(Math.abs(bloodOf(clock) - prev)).toBeLessThan(0.02)
+      prev = bloodOf(clock)
+    }
+  })
+
+  it('mientras sale, la luna no cambia de golpe al caer la Noche Eterna', () => {
+    const clock = eternalClock()
+    const at = (elapsed: number) => {
+      clock.elapsed = elapsed
+      const { view } = viewAt(skyPhase(clock), 0, 0.5, bloodOf(clock))
+      return { lit: (view.moon.material.uniforms.lit.value as THREE.Color).clone(), halo: view.moonHalo.scale.x }
+    }
+    const before = at(clock.eternalAt - 1e-3)
+    const after = at(clock.eternalAt)
+    expect(Math.abs(before.lit.r - after.lit.r) + Math.abs(before.lit.g - after.lit.g) + Math.abs(before.lit.b - after.lit.b)).toBeLessThan(1e-3)
+    expect(Math.abs(before.halo - after.halo)).toBeLessThan(1e-2)
+  })
+
+  it('la luna es roja si y solo si es luna de sangre, aunque la niebla se abra junto al faro', () => {
     const night = MIDNIGHT
     const normal = viewAt(night, 0, 0.5, 0).view.moon.material.uniforms.lit.value as THREE.Color
     expect(normal.r).toBeCloseTo(normal.g, 1)

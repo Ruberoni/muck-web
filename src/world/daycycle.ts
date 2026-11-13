@@ -37,6 +37,18 @@ export function skyPhase(clock: Pick<DayClock, 'phase' | 'eternal' | 'elapsed' |
   return DAY_FRACTION + (MIDNIGHT - DAY_FRACTION) * (1 - (1 - s) * (1 - s))
 }
 
+/** Segundos antes de la Noche Eterna en los que la luna, que ya asoma por el horizonte, se va poniendo roja. */
+export const BLOOD_RAMP = 6
+
+/**
+ * Cuánto es luna de sangre (0..1): sale solo del reloj, no de la niebla (que baja junto al faro), así que junto al faro
+ * sigue roja. Sube del todo durante los `BLOOD_RAMP` segundos antes de la Noche Eterna, mientras la luna sale, para no
+ * cambiar de golpe. En el menú (sin Noche Eterna, `eternalAt` infinito) es 0.
+ */
+export function bloodOf(clock: Pick<DayClock, 'elapsed' | 'eternalAt'>) {
+  return THREE.MathUtils.smoothstep(clock.elapsed, clock.eternalAt - BLOOD_RAMP, clock.eternalAt)
+}
+
 /** Fase de la luna (0 nueva, 0,25 cuarto creciente, 0,5 llena, 0,75 cuarto menguante) por noches que faltan para la llena. */
 const WAXING = [0.5, 0.38, 0.32, 0.25, 0.1]
 /** Sin Noche Eterna (el menú): un ciclo de fases que se repite cada tantas noches, sin luna nueva. */
