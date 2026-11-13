@@ -1144,7 +1144,7 @@ export class Game {
       this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
     )
     this.lighthouseGlow = THREE.MathUtils.damp(this.lighthouseGlow, structures.burning ? 1 : 0, LIGHTHOUSE_FADE, dt)
-    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.eternalFog(), this.lighthouseGlow)
+    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.camera.position, this.eternalFog(), this.lighthouseGlow)
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot, sim.island) : null
@@ -1215,6 +1215,8 @@ export class Game {
     this.handheld.setShield(slot.inventory.equipped.shield, p.blocking)
     this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
     this.renderer.clear()
+    // Primero el cielo (no escribe profundidad) y encima la isla.
+    this.renderer.render(this.sky.view.scene, this.camera)
     this.renderer.render(this.scene, this.camera)
     // La mano no se dibuja muerto ni bajo la pantalla de inventario.
     if (this.state !== 'dead' && this.state !== 'spectating' && this.state !== 'inventory') this.handheld.render(this.renderer)

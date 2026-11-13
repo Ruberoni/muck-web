@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { createSkyState, sampleSky } from './world/daycycle'
 import type { Island } from './sim/world/island'
+import { SkyView } from './world/sky'
 import { createTerrain, createWater } from './world/terrain'
 
 const SUN_DISTANCE = 150
@@ -28,8 +29,8 @@ const LIGHTHOUSE_TINT = new THREE.Color('#ffe9a8')
 /** La escena con la isla `island` (la malla del terreno se cambia con otra isla: ver Game). */
 export function createScene(island: Island) {
   const scene = new THREE.Scene()
+  // El fondo es el cielo, que se dibuja antes en su propia escena: esta no borra el color (ver Game.render).
   const background = new THREE.Color()
-  scene.background = background
   const fog = new THREE.Fog(background, 120, 320)
   scene.fog = fog
 
@@ -56,7 +57,8 @@ export function createScene(island: Island) {
   const water = createWater()
   scene.add(terrain, water)
 
-  const sky = { background, fog, hemi, sun }
+  const view = new SkyView(background)
+  const sky = { background, fog, hemi, sun, view }
   return { scene, sky, water, terrain }
 }
 
@@ -65,15 +67,16 @@ export type Sky = ReturnType<typeof createScene>['sky']
 /**
  * Aplica la hora del día (`phase`, ver DayClock) a cielo, niebla y luces, y centra la cámara
  * de sombras en `center` (normalmente por delante del jugador), ajustada a la rejilla de texels
- * en el espacio de la luz para que las sombras no parpadeen. `eternal`: cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1;
+ * en el espacio de la luz para que las sombras no parpadeen. La cúpula y el sol siguen a la cámara, en `eye`. `eternal`: cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1;
  * `lighthouse`: cuánto se nota el faro encendido, de 0 a 1.
  */
-export function updateSky(sky: Sky, phase: number, center: THREE.Vector3, eternal = 0, lighthouse = 0) {
+export function updateSky(sky: Sky, phase: number, center: THREE.Vector3, eye: THREE.Vector3, eternal = 0, lighthouse = 0) {
   sampleSky(phase, state)
   sky.background.copy(state.sky).lerp(ETERNAL_FOG, eternal)
   sky.fog.color.copy(sky.background)
   sky.fog.near = THREE.MathUtils.lerp(state.fogNear, ETERNAL_FOG_NEAR, eternal)
   sky.fog.far = THREE.MathUtils.lerp(state.fogFar, ETERNAL_FOG_FAR, eternal)
+  sky.view.update(state, phase, eye, sky.background, eternal)
   sky.hemi.color.copy(state.hemiSky).lerp(LIGHTHOUSE_TINT, lighthouse * 0.5)
   sky.hemi.groundColor.copy(state.hemiGround)
   sky.hemi.intensity = THREE.MathUtils.lerp(state.hemiIntensity, Math.max(state.hemiIntensity, LIGHTHOUSE_HEMI), lighthouse)

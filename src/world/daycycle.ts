@@ -17,7 +17,19 @@ export interface SkyState {
   lightDir: THREE.Vector3
   lightColor: THREE.Color
   lightIntensity: number
+  /** Color del horizonte y de la niebla. */
   sky: THREE.Color
+  /** Color del cielo en lo alto. */
+  zenith: THREE.Color
+  /** Brillo del cielo alrededor del sol: su color, cuánto se nota (0..1) y lo concentrado que va (exponente). */
+  glow: THREE.Color
+  glowStrength: number
+  glowPower: number
+  /** Cuánto se nota el amanecer o el atardecer: 1 con el sol en el horizonte, 0 con el sol alto o bien escondido. */
+  sunset: number
+  /** El disco del sol: su color y su tamaño relativo (1 a mediodía, mayor en el horizonte). */
+  sunColor: THREE.Color
+  sunScale: number
   hemiSky: THREE.Color
   hemiGround: THREE.Color
   hemiIntensity: number
@@ -30,6 +42,13 @@ export const createSkyState = (): SkyState => ({
   lightColor: new THREE.Color(),
   lightIntensity: 0,
   sky: new THREE.Color(),
+  zenith: new THREE.Color(),
+  glow: new THREE.Color(),
+  glowStrength: 0,
+  glowPower: 1,
+  sunset: 0,
+  sunColor: new THREE.Color(),
+  sunScale: 1,
   hemiSky: new THREE.Color(),
   hemiGround: new THREE.Color(),
   hemiIntensity: 0,
@@ -41,6 +60,7 @@ interface SkyStop {
   /** Altura del sol (y de su dirección). */
   elevation: number
   sky: THREE.Color
+  zenith: THREE.Color
   hemiSky: THREE.Color
   hemiGround: THREE.Color
   hemiIntensity: number
@@ -48,9 +68,10 @@ interface SkyStop {
   fogFar: number
 }
 
-const stop = (elevation: number, sky: string, hemiSky: string, hemiGround: string, hemiIntensity: number, fogNear: number, fogFar: number): SkyStop => ({
+const stop = (elevation: number, sky: string, zenith: string, hemiSky: string, hemiGround: string, hemiIntensity: number, fogNear: number, fogFar: number): SkyStop => ({
   elevation,
   sky: new THREE.Color(sky),
+  zenith: new THREE.Color(zenith),
   hemiSky: new THREE.Color(hemiSky),
   hemiGround: new THREE.Color(hemiGround),
   hemiIntensity,
@@ -60,16 +81,21 @@ const stop = (elevation: number, sky: string, hemiSky: string, hemiGround: strin
 
 // Ordenados por altura del sol. Amanecer y atardecer comparten colores.
 const STOPS: SkyStop[] = [
-  stop(-0.35, '#0b1630', '#41598f', '#1b2616', 0.55, 50, 220),
-  stop(-0.1, '#26305a', '#5a6aa0', '#232e1c', 0.6, 60, 240),
-  stop(0, '#e8956b', '#f5c19a', '#4a5a30', 0.9, 90, 280),
-  stop(0.12, '#c9d6d8', '#e6e2d6', '#58723a', 1.2, 110, 310),
-  stop(0.3, '#9fd4f0', '#d6ecff', '#5d7a3a', 1.4, 120, 320),
+  stop(-0.35, '#0b1630', '#03081a', '#41598f', '#1b2616', 0.55, 50, 220),
+  stop(-0.1, '#26305a', '#0f1538', '#5a6aa0', '#232e1c', 0.6, 60, 240),
+  stop(0, '#e8956b', '#3d4f86', '#f5c19a', '#4a5a30', 0.9, 90, 280),
+  stop(0.12, '#c9d6d8', '#6f9fd0', '#e6e2d6', '#58723a', 1.2, 110, 310),
+  stop(0.3, '#9fd4f0', '#4c97dc', '#d6ecff', '#5d7a3a', 1.4, 120, 320),
 ]
 
 const SUN_INTENSITY = 2.6
 const SUN_HIGH = new THREE.Color('#fff3d6')
 const SUN_LOW = new THREE.Color('#ff9a5a')
+// El disco del sol y el brillo que lo rodea: blanco cálido arriba, naranja en el horizonte.
+const SUN_DISK_HIGH = new THREE.Color('#fff8e0')
+const SUN_DISK_LOW = new THREE.Color('#ff9440')
+const GLOW_HIGH = new THREE.Color('#fff2cc')
+const GLOW_LOW = new THREE.Color('#ff7a3a')
 const MOON_INTENSITY = 0.45
 const MOON_COLOR = new THREE.Color('#a9bcff')
 
@@ -91,6 +117,17 @@ export function sampleSky(phase: number, out: SkyState) {
   out.hemiIntensity = THREE.MathUtils.lerp(a.hemiIntensity, b.hemiIntensity, t)
   out.fogNear = THREE.MathUtils.lerp(a.fogNear, b.fogNear, t)
   out.fogFar = THREE.MathUtils.lerp(a.fogFar, b.fogFar, t)
+  out.zenith.lerpColors(a.zenith, b.zenith, t)
+
+  // Amanecer y atardecer: del todo con el sol en el horizonte; se van al subir y poco después de esconderse.
+  out.sunset = e >= 0 ? 1 - smoothstep(e, 0.02, 0.3) : 1 - smoothstep(-e, 0, 0.15)
+  const low = 1 - smoothstep(e, 0, 0.3)
+  out.glow.lerpColors(GLOW_HIGH, GLOW_LOW, low)
+  // Con el sol alto, un brillo blanco y estrecho; en el horizonte, uno naranja y ancho hacia su lado del cielo.
+  out.glowStrength = THREE.MathUtils.lerp(0.3, 0.85, low) * (e >= 0 ? 1 : 1 - smoothstep(-e, 0, 0.15))
+  out.glowPower = THREE.MathUtils.lerp(24, 3, low)
+  out.sunColor.lerpColors(SUN_DISK_HIGH, SUN_DISK_LOW, low)
+  out.sunScale = 1 + 0.35 * low
 
   // Ambas luces se apagan en el horizonte, así que el cambio de sol a luna no se nota.
   if (e >= 0) {

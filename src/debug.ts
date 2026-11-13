@@ -221,7 +221,8 @@ export function installDebug(game: Game) {
         hunger: p.hunger,
       }
     },
-    teleport: (x: number, z: number, yaw?: number) => game.teleport(x, z, yaw, 0),
+    /** `pitch`: hacia dónde mira en vertical (0 = al frente), para las capturas del cielo. */
+    teleport: (x: number, z: number, yaw?: number, pitch = 0) => game.teleport(x, z, yaw, pitch),
     /** Se pone delante del prop mirándolo; devuelve el prop apuntado (en red, en una promesa). */
     aimAt(propId: number) {
       const { world } = sim()
