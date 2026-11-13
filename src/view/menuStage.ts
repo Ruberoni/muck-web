@@ -17,7 +17,7 @@ export const ORBIT_SPEED = 0.05
 const POSE_TURN = 0.45
 /** Lo mínimo que la cámara queda sobre el suelo y sobre el agua. */
 const CAMERA_CLEARANCE = 1.1
-/** Por debajo de este ancho el tablón ocupa la pantalla y no queda sitio para el personaje (como en menu.css). */
+/** Hasta este ancho el tablón ocupa la pantalla y no queda sitio para el personaje (`max-width: 900px` en menu.css). */
 export const NARROW_WIDTH = 900
 /** El tablón del menú: a 56 px del borde y 440 de ancho (menu.css). El personaje va en el centro de lo que queda. */
 const PANEL_RIGHT = 56 + 440
@@ -42,9 +42,9 @@ export const yawTowards = (fromX: number, fromZ: number, toX: number, toZ: numbe
 
 /**
  * Dónde se pone el personaje del menú: en tierra, cerca de la orilla más próxima al punto de aparición (así detrás
- * se ve el mar al girar), sin árboles ni rocas en el círculo de la cámara. Sin ningún sitio así, el propio spawn.
+ * se ve el mar al girar), sin árboles, rocas ni estructuras en el círculo de la cámara. Sin ningún sitio así, el propio spawn.
  */
-export function stageSpot(terrain: Pick<Terrain, 'heightAt' | 'slopeAt'>, props: SpatialGrid<Collider> | null, spawn: { x: number; z: number }): StageSpot {
+export function stageSpot(terrain: Pick<Terrain, 'heightAt' | 'slopeAt'>, obstacles: readonly SpatialGrid<Collider>[], spawn: { x: number; z: number }): StageSpot {
   let best: (StageSpot & { score: number }) | null = null
   for (let i = 0; i < DIRECTIONS; i++) {
     const angle = (i / DIRECTIONS) * Math.PI * 2
@@ -65,7 +65,7 @@ export function stageSpot(terrain: Pick<Terrain, 'heightAt' | 'slopeAt'>, props:
       const z = spawn.z + dz * r
       const y = terrain.heightAt(x, z)
       if (y < MIN_HEIGHT || y > MAX_HEIGHT || terrain.slopeAt(x, z) > MAX_SLOPE * 0.6) continue
-      if (props && blocked(props, x, z, ORBIT_RADIUS + 1.5)) continue
+      if (obstacles.some((grid) => blocked(grid, x, z, ORBIT_RADIUS + 1.5))) continue
       // Lo más cerca posible del spawn (es la isla que se va a jugar), y mejor sin alejarse mucho de la orilla.
       const score = r + back * 0.5
       if (!best || score < best.score) best = { x, y, z, seaYaw: yawTowards(x, z, x + dx, z + dz), score }
@@ -85,7 +85,7 @@ function blocked(props: SpatialGrid<Collider>, x: number, z: number, radius: num
 
 /** Dónde cae el personaje en la pantalla, de -1 (izquierda) a 1 (derecha): en el centro de lo que deja el tablón. */
 export function stageScreenX(width: number): number {
-  if (width < NARROW_WIDTH) return 0
+  if (width <= NARROW_WIDTH) return 0
   return (PANEL_RIGHT + width) / width - 1
 }
 
@@ -130,20 +130,21 @@ export class MenuStage {
   private angle = 0
   private rig: CharacterRig | null = null
   private loading: number | null = null
-  private reducedMotion: MediaQueryList | null = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
 
   constructor(
     private load: LoadCharacter,
     private skin: () => number,
+    /** Con el movimiento reducido (`prefers-reduced-motion`) la cámara no gira. */
+    private reducedMotion: () => boolean = systemReducedMotion(),
   ) {
     this.group.visible = false
   }
 
   /** Dónde está el personaje: cambia con la isla (al entrar en una sala o empezar otra partida). */
-  setIsland(terrain: Pick<Terrain, 'heightAt' | 'slopeAt'>, props: SpatialGrid<Collider> | null, spawn: { x: number; z: number }) {
+  setIsland(terrain: Pick<Terrain, 'heightAt' | 'slopeAt'>, obstacles: readonly SpatialGrid<Collider>[], spawn: { x: number; z: number }) {
     if (terrain === this.terrain && this.spot) return
     this.terrain = terrain
-    this.spot = stageSpot(terrain, props, spawn)
+    this.spot = stageSpot(terrain, obstacles, spawn)
     // Empieza con el mar a la espalda del personaje, de cara a la cámara.
     this.angle = this.spot.seaYaw + Math.PI + 0.6
     this.group.position.set(this.spot.x, this.spot.y, this.spot.z)
@@ -154,19 +155,22 @@ export class MenuStage {
     return this.spot
   }
 
-  /** Coloca la cámara y anima al personaje. `false`: aún no hay sitio (no se ha llamado a `setIsland`). */
-  place(camera: THREE.PerspectiveCamera, dt: number, width: number): boolean {
+  /**
+   * Coloca la cámara y anima al personaje. `false`: aún no hay sitio (no se ha llamado a `setIsland`). Sin
+   * `showCharacter` (un tablón más ancho, una tarjeta centrada) la cámara sigue girando pero el personaje no se ve.
+   */
+  place(camera: THREE.PerspectiveCamera, dt: number, width: number, showCharacter = true): boolean {
     const { spot, terrain } = this
     if (!spot || !terrain) return false
     this.ensureRig()
     // Con el movimiento reducido el encuadre se queda fijo.
-    if (!this.reducedMotion?.matches) this.angle += ORBIT_SPEED * dt
+    if (!this.reducedMotion()) this.angle += ORBIT_SPEED * dt
     const view = orbitCamera(spot, this.angle, terrain.heightAt, camera.fov, camera.aspect, stageScreenX(width))
     camera.position.set(view.x, view.y, view.z)
     camera.rotation.set(view.pitch, view.yaw, 0)
     // En una ventana estrecha el tablón tapa el centro: el personaje quedaría detrás.
-    this.group.visible = width >= NARROW_WIDTH
-    if (this.rig) {
+    this.group.visible = showCharacter && width > NARROW_WIDTH
+    if (this.rig && this.group.visible) {
       this.rig.object.rotation.y = poseYaw(spot, view.x, view.z)
       this.rig.update(dt, 0, 0, 0, true)
     }
@@ -198,4 +202,9 @@ export class MenuStage {
       },
     )
   }
+}
+
+function systemReducedMotion(): () => boolean {
+  const query = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
+  return () => query?.matches ?? false
 }

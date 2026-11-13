@@ -145,7 +145,9 @@ export class Game {
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView(loadCharacter)
   /** El fondo del menú: el personaje en la isla y la cámara que gira a su alrededor. */
-  readonly menuStage = new MenuStage(loadCharacter, () => loadSkin() ?? 0)
+  readonly menuStage = new MenuStage(loadCharacter, () => this.ownSkin())
+  /** La skin guardada en el navegador, leída una vez: es la que se manda al entrar en una sala. */
+  private savedSkin = loadSkin()
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
@@ -1243,9 +1245,19 @@ export class Game {
 
   /** La cámara del menú, en la isla que se ve. `false`: no se pudo (se usa la del jugador). */
   private placeStage(dt: number): boolean {
-    const { sim } = this
-    this.menuStage.setIsland(sim.island, sim.world.grid, sim.spawnCenter)
-    return this.menuStage.place(this.camera, dt, window.innerWidth)
+    const { sim, menu } = this
+    this.menuStage.setIsland(sim.island, sim.obstacles, sim.spawnCenter)
+    // Encima del tablón normal (ajustes y controles son más anchos; los resultados de la sala, una tarjeta centrada)
+    // el personaje quedaría tapado.
+    const showCharacter = menu.top === null && menu.screen !== 'results'
+    return this.menuStage.place(this.camera, dt, window.innerWidth, showCharacter)
+  }
+
+  /** La skin del personaje del menú: en una sala, la que ven los demás; si no, la guardada. */
+  private ownSkin(): number {
+    const client = this.net?.client
+    if (client && client.id >= 0) return client.skins.get(client.id) ?? autoSkin(client.id)
+    return this.savedSkin ?? 0
   }
 
   /** Detrás y por encima del compañero, girando con él poco a poco; nunca bajo el suelo ni bajo el agua. */

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SpatialGrid, type Collider } from '../sim/collision'
 import { DEFAULT_ISLAND } from '../sim/world/island'
 import { WATER_LEVEL } from '../sim/world/terrain'
@@ -29,7 +29,7 @@ describe('yawTowards', () => {
 
 describe('stageSpot', () => {
   it('pone al personaje en tierra, cerca de la orilla y mirando al mar', () => {
-    const spot = stageSpot(disc, null, { x: 0, z: 0 })
+    const spot = stageSpot(disc, [], { x: 0, z: 0 })
     const r = Math.hypot(spot.x, spot.z)
     expect(spot.y).toBe(2)
     expect(r).toBeGreaterThan(20)
@@ -40,19 +40,19 @@ describe('stageSpot', () => {
 
   it('evita los árboles y rocas en el círculo de la cámara', () => {
     const grid = new SpatialGrid<Collider>(8)
-    const free = stageSpot(disc, null, { x: 0, z: 0 })
+    const free = stageSpot(disc, [], { x: 0, z: 0 })
     grid.insert({ x: free.x, z: free.z, radius: 1, alive: true })
-    const spot = stageSpot(disc, grid, { x: 0, z: 0 })
+    const spot = stageSpot(disc, [new SpatialGrid<Collider>(8), grid], { x: 0, z: 0 })
     expect(Math.hypot(spot.x - free.x, spot.z - free.z) - 1).toBeGreaterThanOrEqual(ORBIT_RADIUS + 1.5)
   })
 
   it('sin orilla a la vista se queda en el spawn', () => {
     const land = { heightAt: () => 2, slopeAt: () => 0 }
-    expect(stageSpot(land, null, { x: 5, z: 7 })).toEqual({ x: 5, y: 2, z: 7, seaYaw: 0 })
+    expect(stageSpot(land, [], { x: 5, z: 7 })).toEqual({ x: 5, y: 2, z: 7, seaYaw: 0 })
   })
 
   it('en la isla de siempre encuentra un sitio en tierra', () => {
-    const spot = stageSpot(DEFAULT_ISLAND, null, { x: 0, z: 0 })
+    const spot = stageSpot(DEFAULT_ISLAND, [], { x: 0, z: 0 })
     expect(DEFAULT_ISLAND.heightAt(spot.x, spot.z)).toBeGreaterThan(WATER_LEVEL)
   })
 })
@@ -61,7 +61,8 @@ describe('stageScreenX', () => {
   it('centra al personaje en lo que deja el tablón, y en el centro en una ventana estrecha', () => {
     // 1280 px: el tablón llega a 496 px, el hueco va de 496 a 1280 y su centro es 888 px.
     expect(stageScreenX(1280)).toBeCloseTo((888 / 1280) * 2 - 1)
-    expect(stageScreenX(NARROW_WIDTH - 1)).toBe(0)
+    expect(stageScreenX(NARROW_WIDTH)).toBe(0)
+    expect(stageScreenX(NARROW_WIDTH + 1)).toBeGreaterThan(0)
   })
 })
 
@@ -111,7 +112,7 @@ describe('MenuStage', () => {
     const stage = new MenuStage(async () => (loads++, rig), () => 0)
     const camera = new THREE.PerspectiveCamera(70, 1.6, 0.1, 600)
     expect(stage.place(camera, 0.016, 1280)).toBe(false)
-    stage.setIsland(disc, null, { x: 0, z: 0 })
+    stage.setIsland(disc, [], { x: 0, z: 0 })
     expect(loads).toBe(0)
     expect(stage.place(camera, 0.016, 1280)).toBe(true)
     await Promise.resolve()
@@ -120,7 +121,62 @@ describe('MenuStage', () => {
     expect(stage.group.children).toContain(rig.object)
     expect(updates).toEqual([0.02])
     expect(stage.group.visible).toBe(true)
-    stage.place(camera, 0.02, 600)
+    stage.place(camera, 0.02, NARROW_WIDTH)
     expect(stage.group.visible).toBe(false)
+    // Tapado por un tablón más ancho: no se ve ni se anima.
+    stage.place(camera, 0.02, 1280, false)
+    expect(stage.group.visible).toBe(false)
+    expect(updates).toEqual([0.02])
+  })
+
+  const fakeRig = () => ({ object: new THREE.Group(), update: () => {} }) as unknown as CharacterRig
+
+  it('recalcula el sitio solo cuando cambia la isla', () => {
+    const stage = new MenuStage(async () => fakeRig(), () => 0)
+    stage.setIsland(disc, [], { x: 0, z: 0 })
+    const first = stage.center
+    stage.setIsland(disc, [], { x: 50, z: 50 })
+    expect(stage.center).toBe(first)
+    const shifted = { heightAt: (x: number, z: number) => disc.heightAt(x - 100, z), slopeAt: () => 0 }
+    stage.setIsland(shifted, [], { x: 100, z: 0 })
+    expect(stage.center!.x).toBeGreaterThan(60)
+  })
+
+  it('con el movimiento reducido la cámara no gira', () => {
+    let reduced = true
+    const stage = new MenuStage(async () => fakeRig(), () => 0, () => reduced)
+    stage.setIsland(disc, [], { x: 0, z: 0 })
+    const camera = new THREE.PerspectiveCamera(70, 1.6, 0.1, 600)
+    stage.place(camera, 0.1, 1280)
+    const still = camera.position.clone()
+    stage.place(camera, 0.1, 1280)
+    expect(camera.position.distanceTo(still)).toBe(0)
+    reduced = false
+    stage.place(camera, 0.1, 1280)
+    expect(camera.position.distanceTo(still)).toBeGreaterThan(0.01)
+  })
+
+  it('tras un fallo al descargar el personaje vuelve a intentarlo al rato, no en cada frame', async () => {
+    vi.useFakeTimers()
+    try {
+      let loads = 0
+      const stage = new MenuStage(async () => {
+        loads++
+        throw new Error('sin red')
+      }, () => 0)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      stage.setIsland(disc, [], { x: 0, z: 0 })
+      const camera = new THREE.PerspectiveCamera(70, 1.6, 0.1, 600)
+      stage.place(camera, 0.016, 1280)
+      await vi.advanceTimersByTimeAsync(0)
+      for (let i = 0; i < 10; i++) stage.place(camera, 0.016, 1280)
+      expect(loads).toBe(1)
+      await vi.advanceTimersByTimeAsync(10_000)
+      stage.place(camera, 0.016, 1280)
+      expect(loads).toBe(2)
+      warn.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -199,12 +199,12 @@ export class Hud {
     this.prompt.hidden = !text
   }
 
-  /** La mira (el espectador no apunta a nada). */
   /** En el menú el fondo es la isla sin HUD: solo quedan el chat y los avisos de la sala. */
   setInMenu(inMenu: boolean) {
     this.root.classList.toggle('in-menu', inMenu)
   }
 
+  /** La mira (el espectador no apunta a nada). */
   setCrosshair(visible: boolean) {
     this.crosshair.hidden = !visible
   }
