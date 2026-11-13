@@ -1,4 +1,4 @@
-import { ENEMY_DEFS, PROP_DEFS, type EnemyType, type PropFamily } from '../sim/constants'
+import { enemyScale, PROP_DEFS, type EnemyType, type MobLook, type PropFamily } from '../sim/constants'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
 import type { ProjectileEnd } from '../sim/projectiles'
@@ -25,10 +25,27 @@ export const REMOTE_HEARING = { hit: 30, place: 25, hurt: 20, step: 15, other: 1
 /** La muerte de otro se oye siempre, aunque esté lejos (con esta ganancia como mínimo). */
 export const REMOTE_DEATH_GAIN = 0.35
 
-/** Hasta dónde se oyen los pasos de un mob: importan de cerca (avisan de que llega) y son muchos a la vez. */
-export const ENEMY_STEP_HEARING = 16
-/** Lo que suena de cerca un paso de mob, frente al 1 del propio: discreto, porque se repite muchísimo. */
-export const ENEMY_STEP_GAIN = 0.45
+/** Hasta dónde se oyen los pasos de un mob: avisan de que llega, pero son muchos a la vez. */
+export const ENEMY_STEP_HEARING = 20
+/**
+ * La ganancia de un paso de mob pegado a ti: con el efecto `enemyStep` de un trasgo, a 0,8 m, ~4 dB por debajo de un
+ * paso propio en energía y ~8 dB con el paso alto a 300 Hz de un altavoz pequeño (medido con
+ * `scripts/measure-enemy-steps.mjs`). Discreto, porque se repite muchísimo, pero se oye.
+ */
+export const ENEMY_STEP_GAIN = 0.62
+/**
+ * Cómo cae con la distancia: `(1 − d/ENEMY_STEP_HEARING) ^ ENEMY_STEP_FALLOFF`. Más suave que el `near²` de
+ * `spatialize`, para que a media distancia no desaparezca: a 10 m queda ~17 dB por debajo de un paso propio (~20 dB
+ * en un altavoz pequeño). Por eso a 10 m un mob suena algo más que el paso de un compañero: a propósito, avisa.
+ */
+export const ENEMY_STEP_FALLOFF = 1.5
+/** Mobs que pisan más suave que los demás de su tamaño: el espíritu casi flota. */
+export const ENEMY_STEP_SOFT: Partial<Record<EnemyType, number>> = { spirit: 0.55 }
+/**
+ * Un mob que nada chapotea con `stepWater`, el efecto del paso propio en el agua, que ya suena en la banda alta: se
+ * baja por esto para que quede como un paso de mob en tierra y no por encima de los tuyos.
+ */
+export const ENEMY_SWIM_GAIN = 0.25
 /** Pasos de mob que suenan como mucho en un paso fijo, los más cercanos: con la manada encima no deben saturar. */
 export const ENEMY_STEPS_PER_FRAME = 2
 
@@ -70,7 +87,30 @@ export interface EnemyWalker {
   type: EnemyType
   pos: { x: number; z: number }
   alive: boolean
+  /** Su apariencia: en la Noche Eterna un trasgo crece, y sus pasos pesan y se espacian con él. */
+  look?: MobLook
 }
+
+/**
+ * Cómo suena un paso del mob `type` (con la apariencia `look`) a (`dx`, `dz`) del oyente que mira a `yaw`: su ganancia
+ * (0 fuera de alcance), su paneo y su peso (la escala visible, para el efecto).
+ */
+export function enemyStepVolume(dx: number, dz: number, yaw: number, type: EnemyType, look: MobLook = 0) {
+  const { pan } = spatialize(dx, dz, yaw, ENEMY_STEP_HEARING)
+  const near = Math.max(0, 1 - Math.hypot(dx, dz) / ENEMY_STEP_HEARING)
+  const gain = near ** ENEMY_STEP_FALLOFF * ENEMY_STEP_GAIN * (ENEMY_STEP_SOFT[type] ?? 1)
+  return { gain, pan, weight: enemyScale(type, look) }
+}
+
+/**
+ * El oyente: la cámara del jugador local, o, en espectador, el compañero al que se mira con el giro de la cámara que
+ * lo sigue (`spectatorYaw`; null si no se mira a nadie), para que el paneo cuadre con lo que se ve.
+ */
+export const listenerFor = (pos: Point, lookYaw: number, spectatorYaw: number | null): Listener => ({
+  x: pos.x,
+  z: pos.z,
+  yaw: spectatorYaw ?? lookYaw,
+})
 
 type Point = { x: number; z: number }
 
@@ -95,7 +135,7 @@ export class GameAudio {
   /** Pasos de los mobs: lo mismo, por id de enemigo. */
   private mobs = new Map<number, { x: number; z: number; stride: number }>()
   /** Los pasos de mob de este paso fijo, los más cercanos: se reutiliza, no se reserva nada por frame. */
-  private mobSteps = Array.from({ length: ENEMY_STEPS_PER_FRAME }, () => ({ gain: 0, pan: 0, water: false }))
+  private mobSteps = Array.from({ length: ENEMY_STEPS_PER_FRAME }, () => ({ gain: 0, pan: 0, weight: 1, water: false }))
 
   constructor(
     private sound: SoundOut,
@@ -331,9 +371,10 @@ export class GameAudio {
   }
 
   /**
-   * Por paso fijo: los pasos de los mobs, uno cada STRIDE metros por su escala (los del Coloso son largos y los de un
-   * perro cortos). Flojos y de cerca, y como mucho ENEMY_STEPS_PER_FRAME, los más cercanos: con 24 mobs a la vez no
-   * deben saturar. `swimming` dice dónde no hacen pie: ahí nadan y chapotean en vez de pisar.
+   * Por paso fijo (también en espectador): los pasos de los mobs, uno cada STRIDE metros por su escala visible (los del
+   * Coloso son largos y graves, los de un perro cortos y ligeros). Sutiles, hasta ENEMY_STEP_HEARING, y como mucho
+   * ENEMY_STEPS_PER_FRAME, los más cercanos: con 24 mobs a la vez no deben saturar. `swimming` dice dónde no hacen
+   * pie: ahí nadan y chapotean en vez de pisar.
    */
   enemySteps(enemies: readonly EnemyWalker[], listener: Listener, swimming: (x: number, z: number) => boolean) {
     const picks = this.mobSteps
@@ -350,10 +391,10 @@ export class GameAudio {
       // Un salto grande es una corrección del servidor o una aparición, no un paso; un muerto no anda.
       if (!e.alive || moved >= MAX_STEP_DISTANCE * 4) continue
       last.stride += moved
-      const stride = STRIDE * ENEMY_DEFS[e.type].scale
+      const stride = STRIDE * enemyScale(e.type, e.look)
       if (last.stride < stride) continue
       last.stride -= stride
-      const { gain, pan } = spatialize(e.pos.x - listener.x, e.pos.z - listener.z, listener.yaw, ENEMY_STEP_HEARING)
+      const { gain, pan, weight } = enemyStepVolume(e.pos.x - listener.x, e.pos.z - listener.z, listener.yaw, e.type, e.look)
       if (gain <= 0) continue
       // De los que pisan en este paso, se guardan los más cercanos (los de más ganancia).
       let slot = picked
@@ -364,11 +405,14 @@ export class GameAudio {
       } else picked++
       picks[slot].gain = gain
       picks[slot].pan = pan
+      picks[slot].weight = weight
       picks[slot].water = swimming(e.pos.x, e.pos.z)
     }
     for (let i = 0; i < picked; i++) {
-      const { gain, pan, water } = picks[i]
-      this.sound.play(water ? 'stepWater' : 'enemyStep', { gain: gain * ENEMY_STEP_GAIN * (0.85 + this.rng() * 0.3), pan })
+      const { gain, pan, weight, water } = picks[i]
+      const jitter = 0.85 + this.rng() * 0.3
+      if (water) this.sound.play('stepWater', { gain: gain * ENEMY_SWIM_GAIN * jitter, pan })
+      else this.sound.play('enemyStep', { gain: gain * jitter, pan, weight })
     }
     // El mapa no se queda con los que ya no están: se limpia solo cuando sobra, sin reservar un Set en cada frame.
     if (this.mobs.size > enemies.length) {

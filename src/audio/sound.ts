@@ -32,7 +32,7 @@ export type SoundName =
   | 'meteorImpact'
   | 'step'
   | 'stepWater'
-  /** Un paso de un mob: más grave y más corto que el del jugador, porque se repite muchísimo. */
+  /** Un paso de un mob: un golpe sordo en tierra, más grave y más fuerte cuanto más grande es (`weight`, su escala). */
   | 'enemyStep'
   | 'jump'
   | 'land'
@@ -43,6 +43,11 @@ export interface PlayOptions {
   gain?: number
   /** Estéreo: -1 izquierda, 1 derecha. */
   pan?: number
+  /**
+   * El tamaño de lo que suena, para los efectos que cambian con él (hoy solo `enemyStep`: la escala visible del mob).
+   * Los demás efectos lo ignoran.
+   */
+  weight?: number
 }
 
 export interface SoundOut {
@@ -140,7 +145,7 @@ export class Sound implements SoundOut {
     if (this.ctx) this.master.gain.setTargetAtTime(this.volume * MASTER_HEADROOM, this.ctx.currentTime, 0.02)
   }
 
-  play(name: SoundName, { gain = 1, pan = 0 }: PlayOptions = {}) {
+  play(name: SoundName, { gain = 1, pan = 0, weight }: PlayOptions = {}) {
     const ctx = this.ctx
     if (!ctx || ctx.state !== 'running' || gain <= 0.001) return
     const bus = ctx.createGain()
@@ -154,7 +159,7 @@ export class Sound implements SoundOut {
     }
     node.connect(this.master)
     this.out = bus
-    const length = EFFECTS[name](this)
+    const length = EFFECTS[name](this, weight)
     this.out = null
     // Desconectar al acabar para que el grafo no crezca.
     setTimeout(() => node.disconnect(), (length + 0.2) * 1000)
@@ -331,8 +336,28 @@ export class Sound implements SoundOut {
   }
 }
 
-// Cada efecto suena por el bus del momento y devuelve su duración en segundos.
-const EFFECTS: Record<SoundName, (s: Sound) => number> = {
+/** La escala del trasgo, el mob de referencia: a esta escala un paso de mob suena "normal". */
+const STEP_REFERENCE_SCALE = 1.25
+
+/**
+ * Un paso de mob de escala `scale`: un golpe sordo en tierra con un roce corto encima. El golpe (paso bajo a ~600 Hz) y
+ * el roce (~1,5 kHz) caen en la banda que sí reproducen los altavoces de portátil y móvil; el tono grave solo da cuerpo
+ * con audífonos. Cuanto más grande, más grave, algo más fuerte y más largo: el Coloso retumba y el perro apenas roza.
+ */
+export function enemyStepSound(s: Sound, scale = STEP_REFERENCE_SCALE) {
+  const k = Math.min(2.2, Math.max(0.5, scale / STEP_REFERENCE_SCALE))
+  const pitch = k ** -0.6
+  const loud = k ** 0.7
+  const length = 0.08 * k ** 0.35
+  return Math.max(
+    s.noise(length, { filter: 'lowpass', freq: (560 + s.random() * 160) * pitch, gain: 0.55 * loud, attack: 0.004 }),
+    s.noise(0.035 * k ** 0.3, { filter: 'bandpass', freq: (1350 + s.random() * 450) * pitch, q: 1.3, gain: 0.14 * loud, attack: 0.003 }),
+    s.tone(125 * pitch, length * 1.3, { type: 'triangle', to: 70 * pitch, gain: 0.08 * loud * Math.min(1, k) }),
+  )
+}
+
+// Cada efecto suena por el bus del momento y devuelve su duración en segundos. `weight` es el de `PlayOptions`.
+const EFFECTS: Record<SoundName, (s: Sound, weight?: number) => number> = {
   swing: (s) => s.noise(0.14, { filter: 'bandpass', freq: 700 + s.random() * 300, q: 0.7, gain: 0.25, attack: 0.05 }),
   hitWood: (s) =>
     Math.max(
@@ -444,8 +469,7 @@ const EFFECTS: Record<SoundName, (s: Sound) => number> = {
       s.noise(0.5, { filter: 'bandpass', freq: 1500, q: 0.7, gain: 0.5, delay: 0.05 }),
     ),
   step: (s) => s.noise(0.08, { filter: 'lowpass', freq: 450 + s.random() * 250, gain: 1, attack: 0.004 }),
-  // Un mob: un golpe grave y seco, más corto que el paso del jugador, porque con la manada suena sin parar.
-  enemyStep: (s) => s.noise(0.06, { filter: 'lowpass', freq: 220 + s.random() * 120, gain: 0.6, attack: 0.004 }),
+  enemyStep: enemyStepSound,
   stepWater: (s) =>
     Math.max(
       s.noise(0.16, { filter: 'bandpass', freq: 900 + s.random() * 400, q: 0.9, gain: 0.45, attack: 0.02 }),
