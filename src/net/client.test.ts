@@ -409,7 +409,7 @@ describe('el espejo de NetClient', () => {
     const lobby = room.sim!.island.seed
     expect(a.sim!.island.seed).toBe(lobby)
     expect(a.sim!.world.placements).toEqual(room.sim!.world.placements)
-    a.start('normal')
+    a.start()
     run(time, 1500, [[a, idle], [b, idle]])
     const { island, world, structures } = room.sim!
     expect(island.seed).not.toBe(lobby)
@@ -431,9 +431,14 @@ describe('el espejo de NetClient', () => {
     expect(a.match).toMatchObject({ phase: 'lobby', host: a.id })
     expect(a.match!.players.map((p) => p.name)).toEqual(['a', 'b'])
 
+    // La dificultad la ven todos en la sala, antes de empezar.
+    a.setDifficulty('hard')
+    time.advance(500)
+    expect(b.match).toMatchObject({ phase: 'lobby', difficulty: 'hard' })
+
     let changes = 0
     b.onmatch = () => changes++
-    a.start('hard')
+    a.start()
     time.advance(500)
     expect(b.match).toMatchObject({ phase: 'playing', rules: { players: 2, difficulty: 'hard' } })
     expect(changes).toBe(1)

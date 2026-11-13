@@ -158,10 +158,14 @@ describe('Room por partidas', () => {
 
   it('solo empieza el anfitrión, con las reglas de quienes haya', () => {
     const { room, time, a, b } = lobby()
-    b.send({ type: 'start', difficulty: 'hard' })
+    b.send({ type: 'setDifficulty', difficulty: 'easy' })
+    b.send({ type: 'start' })
     time.advance(0)
     expect(b.of('match')).toEqual([])
-    a.send({ type: 'start', difficulty: 'hard' })
+    a.send({ type: 'setDifficulty', difficulty: 'hard' })
+    time.advance(0)
+    expect(match(b)).toMatchObject({ phase: 'lobby', difficulty: 'hard' })
+    a.send({ type: 'start' })
     time.advance(0)
     expect(match(b)).toMatchObject({ phase: 'playing', rules: { players: 2, difficulty: 'hard' }, result: null })
     expect(room.sim!.rules).toEqual({ players: 2, difficulty: 'hard' })
@@ -177,7 +181,7 @@ describe('Room por partidas', () => {
     b.transport.close()
     time.advance(0)
     expect(match(a).players.map((p) => p.id)).toEqual([a.id])
-    a.send({ type: 'start', difficulty: 'normal' })
+    a.send({ type: 'start' })
     time.advance(0)
     expect(room.sim!.rules.players).toBe(1)
     expect(room.sim!.inWorld().map((s) => s.id)).toEqual([a.id])
@@ -185,7 +189,7 @@ describe('Room por partidas', () => {
 
   it('con la partida en marcha nadie nuevo entra, pero quien estaba vuelve con su token', () => {
     const { room, time, a, b } = lobby()
-    a.send({ type: 'start', difficulty: 'normal' })
+    a.send({ type: 'start' })
     time.advance(0)
     const c = new Client(room, time, 'c')
     c.hello('join')
@@ -204,16 +208,39 @@ describe('Room por partidas', () => {
     expect(room.sim!.rules.players).toBe(2)
   })
 
-  it('si se va el anfitrión del lobby pasa al siguiente', () => {
-    const { time, a, b } = lobby()
+  it('si se va el anfitrión del lobby pasa al siguiente, que ya puede cambiar la dificultad y empezar', () => {
+    const { room, time, a, b } = lobby()
+    a.send({ type: 'setDifficulty', difficulty: 'hard' })
+    time.advance(0)
     a.transport.close()
     time.advance(0)
-    expect(match(b).host).toBe(b.id)
+    // La dificultad elegida se queda.
+    expect(match(b)).toMatchObject({ host: b.id, difficulty: 'hard' })
+    b.send({ type: 'setDifficulty', difficulty: 'ultra' })
+    time.advance(0)
+    expect(match(b).difficulty).toBe('ultra')
+    b.send({ type: 'start' })
+    time.advance(0)
+    expect(room.sim!.rules).toEqual({ players: 1, difficulty: 'ultra' })
+  })
+
+  it('la dificultad solo cambia en el lobby, y la última elegida se guarda con la sala', () => {
+    const { time, storage, a } = lobby()
+    expect(match(a).difficulty).toBe('normal')
+    a.send({ type: 'setDifficulty', difficulty: 'easy' })
+    a.send({ type: 'start' })
+    time.advance(0)
+    const before = a.of('match').length
+    a.send({ type: 'setDifficulty', difficulty: 'hard' })
+    time.advance(0)
+    expect(a.of('match').length).toBe(before)
+    expect(match(a)).toMatchObject({ phase: 'playing', difficulty: 'easy' })
+    expect(JSON.parse(storage.blob!).difficulty).toBe('easy')
   })
 
   it('rendirse necesita a más de la mitad, y al acabar se vuelve al lobby con el resultado', () => {
     const { room, time, a, b } = lobby()
-    a.send({ type: 'start', difficulty: 'normal' })
+    a.send({ type: 'start' })
     time.advance(0)
     play(time, 200, [[a], [b]])
     a.send({ type: 'surrender', yes: true })
@@ -235,7 +262,8 @@ describe('Room por partidas', () => {
     c.hello('join')
     time.advance(0)
     expect(c.welcome.match.phase).toBe('lobby')
-    a.send({ type: 'start', difficulty: 'easy' })
+    a.send({ type: 'setDifficulty', difficulty: 'easy' })
+    a.send({ type: 'start' })
     time.advance(0)
     expect(match(c)).toMatchObject({ phase: 'playing', rules: { players: 3, difficulty: 'easy' }, result: null })
     expect(room.sim!.result).toBeNull()
@@ -254,7 +282,7 @@ describe('Room por partidas', () => {
     expect(a.welcome.island).toBe(first)
     // Una isla grande son miles de props: en tuplas, el welcome entero sigue por debajo de esto (comprimido, mucho menos).
     expect(a.raw.find((m) => m.includes('"welcome"'))!.length).toBeLessThan(200 * 1024)
-    a.send({ type: 'start', difficulty: 'normal' })
+    a.send({ type: 'start' })
     time.advance(0)
     const island = room.sim!.island.seed
     expect(island).not.toBe(first)
@@ -274,7 +302,7 @@ describe('Room por partidas', () => {
 
   it('la fase sobrevive a guardar la sala', () => {
     const { time, storage, a, b } = lobby()
-    a.send({ type: 'start', difficulty: 'normal' })
+    a.send({ type: 'start' })
     time.advance(0)
     play(time, 200, [[a], [b]])
     a.transport.close()
@@ -780,7 +808,7 @@ describe('Room', () => {
       c.hello('join')
       time.advance(0)
       expect(c.welcome.id).toBe(2)
-      sockets[0].send({ type: 'start', difficulty: 'normal' })
+      sockets[0].send({ type: 'start' })
       time.advance(LOOP_MS)
       expect(room.sim!.rules.players).toBe(3)
     })
@@ -804,7 +832,7 @@ describe('Room', () => {
       a.transport.close()
       first.time.advance(0)
       const { room, time, sockets } = wake(storage, b)
-      sockets[0].send({ type: 'start', difficulty: 'normal' })
+      sockets[0].send({ type: 'start' })
       time.advance(LOOP_MS)
       expect(sockets[0].of('match').at(-1)!.match.phase).toBe('playing')
       expect(room.sim!.rules.players).toBe(1)

@@ -90,7 +90,7 @@ export function stageScreenX(width: number): number {
 }
 
 /**
- * La cámara del menú: gira alrededor del personaje (`angle`) a una distancia y altura fijas, nunca bajo el suelo ni
+ * La cámara del menú: gira alrededor del personaje (`angle`) a una distancia (`radius`) y altura fijas, nunca bajo el suelo ni
  * bajo el agua, y se tuerce lo justo para que el personaje caiga en `screenX` de la pantalla.
  */
 export function orbitCamera(
@@ -100,14 +100,15 @@ export function orbitCamera(
   fov: number,
   aspect: number,
   screenX: number,
+  radius = ORBIT_RADIUS,
 ): { x: number; y: number; z: number; yaw: number; pitch: number } {
-  const x = spot.x + Math.sin(angle) * ORBIT_RADIUS
-  const z = spot.z + Math.cos(angle) * ORBIT_RADIUS
+  const x = spot.x + Math.sin(angle) * radius
+  const z = spot.z + Math.cos(angle) * radius
   const y = Math.max(spot.y + ORBIT_HEIGHT, heightAt(x, z) + CAMERA_CLEARANCE, WATER_LEVEL + CAMERA_CLEARANCE)
   const halfWidth = Math.tan(THREE.MathUtils.degToRad(fov) / 2) * aspect
   // Girar a la izquierda (más yaw) lleva el personaje a la derecha de la pantalla.
   const yaw = yawTowards(x, z, spot.x, spot.z) + Math.atan(screenX * halfWidth)
-  const pitch = Math.atan2(spot.y + FOCUS_HEIGHT - y, ORBIT_RADIUS)
+  const pitch = Math.atan2(spot.y + FOCUS_HEIGHT - y, radius)
   return { x, y, z, yaw, pitch }
 }
 
@@ -118,18 +119,77 @@ export function poseYaw(spot: StageSpot, cameraX: number, cameraZ: number): numb
   return toCamera + sea * POSE_TURN
 }
 
+/** Quien sale en la fila de la sala: su id, su nombre (en la etiqueta) y su skin. */
+export interface StageMember {
+  id: number
+  name: string
+  skin: number
+}
+
+/** La etiqueta con el nombre de uno de la fila, en píxeles CSS (el pie de la etiqueta sobre su cabeza). */
+export interface StageTag {
+  id: number
+  name: string
+  left: number
+  top: number
+}
+
+/** Metros entre los personajes de la fila. */
+export const ROW_SPACING = 1.15
+/** Medio hombro: lo que asoma el de cada punta más allá de su centro. */
+const ROW_MARGIN = 0.5
+/** Lo que se balancea la cámara delante de la fila (rad) y cada cuánto (rad/s de la fase). */
+const SWAY = 0.22
+const SWAY_SPEED = 0.12
+/** Dónde va la etiqueta del nombre: algo por encima de la cabeza. */
+const TAG_HEIGHT = 2.05
+/** El personaje del menú fuera de una sala. */
+const SOLO = -1
+
+/**
+ * Dónde va cada uno de la fila respecto al centro (x, z), de izquierda a derecha vistos desde una cámara con ese
+ * `yaw`: en una línea perpendicular a su mirada.
+ */
+export function rowOffsets(count: number, yaw: number): { x: number; z: number }[] {
+  // Adelante es (-sin, -cos) y la derecha (cos, -sin).
+  const right = { x: Math.cos(yaw), z: -Math.sin(yaw) }
+  return Array.from({ length: count }, (_, i) => {
+    const along = (i - (count - 1) / 2) * ROW_SPACING
+    return { x: right.x * along, z: right.z * along }
+  })
+}
+
+/** La distancia de la cámara para que una fila de `count` quepa en el hueco de la pantalla (nunca menos que la órbita). */
+export function rowRadius(count: number, fov: number, aspect: number, screenX: number): number {
+  const half = ((count - 1) / 2) * ROW_SPACING + ROW_MARGIN
+  const halfWidth = Math.tan(THREE.MathUtils.degToRad(fov) / 2) * aspect
+  // Lo que queda de pantalla entre el centro de la fila y el borde más cercano, con un poco de aire.
+  const room = (1 - Math.abs(screenX)) * 0.6 * halfWidth
+  return Math.max(ORBIT_RADIUS, half / room)
+}
+
+interface Actor {
+  member: StageMember
+  rig: CharacterRig | null
+  state: 'idle' | 'loading' | 'failed'
+}
+
 /**
  * El fondo del menú (§3.3 del plan del menú): el personaje de pie en la isla, cerca de la orilla, y la cámara que
- * gira despacio a su alrededor. Vive en la escena principal: sin un segundo WebGLRenderer. El personaje se anima con
- * su propio `dt`, sin la simulación, y solo se descarga la primera vez que se ve el menú.
+ * gira despacio a su alrededor. En la sala (`setCast`), todos los de la sala en fila, de cara a la cámara, que se
+ * balancea un poco delante de ellos en lugar de girar. Vive en la escena principal: sin un segundo WebGLRenderer.
+ * Los personajes se animan con su propio `dt`, sin la simulación, y solo se descargan la primera vez que se ven.
  */
 export class MenuStage {
   readonly group = new THREE.Group()
   private spot: StageSpot | null = null
   private terrain: Pick<Terrain, 'heightAt' | 'slopeAt'> | null = null
   private angle = 0
-  private rig: CharacterRig | null = null
-  private loading: number | null = null
+  private actors = new Map<number, Actor>()
+  private cast: readonly StageMember[] | null = null
+  /** En la sala: el ángulo de la cámara al entrar (la fila se pone de cara a él) y la fase del balanceo. */
+  private rowAngle: number | null = null
+  private swayTime = 0
 
   constructor(
     private load: LoadCharacter,
@@ -147,7 +207,13 @@ export class MenuStage {
     this.spot = stageSpot(terrain, obstacles, spawn)
     // Empieza con el mar a la espalda del personaje, de cara a la cámara.
     this.angle = this.spot.seaYaw + Math.PI + 0.6
+    this.rowAngle = null
     this.group.position.set(this.spot.x, this.spot.y, this.spot.z)
+  }
+
+  /** Los de la sala, en fila (null: fuera de una sala, solo el personaje propio). */
+  setCast(cast: readonly StageMember[] | null) {
+    this.cast = cast
   }
 
   /** El punto en el que se centran las sombras. */
@@ -156,25 +222,70 @@ export class MenuStage {
   }
 
   /**
-   * Coloca la cámara y anima al personaje. `false`: aún no hay sitio (no se ha llamado a `setIsland`). Sin
-   * `showCharacter` (un tablón más ancho, una tarjeta centrada) la cámara sigue girando pero el personaje no se ve.
+   * Coloca la cámara y anima a los personajes. `false`: aún no hay sitio (no se ha llamado a `setIsland`). Sin
+   * `showCharacter` (un tablón más ancho, una tarjeta centrada) la cámara sigue moviéndose pero no se ven.
    */
   place(camera: THREE.PerspectiveCamera, dt: number, width: number, showCharacter = true): boolean {
     const { spot, terrain } = this
     if (!spot || !terrain) return false
-    this.ensureRig()
-    // Con el movimiento reducido el encuadre se queda fijo.
-    if (!this.reducedMotion()) this.angle += ORBIT_SPEED * dt
-    const view = orbitCamera(spot, this.angle, terrain.heightAt, camera.fov, camera.aspect, stageScreenX(width))
+    const members = this.cast ?? [{ id: SOLO, name: '', skin: this.skin() }]
+    this.syncActors(members)
+    const still = this.reducedMotion()
+    const screenX = stageScreenX(width)
+    let angle: number
+    let radius = ORBIT_RADIUS
+    if (this.cast) {
+      this.rowAngle ??= this.angle
+      if (!still) this.swayTime += dt
+      // Con el movimiento reducido el encuadre se queda fijo.
+      angle = this.rowAngle + (still ? 0 : SWAY * Math.sin(this.swayTime * SWAY_SPEED))
+      radius = rowRadius(members.length, camera.fov, camera.aspect, screenX)
+    } else {
+      // Al salir de la sala la órbita sigue desde donde se quedó la fila.
+      if (this.rowAngle !== null) this.angle = this.rowAngle
+      this.rowAngle = null
+      this.swayTime = 0
+      if (!still) this.angle += ORBIT_SPEED * dt
+      angle = this.angle
+    }
+    const view = orbitCamera(spot, angle, terrain.heightAt, camera.fov, camera.aspect, screenX, radius)
     camera.position.set(view.x, view.y, view.z)
     camera.rotation.set(view.pitch, view.yaw, 0)
-    // En una ventana estrecha el tablón tapa el centro: el personaje quedaría detrás.
+    // En una ventana estrecha el tablón tapa el centro: los personajes quedarían detrás.
     this.group.visible = showCharacter && width > NARROW_WIDTH
-    if (this.rig && this.group.visible) {
-      this.rig.object.rotation.y = poseYaw(spot, view.x, view.z)
-      this.rig.update(dt, 0, 0, 0, true)
-    }
+    if (!this.group.visible) return true
+    // La fila, perpendicular a la mirada de la cámara sin balanceo: así todos quedan a la misma distancia.
+    const offsets = this.cast
+      ? rowOffsets(members.length, orbitCamera(spot, this.rowAngle!, terrain.heightAt, camera.fov, camera.aspect, screenX, radius).yaw)
+      : [{ x: 0, z: 0 }]
+    members.forEach((member, i) => {
+      const rig = this.actors.get(member.id)?.rig
+      if (!rig) return
+      const { x, z } = offsets[i]!
+      rig.object.position.set(x, terrain.heightAt(spot.x + x, spot.z + z) - spot.y, z)
+      // En la fila, de frente a la cámara; solo, a tres cuartos y hacia el mar.
+      rig.object.rotation.y = this.cast ? yawTowards(spot.x + x, spot.z + z, view.x, view.z) : poseYaw(spot, view.x, view.z)
+      rig.update(dt, 0, 0, 0, true)
+    })
     return true
+  }
+
+  /** Las etiquetas con los nombres de la fila tal como los ve `camera` (vacío fuera de la sala o si no se ve). */
+  tags(camera: THREE.Camera, width: number, height: number): StageTag[] {
+    if (!this.cast || !this.group.visible) return []
+    camera.updateMatrixWorld()
+    const tags: StageTag[] = []
+    const point = new THREE.Vector3()
+    for (const member of this.cast) {
+      const rig = this.actors.get(member.id)?.rig
+      if (!rig) continue
+      point.copy(rig.object.position).add(this.group.position)
+      point.y += TAG_HEIGHT
+      point.project(camera)
+      if (point.z < -1 || point.z > 1) continue
+      tags.push({ id: member.id, name: member.name, left: ((point.x + 1) / 2) * width, top: ((1 - point.y) / 2) * height })
+    }
+    return tags
   }
 
   /** Fuera del menú no se ve (ni se anima). */
@@ -182,21 +293,46 @@ export class MenuStage {
     this.group.visible = false
   }
 
-  private ensureRig() {
-    const skin = this.skin()
-    if (this.loading === skin) return
-    this.loading = skin
-    this.load(skin).then(
+  /** Descarga a quien falte (o cambie de skin) y quita a quien ya no esté. */
+  private syncActors(members: readonly StageMember[]) {
+    const wanted = new Set<number>()
+    for (const member of members) {
+      wanted.add(member.id)
+      let actor = this.actors.get(member.id)
+      if (actor && actor.member.skin !== member.skin) {
+        this.drop(member.id)
+        actor = undefined
+      }
+      if (!actor) {
+        actor = { member, rig: null, state: 'idle' }
+        this.actors.set(member.id, actor)
+      }
+      actor.member = member
+      if (actor.state === 'idle') this.loadActor(actor)
+    }
+    for (const id of [...this.actors.keys()]) if (!wanted.has(id)) this.drop(id)
+  }
+
+  private drop(id: number) {
+    const actor = this.actors.get(id)
+    if (actor?.rig) this.group.remove(actor.rig.object)
+    this.actors.delete(id)
+  }
+
+  private loadActor(actor: Actor) {
+    actor.state = 'loading'
+    const current = () => this.actors.get(actor.member.id) === actor
+    this.load(actor.member.skin).then(
       (rig) => {
-        if (this.loading !== skin) return
-        if (this.rig) this.group.remove(this.rig.object)
-        this.rig = rig
+        if (!current()) return
+        actor.rig = rig
         this.group.add(rig.object)
       },
       (error) => {
         // Se vuelve a intentar al rato (puede haber sido la conexión); mientras, la isla sola.
+        actor.state = 'failed'
         setTimeout(() => {
-          if (this.loading === skin) this.loading = null
+          if (current() && actor.state === 'failed') actor.state = 'idle'
         }, RETRY_MS)
         console.warn('No se ha podido cargar el personaje del menú', error)
       },

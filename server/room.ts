@@ -166,6 +166,7 @@ interface RoomBlob {
   phase: MatchInfo['phase']
   host: PlayerId
   result: MatchResult | null
+  difficulty: Difficulty
 }
 
 /**
@@ -198,6 +199,8 @@ export class Room {
   private phase: MatchInfo['phase']
   private host: PlayerId = 0
   private result: MatchResult | null = null
+  /** La dificultad elegida en la sala para la próxima partida. */
+  private difficulty: Difficulty = 'normal'
   /** Quiénes han votado rendirse en esta partida. */
   private votes = new Set<PlayerId>()
   /** La isla guardada era de otra versión y se descartó: avisar a quien vuelva. */
@@ -242,7 +245,9 @@ export class Room {
     } else if (msg.type === 'say') {
       this.say(seat, msg.text)
     } else if (msg.type === 'start') {
-      this.start(seat, msg.difficulty)
+      this.start(seat)
+    } else if (msg.type === 'setDifficulty') {
+      this.setDifficulty(seat, msg.difficulty)
     } else if (msg.type === 'surrender') {
       this.vote(seat, msg.yes)
     } else if (msg.type === 'dev') {
@@ -350,8 +355,9 @@ export class Room {
   }
 
   /** El anfitrión empieza la partida con quienes haya conectados: los que se fueron del lobby pierden su hueco. */
-  private start(seat: Seat, difficulty: Difficulty) {
+  private start(seat: Seat) {
     if (this.phase !== 'lobby' || seat.id !== this.host) return
+    const { difficulty } = this
     const sim = this.sim!
     for (const other of [...this.seats.values()]) {
       if (other.conn) continue
@@ -373,6 +379,14 @@ export class Room {
     this.save()
     this.resume()
     this.scheduleAlarm()
+  }
+
+  /** Solo el anfitrión y en el lobby; todos la ven en el siguiente `match`. */
+  private setDifficulty(seat: Seat, difficulty: Difficulty) {
+    if (this.phase !== 'lobby' || seat.id !== this.host || difficulty === this.difficulty) return
+    this.difficulty = difficulty
+    this.announceMatch()
+    this.save()
   }
 
   /** Con más de la mitad de los conectados a favor, la partida acaba en el siguiente tick. */
@@ -405,6 +419,7 @@ export class Room {
       phase: this.phase,
       host: this.host,
       rules: this.sim?.rules ?? DEFAULT_RULES,
+      difficulty: this.difficulty,
       players: this.connected().map(({ id, name }) => ({ id, name })),
       votes: this.votes.size,
       result: this.result,
@@ -671,6 +686,7 @@ export class Room {
       phase: this.phase,
       host: this.host,
       result: this.result,
+      difficulty: this.difficulty,
     }
     this.deps.storage.save(JSON.stringify(blob))
   }
@@ -695,6 +711,7 @@ export class Room {
       this.phase = blob.phase
       this.host = blob.host
       this.result = blob.result
+      this.difficulty = blob.difficulty
     } catch {
       // De otra versión o ilegible: sin migraciones, se empieza una isla nueva con el mismo código.
       this.seats.clear()

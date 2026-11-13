@@ -1,12 +1,13 @@
 import type { Game } from '../game/Game'
 import { inGame } from '../game/states'
-import { DIFFICULTIES, DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
+import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
 import { failureMessage, NetError, NetSession } from '../net/netSession'
-import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
+import { cleanName, isRoomCode, MAX_NAME, MAX_PLAYERS, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
 import { onVersionReject, reloadFor } from '../net/reload'
 import { LocalSession } from '../net/session'
 import { loadSkin } from './skin'
-import { backButton, button, field, logo, make, panel, subScreenButtons } from './menu/views'
+import { backButton, button, difficultyCards, field, header, logo, make, panel, subScreenButtons } from './menu/views'
+import { roomModel, seatNote, seatsKey, type Seat } from './menu/room'
 import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
 const NAME_KEY = 'muck-web:name'
@@ -47,6 +48,28 @@ function setRoomInUrl(code: string | null) {
   history.replaceState(null, '', url)
 }
 
+const CROWN_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h18l-2-11-5 5-2-7-2 7-5-5z"></path></svg>'
+
+/** Un puesto de la sala: la corona del anfitrión, el nombre (ajeno: con `textContent`) y quién es; o un hueco libre. */
+function seatItem(seat: Seat | null): HTMLLIElement {
+  if (!seat) {
+    const li = make('li', 'empty')
+    li.textContent = 'Hueco libre'
+    return li
+  }
+  const li = make('li', seat.host ? 'host' : '')
+  const crown = make('span', 'crown', li)
+  if (seat.host) {
+    crown.innerHTML = CROWN_ICON
+    crown.title = 'Anfitrión'
+  }
+  make('span', 'who', li).textContent = seat.name
+  const note = seatNote(seat)
+  if (note) make('span', 'note', li).textContent = note
+  return li
+}
+
 /** El texto de la línea de estado de la conexión (vacío: nada que decir). */
 export function connectionStatus(s: {
   busy: boolean
@@ -78,7 +101,6 @@ export function installLobby(game: Game) {
   /** Desde cuándo (Date.now()) el servidor es más viejo que el cliente en los intentos de entrar. */
   let oldServerSince: number | null = null
   let nameValue = loadName()
-  let roomDifficulty: Difficulty = 'normal'
   /** Cuántos intentos de entrar se han empezado: uno que termina después de abandonarlo (volver al inicio) no cuenta. */
   let attempts = 0
   const name = () => cleanName(nameValue) || DEFAULT_NAME
@@ -205,32 +227,47 @@ export function installLobby(game: Game) {
   // La sala de espera. Se repinta cada medio segundo y con cada `match`: sin rehacerla, para no robar el foco.
   menu.register('room', (menu) => {
     const root = panel()
-    const box = make('div', 'room-code', root)
-    make('span', '', box).textContent = 'Sala'
-    const code = make('code', '', box)
-    const copy = button(root, 'Copiar enlace', 'small', () => void copyLink())
+    root.classList.add('room')
+    make('h1', 'menu-title', root).textContent = 'Sala de espera'
+    const box = make('div', 'room-code row', root)
+    const label = make('div', 'room-code-text', box)
+    make('span', '', label).textContent = 'Código de la sala'
+    const code = make('code', '', label)
+    const copy = button(box, 'Copiar enlace', 'small', () => void copyLink())
     const linkField = make('input', 'menu-input room-link', root)
     linkField.readOnly = true
     linkField.hidden = true
     linkField.setAttribute('aria-label', 'Enlace de la sala')
-    const players = make('ul', 'room-players', root)
-    const difficulty = make('select', 'menu-select', undefined)
-    for (const d of DIFFICULTIES) difficulty.add(new Option(DIFFICULTY_DEFS[d].name, d, false, d === roomDifficulty))
-    difficulty.addEventListener('change', () => (roomDifficulty = difficulty.value as Difficulty))
-    const difficultyRow = make('label', 'menu-field', root)
-    make('span', '', difficultyRow).textContent = 'Dificultad'
-    difficultyRow.appendChild(difficulty)
+    const seatsBox = make('div', 'room-seats', root)
+    const seatsTitle = make('span', 'room-seats-title', seatsBox)
+    const seats = make('ul', 'room-players', seatsBox)
+    const difficultyRow = make('div', 'room-difficulty', root)
+    const difficultyText = make('span', '', difficultyRow)
+    difficultyText.append('Dificultad: ')
+    const difficultyStrong = make('strong', '', difficultyText)
+    const change = button(difficultyRow, 'Cambiar', 'ghost tiny', () => menu.push('difficulty-room'))
+    change.dataset.opens = 'difficulty-room'
     const foot = make('div', 'menu-foot menu-stack', root)
     const start = button(foot, 'Empezar partida', 'primary', () => {
-      game.net?.client.start(roomDifficulty)
+      game.net?.client.start()
       // El clic es el gesto que permite capturar el ratón: a los demás les toca el suyo.
       void game.play()
     })
     const back = button(foot, 'Volver a la partida', 'primary', () => void game.play())
-    const waitingHost = make('p', 'menu-text', foot)
+    const waitingHost = make('p', 'room-waiting', foot)
     waitingHost.textContent = 'Esperando al anfitrión'
     const paint = statusLine(foot)
     button(foot, 'Salir de la sala', 'ghost', leave)
+    // El chat de la sala: el mismo del HUD, traído aquí (a la derecha o, en una ventana estrecha, dentro del tablón).
+    const chat = make('div', 'room-chat', root)
+    game.hud.net.dock(chat)
+    // Enter abre el chat solo si el foco no está en nada (en un botón, Enter lo pulsa).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.repeat || (document.activeElement && document.activeElement !== document.body)) return
+      e.preventDefault()
+      game.hud.net.openChat()
+    }
+    window.addEventListener('keydown', onKey)
     let copiedTimer: ReturnType<typeof setTimeout> | null = null
     let playerKey = ''
 
@@ -254,26 +291,22 @@ export function installLobby(game: Game) {
     const update = () => {
       const net = game.net
       if (!net) return
-      const match = net.client.match
+      const model = roomModel(net.client.match, net.me)
       code.textContent = net.room
-      const lobby = match?.phase === 'lobby'
-      const isHost = !!match && match.host === net.me
-      if (lobby) menu.voted = false
-      const key = match ? match.players.map((p) => `${p.id}:${p.name}`).join('|') + `#${match.host}` : ''
+      if (model.lobby) menu.voted = false
+      const key = seatsKey(model)
       if (key !== playerKey) {
         playerKey = key
-        players.replaceChildren(
-          ...(match?.players ?? []).map(({ id, name: who }) => {
-            const li = make('li', id === match!.host ? 'host' : '')
-            li.textContent = id === match!.host ? `${who} (anfitrión)` : who
-            return li
-          }),
-        )
+        seatsTitle.textContent = `Jugadores (${model.count} de ${MAX_PLAYERS})`
+        seats.replaceChildren(...model.seats.map(seatItem))
       }
-      players.hidden = !lobby
-      difficultyRow.hidden = start.hidden = !lobby || !isHost
-      waitingHost.hidden = !lobby || isHost
-      back.hidden = match?.phase !== 'playing'
+      const difficultyName = DIFFICULTY_DEFS[model.difficulty].name
+      if (difficultyStrong.textContent !== difficultyName) difficultyStrong.textContent = difficultyName
+      difficultyRow.hidden = !model.lobby
+      change.hidden = !model.isHost
+      start.hidden = !model.lobby || !model.isHost
+      waitingHost.hidden = !model.lobby || model.isHost
+      back.hidden = net.client.match?.phase !== 'playing'
       paint()
     }
     return {
@@ -281,8 +314,32 @@ export function installLobby(game: Game) {
       update,
       dispose: () => {
         if (copiedTimer) clearTimeout(copiedTimer)
+        window.removeEventListener('keydown', onKey)
+        game.hud.net.dock(null)
       },
     }
+  })
+
+  // Cambiar la dificultad de la sala (solo el anfitrión): las mismas tarjetas que en solitario, y "Guardar".
+  menu.register('difficulty-room', (menu) => {
+    const root = panel()
+    header(root, menu, 'Dificultad')
+    let picked: Difficulty = game.net?.client.match?.difficulty ?? 'normal'
+    difficultyCards(root, picked, (d) => (picked = d))
+    button(make('div', 'menu-foot menu-stack', root), 'Guardar', 'primary', () => {
+      game.net?.client.setDifficulty(picked)
+      menu.back()
+    })
+    // Si deja de ser el anfitrión (o empieza la partida) ya no hay nada que guardar: de vuelta a la sala.
+    const update = () => {
+      const net = game.net
+      const model = net ? roomModel(net.client.match, net.me) : null
+      if (model && model.isHost && model.lobby) return
+      queueMicrotask(() => {
+        if (menu.top === 'difficulty-room') menu.back()
+      })
+    }
+    return { root, update }
   })
 
   /** Repinta la pantalla del menú que se vea (o cambia a la que toque). */

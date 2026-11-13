@@ -1130,7 +1130,10 @@ export class Game {
     }
     // En el menú (inicio, sala…) la cámara es la del escenario; en la pausa, la muerte y la cuenta atrás, la del jugador.
     const staged = this.state === 'menu' && this.placeStage(dt)
-    if (!staged) this.menuStage.hide()
+    if (!staged) {
+      this.menuStage.hide()
+      this.menu.setStageTags([])
+    }
     if (watched) this.placeSpectatorCamera(watched.pose, dt)
     else if (!staged) this.placeCamera(this.renderPos)
     const shake = this.shake.update(dt)
@@ -1250,7 +1253,15 @@ export class Game {
     // Encima del tablón normal (ajustes y controles son más anchos; los resultados de la sala, una tarjeta centrada)
     // el personaje quedaría tapado.
     const showCharacter = menu.top === null && menu.screen !== 'results'
-    return this.menuStage.place(this.camera, dt, window.innerWidth, showCharacter)
+    // En la sala de espera, todos en fila con su nombre.
+    const client = this.net?.client
+    const match = client?.match
+    this.menuStage.setCast(
+      menu.screen === 'room' && match?.phase === 'lobby' ? match.players.map(({ id, name }) => ({ id, name, skin: client!.skins.get(id) ?? autoSkin(id) })) : null,
+    )
+    const placed = this.menuStage.place(this.camera, dt, window.innerWidth, showCharacter)
+    menu.setStageTags(placed ? this.menuStage.tags(this.camera, window.innerWidth, window.innerHeight) : [])
+    return placed
   }
 
   /** La skin del personaje del menú: en una sala, la que ven los demás; si no, la guardada. */
