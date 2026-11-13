@@ -388,106 +388,8 @@
 .equip-slot .equip-slot-name { position: absolute; top: -14px; left: 0; font-size: 10px; opacity: 0.7; white-space: nowrap; }
 .station-slot .station-slot-name { position: absolute; top: -16px; left: 0; font-size: 10px; opacity: 0.7; white-space: nowrap; }
 
-.overlay {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgb(20 40 60 / 0.45);
-  cursor: pointer;
-  font-family: system-ui, sans-serif;
-  color: #fff;
-}
-
-.overlay[hidden] { display: none; }
-.overlay.dead { background: rgb(70 10 10 / 0.6); }
-
-.overlay .panel {
-  padding: 24px 32px;
-  border-radius: 12px;
-  background: rgb(0 0 0 / 0.9);
-  text-align: center;
-  /* Ancho fijo: la sala de espera y los avisos cambian de texto y no deben estirar ni encoger el menú. */
-  width: min(560px, calc(100vw - 32px));
-  box-sizing: border-box;
-  /* Con los ajustes el panel es más alto: en ventanas bajas se desplaza. */
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
-}
-
-.overlay .title { margin: 0 0 8px; font-size: 28px; }
-.overlay .action { margin: 0 0 16px; font-size: 18px; font-weight: 600; }
-.overlay .warning { margin: 16px 0 0; color: #ffcf70; }
-
-.controls {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-  text-align: left;
-  font-size: 14px;
-}
-
-kbd {
-  display: inline-block;
-  min-width: 64px;
-  padding: 1px 6px;
-  margin-right: 8px;
-  border-radius: 4px;
-  background: rgb(255 255 255 / 0.15);
-  font: inherit;
-  text-align: center;
-}
-
-.settings {
-  display: grid;
-  gap: 6px;
-  margin: 16px 0 0;
-  padding: 12px 0 0;
-  border-top: 1px solid rgb(255 255 255 / 0.2);
-  text-align: left;
-  font-size: 14px;
-  cursor: default;
-}
-
-.settings h2 { margin: 0 0 2px; font-size: 16px; }
-
-.setting {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(90px, 160px) 3.5em;
-  align-items: center;
-  gap: 10px;
-}
-
-.setting input { width: 100%; margin: 0; accent-color: #ffd866; cursor: pointer; }
-.setting .value { text-align: right; font-variant-numeric: tabular-nums; }
-.setting .name small { display: block; font-size: 11px; font-weight: 400; opacity: 0.7; }
-.setting.toggle { grid-template-columns: minmax(0, 1fr) auto; }
-.setting.toggle input { width: auto; height: 16px; }
-.setting.keys { grid-template-columns: minmax(0, 1fr) auto; }
-
-.keybind {
-  font: inherit;
-  font-size: 12px;
-  min-width: 8em;
-  padding: 3px 10px;
-  border-radius: 6px;
-  border: 1px solid rgb(255 255 255 / 0.3);
-  background: rgb(255 255 255 / 0.12);
-  color: inherit;
-  cursor: pointer;
-}
-
-.keybind:hover { background: rgb(255 255 255 / 0.22); }
-.keybind.waiting { border-color: #ffd866; color: #ffd866; }
-.keybind.reset { min-width: 0; justify-self: start; margin-top: 4px; }
-
 /* --- Multijugador --- */
 
-/* En una sala la partida sigue detrás: el overlay deja verla. */
-.overlay.online { background: rgb(20 40 60 / 0.2); }
-.overlay.online.dead { background: rgb(70 10 10 / 0.35); }
 
 .net {
   position: absolute;
@@ -621,61 +523,6 @@ kbd {
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.9), 0 0 1px rgb(0 0 0);
 }
 
-/* El lobby, en el panel del menú y la pausa. */
-.lobby {
-  display: grid;
-  gap: 10px;
-  margin: 0 0 16px;
-  cursor: default;
-  font-size: 14px;
-}
-
-.lobby-offline, .lobby-room { display: grid; gap: 10px; }
-.lobby[hidden], .lobby [hidden] { display: none; }
-.results[hidden] { display: none; }
-.results { margin: 0 0 12px; text-align: center; }
-.results p { margin: 2px 0; }
-.results p:first-child { font-size: 20px; font-weight: 700; color: #ffd866; }
-.lobby .players { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.lobby .field select { font: inherit; padding: 4px; }
-.lobby .skin-preview { width: 120px; height: 170px; justify-self: center; }
-.lobby .field { display: grid; gap: 4px; text-align: left; font-weight: 600; }
-.lobby .buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.lobby .buttons[hidden] { display: none; }
-.lobby .join { display: flex; gap: 8px; justify-content: center; }
-.lobby .join input { width: 7em; text-transform: uppercase; letter-spacing: 0.15em; text-align: center; }
-.lobby .room { font-size: 16px; }
-.lobby .room code { font-size: 20px; letter-spacing: 0.15em; font-weight: 700; color: #ffd866; }
-
-.lobby input {
-  font: inherit;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid rgb(255 255 255 / 0.3);
-  background: rgb(0 0 0 / 0.35);
-  color: #fff;
-}
-
-.lobby button {
-  font: inherit;
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: 6px;
-  border: 1px solid rgb(255 255 255 / 0.3);
-  background: rgb(255 255 255 / 0.12);
-  color: #fff;
-  cursor: pointer;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.lobby button:hover:not(:disabled) { background: rgb(255 255 255 / 0.22); }
-.lobby button:disabled { opacity: 0.5; cursor: default; }
-.lobby button.primary { background: #ffd866; border-color: #ffd866; color: #1d2230; }
-.lobby button.primary:hover:not(:disabled) { background: #ffe38f; }
-.lobby .status { margin: 0; font-size: 13px; opacity: 0.9; }
-.lobby .status.error { color: #ffb3ab; opacity: 1; }
-
 /* Muerto en una sala (espectador) o game over. */
 .banner {
   position: absolute;
@@ -695,8 +542,6 @@ kbd {
 .banner .title { font-size: 30px; font-weight: 700; color: #ffb3ab; }
 .banner .detail { font-size: 15px; padding: 4px 12px; border-radius: 8px; background: rgb(0 0 0 / 0.35); }
 
-/* Un enlace largo (cuando no se puede copiar) o un aviso no ensanchan el menú. */
-.lobby code, .lobby .status { overflow-wrap: anywhere; }
 
 /* La tienda del mercader, en la columna de las recetas. */
 .inventory-shop { display: grid; gap: 8px; align-content: start; min-width: 0; }
@@ -704,13 +549,6 @@ kbd {
 .shop-tabs { display: flex; gap: 6px; }
 .shop-tab { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgb(255 255 255 / 0.3); background: rgb(255 255 255 / 0.08); color: inherit; cursor: pointer; }
 .shop-tab.active { background: #ffd866; border-color: #ffd866; color: #1d2230; }
-
-.credits {
-  margin: 12px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  opacity: 0.6;
-}
 
 /* Lo que lleva comido o bebido: una barrita bajo la mira. */
 .eating {

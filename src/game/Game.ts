@@ -30,8 +30,9 @@ import { maxHealthOf } from '../sim/boosts'
 import { boardingBanner, clockTexts, lightText, planeText, threatText } from '../ui/clockText'
 import { stationPrompt, usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
-import { Hud, type OverlayKind } from '../ui/hud'
-import { createSettingsPanel } from '../ui/settings'
+import { Hud } from '../ui/hud'
+import { MenuScreens } from '../ui/menu/MenuScreens'
+import { installCoreScreens } from '../ui/menu/views'
 import { bloodOf, moonPhaseOf, skyPhase, sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
 import { BIOME_NAMES } from '../sim/world/biomes'
@@ -75,7 +76,6 @@ const LIGHTHOUSE_REACH = 0.75
 /** Con qué rapidez se nota la luz del faro al encenderlo o apagarlo. */
 const LIGHTHOUSE_FADE = 1.5
 
-const overlayFor = (state: GameState): OverlayKind => (inGame(state) ? null : state)
 
 const SHADOW_LOOK_AHEAD = 25
 // Distancia a la que deja de oírse una fogata.
@@ -128,6 +128,8 @@ export class Game {
   private nature: NatureModels | null = null
   private decor: DecorView | null = null
   readonly hud: Hud
+  /** Las pantallas del menú: inicio, sala, pausa, muerte, resultados, ajustes y controles. */
+  readonly menu: MenuScreens
   readonly input: Input
   /** Los modelos animados de los mobs: se descargan la primera vez que sale uno de cada tipo (los trasgos, ya al empezar). */
   private enemyModels = new EnemyModels()
@@ -153,8 +155,6 @@ export class Game {
   inputOverride: Partial<PlayerInput> | null = null
   attackOverride: boolean | null = null
   useOverride: boolean | null = null
-  /** Si un clic en el fondo del menú empieza a jugar. Con el lobby, no: se elige con sus botones. */
-  menuClickStarts = true
   /** Al cambiar de estado o de partida (el lobby se rehace). */
   onchange: (() => void) | null = null
 
@@ -191,8 +191,6 @@ export class Game {
   private useKey = bindingLabel(this.settings.bindings.use)
   /** El `worldVersion` del cliente en red que ya refleja la vista de los props. */
   private worldVersion = -1
-  /** No se pudo capturar el ratón: el siguiente clic en el fondo lo vuelve a intentar, también en el menú. */
-  private retrying = false
   /** `performance.now()` al entrar en pausa: Esc no reanuda hasta pasarse la pulsación que la provocó. */
   private pausedAt = 0
   /** La estación cuyas ranuras enseña la pantalla de inventario (null: las recetas). */
@@ -244,7 +242,7 @@ export class Game {
     scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.hazardView.group, this.fishView.group, this.remotePlayers.group)
     this.lookFromPlayer()
 
-    this.hud = new Hud(container, () => this.onOverlayClick())
+    this.hud = new Hud(container)
     this.hud.minimap.setViewRadius(this.settings.mapRadius)
     this.hud.net.onsay = (text) => this.net?.client.say(text)
     this.hud.inventory.onmove = (from, to) => this.queueAction({ kind: 'move', from, to })
@@ -260,16 +258,9 @@ export class Game {
     this.hud.inventory.onescape = () => this.setState('paused')
     this.bindInventory()
     this.sound.setVolume(this.settings.volume)
-    createSettingsPanel(
-      this.hud.panel,
-      this.settings,
-      () => this.applySettings(),
-      (settings, key) => {
-        saveSettings(settings)
-        if (key === 'volume') this.sound.play('pickup')
-        if (key === 'bindings') this.applyBindings()
-      },
-    )
+    this.menu = new MenuScreens(container, this)
+    installCoreScreens(this.menu)
+    this.menu.refresh()
 
     this.input = new Input(this.renderer.domElement, {
       isPlaying: () => this.state === 'playing',
@@ -278,7 +269,7 @@ export class Game {
       onLockChange: (locked) => {
         const next = afterLockChange(this.state, locked)
         if (next) this.setState(next)
-        // Muerto con un jugador el overlay necesita el ratón suelto para su clic.
+        // Muerto con un jugador la pantalla final necesita el ratón suelto para sus botones.
         else if (locked) document.exitPointerLock()
       },
     }, this.settings.bindings)
@@ -293,12 +284,14 @@ export class Game {
       if (document.hidden) leave()
     })
 
-    // Esc también reanuda, además del clic en el overlay. Va en `keyup` y no en `keydown`: Chrome suelta la captura
+    // Esc también reanuda, además de "Continuar". Va en `keyup` y no en `keydown`: Chrome suelta la captura
     // con el Esc aún pulsado, y si se le pide recapturar mientras ese mismo evento sigue en curso la concede y la
     // suelta al instante (la pausa parpadea y no se sale de ella). Al soltar la tecla ya ha terminado. Va antes que
     // el listener de la pantalla de inventario, así que desde allí Esc pausa y no reanuda en la misma pulsación.
     window.addEventListener('keyup', (e) => {
       if (e.code !== 'Escape') return
+      // En una sub-pantalla de la pausa (ajustes, controles) Esc vuelve a la pausa, no reanuda.
+      if (!this.menu.escapeResumes()) return
       if (escapeResumes(this.state, performance.now() - this.pausedAt)) void this.resumeByEscape()
     })
 
@@ -354,7 +347,7 @@ export class Game {
     this.netGeneration = this.net?.generation ?? 0
     this.gameOverDay = null
     this.matchPhase = this.net?.client.match?.phase ?? null
-    this.hud.setResults(null)
+    this.menu.results = null
     this.lookFromPlayer()
     this.acc = 0
     this.snapPlayer = true
@@ -362,7 +355,8 @@ export class Game {
     // En el menú o en pausa no predice ni envía: al empezar a jugar pide el estado.
     if (!inGame(this.state)) this.net?.suspend()
     this.hud.net.setVisible(this.net !== null)
-    if (this.state !== 'playing') this.hud.showOverlay(overlayFor(this.state), this.net !== null)
+    this.menu.overlay = null
+    this.menu.refresh()
     this.onchange?.()
   }
 
@@ -372,7 +366,6 @@ export class Game {
       // la simulación no se ha parado).
       this.snapPlayer = true
       this.acc = 0
-      this.retrying = false
     }
     // El espectador registra teclas que solo consume con ticks: las que queden no se aplican al reaparecer.
     if (state === 'playing' && this.state === 'spectating') this.input.takePresses()
@@ -392,7 +385,8 @@ export class Game {
     this.state = state
     this.hud.inventory.setOpen(state === 'inventory')
     if (state !== 'inventory') this.openStationId = null
-    this.hud.showOverlay(overlayFor(state), this.net !== null)
+    this.menu.overlay = null
+    this.menu.refresh()
     this.onchange?.()
   }
 
@@ -402,8 +396,7 @@ export class Game {
     this.sound.unlock()
     const ok = await this.input.requestLock()
     if (ok) return
-    this.retrying = true
-    this.hud.showOverlay('retry')
+    this.menu.showRetry()
   }
 
   /**
@@ -437,7 +430,7 @@ export class Game {
   /** La isla acaba de volver a empezar: la vista la sigue. */
   private afterReset() {
     this.resetViews()
-    this.hud.setResults(null)
+    this.menu.setResults(null)
     this.lookFromPlayer()
     this.acc = 0
     this.placeCamera(this.slot.player.pos)
@@ -534,8 +527,7 @@ export class Game {
     void this.input.requestLock().then((ok) => {
       if (ok || this.state !== 'inventory') return
       this.setState('paused')
-      this.retrying = true
-      this.hud.showOverlay('retry', this.net !== null)
+      this.menu.showRetry()
     })
   }
 
@@ -561,17 +553,6 @@ export class Game {
     this.acc = 0
     this.followLives()
     this.render(1, seconds, performance.now())
-  }
-
-  private async onOverlayClick() {
-    if (this.state === 'playing') return
-    if (this.state === 'menu' && !this.menuClickStarts && !this.retrying) return
-    // En red no se llega a `dead` (el muerto es espectador); por si acaso, la isla no se reinicia desde aquí.
-    if (this.state === 'dead') {
-      if (this.net) return
-      this.restart()
-    }
-    await this.play()
   }
 
   /** Un frame: lo llama el navegador; con la ventana tapada no lo hace, y las pruebas lo mueven a mano (`__debug.frames`). */
@@ -606,8 +587,8 @@ export class Game {
       // Muerto, mira a los demás hasta que el servidor dice (en `you`) que ha reaparecido.
       if (this.state === 'playing' && !this.slot.alive) this.setState('spectating')
       else if (this.state === 'spectating' && this.slot.alive) this.setState('playing')
-      // Muerto con el inventario abierto: a pausa, para no quedarse de espectador sin ratón ni overlay. El clic en el
-      // overlay lo recaptura, pasa a jugar y el frame siguiente a espectador.
+      // Muerto con el inventario abierto: a pausa, para no quedarse de espectador sin ratón ni menú. "Continuar" lo
+      // recaptura, pasa a jugar y el frame siguiente a espectador.
       else if (this.state === 'inventory' && !this.slot.alive) this.setState('paused')
       this.render(net.alpha, dt, time)
       return
@@ -636,21 +617,22 @@ export class Game {
   }
 
   /**
-   * La sala ha cambiado de fase. Al empezar, solo quien pulsó el botón puede capturar el ratón ya: los demás, con su
-   * clic. Al acabar se vuelve al lobby, con el resultado a la vista.
+   * La sala ha cambiado de fase. Al empezar, solo quien pulsó el botón puede capturar el ratón ya: los demás, con
+   * "¡Entrar!". Al acabar se vuelve a la sala, con el resultado a la vista.
    */
   private followMatch(net: NetSession) {
     const match = net.client.match
     if (!match || match.phase === this.matchPhase) return
     this.matchPhase = match.phase
     if (match.phase === 'playing') {
-      this.hud.setResults(null)
+      this.menu.setResults(null)
       if (this.state !== 'menu') return
       this.setState('paused')
-      this.hud.showOverlay('ready', true)
+      this.menu.overlay = 'ready'
+      this.menu.refresh()
       return
     }
-    if (match.result) this.hud.setResults(resultLines(match.result, (id) => this.nameOf(net, id)))
+    if (match.result) this.menu.setResults({ end: match.result.end, lines: resultLines(match.result, (id) => this.nameOf(net, id)) })
     if (this.state === 'menu') return
     this.setState('menu')
     if (this.input.locked) document.exitPointerLock()
@@ -805,7 +787,7 @@ export class Game {
         case 'matchEnded':
           // En una sala se vuelve al lobby con el `match` que viene detrás (ver followMatch).
           if (this.net) break
-          this.hud.setResults(resultLines(e.result, () => 'Tú'))
+          this.menu.results = { end: e.result.end, lines: resultLines(e.result, () => 'Tú') }
           this.die()
           break
         case 'eternalNight':

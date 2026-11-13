@@ -27,7 +27,7 @@ export const showsCrosshair = (state: GameState) => state !== 'spectating' && st
 /**
  * A qué estado se pasa al capturar o soltar el ratón; null si no cambia. Capturarlo es empezar, reanudar o cerrar
  * el inventario, salvo muerto con un jugador: si se muere justo al cerrarlo, la captura pendiente no debe volver a
- * jugar (el clic en el overlay reinicia y pasa por el menú). Perderlo (Esc, cambiar de ventana) pausa si se jugaba
+ * jugar ("Jugar otra vez" reinicia y pasa por el menú). Perderlo (Esc, cambiar de ventana) pausa si se jugaba
  * con él; al abrir el inventario se suelta a propósito, y con el estado ya en `inventory` no cambia nada (tampoco
  * en `dead`, que lo suelta igual).
  */

@@ -6,49 +6,7 @@ import { ICONS } from './icons'
 import { InventoryScreen } from './inventoryScreen'
 import { Minimap } from './minimap'
 import { MultiplayerHud } from './multiplayerHud'
-import { CRAFT_MANY } from './recipes'
 import { missingTool } from './tools'
-
-export type OverlayKind = 'menu' | 'paused' | 'retry' | 'dead' | 'ready' | null
-
-const OVERLAY_TEXT: Record<Exclude<OverlayKind, null>, string> = {
-  menu: 'Haz clic para jugar',
-  paused: 'Pausa — haz clic para continuar',
-  retry: 'No se pudo capturar el ratón. Haz clic de nuevo',
-  dead: 'Haz clic para volver al menú',
-  ready: 'La partida ha empezado — haz clic para entrar',
-}
-
-/** En una sala la partida no se para: la pausa es solo tuya y morir no reinicia la isla. */
-const ONLINE_TEXT: Partial<Record<Exclude<OverlayKind, null>, string>> = {
-  menu: 'Sala de espera',
-  paused: 'Pausa (la partida sigue) — haz clic para continuar',
-  dead: 'Has muerto',
-}
-
-const CONTROLS = `
-  <ul class="controls">
-    <li><kbd>WASD</kbd> moverse</li>
-    <li><kbd>Ratón</kbd> mirar</li>
-    <li><kbd>Espacio</kbd> saltar</li>
-    <li><kbd>Shift</kbd> correr</li>
-    <li><kbd>Clic</kbd> golpear (mantener para repetir)</li>
-    <li><kbd>F</kbd> comer lo que llevas en la mano (si no, una baya)</li>
-    <li><kbd>Clic derecho</kbd> mirando a una estación: abrirla; con escudo, mantener para bloquear; si no, comer</li>
-    <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
-    <li><kbd>Q</kbd> tirar uno de la mano (<kbd>Ctrl</kbd> + <kbd>Q</kbd>: todos)</li>
-    <li><kbd>Tab</kbd> o <kbd>E</kbd> inventario (clic en dos casillas o arrastrar: cambiarlas; <kbd>Mayús</kbd> + clic en un peto o escudo: ponérselo)</li>
-    <li><kbd>E</kbd> cerca de una construcción: entregar materiales, cargar aceite o encender el faro; junto a una fogata, echarle leña y cocinar (encendida, su calor cura)</li>
-    <li><kbd>C</kbd> inventario con las recetas (clic: fabricar; <kbd>Mayús</kbd> + clic: hasta ${CRAFT_MANY})</li>
-    <li><kbd>Clic</kbd> con la fogata o una estación en la mano: colocarla</li>
-    <li><kbd>Enter</kbd> chat (en una sala)</li>
-    <li><kbd>Esc</kbd> pausa</li>
-  </ul>`
-
-/** Lo que piden las licencias de los modelos (el LICENSE.txt de cada carpeta de public/models). */
-const CREDITS = `
-  <p class="credits">Modelos: Quaternius (CC0); Guardián del meteorito a partir de "Colossus" de Darwin Yamamoto
-  (CC-BY 3.0); Coloso de Cristal a partir de LOWPO Golem Pack de Standout 7.</p>`
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement) => {
   const node = document.createElement(tag)
@@ -64,8 +22,6 @@ export class Hud {
   readonly net: MultiplayerHud
   /** La pantalla de inventario y crafteo (Tab, E o C), encima del resto del HUD. */
   readonly inventory: InventoryScreen
-  /** El texto del menú cuando hay lobby (los botones del panel deciden cómo jugar). */
-  menuText: string | null = null
   private healthBar: HTMLElement
   private healthFill: HTMLElement
   private regenLeft: HTMLElement
@@ -91,14 +47,9 @@ export class Hud {
   private eating: HTMLElement
   private eatingFill: HTMLElement
   private eatingShown = -1
-  private overlay: HTMLElement
-  private overlayTitle: HTMLElement
-  private results: HTMLElement
-  /** Panel del menú y la pausa, donde van los ajustes. */
-  readonly panel: HTMLElement
   private last = { health: -1, regen: 0, warming: false, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', effects: '', clock: '', tonight: '', light: '', boss: '' }
 
-  constructor(container: HTMLElement, onOverlayClick: () => void) {
+  constructor(container: HTMLElement) {
     const root = el('div', 'hud', container)
     this.hurt = el('div', 'hurt', root)
     this.crosshair = el('div', 'crosshair', root)
@@ -140,35 +91,6 @@ export class Hud {
     }
 
     this.inventory = new InventoryScreen(root)
-
-    this.overlay = el('div', 'overlay', container)
-    const panel = (this.panel = el('div', 'panel', this.overlay))
-    el('h1', 'title', panel).textContent = 'muck-web'
-    this.overlayTitle = el('p', 'action', panel)
-    this.results = el('div', 'results', panel)
-    this.results.hidden = true
-    panel.insertAdjacentHTML('beforeend', CONTROLS + CREDITS)
-    if (!matchMedia('(any-pointer: fine)').matches) {
-      el('p', 'warning', panel).textContent = 'Necesitas teclado y ratón para jugar.'
-    }
-    this.overlay.addEventListener('click', onOverlayClick)
-    this.showOverlay('menu')
-  }
-
-  /** `online`: en una sala (overlay translúcido y textos de red). */
-  showOverlay(kind: OverlayKind, online = false) {
-    this.overlay.hidden = kind === null
-    this.overlay.classList.toggle('dead', kind === 'dead')
-    this.overlay.classList.toggle('online', online)
-    if (!kind) return
-    const text = (online && ONLINE_TEXT[kind]) || (kind === 'menu' && this.menuText) || OVERLAY_TEXT[kind]
-    this.overlayTitle.textContent = text
-  }
-
-  /** La pantalla final, sobre el menú; null la quita. */
-  setResults(lines: readonly string[] | null) {
-    this.results.hidden = !lines
-    this.results.replaceChildren(...(lines ?? []).map((line) => Object.assign(document.createElement('p'), { textContent: line })))
   }
 
   /**
