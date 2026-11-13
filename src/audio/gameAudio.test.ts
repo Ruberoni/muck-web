@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { ENEMY_DEFS, STEP, type EnemyType } from '../sim/constants'
+import { ENEMY_DEFS, enemyScale, STEP, type EnemyType } from '../sim/constants'
 import type { SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
 import type { PropKind } from '../sim/props'
 import {
   ENEMY_STEP_GAIN,
   ENEMY_STEP_HEARING,
+  ENEMY_STEP_SOFT,
   ENEMY_STEPS_PER_FRAME,
+  enemyStepVolume,
   GameAudio,
   GROWL_DISTANCE,
   REMOTE_DEATH_GAIN,
   REMOTE_HEARING,
+  listenerFor,
   STRIDE,
   type EnemyWalker,
   type RemoteWalker,
@@ -326,10 +329,63 @@ describe('pasos de los mobs', () => {
     walk(audio, [goblin], 30)
     // 3 m andados con un paso de 2,1 × 1,25 m: uno, a los 2,7 m.
     expect(played.map((p) => p.name)).toEqual(['enemyStep'])
-    expect(played[0].options!.gain).toBeCloseTo(spatialize(4, 2.7, 0, ENEMY_STEP_HEARING).gain * ENEMY_STEP_GAIN)
+    expect(played[0].options!.gain).toBeCloseTo(enemyStepVolume(4, 2.7, 0, 'goblin').gain)
     expect(played[0].options!.pan).toBeGreaterThan(0.5)
-    // Mucho más flojo que el paso de otro jugador a la misma distancia.
-    expect(played[0].options!.gain).toBeLessThan(spatialize(4, 2.7, 0, REMOTE_HEARING.step).gain)
+    expect(played[0].options!.weight).toBe(ENEMY_DEFS.goblin.scale)
+  })
+
+  it('pegado suena más flojo que un paso propio, y cae con la distancia hasta callarse en ENEMY_STEP_HEARING', () => {
+    // El paso propio suena con ganancia 0,8–1.
+    expect(enemyStepVolume(0, 0, 0, 'goblin').gain).toBe(ENEMY_STEP_GAIN)
+    expect(ENEMY_STEP_GAIN).toBeLessThan(0.8)
+    const at = (d: number) => enemyStepVolume(d, 0, 0, 'goblin').gain
+    expect(at(5)).toBeLessThan(at(1))
+    expect(at(10)).toBeLessThan(at(5))
+    // Más suave que el near² de los demás sonidos: a media distancia no desaparece.
+    expect(at(10) / ENEMY_STEP_GAIN).toBeGreaterThan(spatialize(10, 0, 0, ENEMY_STEP_HEARING).gain)
+    expect(at(ENEMY_STEP_HEARING)).toBe(0)
+    expect(at(ENEMY_STEP_HEARING + 1)).toBe(0)
+  })
+
+  it('el peso es la escala visible: crece con el mob y con la Noche Eterna; el espíritu pisa más suave', () => {
+    const weight = (type: EnemyType, look: 0 | 1 | 2 = 0) => enemyStepVolume(1, 0, 0, type, look).weight
+    expect(weight('dog')).toBeLessThan(weight('goblin'))
+    expect(weight('goblin')).toBeLessThan(weight('golem'))
+    expect(weight('golem')).toBeLessThan(weight('colossus'))
+    expect(weight('goblin', 1)).toBe(enemyScale('goblin', 1))
+    expect(weight('goblin', 1)).toBeGreaterThan(weight('goblin'))
+    expect(enemyStepVolume(1, 0, 0, 'spirit').gain).toBeCloseTo(enemyStepVolume(1, 0, 0, 'goblin').gain * ENEMY_STEP_SOFT.spirit!)
+    expect(ENEMY_STEP_SOFT.spirit!).toBeLessThan(1)
+  })
+
+  it('un trasgo de la Noche Eterna da pasos más largos, como su tamaño', () => {
+    const { audio, played } = setup()
+    const big = { ...mob(1, 'goblin', 4), look: 1 as const }
+    audio.enemySteps([big], listener, land)
+    // 3 m: con la escala de siempre ya habría pisado (2,6 m); crecido, el paso es de 2,1 × 1,25 × 1,3 = 3,4 m.
+    walk(audio, [big], 30)
+    expect(played).toEqual([])
+    walk(audio, [big], 6)
+    expect(played.map((p) => p.options!.weight)).toEqual([enemyScale('goblin', 1)])
+  })
+
+  it('el oyente del espectador gira con su cámara, no con la mirada congelada del muerto', () => {
+    const pos = { x: 3, z: 4 }
+    expect(listenerFor(pos, 0.3, null)).toEqual({ x: 3, z: 4, yaw: 0.3 })
+    expect(listenerFor(pos, 0.3, 2)).toEqual({ x: 3, z: 4, yaw: 2 })
+    // Un mob a la derecha de la cámara del espectador suena a la derecha, aunque el muerto mirara al otro lado.
+    const { audio, played } = setup()
+    const goblin = mob(1, 'goblin', 0)
+    goblin.pos.z = 4
+    const heard = listenerFor({ x: 0, z: 0 }, Math.PI, -Math.PI / 2)
+    audio.enemySteps([goblin], heard, land)
+    for (let i = 0; i < 30; i++) {
+      goblin.pos.x += 0.1
+      audio.enemySteps([goblin], heard, land)
+    }
+    expect(played[0].options!.pan).toBeGreaterThan(0.5)
+    // Con la mirada congelada (`look.yaw` = π), el mismo paso habría sonado a la izquierda.
+    expect(enemyStepVolume(goblin.pos.x, goblin.pos.z, Math.PI, 'goblin').pan).toBeLessThan(0)
   })
 
   it('un mob grande da pasos más largos: los mismos 3 m no le llegan', () => {
@@ -350,7 +406,7 @@ describe('pasos de los mobs', () => {
     audio.enemySteps(pack, listener, land)
     expect(played.map((p) => p.name)).toEqual(Array(ENEMY_STEPS_PER_FRAME).fill('enemyStep'))
     // El lejano es el que se cae: los dos que suenan están más cerca que él.
-    const far = spatialize(12, 1.6, 0, ENEMY_STEP_HEARING).gain * ENEMY_STEP_GAIN
+    const far = enemyStepVolume(12, 1.6, 0, 'dog').gain
     for (const p of played) expect(p.options!.gain).toBeGreaterThan(far)
   })
 

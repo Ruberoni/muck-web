@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { GameAudio } from '../audio/gameAudio'
+import { GameAudio, listenerFor } from '../audio/gameAudio'
 import { Sound } from '../audio/sound'
 import { createScene, updateSky, type Sky } from '../scene'
 import { PropView } from '../view/PropView'
@@ -718,6 +718,8 @@ export class Game {
     const { yaw, pitch } = this.look
     // En solitario lo que pasa en el mundo llega aquí (en una sala, con `render`).
     this.present(this.session.step({ buttons: 0, yaw, pitch }, []))
+    // Muerto también se oyen los mobs, alrededor del compañero al que se mira.
+    this.audio.enemySteps(this.sim.enemies.list, this.listener(), this.mobSwimming)
   }
 
   /** En una sala, Enter abre el chat: lo que se teclee no llega al juego hasta cerrarlo (Enter o Esc). */
@@ -926,8 +928,10 @@ export class Game {
     for (const e of events) if (e.type === 'playerDied' && e.id !== net.me) this.hud.net.notice(`${this.nameOf(net, e.id)} ha muerto`)
   }
 
+  /** Quién escucha: en espectador, el compañero al que se mira (renderPos ya es él) con el giro de la cámara que lo sigue. */
   private listener() {
-    return { x: this.renderPos.x, z: this.renderPos.z, yaw: this.look.yaw }
+    const watching = this.net && this.state === 'spectating' && this.spectated !== null
+    return listenerFor(this.renderPos, this.look.yaw, watching ? this.spectatorYaw : null)
   }
 
   private nameOf(net: NetSession, id: number): string {
