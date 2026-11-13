@@ -234,6 +234,8 @@ describe('el avión', () => {
 
   it('no avisa de quién va a bordo más de dos veces por segundo', () => {
     const { sim, structure, hot, board, steps } = setup()
+    // Uno más, lejos: si no, al subir el segundo estarían todos y despegaría.
+    sim.addPlayer(2)
     hot()
     board(0)
     steps(1)
@@ -243,7 +245,33 @@ describe('el avión', () => {
       sim.teleport(1, structure.x + structure.radius + (i % 2 ? 7.9 : 8.1), structure.z, 0, 0)
       changes += steps(1).filter((e) => e.type === 'planeChanged').length
     }
+    expect(changes).toBeGreaterThanOrEqual(1)
     expect(changes).toBeLessThanOrEqual(2)
+    // Lo que se dejó de avisar llega pasado el hueco.
+    sim.teleport(1, 0, 0, 0, 0)
+    expect(steps(31).filter((e) => e.type === 'planeChanged').at(-1)).toMatchObject({ plane: { aboard: 1, expected: 3 } })
+  })
+
+  it('tras apagarse sin vida y volver a arrancar, calienta de nuevo y la cuenta empieza entera', () => {
+    const { sim, inventory, structure, plane, hot, board, wait, useKey } = setup()
+    hot()
+    board(0)
+    wait(30)
+    plane.hp = 5
+    const goblin = sim.enemies.spawnAt(structure.x - structure.radius - 1.2, structure.z)
+    goblin.attackCooldown = 0
+    wait(2)
+    expect(plane).toMatchObject({ running: false, until: null, wait: null, aboard: 0, expected: 0 })
+    sim.enemies.reset()
+    inventory.add('wood', PLANE_REPAIR_WOOD)
+    useKey(0.05)
+    wait(0.1)
+    useKey(0.05)
+    expect(plane).toMatchObject({ running: true, until: null, aboard: 0, expected: 0 })
+    expect(ended(wait(MOTOR_TIME - 1))).toBeUndefined()
+    expect(plane.until).toBeNull()
+    wait(2)
+    expect(plane.wait).toBeGreaterThan(PLANE_WAIT - 2)
   })
 
   it('si no hay nadie a bordo espera, listo', () => {

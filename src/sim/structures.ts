@@ -131,6 +131,16 @@ const copyStructure = (s: Structure): Structure => ({
   ...(s.shop ? { shop: copyShop(s.shop) } : {}),
 })
 
+/**
+ * La copia del cliente del avión, `dt` segundos después (o antes, si es negativo): calienta y descuenta la espera.
+ * La espera se queda en 0 hasta que el servidor diga que ha despegado (matchEnded) o que se ha cancelado.
+ */
+export function followPlane(plane: PlaneState, dt: number) {
+  if (!plane.running) return
+  plane.heat = Math.max(0, plane.heat + dt)
+  if (plane.wait !== null) plane.wait = Math.max(0, plane.wait - dt)
+}
+
 /** Hueco entre el jugador y lo que coloca, si es grande. */
 const PLACE_GAP = 1.2
 
@@ -305,11 +315,7 @@ export class Structures {
   follow(dt: number, night: boolean) {
     for (const s of this.list) {
       if (s.station) followStation(s.kind, s.station, dt)
-      if (s.plane?.running) {
-        s.plane.heat += dt
-        // Se queda en 0 hasta que el servidor diga que ha despegado (matchEnded) o que se ha cancelado.
-        if (s.plane.wait !== null) s.plane.wait = Math.max(0, s.plane.wait - dt)
-      }
+      if (s.plane) followPlane(s.plane, dt)
       if (!s.fire?.burning) continue
       s.fire.left = Math.max(0, s.fire.left - dt)
       if (night) s.fire.lit += dt

@@ -10,7 +10,7 @@ import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
 import { createIsland } from '../sim/world/island'
-import { stationNear, structureSpot, warmAt, type StructureKind } from '../sim/structures'
+import { followPlane, stationNear, structureSpot, warmAt, type StructureKind } from '../sim/structures'
 import { copyStation, STATION_DEFS, followStation, type StationState } from '../sim/stations'
 import { isNight } from '../sim/world/daycycle'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
@@ -681,7 +681,10 @@ export class NetClient {
       }
       case 'planeChanged': {
         const structure = sim.structures.byId(e.id)
-        if (structure) structure.plane = e.plane
+        if (!structure) break
+        // Medido en el tick del evento; la copia de las estructuras va por structuresTick.
+        structure.plane = { ...e.plane }
+        followPlane(structure.plane, (this.structuresTick - e.tick) * STEP)
         break
       }
       case 'totemActivated': {

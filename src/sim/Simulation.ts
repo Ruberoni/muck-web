@@ -966,6 +966,7 @@ export class Simulation {
     if (!aboard.length) {
       if (plane.until !== null) {
         this.stopBoarding(plane)
+        plane.expected = expected.length
         this.planeChanged(structure)
       } else this.planeAboardChanged(structure)
       return
@@ -986,10 +987,12 @@ export class Simulation {
     this.planeAboardChanged(structure)
   }
 
-  /** Sin cuenta atrás para despegar. */
+  /** Sin cuenta atrás para despegar. A bordo se vuelve a contar en el próximo paso con el motor caliente. */
   private stopBoarding(plane: PlaneState) {
     plane.until = null
     plane.wait = null
+    plane.aboard = 0
+    plane.expected = 0
   }
 
   /** Avisa del avión tal cual está y apunta lo que se ha dicho de quién va a bordo. */
