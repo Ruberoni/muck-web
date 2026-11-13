@@ -571,3 +571,6 @@
   width: 0;
   background: #f2c94c;
 }
+
+/* En el menú: la isla de fondo, sin barras, hotbar, minimapa, día ni mira. El chat y los avisos de la sala se quedan. */
+.hud.in-menu > :not(.chat):not(.notices) { visibility: hidden; }

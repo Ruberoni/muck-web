@@ -7,7 +7,7 @@ export type LoadCharacter = (skin: number) => Promise<CharacterRig>
 
 const modelUrl = (path: string) => `${import.meta.env.BASE_URL}models/${path}.glb`
 
-/** Solo se descarga lo que hace falta, y nada de esto si se juega solo. */
+/** Solo se descarga lo que hace falta: el cargador, la primera vez que se ve un personaje (el del menú, también en solitario). */
 const tools = async () => {
   const [{ GLTFLoader }, { clone }] = await Promise.all([import('three/examples/jsm/loaders/GLTFLoader.js'), import('three/examples/jsm/utils/SkeletonUtils.js')])
   return { loader: new GLTFLoader(), clone }

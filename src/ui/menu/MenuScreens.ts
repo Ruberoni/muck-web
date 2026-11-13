@@ -40,8 +40,6 @@ const NOTICE_MS = 4000
  */
 export class MenuScreens {
   readonly root: HTMLElement
-  /** La vista previa del personaje, a la derecha del tablón (la pone el lobby). */
-  readonly preview: HTMLElement
   private notice: HTMLElement
   private noticeTimer: ReturnType<typeof setTimeout> | null = null
   private builders = new Map<Screen | SubScreen, ScreenBuilder>()
@@ -68,13 +66,11 @@ export class MenuScreens {
   ) {
     this.root = document.createElement('div')
     this.root.className = 'menu'
-    this.preview = document.createElement('div')
-    this.preview.className = 'menu-preview'
     this.notice = document.createElement('div')
     this.notice.className = 'menu-notice'
     this.notice.setAttribute('role', 'status')
     this.notice.hidden = true
-    this.root.append(this.preview, this.notice)
+    this.root.append(this.notice)
     container.appendChild(this.root)
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || e.repeat) return
@@ -198,7 +194,6 @@ export class MenuScreens {
     this.root.classList.toggle('online', this.game.net !== null)
     view.root.classList.add('menu-panel')
     if (view.size) view.root.classList.add(view.size)
-    this.preview.hidden = card || this.top !== null
     this.root.insertBefore(view.root, this.notice)
     this.shown = { key, view }
     view.update?.()

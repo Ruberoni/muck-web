@@ -13,7 +13,9 @@ import { HazardView } from '../view/HazardView'
 import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { autoSkin } from '../net/skins'
+import { loadSkin } from '../ui/skin'
 import { loadCharacter } from '../view/characters'
+import { MenuStage } from '../view/menuStage'
 import { DecorView } from '../view/DecorView'
 import { FishView } from '../view/FishView'
 import { loadNature, type NatureModels } from '../view/nature'
@@ -142,6 +144,10 @@ export class Game {
   readonly fishView = new FishView()
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView(loadCharacter)
+  /** El fondo del menú: el personaje en la isla y la cámara que gira a su alrededor. */
+  readonly menuStage = new MenuStage(loadCharacter, () => this.ownSkin())
+  /** La skin guardada en el navegador, leída una vez: es la que se manda al entrar en una sala. */
+  private savedSkin = loadSkin()
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
@@ -239,7 +245,7 @@ export class Game {
       (error) => console.warn('No se han podido cargar los modelos de naturaleza', error),
     )
     this.structureView = new StructureView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.hazardView.group, this.fishView.group, this.remotePlayers.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.hazardView.group, this.fishView.group, this.remotePlayers.group, this.menuStage.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container)
@@ -258,6 +264,7 @@ export class Game {
     this.hud.inventory.onescape = () => this.setState('paused')
     this.bindInventory()
     this.sound.setVolume(this.settings.volume)
+    this.hud.setInMenu(this.state === 'menu')
     this.menu = new MenuScreens(container, this)
     installCoreScreens(this.menu)
     this.menu.refresh()
@@ -378,6 +385,7 @@ export class Game {
     else if (state !== 'playing') this.input.clear()
     if (!inGame(state)) this.hud.net.closeChat()
     this.hud.setCrosshair(showsCrosshair(state))
+    this.hud.setInMenu(state === 'menu')
     // En red la pausa es solo local: el jugador pasa a ausente y la partida sigue. El espectador y el inventario
     // siguen conectados.
     if (inGame(state)) this.net?.wake()
@@ -1120,11 +1128,16 @@ export class Game {
         this.propView.sync(sim.world.props)
       }
     }
+    // En el menú (inicio, sala…) la cámara es la del escenario; en la pausa, la muerte y la cuenta atrás, la del jugador.
+    const staged = this.state === 'menu' && this.placeStage(dt)
+    if (!staged) this.menuStage.hide()
     if (watched) this.placeSpectatorCamera(watched.pose, dt)
-    else this.placeCamera(this.renderPos)
+    else if (!staged) this.placeCamera(this.renderPos)
     const shake = this.shake.update(dt)
-    this.camera.position.x += shake.x
-    this.camera.position.y += shake.y
+    if (!staged) {
+      this.camera.position.x += shake.x
+      this.camera.position.y += shake.y
+    }
     this.enemyView.update(dt, enemies.list, alpha)
     this.pickupView.update(sim.pickups.list, alpha)
     this.projectileView.update(dt, sim.projectiles.list, alpha)
@@ -1140,12 +1153,15 @@ export class Game {
 
     this.water.position.y = WATER_LEVEL + Math.sin(time * 0.0008) * 0.08
 
-    // Las sombras se centran por delante del jugador según el yaw (no depende del pitch).
-    this.shadowCenter.set(
-      this.renderPos.x - Math.sin(look.yaw) * SHADOW_LOOK_AHEAD,
-      this.renderPos.y,
-      this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
-    )
+    // Las sombras se centran por delante del jugador según el yaw (no depende del pitch); en el menú, en el personaje.
+    const stage = staged ? this.menuStage.center : null
+    if (stage) this.shadowCenter.set(stage.x, stage.y, stage.z)
+    else
+      this.shadowCenter.set(
+        this.renderPos.x - Math.sin(look.yaw) * SHADOW_LOOK_AHEAD,
+        this.renderPos.y,
+        this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
+      )
     this.lighthouseGlow = THREE.MathUtils.damp(this.lighthouseGlow, structures.burning ? 1 : 0, LIGHTHOUSE_FADE, dt)
     // El cielo frena poco a poco en la Noche Eterna (`skyPhase`), y su luna es de sangre.
     const sky = skyPhase(sim.clock)
@@ -1223,8 +1239,25 @@ export class Game {
     // Primero el cielo (no escribe profundidad) y encima la isla.
     this.renderer.render(this.sky.view.scene, this.camera)
     this.renderer.render(this.scene, this.camera)
-    // La mano no se dibuja muerto ni bajo la pantalla de inventario.
-    if (this.state !== 'dead' && this.state !== 'spectating' && this.state !== 'inventory') this.handheld.render(this.renderer)
+    // La mano no se dibuja muerto, bajo la pantalla de inventario ni en el menú (la cámara no es la del jugador).
+    if (this.state !== 'dead' && this.state !== 'spectating' && this.state !== 'inventory' && this.state !== 'menu') this.handheld.render(this.renderer)
+  }
+
+  /** La cámara del menú, en la isla que se ve. `false`: no se pudo (se usa la del jugador). */
+  private placeStage(dt: number): boolean {
+    const { sim, menu } = this
+    this.menuStage.setIsland(sim.island, sim.obstacles, sim.spawnCenter)
+    // Encima del tablón normal (ajustes y controles son más anchos; los resultados de la sala, una tarjeta centrada)
+    // el personaje quedaría tapado.
+    const showCharacter = menu.top === null && menu.screen !== 'results'
+    return this.menuStage.place(this.camera, dt, window.innerWidth, showCharacter)
+  }
+
+  /** La skin del personaje del menú: en una sala, la que ven los demás; si no, la guardada. */
+  private ownSkin(): number {
+    const client = this.net?.client
+    if (client && client.id >= 0) return client.skins.get(client.id) ?? autoSkin(client.id)
+    return this.savedSkin ?? 0
   }
 
   /** Detrás y por encima del compañero, girando con él poco a poco; nunca bajo el suelo ni bajo el agua. */

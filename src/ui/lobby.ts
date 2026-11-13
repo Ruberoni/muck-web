@@ -5,9 +5,8 @@ import { failureMessage, NetError, NetSession } from '../net/netSession'
 import { cleanName, isRoomCode, MAX_NAME, ROOM_ALPHABET, ROOM_CODE_LENGTH } from '../net/protocol'
 import { onVersionReject, reloadFor } from '../net/reload'
 import { LocalSession } from '../net/session'
-import { loadCharacter } from '../view/characters'
+import { loadSkin } from './skin'
 import { backButton, button, field, logo, make, panel, subScreenButtons } from './menu/views'
-import { skinField } from './skinPicker'
 import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
 const NAME_KEY = 'muck-web:name'
@@ -83,8 +82,6 @@ export function installLobby(game: Game) {
   /** Cuántos intentos de entrar se han empezado: uno que termina después de abandonarlo (volver al inicio) no cuenta. */
   let attempts = 0
   const name = () => cleanName(nameValue) || DEFAULT_NAME
-  // La vista previa del personaje (hasta el PR 2 del menú, con su propio lienzo), a la derecha del tablón.
-  const skin = skinField(menu.preview, loadCharacter)
 
   const status = () => {
     const net = game.net
@@ -134,7 +131,7 @@ export function installLobby(game: Game) {
     nameField(root)
     const actions = make('div', 'menu-stack', root)
     const solo = button(actions, 'Jugar solo', 'primary', () => menu.go('solo-difficulty'))
-    const create = button(actions, 'Crear partida', '', () => void enter(() => NetSession.create(name(), skin.value()), ''))
+    const create = button(actions, 'Crear partida', '', () => void enter(() => NetSession.create(name(), loadSkin()), ''))
     const join = button(actions, 'Unirse', '', () => {
       error = ''
       menu.go('join')
@@ -159,7 +156,7 @@ export function installLobby(game: Game) {
     field(root, 'Código', code)
     const paint = statusLine(root)
     const join = button(make('div', 'menu-foot menu-stack', root), 'Unirse', 'primary', () => {
-      if (isRoomCode(code.value)) void enter(() => NetSession.open('join', code.value, name(), skin.value()), code.value)
+      if (isRoomCode(code.value)) void enter(() => NetSession.open('join', code.value, name(), loadSkin()), code.value)
     })
     const update = () => {
       paint()
@@ -185,7 +182,7 @@ export function installLobby(game: Game) {
     nameField(root)
     const accept = button(root, 'Unirse a la sala', 'primary', () => {
       const room = roomFromUrl()
-      if (room) void enter(() => NetSession.open('join', room, name(), skin.value()), room)
+      if (room) void enter(() => NetSession.open('join', room, name(), loadSkin()), room)
     })
     accept.dataset.autofocus = ''
     const paint = statusLine(root)
