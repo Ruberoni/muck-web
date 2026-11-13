@@ -52,6 +52,10 @@ describe('el avión en el HUD', () => {
     expect(planeText(plane({ until: 999, wait: 41.2, aboard: 2, expected: 3, hp: PLANE_HP * 0.8 }))).toBe('Despega en 0:42 · 2/3 a bordo · Avión 80 %')
   })
 
+  it('con la cuenta a 0, mientras llega el final de la partida: despegando', () => {
+    expect(planeText(plane({ until: 999, wait: 0, aboard: 1, expected: 2 }))).toBe('Despegando… · Avión 100 %')
+  })
+
   it('los 60 s justos, aunque la resta de pasos deje decimales de más', () => {
     expect(planeText(plane({ until: 999, wait: 3600 * (1 / 60), aboard: 1, expected: 2 }))).toContain('Despega en 1:00')
   })
@@ -59,10 +63,14 @@ describe('el avión en el HUD', () => {
 
 describe('el aviso de que alguien sube al avión', () => {
   it('lejos: hacia dónde está', () => {
-    expect(boardingBanner(0, -100, 5)).toBe('¡El avión despega en 60 s! Está al norte')
+    expect(boardingBanner(0, -100, 5, true)).toBe('¡El avión despega en 60 s! Está al norte')
   })
 
   it('a bordo: que se espera a los demás', () => {
-    expect(boardingBanner(3, 4, 5)).toBe('¡El avión despega en 60 s! Esperando a los demás')
+    expect(boardingBanner(3, 4, 5, true)).toBe('¡El avión despega en 60 s! Esperando a los demás')
+  })
+
+  it('muerto al lado del avión: no va a bordo, así que hacia dónde está', () => {
+    expect(boardingBanner(0, -3, 5, false)).toBe('¡El avión despega en 60 s! Está al norte')
   })
 })

@@ -21,8 +21,10 @@ export function usePrompt(structure: Structure, rules: MatchRules, awake: boolea
     if (plane?.hp === 0) return `${def.name} · Averiado — ${key} para repararlo (${PLANE_REPAIR_WOOD} de madera)`
     if (plane?.running) {
       if (plane.heat < MOTOR_TIME) return `${def.name} · Calentando el motor`
+      if (plane.wait !== null && plane.wait <= 0) return `${def.name} · Despegando…`
       if (plane.wait !== null) return `${def.name} · Despega en ${Math.ceil(plane.wait - 1e-9)} s · ${plane.aboard}/${plane.expected} a bordo`
-      return `${def.name} · Listo · Esperando a que ${plane.expected > 1 ? 'subáis' : 'subas'}`
+      // Solo se ve un instante (aquí cerca ya se está a bordo y el servidor arranca la cuenta o despega en ese paso).
+      return `${def.name} · Listo para despegar`
     }
     if (plane) return `${def.name} — ${key} para arrancar el motor`
     if (!fire) return def.name

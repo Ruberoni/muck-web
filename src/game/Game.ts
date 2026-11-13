@@ -25,10 +25,9 @@ import { TRAIT_NAMES } from '../sim/threat'
 import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
 import { compassName } from '../ui/minimap'
-import { boardingBanner } from '../ui/clockText'
 import { usableNear } from '../sim/builds'
 import { maxHealthOf } from '../sim/boosts'
-import { clockTexts, lightText, planeText, threatText } from '../ui/clockText'
+import { boardingBanner, clockTexts, lightText, planeText, threatText } from '../ui/clockText'
 import { stationPrompt, usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
@@ -831,7 +830,7 @@ export class Game {
           this.audio.meteorLanded(e.x, e.z, this.listener())
           break
         case 'planeBoarding':
-          this.hud.showBanner(boardingBanner(e.x - this.renderPos.x, e.z - this.renderPos.z, this.sim.structures.byId(e.id)?.radius ?? 0))
+          this.hud.showBanner(boardingBanner(e.x - this.renderPos.x, e.z - this.renderPos.z, this.sim.structures.byId(e.id)?.radius ?? 0, this.slot.alive))
           this.sound.play('bell')
           break
         case 'mobsRose':

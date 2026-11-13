@@ -17,17 +17,18 @@ export function planeText(structures: readonly Structure[]): string | null {
   const plane = structures.find((s) => s.plane?.running)?.plane
   if (!plane) return null
   const hp = `Avión ${Math.ceil((plane.hp / PLANE_HP) * 100)} %`
+  if (plane.wait !== null && plane.wait <= 0) return `Despegando… · ${hp}`
   if (plane.wait !== null) return `Despega en ${minutes(plane.wait)} · ${plane.aboard}/${plane.expected} a bordo · ${hp}`
   return `Motor: ${Math.floor(Math.min(plane.heat, MOTOR_TIME))}/${MOTOR_TIME} s · ${hp}`
 }
 
 /**
  * El aviso de que alguien ha subido al avión caliente: `dx`/`dz`, del jugador al avión; `radius`, el del avión. A quien ya
- * está a bordo no se le dice hacia dónde está.
+ * está a bordo no se le dice hacia dónde está. Un muerto no va a bordo aunque su cuerpo esté al lado (`alive`).
  */
-export function boardingBanner(dx: number, dz: number, radius: number): string {
+export function boardingBanner(dx: number, dz: number, radius: number, alive: boolean): string {
   const head = `¡El avión despega en ${PLANE_WAIT} s!`
-  if (Math.hypot(dx, dz) - radius <= PLANE_BOARD) return `${head} Esperando a los demás`
+  if (alive && Math.hypot(dx, dz) - radius <= PLANE_BOARD) return `${head} Esperando a los demás`
   return `${head} Está al ${compassName(dx, dz)}`
 }
 

@@ -82,9 +82,12 @@ describe('el aviso del avión', () => {
     expect(prompt({ heat: 10 })).toContain('Calentando el motor')
   })
 
-  it('caliente y sin nadie a bordo: espera a que subáis (o a que subas, en solitario)', () => {
-    expect(prompt({ expected: 3 })).toContain('Listo · Esperando a que subáis')
-    expect(prompt({ expected: 1 })).toContain('Listo · Esperando a que subas')
+  it('caliente, antes de que el servidor diga quién va a bordo: listo', () => {
+    expect(prompt({})).toContain('Listo para despegar')
+  })
+
+  it('con la cuenta a 0, mientras llega el final de la partida: despegando', () => {
+    expect(prompt({ until: 999, wait: 0, aboard: 1, expected: 2 })).toContain('Despegando…')
   })
 
   it('con alguien a bordo: la cuenta atrás y cuántos han subido', () => {
