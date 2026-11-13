@@ -31,6 +31,17 @@ export interface LobbyHooks {
 /** Las que son una tarjeta centrada sobre la partida; el resto, el tablón a la izquierda sobre la isla. */
 const CARDS: readonly Screen[] = ['pause', 'dead', 'results', 'countdown', 'loading']
 
+/** Donde se espera: Controles y Ajustes van en dos losetas fuera del tablón, iguales en todas. */
+const WITH_TOOLS: readonly Screen[] = ['home', 'invite', 'room']
+
+const KEYBOARD_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"></path></svg>'
+const GEAR_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>'
+
+/** Si las losetas de Controles y Ajustes se ven: en el inicio, la invitación y la sala, sin nada abierto encima. */
+export const showsTools = (screen: Screen | null, subScreens: number) => subScreens === 0 && screen !== null && WITH_TOOLS.includes(screen)
+
 const RETRY_TEXT = 'No se pudo capturar el ratón. Prueba otra vez.'
 const NOTICE_MS = 4000
 
@@ -42,6 +53,10 @@ const NOTICE_MS = 4000
 export class MenuScreens {
   readonly root: HTMLElement
   private notice: HTMLElement
+  /** Las losetas de Controles y Ajustes, fuera del tablón (dentro, en su esquina, en una ventana estrecha). */
+  private tools: HTMLElement
+  /** Ventana estrecha: el tablón ocupa todo el ancho (como `@media (max-width: 900px)` en menu.css). */
+  private narrow: MediaQueryList | null = typeof matchMedia === 'function' ? matchMedia('(max-width: 900px)') : null
   /** Los nombres sobre los personajes de la sala, detrás del tablón. */
   private tagLayer: HTMLElement
   private tags = new Map<number, HTMLElement>()
@@ -81,7 +96,25 @@ export class MenuScreens {
     this.tagLayer = document.createElement('div')
     this.tagLayer.className = 'stage-tags'
     this.tagLayer.setAttribute('aria-hidden', 'true')
-    this.root.append(this.tagLayer, this.notice)
+    this.tools = document.createElement('div')
+    this.tools.className = 'menu-tools'
+    this.tools.hidden = true
+    for (const [screen, label, icon] of [
+      ['controls', 'Controles', KEYBOARD_ICON],
+      ['settings', 'Ajustes', GEAR_ICON],
+    ] as const) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'menu-tool'
+      b.title = label
+      b.setAttribute('aria-label', label)
+      b.dataset.opens = screen
+      b.innerHTML = icon
+      b.addEventListener('click', () => this.push(screen))
+      this.tools.appendChild(b)
+    }
+    this.root.append(this.tagLayer, this.notice, this.tools)
+    this.narrow?.addEventListener('change', () => this.placeTools())
     container.appendChild(this.root)
     // El toc de cada botón del menú (respeta el volumen: va por el mismo master que los efectos). El clic también
     // despierta el audio, así la cuenta atrás ya suena.
@@ -235,6 +268,19 @@ export class MenuScreens {
     return !used && escapeAction(this.base, this.stack.length) === 'resume'
   }
 
+  /**
+   * Las losetas van fuera del tablón; en una ventana estrecha no queda sitio fuera y van dentro, las primeras (así
+   * también van primero al tabular), en su esquina y moviéndose con lo que haga scroll.
+   */
+  private placeTools() {
+    const panel = this.shown?.view.root
+    if (this.narrow?.matches && panel) {
+      if (panel.firstChild !== this.tools) panel.prepend(this.tools)
+    } else if (this.tools.parentElement !== this.root) {
+      this.root.appendChild(this.tools)
+    }
+  }
+
   private rebuild() {
     const key = this.top ?? this.base
     const hadFocus = this.root.contains(document.activeElement)
@@ -242,6 +288,9 @@ export class MenuScreens {
     this.shown?.view.dispose?.()
     this.shown = null
     this.root.hidden = key === null
+    this.tools.hidden = !showsTools(this.base, this.stack.length)
+    // Con Ajustes o Controles abiertos desde la sala, el chat (que ha vuelto al HUD) no asoma junto al tablón.
+    this.game.hud?.net.setAway(this.base === 'room' && this.stack.length > 0)
     if (key === null) {
       this.notice.hidden = true
       if (hadFocus) (document.activeElement as HTMLElement | null)?.blur()
@@ -261,9 +310,12 @@ export class MenuScreens {
     if (view.size) view.root.classList.add(view.size)
     this.root.insertBefore(view.root, this.notice)
     this.shown = { key, view }
+    this.placeTools()
     view.update?.()
-    const opener = this.returnTo && view.root.querySelector<HTMLElement>(`[data-opens="${this.returnTo}"]`)
-    const first = opener || view.root.querySelector<HTMLElement>('[data-autofocus]') || view.root.querySelector<HTMLElement>('button:not(:disabled), input, select')
+    // El botón que abrió la sub-pantalla: en la pantalla o en las losetas de fuera.
+    const selector = `[data-opens="${this.returnTo}"]`
+    const opener = this.returnTo && (view.root.querySelector<HTMLElement>(selector) ?? (this.tools.hidden ? null : this.tools.querySelector<HTMLElement>(selector)))
+    const first = opener || view.root.querySelector<HTMLElement>('[data-autofocus]') || view.root.querySelector<HTMLElement>('button:not(:disabled):not(.menu-tool), input, select')
     first?.focus({ preventScroll: true })
   }
 }

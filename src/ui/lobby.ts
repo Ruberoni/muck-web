@@ -6,7 +6,7 @@ import { cleanName, isRoomCode, MAX_NAME, MAX_PLAYERS, ROOM_ALPHABET, ROOM_CODE_
 import { onVersionReject, reloadFor } from '../net/reload'
 import { LocalSession } from '../net/session'
 import { loadSkin } from './skin'
-import { backButton, button, difficultyCards, field, header, logo, make, panel, subScreenButtons } from './menu/views'
+import { backButton, button, difficultyCards, field, header, logo, make, panel } from './menu/views'
 import { roomModel, seatNote, seatsKey, type Seat } from './menu/room'
 import { NEW_VERSION, OLD_SERVER_FOR_MS, OLD_SERVER_RETRY_MS, SERVER_UPDATING, shouldReconnect } from '../net/status'
 
@@ -104,6 +104,8 @@ export function installLobby(game: Game) {
   /** Desde cuándo (Date.now()) el servidor es más viejo que el cliente en los intentos de entrar. */
   let oldServerSince: number | null = null
   let nameValue = loadName()
+  /** Tras pulsar "Empezar partida": hasta que vence no se puede volver a pulsar. */
+  let startTimer: ReturnType<typeof setTimeout> | null = null
   /** Cuántos intentos de entrar se han empezado: uno que termina después de abandonarlo (volver al inicio) no cuenta. */
   let attempts = 0
   const name = () => cleanName(nameValue) || DEFAULT_NAME
@@ -163,7 +165,6 @@ export function installLobby(game: Game) {
     })
     solo.dataset.autofocus = ''
     const paint = statusLine(root)
-    subScreenButtons(make('div', 'menu-foot', root), menu)
     const lock = lockWhileBusy(solo, create, join)
     return { root, update: () => (paint(), lock()) }
   })
@@ -254,16 +255,20 @@ export function installLobby(game: Game) {
     // Sin capturar el ratón: como los demás, el anfitrión ve la cuenta atrás y entra con "¡Entrar!". Un doble clic
     // no manda dos `start`; si el servidor no contesta, se puede volver a probar al rato. Con `aria-disabled` y no
     // `disabled`, para que el botón no pierda el foco (en `body`, Enter abriría el chat).
-    let startTimer: ReturnType<typeof setTimeout> | null = null
+    // La espera vive fuera de la pantalla: abrir Ajustes y volver no deja mandar otro `start`.
     const start = button(foot, 'Empezar partida', 'primary', () => {
       if (startTimer) return
-      start.setAttribute('aria-disabled', 'true')
       startTimer = setTimeout(() => {
         startTimer = null
-        start.removeAttribute('aria-disabled')
+        if (menu.screen === 'room') menu.refresh()
       }, START_RETRY_MS)
+      paintStart()
       game.net?.client.start()
     })
+    const paintStart = () => {
+      if (startTimer) start.setAttribute('aria-disabled', 'true')
+      else start.removeAttribute('aria-disabled')
+    }
     const back = button(foot, 'Volver a la partida', 'primary', () => void game.play())
     const waitingHost = make('p', 'room-waiting', foot)
     waitingHost.textContent = 'Esperando al anfitrión'
@@ -318,6 +323,7 @@ export function installLobby(game: Game) {
       start.hidden = !model.lobby || !model.isHost
       waitingHost.hidden = !model.lobby || model.isHost
       back.hidden = net.client.match?.phase !== 'playing'
+      paintStart()
       paint()
     }
     return {
@@ -325,7 +331,6 @@ export function installLobby(game: Game) {
       update,
       dispose: () => {
         if (copiedTimer) clearTimeout(copiedTimer)
-        if (startTimer) clearTimeout(startTimer)
         window.removeEventListener('keydown', onKey)
         game.hud.net.dock(null)
       },
@@ -448,6 +453,8 @@ export function installLobby(game: Game) {
 
   function leave() {
     stopWaiting()
+    if (startTimer) clearTimeout(startTimer)
+    startTimer = null
     game.setSession(new LocalSession())
     setRoomInUrl(null)
     error = ''

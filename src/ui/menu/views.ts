@@ -65,7 +65,7 @@ export function header(parent: HTMLElement, menu: MenuScreens, title: string) {
   return head
 }
 
-/** Controles y Ajustes, uno al lado del otro (al pie del inicio). */
+/** Controles y Ajustes, uno al lado del otro (en la pausa). */
 export function subScreenButtons(parent: HTMLElement, menu: MenuScreens, kind = 'ghost') {
   const row = make('div', 'menu-row', parent)
   button(row, 'Controles', kind, () => menu.push('controls')).dataset.opens = 'controls'
@@ -143,7 +143,6 @@ export function installCoreScreens(menu: MenuScreens) {
     logo(root)
     const actions = make('div', 'menu-stack', root)
     button(actions, 'Jugar solo', 'primary', () => menu.go('solo-difficulty'))
-    subScreenButtons(make('div', 'menu-foot', root), menu)
     return { root }
   })
 
@@ -325,6 +324,12 @@ export function installCoreScreens(menu: MenuScreens) {
         if (key === 'bindings') game.applyBindings()
       },
     )
-    return { root, dispose, size: 'wide' } satisfies ScreenView
+    // Se puede cerrar con un deslizador a medio arrastrar (empieza la partida de la sala, se muere…): su valor ya está
+    // aplicado pero el `change` que lo guarda no llegará. Se guarda sin más, sin el sonido de prueba del volumen.
+    const close = () => {
+      saveSettings(game.settings)
+      dispose()
+    }
+    return { root, dispose: close, size: 'wide' } satisfies ScreenView
   })
 }
