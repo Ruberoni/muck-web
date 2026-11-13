@@ -40,6 +40,7 @@ export class Hud {
   private boss: HTMLElement
   private bossName: HTMLElement
   private bossFill: HTMLElement
+  private root: HTMLElement
   private slots: { root: HTMLElement; icon: HTMLElement; count: HTMLElement }[] = []
   private held: HTMLElement
   private hurt: HTMLElement
@@ -51,6 +52,7 @@ export class Hud {
 
   constructor(container: HTMLElement) {
     const root = el('div', 'hud', container)
+    this.root = root
     this.hurt = el('div', 'hurt', root)
     this.crosshair = el('div', 'crosshair', root)
     this.eating = el('div', 'eating', root)
@@ -198,6 +200,11 @@ export class Hud {
   }
 
   /** La mira (el espectador no apunta a nada). */
+  /** En el menú el fondo es la isla sin HUD: solo quedan el chat y los avisos de la sala. */
+  setInMenu(inMenu: boolean) {
+    this.root.classList.toggle('in-menu', inMenu)
+  }
+
   setCrosshair(visible: boolean) {
     this.crosshair.hidden = !visible
   }

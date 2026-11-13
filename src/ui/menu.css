@@ -392,21 +392,10 @@
   box-shadow: 0 2px 0 var(--wood-shadow);
 }
 
-/* La vista previa del personaje, a la derecha del tablón. */
-.menu-preview {
-  position: absolute;
-  left: calc(56px + 440px + (100vw - 56px - 440px) / 2);
-  top: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-.menu-preview canvas { display: block; width: 180px; height: 255px; }
-
 /* --- Ventanas estrechas y bajas --- */
 
 @media (max-width: 900px) {
   .menu-panel, .menu-panel.wide, .menu-panel.full { left: 16px; right: 16px; width: auto; top: 16px; bottom: 16px; }
-  .menu-preview { display: none; }
   .controls-grid, .keys-grid { grid-template-columns: minmax(0, 1fr); }
   .setting { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 56px; }
 }
