@@ -155,6 +155,24 @@ describe('empezar, cuenta atrás y carga', () => {
     expect(game.sound.play.mock.calls.filter(([name]) => name === 'uiTick')).toHaveLength(3)
     enter.click()
     expect(game.play).toHaveBeenCalledTimes(1)
+    // Se desmonta (y para su reloj) al volver al menú.
+    game.state = 'menu'
+    menu.refresh()
+    expect(menu.screen).toBe('room')
+  })
+
+  it('"Empezar partida" no manda dos inicios ni pierde el foco', () => {
+    vi.useFakeTimers()
+    const { client } = room()
+    const start = buttonNamed('Empezar partida')
+    start.focus()
+    start.click()
+    start.click()
+    expect(client.start).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(start)
+    vi.advanceTimersByTime(5000)
+    start.click()
+    expect(client.start).toHaveBeenCalledTimes(2)
   })
 
   it('la carga tapa el menú hasta que llega todo; si todo falla, "Recargar" o seguir', async () => {
@@ -180,8 +198,24 @@ describe('empezar, cuenta atrás y carga', () => {
     // Pasado el tiempo sigue ahí: sin modelos se ofrece recargar.
     second.menu.endLoading(false)
     expect(second.menu.screen).toBe('loading')
+    expect(second.menu.screen).toBe('loading')
     expect(buttonNamed('Recargar').closest('[hidden]')).toBeNull()
     buttonNamed('Seguir sin ellos').click()
     expect(second.menu.screen).toBe('room')
   })
+})
+
+it('si todo falla después del tiempo, vuelve la carga con "Recargar"', async () => {
+  const loads = new LoadTracker()
+  let fail!: (e: Error) => void
+  loads.track(new Promise<void>((_, reject) => (fail = reject))).catch(() => {})
+  const { menu } = room(1, loads)
+  loads.onChange = () => menu.refresh()
+  menu.endLoading(false)
+  expect(menu.screen).toBe('room')
+  fail(new Error('sin red'))
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(menu.screen).toBe('loading')
+  expect(buttonNamed('Recargar').closest('[hidden]')).toBeNull()
 })

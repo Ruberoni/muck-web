@@ -54,8 +54,10 @@ export class MenuScreens {
   private escapeUsed = false
   /** La sub-pantalla que se acaba de cerrar: el foco vuelve al botón que la abrió. */
   private returnTo: SubScreen | null = null
-  /** La pantalla de carga del principio ya no se enseña (ha terminado, se ha pasado el tiempo o se ha seguido sin modelos). */
+  /** La pantalla de carga del principio ya no se enseña (ha terminado o se ha pasado el tiempo). */
   private loadingOver = false
+  /** Se ha elegido seguir sin los modelos: aunque todo haya fallado, no vuelve. */
+  private loadingSkipped = false
 
   choice: Choice | null = null
   /** `ready`: la partida de la sala ha empezado y falta entrar. Se borra al cambiar de estado. */
@@ -140,20 +142,22 @@ export class MenuScreens {
   }
 
   /**
-   * Si aún toca la pantalla de carga: hasta que no quede nada pendiente. Si todo ha fallado se queda (con
-   * "Recargar") hasta que se elija seguir.
+   * Si aún toca la pantalla de carga: hasta que no quede nada pendiente (o pase el tiempo). Si todo ha fallado se
+   * enseña (con "Recargar"), también si falla después del tiempo, hasta que se elija seguir sin los modelos.
    */
   private get loading(): boolean {
-    if (this.loadingOver) return false
+    if (this.loadingSkipped) return false
     const progress = this.game.loads.state
-    if (pendingOf(progress) > 0 || allFailed(progress)) return true
+    if (allFailed(progress)) return true
+    if (this.loadingOver) return false
+    if (pendingOf(progress) > 0) return true
     this.loadingOver = true
     return false
   }
 
-  /** Deja de enseñar la carga. Sin `force` (se ha pasado el tiempo) sigue si todo ha fallado, para poder recargar. */
-  endLoading(force = true) {
-    if (this.loadingOver || (!force && allFailed(this.game.loads.state))) return
+  /** Deja de esperar a los modelos: `skip`, se ha elegido seguir sin ellos; si no, se ha pasado el tiempo. */
+  endLoading(skip = true) {
+    if (skip) this.loadingSkipped = true
     this.loadingOver = true
     this.refresh()
   }

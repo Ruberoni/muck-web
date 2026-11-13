@@ -7,7 +7,7 @@ export const TIPS: readonly string[] = [
   'Si la luna se pone roja, no es por timidez.',
   'El mar está bonito. Lo que nada en él, no tanto.',
   'Un escudo a tiempo vale más que dos espadas.',
-  'En compañía, las noches se hacen más cortas. Y los trasgos, más pocos.',
+  'En compañía, las noches se hacen más cortas. Y los trasgos, menos temibles.',
 ]
 
 /** Un consejo al azar (`random` de 0 a 1, para las pruebas). */

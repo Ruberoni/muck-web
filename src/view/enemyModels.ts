@@ -75,6 +75,8 @@ export class EnemyModels implements EnemyModelSource {
   private tools: Promise<Tools> | null = null
   private files = new Map<string, Promise<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] }>>()
   private templates = new Map<string, EnemyTemplate | 'loading'>()
+  /** Las plantillas que se están descargando, para que `preload` espere también a las que pidió `get`. */
+  private loading = new Map<string, Promise<EnemyTemplate>>()
 
   get(type: EnemyType, look: MobLook): EnemyTemplate | null {
     const key = `${type}:${look}`
@@ -87,12 +89,19 @@ export class EnemyModels implements EnemyModelSource {
 
   /** Para que el primero que salga ya tenga su modelo. La promesa acaba cuando han llegado (o falla si alguno no). */
   preload(types: readonly EnemyType[]): Promise<void> {
-    return Promise.all(types.map((type) => (this.templates.has(`${type}:0`) ? undefined : this.start(type, 0, `${type}:0`)))).then(() => undefined)
+    return Promise.all(
+      types.map((type) => {
+        const key = `${type}:0`
+        return this.loading.get(key) ?? (this.templates.has(key) ? undefined : this.start(type, 0, key))
+      }),
+    ).then(() => undefined)
   }
 
   private start(type: EnemyType, look: MobLook, key: string): Promise<EnemyTemplate> {
     this.templates.set(key, 'loading')
     const load = this.load(type, look)
+    this.loading.set(key, load)
+    load.finally(() => this.loading.delete(key)).catch(() => {})
     load.then(
       (template) => this.templates.set(key, template),
       () => setTimeout(() => this.templates.delete(key), 10_000),

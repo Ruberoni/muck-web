@@ -132,7 +132,7 @@
 .btn.ghost:hover:not(:disabled), .btn.danger:hover:not(:disabled) { box-shadow: none; background-color: rgb(255 255 255 / 0.06); }
 
 .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 3px 0 var(--wood-shadow); transition-duration: 0.05s; }
-.btn:disabled { opacity: 0.55; cursor: default; }
+.btn:disabled, .btn[aria-disabled='true'] { opacity: 0.55; cursor: default; }
 
 .btn.primary { color: var(--leaf-ink); background: var(--leaf); box-shadow: 0 6px 0 var(--leaf-shadow); }
 .btn.primary:active:not(:disabled) { box-shadow: 0 3px 0 var(--leaf-shadow); }
@@ -576,5 +576,6 @@
 @media (prefers-reduced-motion: reduce) {
   /* Sin rebote, sin transiciones y sin animar el número de la cuenta atrás. */
   .menu *, .menu, .menu.card .menu-panel { transition: none !important; animation: none !important; }
-  .btn:hover:not(:disabled), .btn:active:not(:disabled), .difficulty:hover, .menu-back:hover { transform: none; }
+  .btn:hover:not(:disabled), .btn:active:not(:disabled), .btn.ghost:active:not(:disabled), .btn.danger:active:not(:disabled),
+  .difficulty:hover, .menu-back:hover { transform: none; }
 }

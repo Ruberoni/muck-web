@@ -376,7 +376,8 @@ export class Game {
     this.onchange?.()
   }
 
-  setState(state: GameState) {
+  /** `overlay`: el aviso que va con el nuevo estado (`ready`, la cuenta atrás), en el mismo repintado. */
+  setState(state: GameState, overlay: 'ready' | null = null) {
     if (state === 'playing' && this.state !== 'playing' && this.state !== 'inventory') {
       // Al empezar, reanudar o reaparecer no se interpola desde la posición de antes (al cerrar el inventario sí:
       // la simulación no se ha parado).
@@ -402,7 +403,7 @@ export class Game {
     this.state = state
     this.hud.inventory.setOpen(state === 'inventory')
     if (state !== 'inventory') this.openStationId = null
-    this.menu.overlay = null
+    this.menu.overlay = overlay
     this.menu.refresh()
     this.onchange?.()
   }
@@ -647,9 +648,8 @@ export class Game {
     if (match.phase === 'playing') {
       this.menu.setResults(null)
       if (this.state !== 'menu') return
-      this.setState('paused')
-      this.menu.overlay = 'ready'
-      this.menu.refresh()
+      // De una vez: sin montar antes la pausa (y moverle el foco) para cambiarla al momento por la cuenta atrás.
+      this.setState('paused', 'ready')
       return
     }
     if (match.result) this.menu.setResults({ end: match.result.end, lines: resultLines(match.result, (id) => this.nameOf(net, id)) })
