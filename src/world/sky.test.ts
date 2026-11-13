@@ -8,7 +8,7 @@ const eye = new THREE.Vector3(12, 30, -40)
 
 function viewAt(phase: number, eternal = 0) {
   const state = sampleSky(phase, createSkyState())
-  const view = new SkyView(new THREE.Color())
+  const view = new SkyView()
   view.update(state, phase, eye, state.sky, eternal)
   return { state, view }
 }
@@ -40,10 +40,9 @@ describe('cielo visible', () => {
   it('el horizonte de la cúpula es el color de la niebla', () => {
     const fog = new THREE.Color('#123456')
     const state = sampleSky(0.1, createSkyState())
-    const view = new SkyView(fog)
+    const view = new SkyView()
     view.update(state, 0.1, eye, fog)
     expect(view.dome.material.uniforms.horizon.value.equals(fog)).toBe(true)
-    expect(view.scene.background).toBe(fog)
     expect(view.dome.position.equals(eye)).toBe(true)
   })
 

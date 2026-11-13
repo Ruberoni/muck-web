@@ -57,7 +57,7 @@ export function createScene(island: Island) {
   const water = createWater()
   scene.add(terrain, water)
 
-  const view = new SkyView(background)
+  const view = new SkyView()
   const sky = { background, fog, hemi, sun, view }
   return { scene, sky, water, terrain }
 }

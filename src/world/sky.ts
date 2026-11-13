@@ -15,7 +15,8 @@ const SUN_SIDES = 12
 const domeVertex = /* glsl */ `
 varying vec3 vDir;
 void main() {
-  vDir = position;
+  // Unitario ya aquí: con mediump, 450² se desbordaría en el fragment shader.
+  vDir = normalize(position);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `
@@ -79,9 +80,7 @@ export class SkyView {
   /** Hacia el sol (no hacia la luz: de noche la luz es la luna). */
   readonly sunDir = new THREE.Vector3()
 
-  constructor(background: THREE.Color) {
-    // Lo que se borra antes del cielo: el color de la niebla, por si la cúpula no cubriera algo.
-    this.scene.background = background
+  constructor() {
     this.dome = new THREE.Mesh(
       new THREE.SphereGeometry(DOME_RADIUS, 32, 16),
       new THREE.ShaderMaterial({
