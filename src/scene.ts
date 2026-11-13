@@ -68,15 +68,16 @@ export type Sky = ReturnType<typeof createScene>['sky']
  * Aplica la hora del día (`phase`, ver DayClock) a cielo, niebla y luces, y centra la cámara
  * de sombras en `center` (normalmente por delante del jugador), ajustada a la rejilla de texels
  * en el espacio de la luz para que las sombras no parpadeen. La cúpula y el sol siguen a la cámara, en `eye`. `eternal`: cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1;
- * `lighthouse`: cuánto se nota el faro encendido, de 0 a 1; `moonPhase`: la fase de la luna de esta noche (ver `moonPhaseOf`).
+ * `lighthouse`: cuánto se nota el faro encendido, de 0 a 1; `moonPhase`: la fase de la luna de esta noche (ver `moonPhaseOf`); `blood`: cuánto es luna de
+ * sangre, de 0 a 1 (la Noche Eterna: roja la luna y algo roja su luz). Va aparte de `eternal`, que baja junto al faro.
  */
-export function updateSky(sky: Sky, phase: number, center: THREE.Vector3, eye: THREE.Vector3, eternal = 0, lighthouse = 0, moonPhase = 0.5) {
-  sampleSky(phase, state)
+export function updateSky(sky: Sky, phase: number, center: THREE.Vector3, eye: THREE.Vector3, eternal = 0, lighthouse = 0, moonPhase = 0.5, blood = 0) {
+  sampleSky(phase, state, blood)
   sky.background.copy(state.sky).lerp(ETERNAL_FOG, eternal)
   sky.fog.color.copy(sky.background)
   sky.fog.near = THREE.MathUtils.lerp(state.fogNear, ETERNAL_FOG_NEAR, eternal)
   sky.fog.far = THREE.MathUtils.lerp(state.fogFar, ETERNAL_FOG_FAR, eternal)
-  sky.view.update(state, phase, eye, sky.background, eternal, moonPhase)
+  sky.view.update(state, phase, eye, sky.background, eternal, moonPhase, blood)
   sky.hemi.color.copy(state.hemiSky).lerp(LIGHTHOUSE_TINT, lighthouse * 0.5)
   sky.hemi.groundColor.copy(state.hemiGround)
   sky.hemi.intensity = THREE.MathUtils.lerp(state.hemiIntensity, Math.max(state.hemiIntensity, LIGHTHOUSE_HEMI), lighthouse)

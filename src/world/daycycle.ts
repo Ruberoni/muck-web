@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { DAY_FRACTION } from '../sim/world/daycycle'
+import { DAY_FRACTION, NIGHT_LENGTH, type DayClock } from '../sim/world/daycycle'
 
 // Inclinación de la órbita respecto a la vertical: a mediodía el sol queda a unos 60°.
 const ORBIT_TILT = THREE.MathUtils.degToRad(30)
@@ -20,6 +20,21 @@ export function skyAngle(phase: number) {
 export function sunDirection(phase: number, out = new THREE.Vector3()) {
   const angle = skyAngle(phase)
   return out.set(Math.cos(angle), Math.sin(angle) * Math.cos(ORBIT_TILT), Math.sin(angle) * Math.sin(ORBIT_TILT))
+}
+
+/** Medianoche: donde se para el cielo en la Noche Eterna, con la luna a 60° de altura hacia el lado donde culmina el sol. */
+const MIDNIGHT = (1 + DAY_FRACTION) / 2
+
+/**
+ * La fase con la que se dibuja el cielo (cúpula, sol, luna, estrellas y la dirección de la luz). Es `clock.phase` salvo
+ * en la Noche Eterna: ahí el reloj se para en seco a medianoche, y el cielo en cambio frena poco a poco (ease-out
+ * cuadrático). Empieza a la velocidad de una noche normal y tarda `NIGHT_LENGTH` en quedarse quieto, el doble que el
+ * reloj. Solo para dibujar: la simulación sigue con `clock.phase`.
+ */
+export function skyPhase(clock: Pick<DayClock, 'phase' | 'eternal' | 'elapsed' | 'eternalAt'>) {
+  if (!clock.eternal) return clock.phase
+  const s = Math.min(1, (clock.elapsed - clock.eternalAt) / NIGHT_LENGTH)
+  return DAY_FRACTION + (MIDNIGHT - DAY_FRACTION) * (1 - (1 - s) * (1 - s))
 }
 
 /** Fase de la luna (0 nueva, 0,25 cuarto creciente, 0,5 llena, 0,75 cuarto menguante) por noches que faltan para la llena. */
@@ -124,11 +139,17 @@ const GLOW_HIGH = new THREE.Color('#fff2cc')
 const GLOW_LOW = new THREE.Color('#ff7a3a')
 const MOON_INTENSITY = 0.45
 const MOON_COLOR = new THREE.Color('#a9bcff')
+/** La luz de la luna de sangre: la de siempre, algo teñida de rojo. */
+const BLOOD_LIGHT = new THREE.Color('#ff7a6a')
+const BLOOD_LIGHT_MIX = 0.55
 
 const smoothstep = THREE.MathUtils.smoothstep
 
-/** Luces, cielo y niebla para una fase del ciclo. Escribe en `out` para no reservar memoria por frame. */
-export function sampleSky(phase: number, out: SkyState) {
+/**
+ * Luces, cielo y niebla para una fase del ciclo. Escribe en `out` para no reservar memoria por frame. `blood` (0..1):
+ * cuánto es luna de sangre (la Noche Eterna); tiñe de rojo la luz de la luna.
+ */
+export function sampleSky(phase: number, out: SkyState, blood = 0) {
   const sun = sunDirection(phase, out.lightDir)
   const e = sun.y
 
@@ -162,7 +183,7 @@ export function sampleSky(phase: number, out: SkyState) {
   } else {
     sun.negate()
     out.lightIntensity = MOON_INTENSITY * smoothstep(-e, 0, 0.2)
-    out.lightColor.copy(MOON_COLOR)
+    out.lightColor.copy(MOON_COLOR).lerp(BLOOD_LIGHT, BLOOD_LIGHT_MIX * blood)
   }
   return out
 }

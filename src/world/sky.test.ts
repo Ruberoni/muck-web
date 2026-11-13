@@ -1,15 +1,15 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { DAY_FRACTION } from '../sim/world/daycycle'
-import { createSkyState, moonPhaseOf, sampleSky, SKY_AXIS, sunDirection } from './daycycle'
+import { DAY_FRACTION, DAY_LENGTH, DayClock, NIGHT_LENGTH } from '../sim/world/daycycle'
+import { createSkyState, moonPhaseOf, sampleSky, SKY_AXIS, skyPhase, sunDirection } from './daycycle'
 import { MOON_DISTANCE, STAR_COUNT, SUN_DISTANCE, SkyView, starsOf } from './sky'
 
 const eye = new THREE.Vector3(12, 30, -40)
 
-function viewAt(phase: number, eternal = 0, moonPhase = 0.5) {
-  const state = sampleSky(phase, createSkyState())
+function viewAt(phase: number, eternal = 0, moonPhase = 0.5, blood = 0) {
+  const state = sampleSky(phase, createSkyState(), blood)
   const view = new SkyView()
-  view.update(state, phase, eye, state.sky, eternal, moonPhase)
+  view.update(state, phase, eye, state.sky, eternal, moonPhase, blood)
   return { state, view }
 }
 
@@ -154,5 +154,92 @@ describe('luna y estrellas', () => {
     for (let i = 0; i < a.count; i++) if (a.getY(i) < 0) below++
     expect(below / a.count).toBeGreaterThan(0.4)
     expect(below / a.count).toBeLessThan(0.6)
+  })
+})
+
+describe('Noche Eterna en el cielo', () => {
+  const MIDNIGHT = (1 + DAY_FRACTION) / 2
+  const eternalClock = () => {
+    const clock = new DayClock()
+    clock.configure({ daylight: DAY_LENGTH * DAY_FRACTION, eternalDay: 6, bell: 60 })
+    return clock
+  }
+
+  it('fuera de la Noche Eterna el cielo va con el reloj', () => {
+    const clock = eternalClock()
+    for (let t = 0; t < clock.eternalAt; t += 7.3) {
+      clock.elapsed = t
+      expect(skyPhase(clock)).toBe(clock.phase)
+    }
+  })
+
+  it('en la Noche Eterna el cielo frena poco a poco hasta pararse en medianoche, sin saltos ni vuelta atrás', () => {
+    const clock = eternalClock()
+    const normalSpeed = (1 - DAY_FRACTION) / NIGHT_LENGTH
+    // Sin salto al entrar: justo antes es el anochecer.
+    clock.elapsed = clock.eternalAt - 1e-6
+    const before = skyPhase(clock)
+    clock.elapsed = clock.eternalAt
+    expect(skyPhase(clock)).toBeCloseTo(before, 5)
+    expect(skyPhase(clock)).toBeCloseTo(DAY_FRACTION, 9)
+    // Al principio, a la velocidad de una noche normal.
+    clock.elapsed = clock.eternalAt + 0.01
+    expect((skyPhase(clock) - DAY_FRACTION) / 0.01).toBeCloseTo(normalSpeed, 5)
+    // Nunca retrocede y cada vez va más despacio.
+    let prev = DAY_FRACTION
+    let prevStep = Infinity
+    for (let t = 1; t <= NIGHT_LENGTH + 1; t++) {
+      clock.elapsed = clock.eternalAt + t
+      const p = skyPhase(clock)
+      expect(p).toBeGreaterThanOrEqual(prev)
+      expect(p - prev).toBeLessThanOrEqual(prevStep + 1e-12)
+      prevStep = p - prev
+      prev = p
+    }
+    expect(prev).toBeCloseTo(MIDNIGHT, 9)
+    // Y parado ahí, campana tras campana.
+    for (const t of [NIGHT_LENGTH + 1, 500, 5000]) {
+      clock.elapsed = clock.eternalAt + t
+      expect(skyPhase(clock)).toBe(MIDNIGHT)
+    }
+  })
+
+  it('parado, la luna queda a unos 60° hacia el lado donde culmina el sol, y las estrellas quietas', () => {
+    const moon = sunDirection(MIDNIGHT).negate()
+    expect(THREE.MathUtils.radToDeg(Math.asin(moon.y))).toBeCloseTo(60, 6)
+    expect(moon.z).toBeGreaterThan(0)
+    expect(sunDirection(DAY_FRACTION / 2).z).toBeGreaterThan(0)
+    const a = viewAt(MIDNIGHT).view.stars.quaternion.clone()
+    const b = viewAt(MIDNIGHT).view.stars.quaternion
+    expect(a.equals(b)).toBe(true)
+  })
+
+  it('la luna es roja si y solo si es luna de sangre, también junto al faro (sin niebla)', () => {
+    const night = MIDNIGHT
+    const normal = viewAt(night, 0, 0.5, 0).view.moon.material.uniforms.lit.value as THREE.Color
+    expect(normal.r).toBeCloseTo(normal.g, 1)
+    for (const fog of [0, 1]) {
+      const lit = viewAt(night, fog, 0.5, 1).view.moon.material.uniforms.lit.value as THREE.Color
+      expect(lit.r).toBeGreaterThan(lit.g * 3)
+      expect(lit.r).toBeGreaterThan(lit.b * 3)
+    }
+  })
+
+  it('la luna de sangre es más oscura saliendo por el horizonte que arriba', () => {
+    const rising = viewAt(DAY_FRACTION + 0.01, 1, 0.5, 1).view.moon.material.uniforms.lit.value as THREE.Color
+    const high = viewAt(MIDNIGHT, 1, 0.5, 1).view.moon.material.uniforms.lit.value as THREE.Color
+    expect(rising.r).toBeLessThan(high.r)
+    expect(rising.r).toBeGreaterThan(rising.g * 3)
+  })
+
+  it('con luna de sangre la luz de la luna se tiñe algo de rojo, y de día no cambia nada', () => {
+    const plain = sampleSky(MIDNIGHT, createSkyState())
+    const blood = sampleSky(MIDNIGHT, createSkyState(), 1)
+    expect(blood.lightColor.r).toBeGreaterThan(blood.lightColor.b)
+    expect(plain.lightColor.r).toBeLessThan(plain.lightColor.b)
+    expect(blood.lightIntensity).toBe(plain.lightIntensity)
+    expect(blood.lightDir.equals(plain.lightDir)).toBe(true)
+    const day = sampleSky(DAY_FRACTION / 2, createSkyState(), 1)
+    expect(day.lightColor.equals(sampleSky(DAY_FRACTION / 2, createSkyState()).lightColor)).toBe(true)
   })
 })

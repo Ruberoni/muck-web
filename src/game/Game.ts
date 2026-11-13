@@ -32,7 +32,7 @@ import { stationPrompt, usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
-import { moonPhaseOf, sunDirection } from '../world/daycycle'
+import { moonPhaseOf, skyPhase, sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
 import { BIOME_NAMES } from '../sim/world/biomes'
 import type { Island } from '../sim/world/island'
@@ -1158,7 +1158,9 @@ export class Game {
       this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
     )
     this.lighthouseGlow = THREE.MathUtils.damp(this.lighthouseGlow, structures.burning ? 1 : 0, LIGHTHOUSE_FADE, dt)
-    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.camera.position, this.eternalFog(), this.lighthouseGlow, this.moonPhase())
+    // El cielo frena poco a poco en la Noche Eterna (`skyPhase`), y su luna es de sangre.
+    const blood = sim.clock.eternal ? 1 : 0
+    updateSky(this.sky, skyPhase(sim.clock), this.shadowCenter, this.camera.position, this.eternalFog(), this.lighthouseGlow, this.moonPhase(), blood)
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot, sim.island) : null

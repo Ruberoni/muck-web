@@ -24,6 +24,14 @@ const STAR_SEED = 0x5747
 const MOON_LIT = new THREE.Color('#f6f3e8')
 const MOON_CRATER = new THREE.Color('#d5d2c6')
 const MOON_HALO_COLOR = new THREE.Color('#9fb4e8')
+// La luna de sangre de la Noche Eterna: roja oscura al salir por el horizonte y roja viva arriba, con un halo rojo
+// más ancho y fuerte. Colores en lineal ya convertidos por THREE.Color.
+const BLOOD_LOW = new THREE.Color('#7a1410')
+const BLOOD_HIGH = new THREE.Color('#d8301f')
+const BLOOD_CRATER = 0.78
+const BLOOD_HALO_COLOR = new THREE.Color('#c0261a')
+const BLOOD_HALO = 4.5
+const BLOOD_HALO_STRENGTH = 0.6
 
 // La mitad de abajo de la cúpula es el color de la niebla y nada se dibuja bajo el horizonte:
 // el agua es transparente y dejaría ver un sol o un brillo por debajo.
@@ -197,6 +205,7 @@ const tangent = new THREE.Vector3()
 const facing = new THREE.Vector3()
 const side = new THREE.Vector3()
 const basis = new THREE.Matrix4()
+const scratchColor = new THREE.Color()
 
 /**
  * El cielo: una cúpula con degradado (horizonte = niebla, cénit más oscuro) y brillo hacia el sol, el disco del sol, la
@@ -319,9 +328,10 @@ export class SkyView {
    * Coloca el cielo para la fase `phase` alrededor de la cámara `view`. `horizon` es el color de la niebla de ahora
    * (ya con la Noche Eterna), y `eternal` (0..1) oscurece el cénit y apaga el brillo y el sol igual que la niebla.
    * `moonPhase` es la fase de la luna de esta noche (ver `moonPhaseOf`). La luna y las estrellas no se apagan con
-   * `eternal`: en la Noche Eterna se ven sobre el cielo negro.
+   * `eternal`: en la Noche Eterna se ven sobre el cielo negro. `blood` (0..1) es cuánto es luna de sangre: sale del
+   * reloj y no de `eternal`, que baja junto al faro, para que la luna siga roja ahí también.
    */
-  update(state: SkyState, phase: number, view: THREE.Vector3, horizon: THREE.Color, eternal = 0, moonPhase = 0.5) {
+  update(state: SkyState, phase: number, view: THREE.Vector3, horizon: THREE.Color, eternal = 0, moonPhase = 0.5, blood = 0) {
     sunDirection(phase, this.sunDir)
     const u = this.dome.material.uniforms
     u.horizon.value.copy(horizon)
@@ -361,16 +371,21 @@ export class SkyView {
     this.moon.quaternion.setFromRotationMatrix(basis.makeBasis(tangent, side, facing))
     this.moonHalo.position.copy(this.moon.position)
     this.moonHalo.quaternion.copy(this.moon.quaternion)
-    this.moonHalo.scale.setScalar(MOON_RADIUS * MOON_HALO)
+    this.moonHalo.scale.setScalar(MOON_RADIUS * THREE.MathUtils.lerp(MOON_HALO, BLOOD_HALO, blood))
 
     const mu = this.moon.material.uniforms
     mu.phase.value = THREE.MathUtils.euclideanModulo(moonPhase, 1)
+    // Luna de sangre: más oscura cuanto más pegada al horizonte, como el sol al ponerse.
+    const red = scratchColor.lerpColors(BLOOD_LOW, BLOOD_HIGH, THREE.MathUtils.smoothstep(this.moonDir.y, 0, 0.5))
+    mu.lit.value.copy(MOON_LIT).lerp(red, blood)
+    mu.crater.value.copy(MOON_CRATER).lerp(red.multiplyScalar(BLOOD_CRATER), blood)
+    this.moonHalo.material.uniforms.color.value.copy(MOON_HALO_COLOR).lerp(BLOOD_HALO_COLOR, blood)
     // La parte en sombra es el cielo que tiene detrás, apenas aclarado (la luz de la Tierra). En lineal: poco da mucho.
     const sky = mu.shade.value.copy(horizon).lerp(u.zenith.value, THREE.MathUtils.smoothstep(this.moonDir.y, 0, 0.7))
     sky.lerp(MOON_LIT, 0.006)
     // El halo crece con la parte iluminada y se nota solo de noche.
     const lit = (1 - Math.cos(2 * Math.PI * mu.phase.value)) / 2
-    this.moonHalo.material.uniforms.strength.value = 0.35 * lit * (0.3 + 0.7 * su.opacity.value)
+    this.moonHalo.material.uniforms.strength.value = THREE.MathUtils.lerp(0.35, BLOOD_HALO_STRENGTH, blood) * lit * (0.3 + 0.7 * su.opacity.value)
   }
 }
 
