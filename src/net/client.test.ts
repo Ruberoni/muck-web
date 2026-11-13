@@ -466,6 +466,40 @@ describe('el espejo de NetClient', () => {
     expect(isLit(mirror())).toBe(false)
   })
 
+  it('el calor de la fogata se predice: cura al encenderla y deja de curar al apagarse, casi sin correcciones', () => {
+    const { room, time, connect } = setup()
+    const { client } = connect('a', 'create')
+    run(time, 1000, [[client, idle]])
+    const sim = room.sim!
+    const slot = sim.slot(client.id)
+    const fire = sim.structures.place(structureSpot(slot.player.pos, 0, 0.6, sim.obstacles), 'campfire')!
+    // Poca vida y poco hambre (sin regeneración natural): lo que sube es del calor.
+    slot.player.health = 10
+    slot.player.hunger = 29
+    run(time, 1000, [[client, idle]])
+    const predicted = client.predictor!.slot.player
+    expect(predicted.health).toBe(10)
+    resetStats(client)
+    putInto('campfire', fire.station!, 'fuel', 'wood', 1)
+    sim.structures.stationChanged(fire)
+    run(time, 10_000, [[client, idle]])
+    expect(slot.player.health).toBeGreaterThan(14)
+    expect(Math.abs(predicted.health - slot.player.health)).toBeLessThan(0.5)
+    // Encenderla cuesta como mucho la corrección de cuando llega el aviso (el cliente no predice la leña de otro).
+    expect(client.predictor!.stats.corrections).toBeLessThanOrEqual(1)
+    resetStats(client)
+    run(time, 55_000, [[client, idle]])
+    expect(isLit(fire.station!)).toBe(false)
+    const healed = slot.player.health
+    expect(healed).toBeCloseTo(10 + 60 * 0.5, 0)
+    // Al apagarse, la predicción ya la da por apagada en el tick que predice (la copia va por detrás): como mucho,
+    // una corrección por lo que la copia del render se separa del servidor.
+    expect(client.predictor!.stats.corrections).toBeLessThanOrEqual(1)
+    run(time, 3000, [[client, idle]])
+    expect(slot.player.health).toBe(healed)
+    expect(predicted.health).toBe(healed)
+  })
+
   it('el espejo sigue lo que hay en las estaciones y la obra, y quien reconecta las recibe', () => {
     const { room, time, connect } = setup()
     const { client } = connect('a', 'create')

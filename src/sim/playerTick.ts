@@ -4,7 +4,7 @@ import { craft, recipeById, type CraftWorld, type RecipeId } from './crafting'
 import type { Emit, TargetRef } from './events'
 import { startSwing, stepStrike, type Fighter } from './interaction'
 import type { Inventory, ItemId } from './inventory'
-import { stepPlayer, type Player, type PlayerEnv } from './player'
+import { stepPlayer, type Player, type PlayerEnv, type Vec3 } from './player'
 import { placeableOf } from './structures'
 import { eat, isDead, stepSurvival, useful } from './survival'
 
@@ -157,13 +157,14 @@ export function useHands(actor: Actor, intent: Intent): { swing: boolean; strike
 
 /**
  * Final del paso del jugador: comer y hambre (morir lo decide la simulación). Con la vida a 0 por un golpe de este
- * mismo paso ya no hace nada: ni comer ni regenerar devuelven a la vida.
+ * mismo paso ya no hace nada: ni comer ni regenerar devuelven a la vida. `warm`: si está al calor de una fogata
+ * encendida (`warmAt`), que también cura.
  */
-export function finishPlayerTick(actor: Actor, intent: Intent, emit: Emit) {
+export function finishPlayerTick(actor: Actor, intent: Intent, emit: Emit, warm: boolean) {
   if (isDead(actor.player)) return
   stepEating(actor, emit)
   if (intent.eat && actor.player.eatLeft <= 0 && !actor.player.blocking && actor.combat.strikeLeft <= 0) startEating(actor, emit)
-  stepSurvival(actor.player, STEP)
+  stepSurvival(actor.player, STEP, warm)
 }
 
 /** Lo que se comería ahora: lo que se lleva en la mano, si es consumible; si no, una baya, si hay. */
@@ -213,6 +214,8 @@ export interface PredictWorld extends CraftWorld {
   env: PlayerEnv
   /** Si una estructura de radio `radius` colocada desde aquí caería en un sitio válido (structureSpot contra las rejillas del cliente). */
   canPlace(player: Player, radius: number): boolean
+  /** Si desde `pos` se está al calor de una fogata encendida en el tick `tick` (`warmAt` contra las estaciones del espejo). */
+  warm(pos: Vec3, tick: number | undefined): boolean
   emit: Emit
 }
 
@@ -237,6 +240,6 @@ export function predictPlayer(actor: Actor, command: PlayerCommands | undefined,
     world.emit({ type: 'playerPlaced', id: actor.id, item })
     actor.inventory.remove(item, 1)
   }
-  finishPlayerTick(actor, intent, world.emit)
+  finishPlayerTick(actor, intent, world.emit, world.warm(actor.player.pos, command?.move.tick))
   return hands.swing
 }

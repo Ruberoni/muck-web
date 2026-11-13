@@ -10,7 +10,7 @@ import { resetProp } from '../sim/props'
 import type { Connection } from '../sim/Simulation'
 import { Simulation } from '../sim/Simulation'
 import { createIsland } from '../sim/world/island'
-import { stationNear, structureSpot } from '../sim/structures'
+import { stationNear, structureSpot, warmAt } from '../sim/structures'
 import { copyStation } from '../sim/stations'
 import { isNight } from '../sim/world/daycycle'
 import { QUIET_SEND_MS, SEND_MS, TickClock } from './clock'
@@ -437,6 +437,10 @@ export class NetClient {
           canPlace: (p, radius) => structureSpot(p.pos, p.yaw, radius, sim.obstacles, undefined, sim.island).valid,
           // Como en la simulación: las estaciones del espejo, con el mismo alcance.
           nearStation: (kind, pos) => stationNear(sim.structures.list, kind, pos, STATION_RANGE),
+          // La copia de las estaciones va al tick del render, por detrás de la predicción: la fogata que se habrá
+          // apagado en el tick que se predice (o se repite al reconciliar) ya no calienta. Si no, cada apagado sería
+          // una corrección de vida.
+          warm: (pos, tick) => warmAt(sim.structures.list, pos, Math.max(0, (tick ?? this.predictor!.tick + 1) - this.lastRenderTick) * STEP),
         })
         this.predictor.start(msg.serverTick, msg.you)
         this.clock.sync(now, msg.serverTick, msg)

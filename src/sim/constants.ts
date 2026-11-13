@@ -36,6 +36,13 @@ export const HEALTH_REGEN_HUNGER = 30
 export const HEALTH_REGEN_PER_SEC = 1
 /** Segundos sin regeneración natural tras recibir daño: esperando no se cura en mitad de una pelea. */
 export const HEALTH_REGEN_DELAY = 8
+/** El calor de una fogata encendida cura a esta distancia o menos (en horizontal, del jugador al borde de la fogata). */
+export const CAMPFIRE_HEAL_RANGE = 4
+/**
+ * Vida por segundo que da ese calor, además de la natural: también durante la pausa tras recibir daño y con cualquier
+ * hambre por encima de 0. La mejora "regen" del mercader no la cambia, y varias fogatas no se suman.
+ */
+export const CAMPFIRE_HEAL_PER_SEC = 0.5
 export const EAT_KEY = 'KeyF'
 /** Comiendo o bebiendo se anda a esta parte de la velocidad, sin correr. */
 export const EAT_SPEED_FACTOR = 0.5

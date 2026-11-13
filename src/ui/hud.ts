@@ -38,7 +38,7 @@ const CONTROLS = `
     <li><kbd>1–9</kbd> o <kbd>Rueda</kbd> elegir casilla</li>
     <li><kbd>Q</kbd> tirar uno de la mano (<kbd>Ctrl</kbd> + <kbd>Q</kbd>: todos)</li>
     <li><kbd>Tab</kbd> o <kbd>E</kbd> inventario (clic en dos casillas o arrastrar: cambiarlas; <kbd>Mayús</kbd> + clic en un peto o escudo: ponérselo)</li>
-    <li><kbd>E</kbd> cerca de una construcción: entregar materiales, cargar aceite o encender el faro; junto a una fogata, echarle leña y cocinar</li>
+    <li><kbd>E</kbd> cerca de una construcción: entregar materiales, cargar aceite o encender el faro; junto a una fogata, echarle leña y cocinar (encendida, su calor cura)</li>
     <li><kbd>C</kbd> inventario con las recetas (clic: fabricar; <kbd>Mayús</kbd> + clic: hasta ${CRAFT_MANY})</li>
     <li><kbd>Clic</kbd> con la fogata o una estación en la mano: colocarla</li>
     <li><kbd>Enter</kbd> chat (en una sala)</li>
@@ -96,7 +96,7 @@ export class Hud {
   private results: HTMLElement
   /** Panel del menú y la pausa, donde van los ajustes. */
   readonly panel: HTMLElement
-  private last = { health: -1, regen: 0, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', effects: '', clock: '', tonight: '', light: '', boss: '' }
+  private last = { health: -1, regen: 0, warming: false, hunger: -1, stamina: -1, exhausted: false, food: null as ItemId | null, prompt: '', effects: '', clock: '', tonight: '', light: '', boss: '' }
 
   constructor(container: HTMLElement, onOverlayClick: () => void) {
     const root = el('div', 'hud', container)
@@ -171,12 +171,16 @@ export class Hud {
     this.results.replaceChildren(...(lines ?? []).map((line) => Object.assign(document.createElement('p'), { textContent: line })))
   }
 
-  /** `regenLeft`: segundos de curación poco a poco que quedan (la barra late en verde y los muestra). */
-  setHealth(value: number, max: number, regenLeft = 0) {
+  /**
+   * `regenLeft`: segundos de curación poco a poco que quedan (la barra late en verde y los muestra). `warming`: el
+   * calor de una fogata le está curando ahora (`warmHeals`); la barra también late, sin segundos.
+   */
+  setHealth(value: number, max: number, regenLeft = 0, warming = false) {
     const regen = Math.ceil(regenLeft)
-    if (regen !== this.last.regen) {
+    if (regen !== this.last.regen || warming !== this.last.warming) {
       this.last.regen = regen
-      this.healthBar.classList.toggle('regen', regen > 0)
+      this.last.warming = warming
+      this.healthBar.classList.toggle('regen', regen > 0 || warming)
       this.regenLeft.textContent = regen > 0 ? `${regen} s` : ''
     }
     const v = Math.ceil(value)
@@ -205,9 +209,13 @@ export class Hud {
     }
   }
 
-  /** Los efectos con tiempo que siguen en marcha (aliento, rapidez, piedra), con los segundos que les quedan. */
-  setEffects(effects: { breath: number; speed: number; guard: number }) {
+  /**
+   * Los efectos con tiempo que siguen en marcha (aliento, rapidez, piedra), con los segundos que les quedan, y
+   * `warm`: al calor de una fogata encendida, sin tiempo ("Calor").
+   */
+  setEffects(effects: { breath: number; speed: number; guard: number; warm?: boolean }) {
     const parts = [
+      effects.warm ? 'Calor' : '',
       effects.breath > 0 ? `Aliento ${Math.ceil(effects.breath)} s` : '',
       effects.speed > 0 ? `Rapidez ${Math.ceil(effects.speed)} s` : '',
       effects.guard > 0 ? `Piedra ${Math.ceil(effects.guard)} s` : '',

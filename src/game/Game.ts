@@ -38,7 +38,8 @@ import { BIOME_NAMES } from '../sim/world/biomes'
 import type { Island } from '../sim/world/island'
 import { createTerrain } from '../world/terrain'
 import { WATER_LEVEL } from '../sim/world/terrain'
-import { isLitCampfire, placeableOf, structureSpot, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
+import { isLitCampfire, placeableOf, structureSpot, warmAt, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
+import { warmHeals } from '../sim/survival'
 import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
@@ -1145,10 +1146,12 @@ export class Game {
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot, sim.island) : null
     this.structureView.setGhost(placing && spot && { kind: placing.kind, spot, yaw: look.yaw })
 
-    this.hud.setHealth(p.health, maxHealthOf(p.boosts), p.regenLeft)
+    // Con el jugador vivo: el espectador no se calienta.
+    const warm = slot.alive && warmAt(structures.list, p.pos)
+    this.hud.setHealth(p.health, maxHealthOf(p.boosts), p.regenLeft, warmHeals(p, warm))
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
-    this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft })
+    this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft, warm })
     const eating = p.eatItem && CONSUMABLE_DEFS[p.eatItem]
     this.hud.setEating(eating && p.eatLeft > 0 ? 1 - p.eatLeft / eating.time : null)
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)

@@ -1,4 +1,5 @@
 import {
+  CAMPFIRE_HEAL_PER_SEC,
   STAMINA_MAX,
   STAMINA_RECOVER_THRESHOLD,
   HEALTH_REGEN_DELAY,
@@ -46,15 +47,17 @@ export const guardFactor = (v: Vitals) => (v.guardLeft > 0 ? v.guardMul : 1)
 /**
  * Un paso fijo: el hambre baja siempre; a cero quita vida y por encima del umbral la regenera, salvo justo después
  * de recibir daño. La curación de un consumible va aparte y no se pausa: es para mitad de una pelea. Las mejoras del
- * mercader (`boosts`) multiplican estas tasas y la vida máxima.
+ * mercader (`boosts`) multiplican estas tasas y la vida máxima. `warm`: al calor de una fogata encendida (`warmAt`),
+ * que cura además CAMPFIRE_HEAL_PER_SEC con cualquier hambre por encima de 0, sin pausa tras el daño ni mejora "regen".
  */
-export function stepSurvival(v: Vitals, dt: number) {
+export function stepSurvival(v: Vitals, dt: number, warm = false) {
   const maxHealth = maxHealthOf(v.boosts)
   v.hunger = Math.max(0, v.hunger - HUNGER_DRAIN_PER_SEC * boostFactor(v.boosts, 'hunger') * dt)
   v.healDelay = Math.max(0, v.healDelay - dt)
   if (v.hunger <= 0) v.health = Math.max(0, v.health - STARVE_DAMAGE_PER_SEC * dt)
   else if (v.hunger > HEALTH_REGEN_HUNGER && v.healDelay <= 0)
     v.health = Math.min(maxHealth, v.health + HEALTH_REGEN_PER_SEC * boostFactor(v.boosts, 'regen') * dt)
+  if (warm && v.health > 0 && v.hunger > 0) v.health = Math.min(maxHealth, v.health + CAMPFIRE_HEAL_PER_SEC * dt)
   v.breathLeft = Math.max(0, v.breathLeft - dt)
   v.speedLeft = Math.max(0, v.speedLeft - dt)
   if (v.speedLeft <= 0) v.speedMul = 1
@@ -111,3 +114,6 @@ export function eat(v: Vitals & Partial<Breath>, def: ConsumableDef): boolean {
 }
 
 export const isDead = (v: Vitals) => v.health <= 0
+
+/** Si el calor de una fogata (`warm`) le está curando ahora: vivo, con hambre y sin la vida llena. */
+export const warmHeals = (v: Vitals, warm: boolean) => warm && v.health > 0 && v.hunger > 0 && v.health < maxHealthOf(v.boosts)

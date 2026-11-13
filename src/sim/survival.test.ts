@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CAMPFIRE_HEAL_PER_SEC,
   HEALTH_MAX,
   HEALTH_REGEN_DELAY,
   HEALTH_REGEN_HUNGER,
@@ -11,12 +12,12 @@ import {
   STARVE_DAMAGE_PER_SEC,
   STEP,
 } from './constants'
-import { eat, guardFactor, hurt, isDead, NO_HEALING, speedFactor, stepSurvival, type Vitals } from './survival'
+import { eat, guardFactor, hurt, isDead, NO_HEALING, speedFactor, stepSurvival, warmHeals, type Vitals } from './survival'
 
 const vitals = (health: number, hunger: number): Vitals => ({ health, hunger, ...NO_HEALING })
 
-const run = (v: Vitals, seconds: number) => {
-  for (let i = 0; i < Math.round(seconds / STEP); i++) stepSurvival(v, STEP)
+const run = (v: Vitals, seconds: number, warm = false) => {
+  for (let i = 0; i < Math.round(seconds / STEP); i++) stepSurvival(v, STEP, warm)
 }
 
 describe('supervivencia', () => {
@@ -164,5 +165,61 @@ describe('supervivencia', () => {
     expect(speedFactor(v)).toBe(1.3)
     run(v, 2)
     expect(speedFactor(v)).toBe(1)
+  })
+})
+
+describe('el calor de la fogata', () => {
+  it('se suma a la regeneración natural', () => {
+    const v = vitals(50, HUNGER_MAX)
+    run(v, 4, true)
+    expect(v.health).toBeCloseTo(50 + (HEALTH_REGEN_PER_SEC + CAMPFIRE_HEAL_PER_SEC) * 4, 6)
+  })
+
+  it('cura con poco hambre, donde la natural no', () => {
+    const v = vitals(50, HEALTH_REGEN_HUNGER - 10)
+    run(v, 4, true)
+    expect(v.health).toBeCloseTo(50 + CAMPFIRE_HEAL_PER_SEC * 4, 6)
+    expect(warmHeals(v, true)).toBe(true)
+  })
+
+  it('cura también durante la pausa que sigue a recibir daño', () => {
+    const v = vitals(60, HUNGER_MAX)
+    hurt(v, 10)
+    run(v, HEALTH_REGEN_DELAY / 2, true)
+    expect(v.health).toBeCloseTo(50 + (CAMPFIRE_HEAL_PER_SEC * HEALTH_REGEN_DELAY) / 2, 6)
+  })
+
+  it('no pasa de la vida máxima', () => {
+    const v = vitals(HEALTH_MAX - 0.1, HEALTH_REGEN_HUNGER - 10)
+    run(v, 4, true)
+    expect(v.health).toBe(HEALTH_MAX)
+    expect(warmHeals(v, true)).toBe(false)
+  })
+
+  it('con hambre a 0 no cura: se sigue muriendo de hambre', () => {
+    const v = vitals(50, 0)
+    run(v, 4, true)
+    expect(v.health).toBeCloseTo(50 - STARVE_DAMAGE_PER_SEC * 4, 6)
+    expect(warmHeals(v, true)).toBe(false)
+  })
+
+  it('a quien está muerto no lo devuelve a la vida', () => {
+    const v = vitals(0, HEALTH_REGEN_HUNGER - 10)
+    run(v, 4, true)
+    expect(v.health).toBe(0)
+    expect(warmHeals(v, true)).toBe(false)
+  })
+
+  it('la mejora "regen" del mercader no la multiplica', () => {
+    const v: Vitals = { ...vitals(50, HEALTH_REGEN_HUNGER - 10), boosts: { regen: 3 } }
+    run(v, 4, true)
+    expect(v.health).toBeCloseTo(50 + CAMPFIRE_HEAL_PER_SEC * 4, 6)
+  })
+
+  it('sin calor no cura nada de más', () => {
+    const v = vitals(50, HEALTH_REGEN_HUNGER - 10)
+    run(v, 4)
+    expect(v.health).toBe(50)
+    expect(warmHeals(v, false)).toBe(false)
   })
 })
