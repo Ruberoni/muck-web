@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUILD_DEFS } from '../sim/builds'
+import { MOTOR_TIME, PLANE_HP } from '../sim/constants'
 import { DEFAULT_RULES } from '../sim/match'
 import type { Structure } from '../sim/structures'
 import { newStation, putInto, type StationState } from '../sim/stations'
@@ -65,5 +66,28 @@ describe('el aviso de las estaciones de procesar', () => {
     expect(clockTime(0)).toBe('0:00')
     expect(clockTime(59.1)).toBe('1:00')
     expect(clockTime(3600)).toBe('1:00:00')
+  })
+})
+
+describe('el aviso del avión', () => {
+  const plane = (p: Partial<NonNullable<Structure['plane']>>) =>
+    ({
+      kind: 'plane',
+      build: { phase: BUILD_DEFS.plane!.phases.length, delivered: {}, progress: 1 },
+      plane: { hp: PLANE_HP, running: true, heat: MOTOR_TIME, until: null, wait: null, aboard: 0, expected: 0, ...p },
+    }) as Structure
+  const prompt = (p: Partial<NonNullable<Structure['plane']>>) => usePrompt(plane(p), DEFAULT_RULES, true, 'E')
+
+  it('calentando', () => {
+    expect(prompt({ heat: 10 })).toContain('Calentando el motor')
+  })
+
+  it('caliente y sin nadie a bordo: espera a que subáis (o a que subas, en solitario)', () => {
+    expect(prompt({ expected: 3 })).toContain('Listo · Esperando a que subáis')
+    expect(prompt({ expected: 1 })).toContain('Listo · Esperando a que subas')
+  })
+
+  it('con alguien a bordo: la cuenta atrás y cuántos han subido', () => {
+    expect(prompt({ until: 999, wait: 41.2, aboard: 2, expected: 3 })).toContain('Despega en 42 s · 2/3 a bordo')
   })
 })
