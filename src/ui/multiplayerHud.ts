@@ -158,6 +158,8 @@ export class MultiplayerHud {
       parent.appendChild(this.chatBox)
       this.chatBox.classList.add('docked', 'open')
       this.chatInput.hidden = false
+      // Lo último a la vista, también lo que llegó mientras el chat estaba fuera de la sala.
+      this.chatLog.scrollTop = this.chatLog.scrollHeight
       return
     }
     if (!this.docked) return
@@ -169,6 +171,14 @@ export class MultiplayerHud {
     this.chatInput.hidden = true
     // Lo que ya se leyó en la sala no vuelve a aparecer en la partida.
     for (const line of this.chatLog.children) line.classList.add('seen')
+  }
+
+  /**
+   * Fuera de la vista mientras se miran Ajustes o Controles desde la sala. Con `display: none`: al volver a verse, las
+   * líneas que llegaron entretanto empiezan a desvanecerse entonces, no antes.
+   */
+  setAway(away: boolean) {
+    this.chatBox.classList.toggle('away', away)
   }
 
   /** Abre la caja de chat (Enter en una sala) con el foco en ella. */

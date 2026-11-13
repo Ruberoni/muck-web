@@ -8,6 +8,7 @@ import { MenuScreens } from './menu/MenuScreens'
 import { installCoreScreens } from './menu/views'
 import { LoadTracker } from '../game/loadTracker'
 import { MultiplayerHud } from './multiplayerHud'
+import { DEFAULT_SETTINGS } from '../game/settings'
 
 const lobbyMatch = (over: Partial<MatchInfo> = {}): MatchInfo => ({
   phase: 'lobby',
@@ -35,6 +36,9 @@ function room(me = 1, loads = new LoadTracker()) {
     hud: { net: new MultiplayerHud(hudRoot) },
     onchange: null,
     play: vi.fn(),
+    settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
+    applySettings: vi.fn(),
+    applyBindings: vi.fn(),
     loads,
     sound: { unlock: vi.fn(), play: vi.fn() },
   } as unknown as Game & { menu: MenuScreens; state: string; sound: { unlock: ReturnType<typeof vi.fn>; play: ReturnType<typeof vi.fn> } }
@@ -218,4 +222,110 @@ it('si todo falla después del tiempo, vuelve la carga con "Recargar"', async ()
   await Promise.resolve()
   expect(menu.screen).toBe('loading')
   expect(buttonNamed('Recargar').closest('[hidden]')).toBeNull()
+})
+
+const tool = (label: string) => document.querySelector<HTMLButtonElement>(`.menu-tool[aria-label="${label}"]`)!
+
+describe('Controles y Ajustes desde la sala', () => {
+  it('las mismas losetas en la sala del anfitrión y del invitado; abren y Esc vuelve con el foco en la loseta', () => {
+    for (const me of [1, 2]) {
+      const { menu } = room(me)
+      const tools = document.querySelector<HTMLElement>('.menu-tools')!
+      expect(tools.hidden).toBe(false)
+      // Fuera del tablón.
+      expect(document.querySelector('.menu-panel')!.contains(tools)).toBe(false)
+      tool('Ajustes').click()
+      expect(menu.top).toBe('settings')
+      expect(tools.hidden).toBe(true)
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' }))
+      expect(menu.top).toBe(null)
+      expect(menu.screen).toBe('room')
+      expect(tools.hidden).toBe(false)
+      expect(document.activeElement).toBe(tool('Ajustes'))
+      tool('Controles').click()
+      expect(menu.top).toBe('controls')
+      menu.back()
+      expect(document.activeElement).toBe(tool('Controles'))
+    }
+  })
+
+  it('en el inicio, las mismas losetas en el mismo sitio y sin la fila de texto', () => {
+    const { game, menu } = room()
+    ;(game as { net: unknown }).net = null
+    menu.refresh()
+    expect(menu.screen).toBe('home')
+    expect(document.querySelector<HTMLElement>('.menu-tools')!.hidden).toBe(false)
+    expect([...document.querySelectorAll('.menu-panel button')].map((b) => b.textContent)).not.toContain('Ajustes')
+  })
+
+  it('en la pausa no hay losetas: siguen los botones de texto', () => {
+    const { game, menu } = room()
+    game.state = 'paused'
+    menu.refresh()
+    expect(menu.screen).toBe('pause')
+    expect(document.querySelector<HTMLElement>('.menu-tools')!.hidden).toBe(true)
+    expect(buttonNamed('Ajustes')).toBeTruthy()
+  })
+
+  it('con Ajustes abierto el chat no asoma; al volver sigue el borrador y se ve lo último', () => {
+    const { game, menu } = room()
+    const input = document.querySelector<HTMLInputElement>('.room-chat .chat-input')!
+    input.value = 'un momento'
+    tool('Ajustes').click()
+    const chat = input.parentElement!
+    expect(chat.classList.contains('away')).toBe(true)
+    game.hud.net.chat(2, 'Tomás', '¿listos?')
+    const log = chat.querySelector<HTMLElement>('.chat-log')!
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 500 })
+    menu.back()
+    expect(chat.classList.contains('away')).toBe(false)
+    expect(document.querySelector('.room-chat')!.contains(input)).toBe(true)
+    expect(input.value).toBe('un momento')
+    expect(log.textContent).toContain('¿listos?')
+    expect(log.scrollTop).toBe(500)
+  })
+
+  it('si empieza la partida con Ajustes abierto: se cierra, sale la cuenta atrás y el chat vuelve a verse', () => {
+    vi.useFakeTimers()
+    const { game, menu } = room(2)
+    tool('Ajustes').click()
+    game.state = 'paused'
+    menu.overlay = 'ready'
+    menu.refresh()
+    expect(menu.screen).toBe('countdown')
+    expect(menu.top).toBe(null)
+    expect(document.querySelector('.chat')!.classList.contains('away')).toBe(false)
+    expect(document.querySelector<HTMLElement>('.menu-tools')!.hidden).toBe(true)
+    expect(game.sound.play).toHaveBeenCalledWith('uiTick')
+  })
+
+  it('un deslizador a medio arrastrar se guarda al cerrar Ajustes, sin el sonido de prueba', () => {
+    const { game, menu } = room()
+    localStorage.clear()
+    tool('Ajustes').click()
+    const volume = document.querySelector<HTMLInputElement>('input[data-setting="volume"]')!
+    volume.value = '0.3'
+    volume.dispatchEvent(new Event('input'))
+    game.state = 'paused'
+    menu.overlay = 'ready'
+    menu.refresh()
+    expect(JSON.parse(localStorage.getItem('muck-web:settings')!).volume).toBe(0.3)
+    expect(game.sound.play).not.toHaveBeenCalledWith('pickup')
+  })
+
+  it('pulsar Empezar, abrir Ajustes y volver no deja mandar otro inicio', () => {
+    vi.useFakeTimers()
+    const { client } = room()
+    buttonNamed('Empezar partida').click()
+    tool('Ajustes').click()
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' }))
+    const start = buttonNamed('Empezar partida')
+    expect(start.getAttribute('aria-disabled')).toBe('true')
+    start.click()
+    expect(client.start).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(5000)
+    expect(start.hasAttribute('aria-disabled')).toBe(false)
+    start.click()
+    expect(client.start).toHaveBeenCalledTimes(2)
+  })
 })

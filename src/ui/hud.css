@@ -480,6 +480,9 @@
 
 .chat-line .who { font-weight: 600; }
 
+/* Ajustes o Controles abiertos desde la sala: el chat espera sin asomar junto al tablón. */
+.chat.away { display: none; }
+
 /* Con el chat abierto se ven las últimas líneas aunque ya se hubieran desvanecido. */
 .chat.open .chat-line { animation: none; opacity: 1; }
 /* Las de la sala de espera ya se leyeron: en partida solo se ven con el chat abierto. */
