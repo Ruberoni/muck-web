@@ -20,7 +20,7 @@ import { loadNature, type NatureModels } from '../view/nature'
 import { RemotePlayerView } from '../view/RemotePlayerView'
 import type { SimEvent } from '../sim/events'
 import { isCommon } from '../sim/enemies'
-import { DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
+import { clockOf, DIFFICULTY_DEFS, type Difficulty } from '../sim/match'
 import { TRAIT_NAMES } from '../sim/threat'
 import { BiomeNotice } from '../ui/biomeNotice'
 import { BossWatch } from '../ui/bossWatch'
@@ -32,7 +32,7 @@ import { stationPrompt, usePrompt } from '../ui/usePrompt'
 import { resultLines } from '../ui/results'
 import { Hud, type OverlayKind } from '../ui/hud'
 import { createSettingsPanel } from '../ui/settings'
-import { sunDirection } from '../world/daycycle'
+import { moonPhaseOf, sunDirection } from '../world/daycycle'
 import { euclideanModulo } from '../sim/world/daycycle'
 import { BIOME_NAMES } from '../sim/world/biomes'
 import type { Island } from '../sim/world/island'
@@ -64,6 +64,8 @@ import { playerCss } from '../ui/playerColor'
 
 export type { GameState } from './states'
 
+/** Fase hasta la que la luna sigue asomando tras el amanecer (y aún es la de la noche anterior). */
+const MOON_SETTING = 0.05
 /** Segundos que tarda en cerrarse la niebla de la Noche Eterna. */
 const ETERNAL_FOG_TIME = 12
 /** El faro encendido abre la niebla en toda la isla, sea cual sea su tamaño: hasta aquí no hay, y desde aquí ya está cerrada. */
@@ -227,6 +229,7 @@ export class Game {
     this.shownIsland = this.sim.island
     this.scene = scene
     this.sky = sky
+    this.sky.view.setPixelRatio(this.renderer.getPixelRatio())
     this.water = water
     this.propView = this.buildPropView(null)
     // Mientras no llegan (o si fallan) se ven las formas de siempre.
@@ -978,6 +981,17 @@ export class Game {
     )
   }
 
+  /**
+   * La luna de esta noche. Sin partida (el menú) el reloj no tiene Noche Eterna y la luna da vueltas a sus fases.
+   * El día sube al amanecer, pero la luna tarda un poco en esconderse: hasta entonces es la de la noche anterior.
+   */
+  private moonPhase() {
+    const { clock } = this.sim
+    const eternalDay = Number.isFinite(clock.eternalAt) ? clockOf(this.sim.rules.players).eternalDay : Infinity
+    const setting = !clock.eternal && clock.phase < MOON_SETTING
+    return moonPhaseOf(setting ? clock.day - 1 : clock.day, eternalDay)
+  }
+
   /** Cuánto ha cerrado la niebla de la Noche Eterna, de 0 a 1: con el faro encendido se abre. */
   private eternalFog() {
     const { clock, structures } = this.sim
@@ -1144,7 +1158,7 @@ export class Game {
       this.renderPos.z - Math.cos(look.yaw) * SHADOW_LOOK_AHEAD,
     )
     this.lighthouseGlow = THREE.MathUtils.damp(this.lighthouseGlow, structures.burning ? 1 : 0, LIGHTHOUSE_FADE, dt)
-    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.camera.position, this.eternalFog(), this.lighthouseGlow)
+    updateSky(this.sky, sim.clock.phase, this.shadowCenter, this.camera.position, this.eternalFog(), this.lighthouseGlow, this.moonPhase())
     this.structureView.update(time, sim.clock.phase, this.renderPos, structures.list)
     const placing = this.state === 'playing' ? placeableOf(slot.inventory.selectedItem) : null
     const spot = placing ? structureSpot(this.renderPos, look.yaw, placing.radius, sim.obstacles, this.spot, sim.island) : null

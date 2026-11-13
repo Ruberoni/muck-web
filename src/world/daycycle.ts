@@ -4,12 +4,38 @@ import { DAY_FRACTION } from '../sim/world/daycycle'
 // Inclinación de la órbita respecto a la vertical: a mediodía el sol queda a unos 60°.
 const ORBIT_TILT = THREE.MathUtils.degToRad(30)
 
-/** Dirección hacia el sol: sale por +X, culmina hacia +Z y se pone por -X. */
-export function sunDirection(phase: number, out = new THREE.Vector3()) {
+/** Eje sobre el que gira el cielo (sol, luna y estrellas): perpendicular a la órbita del sol. */
+export const SKY_AXIS = new THREE.Vector3(0, -Math.sin(ORBIT_TILT), Math.cos(ORBIT_TILT))
+
+/** Ángulo del cielo en la fase `phase`: 0 al amanecer, π al anochecer. El día y la noche van cada uno a su ritmo. */
+export function skyAngle(phase: number) {
   const p = THREE.MathUtils.euclideanModulo(phase, 1)
-  // El día ocupa media órbita (0..π) y la noche la otra mitad, cada uno a su ritmo.
-  const angle = p < DAY_FRACTION ? (p / DAY_FRACTION) * Math.PI : Math.PI + ((p - DAY_FRACTION) / (1 - DAY_FRACTION)) * Math.PI
+  return p < DAY_FRACTION ? (p / DAY_FRACTION) * Math.PI : Math.PI + ((p - DAY_FRACTION) / (1 - DAY_FRACTION)) * Math.PI
+}
+
+/**
+ * Dirección hacia el sol: sale por +X, culmina hacia +Z y se pone por -X. Es (1, 0, 0) girado `skyAngle` sobre
+ * `SKY_AXIS`, igual que las estrellas.
+ */
+export function sunDirection(phase: number, out = new THREE.Vector3()) {
+  const angle = skyAngle(phase)
   return out.set(Math.cos(angle), Math.sin(angle) * Math.cos(ORBIT_TILT), Math.sin(angle) * Math.sin(ORBIT_TILT))
+}
+
+/** Fase de la luna (0 nueva, 0,25 cuarto creciente, 0,5 llena, 0,75 cuarto menguante) por noches que faltan para la llena. */
+const WAXING = [0.5, 0.38, 0.32, 0.25, 0.1]
+/** Sin Noche Eterna (el menú): un ciclo de fases que se repite cada tantas noches, sin luna nueva. */
+const MENU_CYCLE = 8
+
+/**
+ * La luna de la noche del día `day`: crece noche a noche hasta estar llena en la última noche antes de la Noche Eterna
+ * (`eternalDay`), como una cuenta atrás, y en la Noche Eterna sigue llena. Sin Noche Eterna (`Infinity`) da vueltas.
+ */
+export function moonPhaseOf(day: number, eternalDay: number) {
+  if (!Number.isFinite(eternalDay)) return (THREE.MathUtils.euclideanModulo(day - 1, MENU_CYCLE) + 0.5) / MENU_CYCLE
+  const left = eternalDay - 1 - day
+  if (left <= 0) return 0.5
+  return WAXING[Math.min(left, WAXING.length - 1)]
 }
 
 export interface SkyState {
