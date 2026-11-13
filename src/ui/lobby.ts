@@ -248,10 +248,12 @@ export function installLobby(game: Game) {
     const change = button(difficultyRow, 'Cambiar', 'ghost tiny', () => menu.push('difficulty-room'))
     change.dataset.opens = 'difficulty-room'
     const foot = make('div', 'menu-foot menu-stack', root)
+    // Sin capturar el ratón: como los demás, el anfitrión ve la cuenta atrás y entra con "¡Entrar!".
     const start = button(foot, 'Empezar partida', 'primary', () => {
+      // Un doble clic no manda dos `start`; si el servidor no contesta, se puede volver a probar.
+      start.disabled = true
+      window.setTimeout(() => (start.disabled = false), 2000)
       game.net?.client.start()
-      // El clic es el gesto que permite capturar el ratón: a los demás les toca el suyo.
-      void game.play()
     })
     const back = button(foot, 'Volver a la partida', 'primary', () => void game.play())
     const waitingHost = make('p', 'room-waiting', foot)

@@ -58,9 +58,12 @@ describe('screenFor', () => {
     expect(at({ state: 'dead', results: 'surrendered' })).toBe('results')
   })
 
-  it('cargando, antes que nada', () => {
+  it('cargando, en el menú antes que nada; nunca tapa una partida', () => {
     expect(at({ loading: true })).toBe('loading')
-    expect(at({ loading: true, state: 'paused' })).toBe('loading')
+    expect(at({ loading: true, inviteCode: 'K7QX2' })).toBe('loading')
+    expect(at({ loading: true, inRoom: true })).toBe('loading')
+    expect(at({ loading: true, state: 'paused' })).toBe('pause')
+    expect(at({ loading: true, state: 'playing' })).toBeNull()
   })
 })
 

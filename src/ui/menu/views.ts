@@ -1,7 +1,10 @@
 import { saveSettings } from '../../game/settings'
 import { DIFFICULTIES, DIFFICULTY_DEFS, type Difficulty } from '../../sim/match'
 import { createSettingsPanel } from '../settings'
+import { allFailed, loadFraction } from '../../game/loadTracker'
 import { controlGroups } from './controls'
+import { countdownNumber } from './countdown'
+import { pickTip } from './tips'
 import type { MenuScreens, ScreenView } from './MenuScreens'
 
 export const TAGLINE = 'Sobrevive a la noche en la isla'
@@ -193,12 +196,68 @@ export function installCoreScreens(menu: MenuScreens) {
     return { root, update }
   })
 
-  // La partida de la sala ha empezado: se entra con un clic (el gesto que deja capturar el ratón).
+  // La partida de la sala ha empezado: 3, 2, 1 para todos (también el anfitrión) y luego "¡Entrar!", el clic que
+  // deja capturar el ratón.
   menu.register('countdown', () => {
     const root = panel()
     make('p', 'menu-text', root).textContent = 'La partida empieza'
-    button(root, '¡Entrar!', 'primary', () => void game.play())
-    return { root }
+    const number = make('div', 'countdown-number', root)
+    number.setAttribute('aria-hidden', 'true')
+    const enter = button(root, '¡Entrar!', 'primary big', () => void game.play())
+    enter.hidden = true
+    const started = performance.now()
+    let shown: number | null | undefined
+    const tick = () => {
+      const left = countdownNumber(performance.now() - started)
+      if (left === shown) return
+      shown = left
+      if (left === null) {
+        number.hidden = true
+        enter.hidden = false
+        enter.focus({ preventScroll: true })
+        window.clearInterval(timer)
+        return
+      }
+      number.textContent = String(left)
+      // Vuelve a lanzar la animación del número (sin ella con el movimiento reducido: ver menu.css).
+      number.classList.remove('pop')
+      void number.offsetWidth
+      number.classList.add('pop')
+      game.sound.play('uiTick')
+    }
+    const timer = window.setInterval(tick, 100)
+    tick()
+    return { root, dispose: () => window.clearInterval(timer) }
+  })
+
+  // Al abrir el juego, mientras llegan los modelos: el logo, la barra y un consejo.
+  menu.register('loading', (menu) => {
+    const root = panel()
+    logo(root, false)
+    const bar = make('div', 'load-bar', root)
+    bar.setAttribute('role', 'progressbar')
+    bar.setAttribute('aria-label', 'Cargando')
+    bar.setAttribute('aria-valuemin', '0')
+    bar.setAttribute('aria-valuemax', '100')
+    const fill = make('div', 'load-fill', bar)
+    const tip = make('p', 'load-tip', root)
+    tip.textContent = pickTip()
+    const failed = make('div', 'menu-stack', root)
+    make('p', 'menu-status error', failed).textContent = 'No se pudieron cargar los modelos'
+    button(failed, 'Recargar', 'primary', () => location.reload())
+    button(failed, 'Seguir sin ellos', 'ghost', () => menu.endLoading())
+    const update = () => {
+      const progress = game.loads.state
+      const percent = Math.round(loadFraction(progress) * 100)
+      fill.style.width = `${percent}%`
+      bar.setAttribute('aria-valuenow', String(percent))
+      const lost = allFailed(progress)
+      failed.hidden = !lost
+      bar.hidden = lost
+      tip.hidden = lost
+      if (lost && !root.contains(document.activeElement)) failed.querySelector('button')?.focus({ preventScroll: true })
+    }
+    return { root, update }
   })
 
   // Fin en solitario: "Jugar otra vez" reinicia la isla con la misma dificultad.
@@ -226,7 +285,8 @@ export function installCoreScreens(menu: MenuScreens) {
   menu.register('results', (menu) => {
     const root = panel()
     const [title, ...lines] = menu.results?.lines ?? ['Fin de la partida']
-    make('h1', 'menu-title', root).textContent = title!
+    // Escapar en el avión es ganar: el título, dorado.
+    make('h1', menu.results?.end === 'escaped' ? 'menu-title win' : 'menu-title', root).textContent = title!
     resultLines(root, lines)
     if (game.net) {
       button(root, 'Volver a la sala', 'primary', () => menu.setResults(null))

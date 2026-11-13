@@ -14,7 +14,8 @@ import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { autoSkin } from '../net/skins'
 import { loadSkin } from '../ui/skin'
-import { loadCharacter } from '../view/characters'
+import { loadCharacter, preloadCharacter } from '../view/characters'
+import { LoadTracker } from './loadTracker'
 import { MenuStage } from '../view/menuStage'
 import { DecorView } from '../view/DecorView'
 import { FishView } from '../view/FishView'
@@ -97,6 +98,8 @@ const PLACE_PROMPT: Record<StructureKind, string> = {
 }
 /** Segundos que se ve "Necesitas pico de madera" tras golpear algo que no se puede con lo que se lleva. */
 const TOOL_WARNING_TIME = 1.5
+/** La pantalla de carga no espera más que esto a los modelos (los que falten se ven al llegar). */
+const LOADING_MAX_MS = 15_000
 /** Los nombres flotan algo por encima de la cabeza. */
 const NAME_HEIGHT = EYE_HEIGHT + 0.55
 /** Por encima del suelo a esta altura (m), otro jugador está en el aire o flotando: sus pasos no suenan. */
@@ -148,6 +151,8 @@ export class Game {
   readonly menuStage = new MenuStage(loadCharacter, () => this.ownSkin())
   /** La skin guardada en el navegador, leída una vez: es la que se manda al entrar en una sala. */
   private savedSkin = loadSkin()
+  /** Los modelos que se esperan al abrir el juego: la pantalla de carga los cuenta. */
+  readonly loads = new LoadTracker()
   readonly settings: Settings = loadSettings()
   readonly sound = new Sound()
   private audio = new GameAudio(this.sound)
@@ -237,7 +242,7 @@ export class Game {
     this.water = water
     this.propView = this.buildPropView(null)
     // Mientras no llegan (o si fallan) se ven las formas de siempre.
-    loadNature().then(
+    this.loads.track(loadNature()).then(
       (models) => {
         this.nature = models
         this.propView = this.buildPropView(this.propView)
@@ -267,6 +272,13 @@ export class Game {
     this.hud.setInMenu(this.state === 'menu')
     this.menu = new MenuScreens(container, this)
     installCoreScreens(this.menu)
+    // Los trasgos salen la primera noche: que su modelo ya esté al anochecer. Las armas de verdad: hasta que llegan
+    // se ven las hechas en código. El personaje, el del fondo del menú. Todo cuenta para la pantalla de carga.
+    this.loads.track(this.enemyModels.preload(['goblin', 'spearGoblin'])).catch(() => {})
+    this.loads.track(loadWeapons()).then(() => this.handheld.refresh(), () => {})
+    this.loads.track(preloadCharacter(this.ownSkin())).catch(() => {})
+    this.loads.onChange = () => this.menu.refresh()
+    window.setTimeout(() => this.menu.endLoading(false), LOADING_MAX_MS)
     this.menu.refresh()
 
     this.input = new Input(this.renderer.domElement, {
@@ -317,10 +329,6 @@ export class Game {
       this.renderer.setSize(window.innerWidth, window.innerHeight)
     })
 
-    // Los trasgos salen la primera noche: que su modelo ya esté al anochecer.
-    this.enemyModels.preload(['goblin', 'spearGoblin'])
-    // Las armas de verdad: hasta que llegan se ven las hechas en código.
-    void loadWeapons().then(() => this.handheld.refresh(), () => {})
     this.renderer.setAnimationLoop((time) => this.frame(time))
   }
 
@@ -626,8 +634,9 @@ export class Game {
   }
 
   /**
-   * La sala ha cambiado de fase. Al empezar, solo quien pulsó el botón puede capturar el ratón ya: los demás, con
-   * "¡Entrar!". Al acabar se vuelve a la sala, con el resultado a la vista.
+   * La sala ha cambiado de fase. Al empezar, todos los que esperaban en la sala (también el anfitrión) ven la
+   * cuenta atrás y entran con "¡Entrar!", el clic que deja capturar el ratón. Al acabar se vuelve a la sala, con el
+   * resultado a la vista.
    */
   private followMatch(net: NetSession) {
     const match = net.client.match
@@ -1252,7 +1261,7 @@ export class Game {
     this.menuStage.setIsland(sim.island, sim.obstacles, sim.spawnCenter)
     // Encima del tablón normal (ajustes y controles son más anchos; los resultados de la sala, una tarjeta centrada)
     // el personaje quedaría tapado.
-    const showCharacter = menu.top === null && menu.screen !== 'results'
+    const showCharacter = menu.top === null && menu.screen !== 'results' && menu.screen !== 'loading'
     // En la sala de espera, todos en fila con su nombre.
     const client = this.net?.client
     const match = client?.match

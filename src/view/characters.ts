@@ -49,6 +49,11 @@ function loadBody(skin: number) {
   return body
 }
 
+/** Descarga el personaje `skin` y las animaciones sin crear ninguno (la pantalla de carga espera a que lleguen). */
+export async function preloadCharacter(skin: number): Promise<void> {
+  await Promise.all([(toolsLoading ??= tools()), loadBody(skin), loadClips()])
+}
+
 export const loadCharacter: LoadCharacter = async (skin) => {
   const [{ clone }, body, clips] = await Promise.all([(toolsLoading ??= tools()), loadBody(skin), loadClips()])
   return new CharacterRig(clone(body), clips)

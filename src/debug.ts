@@ -136,6 +136,8 @@ export function installDebug(game: Game) {
   }
 
   const api = {
+    /** El juego entero, para las capturas y las pruebas del menú (cuenta atrás, carga…). */
+    game,
     worldHash,
     levelPropsHash,
     mithrilPropsHash,

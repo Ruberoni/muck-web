@@ -37,6 +37,10 @@ export type SoundName =
   | 'jump'
   | 'land'
   | 'death'
+  /** Un botón del menú: un toc de madera corto. */
+  | 'uiClick'
+  /** Cada número de la cuenta atrás de la sala. */
+  | 'uiTick'
 
 export interface PlayOptions {
   /** Multiplica el volumen del efecto (0..1). */
@@ -483,4 +487,10 @@ const EFFECTS: Record<SoundName, (s: Sound, weight?: number) => number> = {
       s.tone(330, 1.5, { type: 'triangle', to: 82, gain: 0.11, attack: 0.02, delay: 0.15 }),
       s.tone(55, 1.6, { type: 'sine', gain: 0.18, attack: 0.1 }),
     ),
+  uiClick: (s) =>
+    Math.max(
+      s.tone(880 + s.random() * 60, 0.05, { type: 'triangle', to: 620, gain: 0.16 }),
+      s.noise(0.03, { filter: 'bandpass', freq: 1800, q: 1.5, gain: 0.12 }),
+    ),
+  uiTick: (s) => Math.max(s.tone(740, 0.12, { type: 'triangle', gain: 0.22 }), s.tone(1480, 0.06, { gain: 0.06 })),
 }

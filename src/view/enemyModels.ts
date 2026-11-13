@@ -81,17 +81,23 @@ export class EnemyModels implements EnemyModelSource {
     const found = this.templates.get(key)
     if (found === 'loading') return null
     if (found) return found
-    this.templates.set(key, 'loading')
-    void this.load(type, look).then(
-      (template) => this.templates.set(key, template),
-      () => setTimeout(() => this.templates.delete(key), 10_000),
-    )
+    this.start(type, look, key).catch(() => {})
     return null
   }
 
-  /** Para que el primero que salga ya tenga su modelo. */
-  preload(types: readonly EnemyType[]) {
-    for (const type of types) this.get(type, 0)
+  /** Para que el primero que salga ya tenga su modelo. La promesa acaba cuando han llegado (o falla si alguno no). */
+  preload(types: readonly EnemyType[]): Promise<void> {
+    return Promise.all(types.map((type) => (this.templates.has(`${type}:0`) ? undefined : this.start(type, 0, `${type}:0`)))).then(() => undefined)
+  }
+
+  private start(type: EnemyType, look: MobLook, key: string): Promise<EnemyTemplate> {
+    this.templates.set(key, 'loading')
+    const load = this.load(type, look)
+    load.then(
+      (template) => this.templates.set(key, template),
+      () => setTimeout(() => this.templates.delete(key), 10_000),
+    )
+    return load
   }
 
   private async load(type: EnemyType, look: MobLook): Promise<EnemyTemplate> {
