@@ -68,24 +68,27 @@ const TOSS_HEIGHT = 1.2
 /** Altura sobre el suelo desde la que sale lo que termina una estación. */
 /** Intentos de encontrar dónde cae el avión o dónde va la tumba. */
 const CRASH_ATTEMPTS = 20
-// Los ataques especiales de los jefes (ver `special`).
+// Los ataques especiales de los jefes (ver `special`). Los del trasgo gigante y del Lanzarrocas se esquivan bien, pero
+// castigan mucho al que se los come: sin armadura uno de los fuertes mata y los otros dejan al borde de la muerte; con
+// la de hierro (−25 %) o la de mithril (−42 %) se aguanta algo más.
 const STOMP_RADIUS = 7
 const STOMP_SPEED = 12
 const STOMP_WIDTH = 1.2
-const STOMP_DAMAGE = 20
+const STOMP_DAMAGE = 85
 const ARROW_SPEED = 30
-const ARROW_DAMAGE = 20
+/** Cada una de las tres: las tres juntas matan sin armadura (y cada una frena, ARROW_DAZE). */
+const ARROW_DAMAGE = 35
 const ARROW_HEIGHT = 2.6
 const SMASH_REACH = 2
 const SMASH_RADIUS = 2.6
-const SMASH_DAMAGE = 35
+const SMASH_DAMAGE = 100
 /** Gólems que llama el lanzarrocas cada vez, cuántos puede tener a la vez a su alrededor (SUMMON_AREA) y a qué distancia salen. */
 const SUMMON_COUNT = 2
 const SUMMON_MAX = 3
 const SUMMON_AREA = 20
 const SUMMON_RING = 3.5
 const FAST_ROCK_SPEED = 30
-const FAST_ROCK_DAMAGE = 28
+const FAST_ROCK_DAMAGE = 85
 const FAST_ROCK_HEIGHT = 3.2
 const FIRE_RING_RADIUS = 9
 const FIRE_RING_SPEED = 8

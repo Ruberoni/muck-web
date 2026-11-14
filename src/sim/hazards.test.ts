@@ -211,6 +211,27 @@ describe('los ataques del trasgo gigante y del lanzarrocas', () => {
   })
 })
 
+describe('los ataques del trasgo gigante y del lanzarrocas castigan mucho', () => {
+  /** El golpe al suelo del Lanzarrocas a un jugador con toda la vida y la armadura `armor` (o sin ella): la vida que le queda. */
+  const smashed = (armor: 'mithril' | null) => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player, inventory } = sim.slot(0)
+    if (armor) Object.assign(inventory.equipped, { head: `${armor}_helmet`, chest: `${armor}_chestplate`, legs: `${armor}_leggings`, feet: `${armor}_boots` })
+    const boss = sim.enemies.spawnAt(player.pos.x + 2.5, player.pos.z, 'thrower')
+    sim.enemies.forceSpecial(boss.id, 'smash')
+    for (let i = 0; i < ticks(1); i++) if (sim.step(new Map()).some((e) => e.type === 'playerHurt')) break
+    return player.health
+  }
+
+  it('el golpe al suelo mata sin armadura, y con la de mithril se aguanta con algo de vida', () => {
+    expect(smashed(null)).toBe(0)
+    const left = smashed('mithril')
+    expect(left).toBeGreaterThan(30)
+    expect(left).toBeLessThan(50)
+  })
+})
+
 describe('los jefes solo atacan con sus ataques especiales', () => {
   const BOSS_TYPES = ['giant', 'thrower', 'guardian', 'colossus'] as const
 
