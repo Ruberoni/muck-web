@@ -5,6 +5,7 @@ import { findLandmarks } from './landmarks'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
 import {
+  ARROW_DAZE,
   DEATH_DROP_HEIGHT,
   ENEMY_DEFS,
   EYE_HEIGHT,
@@ -417,7 +418,7 @@ export class Simulation {
     // Los que salgan ahora, con la apariencia de la amenaza: la del tótem, la de la Noche Eterna o la de siempre.
     this.enemies.look = this.threat.state.totem ? 2 : this.threat.state.eternal ? 1 : 0
     // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
-    const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
+    const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number }; daze?: true }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
     // Detrás de los proyectiles: la roca gorda estalla en el mismo paso en que cae. En el aire, la onda pasa por debajo.
     hits.push(...this.hazards.step(this.tick, present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil, grounded: player.grounded }))))
@@ -436,8 +437,8 @@ export class Simulation {
       ),
     )
     // Golpe a golpe, por si el escudo para unos y otros no; el aviso, uno por jugador y paso.
-    const taken = new Map<PlayerId, { dmg: number; blocked: number }>()
-    for (const { playerId, damage, from } of hits) {
+    const taken = new Map<PlayerId, { dmg: number; blocked: number; dazed: boolean }>()
+    for (const { playerId, damage, from, daze } of hits) {
       if (playerId === PLANE_TARGET) {
         this.hurtPlane(damage)
         continue
@@ -448,12 +449,16 @@ export class Simulation {
       // La poción de piedra quita una parte de lo que pasa del escudo y el peto.
       const dealt = hit.damage * guardFactor(player)
       hurt(player, dealt)
-      const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0 }
+      // La flecha que pasa del escudo aturde: un momento más despacio.
+      const dazed = daze === true && dealt > 0
+      if (dazed) player.slowLeft = ARROW_DAZE.seconds
+      const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0, dazed: false }
       sum.dmg += dealt
       sum.blocked += hit.blocked
+      sum.dazed ||= dazed
       taken.set(playerId, sum)
     }
-    for (const [id, { dmg, blocked }] of taken) this.events.emit({ type: 'playerHurt', id, dmg, ...(blocked > 0 ? { blocked } : {}) })
+    for (const [id, { dmg, blocked, dazed }] of taken) this.events.emit({ type: 'playerHurt', id, dmg, ...(blocked > 0 ? { blocked } : {}), ...(dazed ? { dazed: true as const } : {}) })
 
     growBerries(this.world.regrowing, STEP, this.events.emit)
     this.structures.burn(STEP, this.oilUnit, isNight(this.clock.phase))
@@ -627,7 +632,7 @@ export class Simulation {
           const gx = x + Math.cos(angle) * SUMMON_RING
           const gz = z + Math.sin(angle) * SUMMON_RING
           if (this.island.heightAt(gx, gz) <= WATER_LEVEL) continue
-          this.enemies.spawnAt(gx, gz, 'golem')
+          this.enemies.spawnAt(gx, gz, 'golem', 1, true)
           made++
         }
         break

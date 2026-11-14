@@ -39,7 +39,8 @@ export type SimEventData =
   | { type: 'fireChanged'; id: number; fire: LighthouseFire }
   /** Han entregado materiales a una construcción. `finished`: la fase que ha acabado, si ha acabado alguna. */
   | { type: 'buildProgress'; id: number; build: BuildState; finished: string | null }
-  | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number }
+  /** `called`: lo llamó un jefe (los gólems del Lanzarrocas), sin aviso: sale con su humo. */
+  | { type: 'enemySpawn'; id: number; enemy: EnemyType; x: number; z: number; called?: true }
   /** Un jefe empieza un ataque especial (su aviso): suena, y la vista lo ve por su `enemyCharge`. */
   | { type: 'enemySpecial'; id: number; attack: SpecialId }
   /** Un peligro nuevo en el suelo (hazards.ts): el cliente lo copia y lo dibuja en su tick. */
@@ -76,7 +77,8 @@ export type SimEventData =
   /** Se ha puesto `item` (null: se ha quitado algo). */
   | { type: 'playerEquipped'; id: PlayerId; item: ItemId | null }
   /** `blocked`: lo que ha parado el escudo (sin él, nada). */
-  | { type: 'playerHurt'; id: PlayerId; dmg: number; blocked?: number }
+  /** `dazed`: una flecha le ha aturdido (anda más despacio un momento, y la vista lo enseña). */
+  | { type: 'playerHurt'; id: PlayerId; dmg: number; blocked?: number; dazed?: true }
   | { type: 'playerDied'; id: PlayerId }
   | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }
   /** Todos muertos (o, en solitario, sin vidas): a los pocos segundos se acaba la partida (`matchEnded`). */

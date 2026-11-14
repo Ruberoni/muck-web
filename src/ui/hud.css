@@ -579,3 +579,12 @@
 
 /* En el menú: la isla de fondo, sin barras, hotbar, minimapa, día ni mira. El chat y los avisos de la sala se quedan. */
 .hud.in-menu > :not(.chat):not(.notices) { visibility: hidden; }
+
+/* Aturdido por una flecha del trasgo gigante: el borde se tiñe de azul (su color) y se va pasando (Game.showDaze). */
+.daze {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgb(79 184 255 / 0.25) 70%, rgb(47 109 255 / 0.6) 100%);
+}

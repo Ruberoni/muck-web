@@ -30,6 +30,24 @@ export type SoundName =
   /** Un meteorito que baja: suena `METEOR_WARNING` segundos, y se oye en toda la isla. */
   | 'meteorWhistle'
   | 'meteorImpact'
+  /** El golpe al suelo del Lanzarrocas: un golpe grave, un soplo de viento y piedritas. */
+  | 'smash'
+  /** La roca rápida sale: un chasquido seco que corta el aire (luego silba con `whistle`). */
+  | 'pierce'
+  /** El pisotón del trasgo gigante: un golpe muy grave, el suelo que se agrieta y un brillo encima. */
+  | 'quake'
+  /** El trasgo gigante sale embistiendo: un soplo de viento que crece. */
+  | 'rush'
+  /** La lanza del gigante te alcanza al embestir: un golpe con un tintineo brillante. */
+  | 'spearHit'
+  /** La embestida se para sin pegar: un frenazo en seco. */
+  | 'rushStop'
+  /** El gigante suelta una flecha: la cuerda del arco y un brillo. */
+  | 'arrowShot'
+  /** Una flecha del gigante se clava en algo: un golpe seco con chispas. */
+  | 'arrowHit'
+  /** Te ha aturdido una flecha: un pitido en los oídos. */
+  | 'daze'
   | 'step'
   | 'stepWater'
   /** Un paso de un mob: un golpe sordo en tierra, más grave y más fuerte cuanto más grande es (`weight`, su escala). */
@@ -54,8 +72,17 @@ export interface PlayOptions {
   weight?: number
 }
 
+/** Un sonido que dura mientras pasa algo: se le cambia el volumen, el paneo y el tono en cada frame, hasta `stop`. */
+export interface SoundLoop {
+  /** `gain` 0..1, `pan` -1..1 y `pitch` 1 = el tono de siempre. */
+  set(gain: number, pan: number, pitch: number): void
+  stop(): void
+}
+
 export interface SoundOut {
   play(name: SoundName, options?: PlayOptions): void
+  /** El silbido de algo que vuela, `tone` veces más agudo que el de la roca (null sin sonido todavía). */
+  whistle?(tone?: number): SoundLoop | null
 }
 
 /** Estado del ambiente, por frame. */
@@ -83,6 +110,12 @@ export function spatialize(dx: number, dz: number, yaw: number, maxDistance: num
 }
 
 const AMBIENT_FADE = 0.4
+/** El silbido de lo que vuela: ruido en una banda estrecha y un tono suave encima, en Hz, y su volumen máximo. */
+const WHISTLE_FREQ = 1700
+const WHISTLE_TONE = 1250
+const WHISTLE_GAIN = 1.6
+/** Lo que tardan en seguir los cambios de volumen, paneo y tono (s): sin saltos entre frames. */
+const WHISTLE_SMOOTH = 0.03
 const MASTER_HEADROOM = 0.8
 // Los efectos se definen a escala cómoda (0..1) y aquí se suben al nivel del resto de la mezcla.
 const EFFECT_GAIN = 3
@@ -167,6 +200,55 @@ export class Sound implements SoundOut {
     this.out = null
     // Desconectar al acabar para que el grafo no crezca.
     setTimeout(() => node.disconnect(), (length + 0.2) * 1000)
+  }
+
+  /**
+   * El silbido de algo que vuela (la roca del Lanzarrocas; la flecha del gigante, `pitch` veces más aguda): suena hasta
+   * `stop()`, y quien lo usa le cambia el volumen, el paneo y el tono en cada frame según por dónde va. Antes de
+   * `unlock` no hay sonido: null.
+   */
+  whistle(pitch = 1): SoundLoop | null {
+    const ctx = this.ctx
+    if (!ctx || ctx.state !== 'running') return null
+    const base = WHISTLE_FREQ * pitch
+    const toneBase = WHISTLE_TONE * pitch
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = base
+    filter.Q.value = 7
+    const tone = ctx.createOscillator()
+    tone.frequency.value = toneBase
+    const toneGain = ctx.createGain()
+    toneGain.gain.value = 0.04
+    const gain = ctx.createGain()
+    gain.gain.value = 0
+    const noise = this.loopNoise(ctx)
+    noise.connect(filter).connect(gain)
+    tone.connect(toneGain).connect(gain)
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null
+    const out = panner ? gain.connect(panner) : gain
+    out.connect(this.master)
+    tone.start()
+    let stopped = false
+    return {
+      set: (g, pan, shift) => {
+        if (stopped) return
+        const now = ctx.currentTime
+        gain.gain.setTargetAtTime(Math.max(0, g) * WHISTLE_GAIN, now, WHISTLE_SMOOTH)
+        panner?.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), now, WHISTLE_SMOOTH)
+        filter.frequency.setTargetAtTime(base * shift, now, WHISTLE_SMOOTH)
+        tone.frequency.setTargetAtTime(toneBase * shift, now, WHISTLE_SMOOTH)
+      },
+      stop: () => {
+        if (stopped) return
+        stopped = true
+        const now = ctx.currentTime
+        gain.gain.setTargetAtTime(0, now, 0.04)
+        noise.stop(now + 0.25)
+        tone.stop(now + 0.25)
+        setTimeout(() => out.disconnect(), 400)
+      },
+    }
   }
 
   /** Por frame: viento, pájaros de día, grillos de noche y crepitar de fogatas. */
@@ -471,6 +553,65 @@ const EFFECTS: Record<SoundName, (s: Sound, weight?: number) => number> = {
       s.tone(62, 1.7, { type: 'triangle', to: 26, gain: 0.9 }),
       s.noise(1.3, { filter: 'lowpass', freq: 520, gain: 0.9, attack: 0.01 }),
       s.noise(0.5, { filter: 'bandpass', freq: 1500, q: 0.7, gain: 0.5, delay: 0.05 }),
+    ),
+  smash: (s) =>
+    Math.max(
+      s.tone(72, 0.7, { type: 'triangle', to: 30, gain: 0.85 }),
+      s.noise(0.55, { filter: 'lowpass', freq: 560, gain: 0.75, attack: 0.004 }),
+      // El soplo del viento que sale del golpe.
+      s.noise(0.5, { filter: 'bandpass', freq: 1100, q: 0.6, gain: 0.32, attack: 0.05, delay: 0.02 }),
+      s.noise(0.05, { filter: 'bandpass', freq: 2600, q: 2, gain: 0.28, delay: 0.12 }),
+      s.noise(0.05, { filter: 'bandpass', freq: 2200, q: 2, gain: 0.22, delay: 0.24 }),
+    ),
+  pierce: (s) =>
+    Math.max(
+      s.noise(0.04, { filter: 'highpass', freq: 3200, gain: 0.5, attack: 0.001 }),
+      s.tone(1900, 0.16, { type: 'triangle', to: 520, gain: 0.12 }),
+      s.noise(0.22, { filter: 'bandpass', freq: 1500, q: 1.2, gain: 0.35, attack: 0.015 }),
+      s.tone(110, 0.12, { type: 'triangle', to: 70, gain: 0.3 }),
+    ),
+  quake: (s) =>
+    Math.max(
+      s.tone(55, 1.1, { type: 'triangle', to: 26, gain: 0.95 }),
+      s.noise(0.9, { filter: 'lowpass', freq: 420, gain: 0.85, attack: 0.005 }),
+      // El suelo que se agrieta: chasquidos sueltos.
+      ...[0.04, 0.11, 0.19, 0.3, 0.42].map((delay) => s.noise(0.04, { filter: 'highpass', freq: 2400 + s.random() * 1500, gain: 0.25, delay })),
+      // El brillo azul de las grietas.
+      s.tone(880, 0.7, { to: 1760, gain: 0.05, attack: 0.05, delay: 0.05 }),
+    ),
+  rush: (s) =>
+    Math.max(
+      s.noise(0.7, { filter: 'bandpass', freq: 520, q: 0.8, gain: 0.45, attack: 0.3 }),
+      s.noise(0.45, { filter: 'bandpass', freq: 1300, q: 1, gain: 0.22, attack: 0.25, delay: 0.2 }),
+      s.tone(85, 0.6, { type: 'sawtooth', to: 120, gain: 0.18, attack: 0.15, lowpass: 320 }),
+    ),
+  spearHit: (s) =>
+    Math.max(
+      s.tone(130, 0.28, { type: 'triangle', to: 60, gain: 0.65 }),
+      s.noise(0.08, { filter: 'highpass', freq: 3000, gain: 0.4 }),
+      s.tone(2400, 0.4, { type: 'triangle', to: 1800, gain: 0.16 }),
+      s.tone(3600, 0.3, { gain: 0.07, delay: 0.02 }),
+    ),
+  rushStop: (s) =>
+    Math.max(s.noise(0.35, { filter: 'lowpass', freq: 500, gain: 0.6, attack: 0.005 }), s.tone(80, 0.25, { type: 'triangle', to: 50, gain: 0.5 })),
+  arrowShot: (s) =>
+    Math.max(
+      s.tone(260, 0.18, { type: 'triangle', to: 170, gain: 0.28 }),
+      s.noise(0.1, { filter: 'bandpass', freq: 2400, q: 1.5, gain: 0.25, attack: 0.003 }),
+      s.tone(1800, 0.14, { to: 2600, gain: 0.06 }),
+    ),
+  arrowHit: (s) =>
+    Math.max(
+      s.noise(0.05, { filter: 'bandpass', freq: 1800, q: 2, gain: 0.45 }),
+      s.tone(2600, 0.16, { to: 3400, gain: 0.08 }),
+      s.tone(160, 0.08, { type: 'triangle', to: 110, gain: 0.3 }),
+    ),
+  // Dos tonos casi iguales baten entre sí: el pitido tiembla, como cuando zumban los oídos.
+  daze: (s) =>
+    Math.max(
+      s.tone(140, 0.3, { type: 'triangle', to: 90, gain: 0.35 }),
+      s.tone(2900, 1.1, { gain: 0.07, attack: 0.03 }),
+      s.tone(2945, 1, { gain: 0.05, attack: 0.03 }),
     ),
   step: (s) => s.noise(0.08, { filter: 'lowpass', freq: 450 + s.random() * 250, gain: 1, attack: 0.004 }),
   enemyStep: enemyStepSound,

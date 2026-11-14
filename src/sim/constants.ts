@@ -46,6 +46,8 @@ export const CAMPFIRE_HEAL_PER_SEC = 0.5
 export const EAT_KEY = 'KeyF'
 /** Comiendo o bebiendo se anda a esta parte de la velocidad, sin correr. */
 export const EAT_SPEED_FACTOR = 0.5
+/** Una flecha del trasgo gigante aturde un poco: tantos segundos andando a esta parte de la velocidad. */
+export const ARROW_DAZE = { seconds: 0.5, factor: 0.6 }
 
 export interface ConsumableDef {
   /** Segundos que se tarda en comerlo o beberlo: el efecto llega al acabar. */

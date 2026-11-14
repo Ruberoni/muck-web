@@ -190,11 +190,56 @@ describe('sonido', () => {
         { tick: 1, type: 'projectileHit', ...rock, end: 'obstacle' },
         { tick: 1, type: 'projectileHit', ...rock, end: 'player' },
         { tick: 1, type: 'projectileHit', ...rock, end: 'expired' },
+        // La lanza del trasgo sale como un golpe al aire; la roca del Lanzarrocas corta el aire.
+        { tick: 1, type: 'projectileThrown', id: 1, kind: 'spear', x: 0, y: 0, z: 0, vx: 1, vy: 1, vz: 1 },
       ],
       0,
       () => 'tree',
     )
-    expect(names()).toEqual(['growl', 'swing', 'hitStone', 'hitStone'])
+    expect(names()).toEqual(['growl', 'pierce', 'hitStone', 'hitStone', 'swing'])
+  })
+
+  it('el trasgo gigante: el pisotón retumba, la embestida suena al salir y al pararse según si pega, y la flecha suena a arco', () => {
+    const { audio, names } = setup()
+    const stomp: SimEvent = {
+      tick: 1,
+      type: 'hazardAdded',
+      hazard: { id: 0, look: 'stomp', x: 0, z: 0, radius: 7, startTick: 1, hitTick: 1, endTick: 40, damage: 1, hit: [], ring: { speed: 12, width: 1.2 } },
+    }
+    const arrow = { id: 3, kind: 'arrow', x: 0, y: 0, z: 0 } as const
+    audio.events([stomp], 0, () => 'tree')
+    audio.events([{ tick: 2, type: 'enemyCharge', id: 7, state: 'rush' }], 0, () => 'tree')
+    audio.events([{ tick: 3, type: 'enemyCharge', id: 7, state: 'dazed' }, { tick: 3, type: 'enemyAttack', id: 7, target: 0 }], 0, () => 'tree')
+    audio.events([{ tick: 4, type: 'enemyCharge', id: 7, state: 'rush' }], 0, () => 'tree')
+    audio.events([{ tick: 5, type: 'enemyCharge', id: 7, state: 'dazed' }], 0, () => 'tree')
+    // Agotado tras otro ataque (sin embestir): no suena nada nuevo.
+    audio.events([{ tick: 6, type: 'enemyCharge', id: 8, state: 'dazed' }], 0, () => 'tree')
+    audio.events(
+      [
+        { tick: 7, type: 'projectileThrown', ...arrow, vx: 1, vy: 1, vz: 1 },
+        { tick: 8, type: 'projectileHit', ...arrow, end: 'ground' },
+      ],
+      0,
+      () => 'tree',
+    )
+    expect(names()).toEqual(['quake', 'rush', 'spearHit', 'rush', 'rushStop', 'arrowShot', 'arrowHit'])
+  })
+
+  it('una flecha que te aturde suena además a pitido; la de otro, no', () => {
+    const { audio, names } = setup()
+    audio.events([{ tick: 1, type: 'playerHurt', id: 0, dmg: 20, dazed: true }, { tick: 1, type: 'playerHurt', id: 1, dmg: 20, dazed: true }], 0, () => 'tree')
+    expect(names()).toEqual(['hurt', 'daze'])
+  })
+
+  it('el golpe al suelo del Lanzarrocas suena al caer; los demás peligros, no', () => {
+    const { audio, names } = setup()
+    const hazard = (look: 'rock' | 'fire'): SimEvent => ({
+      tick: 1,
+      type: 'hazardAdded',
+      hazard: { id: 0, look, x: 0, z: 0, radius: 2, startTick: 1, hitTick: 1, endTick: 1, damage: 1, hit: [] },
+    })
+    audio.events([hazard('rock'), hazard('fire')], 0, () => 'tree')
+    expect(names()).toEqual(['smash'])
   })
 
   it('fabricar varias en un paso (Mayúsculas + clic) suena una vez; en el siguiente, otra', () => {
@@ -242,11 +287,23 @@ describe('sonido de los demás', () => {
         { tick: 1, type: 'projectileHit', ...rock, end: 'player' },
       ],
       listener,
-      (e) => (e.type === 'projectileThrown' || e.type === 'projectileHit' ? e : null),
+      (e) => (e.type === 'projectileThrown' || e.type === 'projectileHit' ? e : e.type === 'hazardAdded' ? e.hazard : null),
       (id) => kinds[id],
     )
-    expect(played.map((p) => p.name)).toEqual(['swing', 'hitStone'])
+    expect(played.map((p) => p.name)).toEqual(['pierce', 'hitStone'])
     expect(played[0].options!.pan).toBeGreaterThan(0.5)
+  })
+
+  it('el golpe al suelo de un Lanzarrocas suena donde cae', () => {
+    const { audio, played } = setup()
+    audio.remote(
+      [{ tick: 1, type: 'hazardAdded', hazard: { id: 0, look: 'rock', x: -10, z: 0, radius: 2, startTick: 1, hitTick: 1, endTick: 1, damage: 1, hit: [] } }],
+      listener,
+      (e) => (e.type === 'hazardAdded' ? e.hazard : null),
+      (id) => kinds[id],
+    )
+    expect(played.map((p) => p.name)).toEqual(['smash'])
+    expect(played[0].options!.pan).toBeLessThan(-0.5)
   })
 
   it('un meteorito silba en toda la isla, y su impacto llega de su lado, sin dejar de oírse de lejos', () => {
@@ -446,5 +503,64 @@ describe('pasos de los mobs', () => {
     audio.enemySteps([far], listener, land)
     walk(audio, [far], 40)
     expect(played).toEqual([])
+  })
+})
+
+describe('silbido de las rocas', () => {
+  const listener = { x: 0, z: 0, yaw: 0 }
+  /** Un sonido falso que apunta cada silbido: sus ajustes y si se ha parado. */
+  function setupLoops() {
+    const loops: { sets: { gain: number; pan: number; pitch: number }[]; stopped: boolean }[] = []
+    const audio = new GameAudio({
+      play: () => {},
+      whistle: () => {
+        const loop = { sets: [] as { gain: number; pan: number; pitch: number }[], stopped: false }
+        loops.push(loop)
+        return { set: (gain, pan, pitch) => void loop.sets.push({ gain, pan, pitch }), stop: () => void (loop.stopped = true) }
+      },
+    })
+    return { audio, loops }
+  }
+  /** Una roca en (x, z) que avanza `dx` por paso. */
+  const rock = (id: number, x: number, z: number, dx = 0, kind: 'rock' | 'spear' = 'rock') => ({ id, kind, pos: { x, z }, prev: { x: x - dx, z } })
+
+  it('una roca silba mientras vuela, desde su lado, y se calla al caer; las lanzas no', () => {
+    const { audio, loops } = setupLoops()
+    audio.flyby([rock(0, 10, 0), rock(1, 5, 0, 0, 'spear')], listener)
+    expect(loops).toHaveLength(1)
+    expect(loops[0].sets[0].pan).toBeGreaterThan(0.5)
+    expect(loops[0].sets[0].gain).toBeCloseTo(spatialize(10, 0, 0, 45).gain)
+    audio.flyby([rock(0, 10, 0)], listener)
+    expect(loops).toHaveLength(1)
+    audio.flyby([], listener)
+    expect(loops[0].stopped).toBe(true)
+  })
+
+  it('más agudo si se acerca y más grave si se aleja', () => {
+    const { audio, loops } = setupLoops()
+    // A 10 m a la derecha: la primera viene hacia aquí (x baja) y la segunda se va.
+    audio.flyby([rock(0, 10, 0, -30 * STEP), rock(1, 10, 0, 30 * STEP)], listener)
+    expect(loops[0].sets[0].pitch).toBeGreaterThan(1)
+    expect(loops[1].sets[0].pitch).toBeLessThan(1)
+  })
+
+  it('la flecha silba más aguda y más bajo que la roca', () => {
+    const tones: number[] = []
+    const sets: number[] = []
+    const audio = new GameAudio({
+      play: () => {},
+      whistle: (tone = 1) => {
+        tones.push(tone)
+        return { set: (gain) => void sets.push(gain), stop: () => {} }
+      },
+    })
+    audio.flyby([rock(0, 10, 0), { ...rock(1, 10, 0), kind: 'arrow' as const }], listener)
+    expect(tones[1]).toBeGreaterThan(tones[0])
+    expect(sets[1]).toBeLessThan(sets[0])
+  })
+
+  it('sin sonido todavía (antes del primer clic) no pasa nada', () => {
+    const { audio } = setup()
+    expect(() => audio.flyby([rock(0, 10, 0)], listener)).not.toThrow()
   })
 })

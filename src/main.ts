@@ -8,7 +8,12 @@ const game = new Game(container)
 
 // Import dinámico bajo DEV: en producción se elimina y el módulo no entra en el bundle.
 if (import.meta.env.DEV) {
-  import('./debug').then(({ installDebug }) => installDebug(game))
+  import('./debug').then(({ installDebug }) => {
+    const debug = installDebug(game)
+    // `?muestra=lanzarrocas`: una partida de prueba para ver los ataques de un jefe (ver muestra.ts).
+    const muestra = new URLSearchParams(location.search).get('muestra')
+    if (muestra) import('./muestra').then(({ installMuestra }) => installMuestra(game, debug, muestra))
+  })
 }
 
 // Multijugador: en desarrollo y en los builds con VITE_MULTIPLAYER=1 (el de GitHub Pages lo lleva, ver deploy.yml).

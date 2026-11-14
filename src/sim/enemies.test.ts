@@ -640,6 +640,39 @@ describe('jefes', () => {
       expect(boss.charge.state).toBe('idle')
       expect(boss.pos).toEqual({ x, z })
     })
+
+    it('forzar un ataque (depuración) lo empieza ya, sin mirar la espera ni la distancia, y pega al acabar el aviso', () => {
+      const used: string[] = []
+      enemies = new Enemies([], mulberry32(7), (e) => events.push(e), () => {}, undefined, (_e, id) => used.push(id))
+      // Lejos para golpear el suelo (0–4 m) y con todas las esperas a tope.
+      const boss = facing(12)
+      boss.special.gap = 0
+      boss.special.cooldowns.smash = 1e9
+      expect(enemies.forceSpecial(boss.id, 'smash')).toBe(true)
+      expect(events).toContainEqual({ type: 'enemySpecial', id: boss.id, attack: 'smash' })
+      // Con uno en marcha no empieza otro.
+      expect(enemies.forceSpecial(boss.id, 'fastRock')).toBe(false)
+      const smash = THROWER.specials!.find((d) => d.id === 'smash')!
+      run(Math.round(smash.windup / STEP) - 2)
+      expect(used).toEqual([])
+      run(3)
+      expect(used).toEqual(['smash'])
+    })
+
+    it('no se puede forzar un ataque que no tiene, ni a uno muerto', () => {
+      const boss = facing(12)
+      expect(enemies.forceSpecial(boss.id, 'pulse')).toBe(false)
+      boss.alive = false
+      expect(enemies.forceSpecial(boss.id, 'smash')).toBe(false)
+      expect(enemies.forceSpecial(999, 'smash')).toBe(false)
+    })
+
+    it('los gólems que llama salen avisando que son llamados (para su humo); los demás no', () => {
+      enemies.spawnAt(player.x + 5, player.z, 'golem', 1, true)
+      enemies.spawnAt(player.x - 5, player.z, 'golem')
+      const spawns = events.filter((e) => e.type === 'enemySpawn')
+      expect(spawns.map((e) => 'called' in e && e.called)).toEqual([true, false])
+    })
   })
 })
 
