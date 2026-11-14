@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Btn, type Action, type ActionData, type PlayerCommands } from './commands'
 import { RECIPE_IDS, type RecipeId } from './crafting'
-import { ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, PROP_DEFS, STATION_RANGE, STEP } from './constants'
+import { BASE_DAMAGE, ENEMY_SPAWN_MIN, EYE_HEIGHT, HIT_COOLDOWN, PICKUP_DELAY, PLACE_DISTANCE, PROP_DEFS, STATION_RANGE, STEP } from './constants'
 import { swingImpact } from './tiers'
 import { Enemies, enemyCap, enemyCapFor, spawnIntervalFor, type EnemyPrey } from './enemies'
 import type { PlayerId, SimEvent, SimEventData, TargetRef } from './events'
@@ -155,7 +155,7 @@ describe('Simulation con varios jugadores', () => {
     const b = aimAt(sim, 1, tree, (x, z) => Math.hypot(x - a.x, z - a.z) > 1)
     const events: SimEvent[] = []
     let fell = 0
-    for (let t = 1; t <= 60 && !fell; t++) {
+    for (let t = 1; t <= 120 && !fell; t++) {
       events.push(...stepAll(sim, { 0: { ...a, buttons: Btn.Attack }, 1: { ...b, buttons: Btn.Attack } }))
       if (!tree.alive) fell = t
     }
@@ -181,7 +181,7 @@ describe('Simulation con varios jugadores', () => {
     const b = aimAt(sim, 1, rock, (x, z) => Math.hypot(x - a.x, z - a.z) > 1)
     const events: SimEvent[] = []
     let broke = 0
-    for (let t = 1; t <= 60 && !broke; t++) {
+    for (let t = 1; t <= 120 && !broke; t++) {
       events.push(...stepAll(sim, { 0: { ...a, buttons: Btn.Attack }, 1: { ...b, buttons: Btn.Attack } }))
       if (!rock.alive) broke = t
     }
@@ -194,7 +194,7 @@ describe('Simulation con varios jugadores', () => {
       [0, null],
       [1, 'wood_pickaxe'],
     ])
-    expect(ofType(events, 'propHit')).toEqual([expect.objectContaining({ id: rock.id, hp: 2, by: 1 })])
+    expect(ofType(events, 'propHit')).toEqual([expect.objectContaining({ id: rock.id, hp: 3, by: 1 })])
     expect(ofType(events, 'propDestroyed')).toEqual([expect.objectContaining({ id: rock.id, by: 1 })])
     expect(sim.pickups.list.filter((p) => p.item === 'stone')).toHaveLength(3)
   })
@@ -335,7 +335,7 @@ describe('Simulation con varios jugadores', () => {
     inventory.select(inventory.slots.indexOf('iron_pickaxe'))
     const look = aimAt(sim, 0, ore)
     let broke = 0
-    for (let t = 1; t <= 60 && !broke; t++) {
+    for (let t = 1; t <= 120 && !broke; t++) {
       stepAll(sim, { 0: { ...look, buttons: Btn.Attack } })
       if (!ore.alive) broke = t
     }
@@ -722,7 +722,7 @@ describe('objetivo que manda el cliente (Move.aim)', () => {
     const look = aimAt(sim, 0, tree)
     // Mirando 30° a un lado el rayo ya no toca el tronco, pero sigue dentro del cono.
     expect(swing(sim, { yaw: look.yaw + Math.PI / 6, pitch: look.pitch, aim: { kind: 'prop', id: tree.id } }).target).toEqual({ kind: 'prop', id: tree.id })
-    expect(tree.hp).toBe(tree.maxHp - 1)
+    expect(tree.hp).toBe(tree.maxHp - BASE_DAMAGE)
   })
 
   it('null es golpe al aire aunque haya algo delante', () => {

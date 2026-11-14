@@ -40,10 +40,12 @@ describe('bot', () => {
     const tree = sim.world.props.find((p) => p.kind === 'tree')!
     const rock = sim.world.props.find((p) => p.kind === 'rock')!
     const walking = botMove(10, 1)
+    // Golpeando, mira a lo que golpea.
+    const facing = (prop: { x: number; z: number }) => Math.atan2(slot.player.pos.x - prop.x, slot.player.pos.z - prop.z)
 
     // A mano el árbol cae y la roca no.
     slot.target = tree
-    expect(botStep(10, 1, slot)).toEqual({ buttons: Btn.Attack, yaw: walking.yaw, pitch: walking.pitch, actions: [] })
+    expect(botStep(10, 1, slot)).toEqual({ buttons: Btn.Attack, yaw: facing(tree), pitch: walking.pitch, actions: [] })
     slot.target = rock
     expect(botStep(10, 1, slot)).toEqual({ ...walking, actions: [] })
     // Los arbustos los deja, y lo que ya está roto también.
@@ -58,7 +60,7 @@ describe('bot', () => {
     slot.inventory.add('wood_pickaxe', 1)
     slot.inventory.add('wood_axe', 1)
     slot.inventory.add('stone_axe', 1)
-    expect(botStep(10, 1, slot)).toEqual({ buttons: Btn.Attack, yaw: walking.yaw, pitch: walking.pitch, actions: [{ kind: 'select', slot: 1 }] })
+    expect(botStep(10, 1, slot)).toEqual({ buttons: Btn.Attack, yaw: facing(rock), pitch: walking.pitch, actions: [{ kind: 'select', slot: 1 }] })
     slot.target = tree
     expect(botStep(10, 1, slot).actions).toEqual([{ kind: 'select', slot: 3 }])
     slot.inventory.select(3)

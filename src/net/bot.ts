@@ -54,7 +54,9 @@ export function botStep(tick: number, id: number, slot: PlayerSlot): BotStep {
   if (best >= 0 && best !== inventory.selected) actions.push({ kind: 'select', slot: best })
   const held = best >= 0 ? inventory.slots[best] : inventory.selectedItem
   if (!canDamage(held, target.kind)) return { ...move, actions }
-  return { buttons: Btn.Attack, yaw: move.yaw, pitch: move.pitch, actions }
+  // Mientras golpea se queda mirándolo: si siguiera girando, con golpes lentos se le escaparía antes de romperlo.
+  const { pos } = slot.player
+  return { buttons: Btn.Attack, yaw: Math.atan2(pos.x - target.x, pos.z - target.z), pitch: move.pitch, actions }
 }
 
 /** Un frame de un cliente sin pantalla: predice los ticks que tocan con `script`, envía y pone el espejo al día. */

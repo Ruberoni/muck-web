@@ -24,6 +24,7 @@ import {
   WADE_DEPTH,
   WALK_SPEED,
   WATER_SPEED_FACTOR,
+  STRIKE_DELAY,
 } from './constants'
 import { bossOfNight, bossScale, Enemies, enemyAimHeight, enemyCap, ENEMY_SWIM_MAX, spawnChance, spawnType, type EnemyData } from './enemies'
 import type { SimEventData } from './events'
@@ -819,12 +820,12 @@ describe('combate', () => {
   }
 
   it('las herramientas pegan más fuerte que la mano, sea hacha o pico', () => {
-    expect(attackDamage(null, 'goblin')).toBe(10)
-    expect(attackDamage('wood', 'goblin')).toBe(10)
-    expect(attackDamage('wood_axe', 'goblin')).toBe(20)
-    expect(attackDamage('wood_pickaxe', 'goblin')).toBe(20)
-    expect(attackDamage('stone_axe', 'goblin')).toBe(30)
-    expect(attackDamage('stone_pickaxe', 'goblin')).toBe(30)
+    expect(attackDamage(null, 'goblin')).toBe(15)
+    expect(attackDamage('wood', 'goblin')).toBe(15)
+    expect(attackDamage('wood_axe', 'goblin')).toBe(30)
+    expect(attackDamage('wood_pickaxe', 'goblin')).toBe(30)
+    expect(attackDamage('stone_axe', 'goblin')).toBe(42)
+    expect(attackDamage('stone_pickaxe', 'goblin')).toBe(42)
   })
 
   it('el raycast apunta al enemigo', () => {
@@ -832,12 +833,12 @@ describe('combate', () => {
     expect(fighter.target).toBe(enemy)
   })
 
-  it('con hacha de piedra cae en 3 golpes y suelta carne cruda al suelo', () => {
+  it('con hacha de piedra cae en 2 golpes y suelta carne cruda al suelo', () => {
     const { inventory, enemies, fighter, enemy, hold, equip, meat } = setup()
     const { x, z } = enemy.pos
     equip('stone_axe')
     hold(STEP)
-    expect(enemy.hp).toBe(GOBLIN.hp - 30)
+    expect(enemy.hp).toBe(GOBLIN.hp - 42)
     hold(0.8)
     expect(enemy.alive).toBe(false)
     expect(enemies.list).toHaveLength(0)
@@ -847,9 +848,9 @@ describe('combate', () => {
     expect(fighter.target).not.toBe(enemy)
   })
 
-  it('a mano hacen falta 7 golpes', () => {
+  it('a mano hacen falta 5 golpes', () => {
     const { enemy, hold, meat } = setup()
-    hold(HIT_COOLDOWN * 6 + STEP)
+    hold(HIT_COOLDOWN * 4 + STRIKE_DELAY.hand + STEP)
     expect(enemy.hp).toBe(0)
     expect(meat()).toHaveLength(1)
   })
@@ -866,14 +867,14 @@ describe('combate', () => {
   })
 
   it('el gólem se rompe con el pico y el espíritu se tala con el hacha, y el golpe dice si fue eficaz', () => {
-    expect(attackDamage('stone_pickaxe', 'golem')).toBe(60)
-    expect(attackDamage('stone_axe', 'golem')).toBe(15)
-    expect(attackDamage('stone_sword', 'golem')).toBe(25)
-    expect(attackDamage(null, 'golem')).toBe(5)
-    expect(attackDamage('stone_axe', 'spirit')).toBe(60)
-    expect(attackDamage('stone_pickaxe', 'spirit')).toBe(15)
-    expect(attackDamage('stone_sword', 'spirit')).toBe(25)
-    expect(attackDamage(null, 'spirit')).toBe(5)
+    expect(attackDamage('stone_pickaxe', 'golem')).toBe(84)
+    expect(attackDamage('stone_axe', 'golem')).toBe(21)
+    expect(attackDamage('stone_sword', 'golem')).toBe(37.5)
+    expect(attackDamage(null, 'golem')).toBe(7.5)
+    expect(attackDamage('stone_axe', 'spirit')).toBe(84)
+    expect(attackDamage('stone_pickaxe', 'spirit')).toBe(21)
+    expect(attackDamage('stone_sword', 'spirit')).toBe(37.5)
+    expect(attackDamage(null, 'spirit')).toBe(7.5)
     expect(hitEfficacy('stone_pickaxe', 'golem')).toBe('effective')
     expect(hitEfficacy('stone_axe', 'golem')).toBe('resisted')
     expect(hitEfficacy('stone_sword', 'golem')).toBe('normal')
@@ -919,17 +920,17 @@ describe('los enemigos salen de ENEMY_DEFS', () => {
   const player = { ...spot }
   const prey = [{ id: 0, pos: player, alive: true }]
 
-  it('los golpes para matar a un trasgo: la espada necesita alguno más, pero va más deprisa', () => {
+  it('los golpes para matar a un trasgo: la espada necesita alguno más (o los mismos), pero va más deprisa', () => {
     const hits = (item: ItemId | null) => Math.ceil(GOBLIN.hp / attackDamage(item, 'goblin'))
-    expect(([null, 'wood_axe', 'stone_axe', 'iron_axe', 'mithril_axe'] as const).map(hits)).toEqual([7, 4, 3, 2, 2])
-    expect((['wood_sword', 'stone_sword', 'iron_sword', 'mithril_sword'] as const).map(hits)).toEqual([5, 3, 2, 2])
+    expect(([null, 'wood_axe', 'stone_axe', 'iron_axe', 'mithril_axe'] as const).map(hits)).toEqual([5, 3, 2, 2, 1])
+    expect((['wood_sword', 'stone_sword', 'iron_sword', 'mithril_sword'] as const).map(hits)).toEqual([3, 2, 2, 1])
   })
 
   it('la debilidad del enemigo multiplica el daño y dice la eficacia', () => {
     GOBLIN.weakness = { pickaxe: 2, axe: 0.5 }
-    expect(attackDamage('wood_pickaxe', 'goblin')).toBe(40)
-    expect(attackDamage('wood_axe', 'goblin')).toBe(10)
-    expect(attackDamage('wood_sword', 'goblin')).toBe(16)
+    expect(attackDamage('wood_pickaxe', 'goblin')).toBe(60)
+    expect(attackDamage('wood_axe', 'goblin')).toBe(15)
+    expect(attackDamage('wood_sword', 'goblin')).toBe(25)
     expect(hitEfficacy('wood_pickaxe', 'goblin')).toBe('effective')
     expect(hitEfficacy('wood_axe', 'goblin')).toBe('resisted')
     expect(hitEfficacy('wood_sword', 'goblin')).toBe('normal')

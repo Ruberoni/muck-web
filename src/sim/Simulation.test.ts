@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isLit, putInto } from './stations'
 import { Btn, type Action, type ActionData, type Move } from './commands'
-import { BERRY_REGROW, CAMPFIRE_HEAL_PER_SEC, CAMPFIRE_HEAL_RANGE, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HEALTH_REGEN_HUNGER, HEALTH_REGEN_PER_SEC, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
+import { BASE_DAMAGE, BERRY_REGROW, CAMPFIRE_HEAL_PER_SEC, CAMPFIRE_HEAL_RANGE, CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_REGEN_DELAY, HEALTH_REGEN_HUNGER, HEALTH_REGEN_PER_SEC, HIT_COOLDOWN, HUNGER_MAX, PROP_DEFS, STEP } from './constants'
 import { aimPose } from './interaction'
 import { generatePropPlacements, type PropData } from './props'
 import { quickProps } from './quickProps'
@@ -82,7 +82,7 @@ describe('Simulation', () => {
     const events = strike(sim, look)
     expect(events.map((e) => e.type)).toContain('playerSwing')
     expect(events.map((e) => e.type)).toContain('playerStrike')
-    expect(tree.hp).toBe(tree.maxHp - 1)
+    expect(tree.hp).toBe(tree.maxHp - BASE_DAMAGE)
   })
 
   it('un clic durante el cooldown queda pendiente y golpea al acabar, sin duplicar con el ataque mantenido', () => {
@@ -281,8 +281,8 @@ describe('Simulation', () => {
       for (let i = 0; i < 120; i++) count += step(sim, { buttons: Btn.Attack }).filter((e) => e.type === 'playerSwing').length
       return count
     }
-    expect(swings('wood_sword')).toBe(8)
-    expect(swings('wood_axe')).toBe(5)
+    expect(swings('wood_sword')).toBe(5)
+    expect(swings('wood_axe')).toBe(3)
   })
 
   describe('golpe en arco', () => {
@@ -299,7 +299,8 @@ describe('Simulation', () => {
     it('la espada daña a todos los que tiene delante, aunque el golpe vaya al aire', () => {
       const { enemies, swing } = arc('iron_sword', [[0, -2], [1.2, -2], [-1.2, -2]])
       const events = swing()
-      for (const e of enemies) expect(e.hp).toBe(e.maxHp - 35)
+      // 52,5 de ataque: la vida es entera y el golpe se redondea (boostedDamage).
+      for (const e of enemies) expect(e.hp).toBe(e.maxHp - 53)
       expect(events.filter((e) => e.type === 'enemyHit')).toHaveLength(3)
     })
 
@@ -331,8 +332,8 @@ describe('Simulation', () => {
       const hp = tree.hp
       sim.enemies.spawnAt(sim.slot(0).player.pos.x, sim.slot(0).player.pos.z + 40)
       strike(sim, look)
-      // Como a mano: un golpe de 1.
-      expect(tree.hp).toBe(hp - 1)
+      // Como a mano.
+      expect(tree.hp).toBe(hp - BASE_DAMAGE)
     })
 
     it('lo que mata suelta su botín', () => {

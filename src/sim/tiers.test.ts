@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PROP_DEFS, TOOL_DEFS } from './constants'
+import { BASE_DAMAGE, PROP_DEFS, TOOL_DEFS } from './constants'
 import { ITEM_NAMES, type ItemId } from './inventory'
 import type { PropKind } from './props'
 import { attackDamage, canDamage, propDamage, requiredTool } from './tiers'
@@ -11,10 +11,10 @@ const hits = (item: ItemId, kind: PropKind) => Math.ceil(PROP_DEFS[kind].hp / pr
 
 describe('armadura', () => {
   it('resta a cada golpe, tras la debilidad, y siempre queda algo', () => {
-    expect(attackDamage('iron_sword', 'giant')).toBe(25)
-    expect(attackDamage('stone_pickaxe', 'guardian')).toBe(35)
+    expect(attackDamage('iron_sword', 'giant')).toBe(37.5)
+    expect(attackDamage('stone_pickaxe', 'guardian')).toBe(48)
     expect(attackDamage(null, 'giant')).toBe(1)
-    expect(attackDamage('iron_sword', 'goblin')).toBe(35)
+    expect(attackDamage('iron_sword', 'goblin')).toBe(52.5)
   })
 })
 
@@ -23,68 +23,68 @@ describe('niveles: daño contra props', () => {
   // pino oscuro y mena de mithril de nivel 3.
   const TABLE: [ItemId | null, number, number, number, number, number, number, number][] = [
     // objeto, árbol, abedul, pino oscuro, roca, mena de hierro, mena de mithril, arbusto
-    [null, 1, 0, 0, 0, 0, 0, 1],
-    ['wood', 1, 0, 0, 0, 0, 0, 1],
-    ['stone', 1, 0, 0, 0, 0, 0, 1],
-    ['berry', 1, 0, 0, 0, 0, 0, 1],
-    ['raw_meat', 1, 0, 0, 0, 0, 0, 1],
-    ['cooked_meat', 1, 0, 0, 0, 0, 0, 1],
-    ['berry_infusion', 1, 0, 0, 0, 0, 0, 1],
-    ['healing_herb', 1, 0, 0, 0, 0, 0, 1],
-    ['iron_helmet', 1, 0, 0, 0, 0, 0, 1],
-    ['iron_leggings', 1, 0, 0, 0, 0, 0, 1],
-    ['iron_boots', 1, 0, 0, 0, 0, 0, 1],
-    ['mithril_helmet', 1, 0, 0, 0, 0, 0, 1],
-    ['mithril_leggings', 1, 0, 0, 0, 0, 0, 1],
-    ['mithril_boots', 1, 0, 0, 0, 0, 0, 1],
-    ['mint', 1, 0, 0, 0, 0, 0, 1],
-    ['healing_potion', 1, 0, 0, 0, 0, 0, 1],
-    ['speed_potion', 1, 0, 0, 0, 0, 0, 1],
-    ['stamina_potion', 1, 0, 0, 0, 0, 0, 1],
-    ['stone_potion', 1, 0, 0, 0, 0, 0, 1],
-    ['calm_incense', 1, 0, 0, 0, 0, 0, 1],
-    ['forget_amulet', 1, 0, 0, 0, 0, 0, 1],
-    ['campfire', 1, 0, 0, 0, 0, 0, 1],
-    ['birch_wood', 1, 0, 0, 0, 0, 0, 1],
-    ['dark_wood', 1, 0, 0, 0, 0, 0, 1],
-    ['iron_ore', 1, 0, 0, 0, 0, 0, 1],
-    ['iron_bar', 1, 0, 0, 0, 0, 0, 1],
-    ['mithril_ore', 1, 0, 0, 0, 0, 0, 1],
-    ['mithril_bar', 1, 0, 0, 0, 0, 0, 1],
-    ['meteor_fragment', 1, 0, 0, 0, 0, 0, 1],
-    ['distiller', 1, 0, 0, 0, 0, 0, 1],
-    ['oil', 1, 0, 0, 0, 0, 0, 1],
-    ['boss_trophy', 1, 0, 0, 0, 0, 0, 1],
-    ['plane_engine', 1, 0, 0, 0, 0, 0, 1],
-    ['coin', 1, 0, 0, 0, 0, 0, 1],
-    ['coal', 1, 0, 0, 0, 0, 0, 1],
-    ['crystal', 1, 0, 0, 0, 0, 0, 1],
-    ['dry_wood', 1, 0, 0, 0, 0, 0, 1],
+    [null, 2, 0, 0, 0, 0, 0, 2],
+    ['wood', 2, 0, 0, 0, 0, 0, 2],
+    ['stone', 2, 0, 0, 0, 0, 0, 2],
+    ['berry', 2, 0, 0, 0, 0, 0, 2],
+    ['raw_meat', 2, 0, 0, 0, 0, 0, 2],
+    ['cooked_meat', 2, 0, 0, 0, 0, 0, 2],
+    ['berry_infusion', 2, 0, 0, 0, 0, 0, 2],
+    ['healing_herb', 2, 0, 0, 0, 0, 0, 2],
+    ['iron_helmet', 2, 0, 0, 0, 0, 0, 2],
+    ['iron_leggings', 2, 0, 0, 0, 0, 0, 2],
+    ['iron_boots', 2, 0, 0, 0, 0, 0, 2],
+    ['mithril_helmet', 2, 0, 0, 0, 0, 0, 2],
+    ['mithril_leggings', 2, 0, 0, 0, 0, 0, 2],
+    ['mithril_boots', 2, 0, 0, 0, 0, 0, 2],
+    ['mint', 2, 0, 0, 0, 0, 0, 2],
+    ['healing_potion', 2, 0, 0, 0, 0, 0, 2],
+    ['speed_potion', 2, 0, 0, 0, 0, 0, 2],
+    ['stamina_potion', 2, 0, 0, 0, 0, 0, 2],
+    ['stone_potion', 2, 0, 0, 0, 0, 0, 2],
+    ['calm_incense', 2, 0, 0, 0, 0, 0, 2],
+    ['forget_amulet', 2, 0, 0, 0, 0, 0, 2],
+    ['campfire', 2, 0, 0, 0, 0, 0, 2],
+    ['birch_wood', 2, 0, 0, 0, 0, 0, 2],
+    ['dark_wood', 2, 0, 0, 0, 0, 0, 2],
+    ['iron_ore', 2, 0, 0, 0, 0, 0, 2],
+    ['iron_bar', 2, 0, 0, 0, 0, 0, 2],
+    ['mithril_ore', 2, 0, 0, 0, 0, 0, 2],
+    ['mithril_bar', 2, 0, 0, 0, 0, 0, 2],
+    ['meteor_fragment', 2, 0, 0, 0, 0, 0, 2],
+    ['distiller', 2, 0, 0, 0, 0, 0, 2],
+    ['oil', 2, 0, 0, 0, 0, 0, 2],
+    ['boss_trophy', 2, 0, 0, 0, 0, 0, 2],
+    ['plane_engine', 2, 0, 0, 0, 0, 0, 2],
+    ['coin', 2, 0, 0, 0, 0, 0, 2],
+    ['coal', 2, 0, 0, 0, 0, 0, 2],
+    ['crystal', 2, 0, 0, 0, 0, 0, 2],
+    ['dry_wood', 2, 0, 0, 0, 0, 0, 2],
     // El equipo tampoco tala ni pica.
-    ['iron_chestplate', 1, 0, 0, 0, 0, 0, 1],
-    ['mithril_chestplate', 1, 0, 0, 0, 0, 0, 1],
-    ['wood_shield', 1, 0, 0, 0, 0, 0, 1],
-    ['iron_shield', 1, 0, 0, 0, 0, 0, 1],
-    ['crystal_shield', 1, 0, 0, 0, 0, 0, 1],
-    ['workbench', 1, 0, 0, 0, 0, 0, 1],
-    ['furnace', 1, 0, 0, 0, 0, 0, 1],
-    ['anvil', 1, 0, 0, 0, 0, 0, 1],
-    ['wood_axe', 2, 0, 0, 0, 0, 0, 1],
-    ['stone_axe', 4, 4, 0, 0, 0, 0, 1],
-    ['iron_axe', 6, 6, 6, 0, 0, 0, 1],
-    ['mithril_axe', 12, 12, 12, 0, 0, 0, 1],
-    ['meteor_axe', 16, 16, 16, 0, 0, 0, 1],
-    ['wood_pickaxe', 1, 0, 0, 2, 0, 0, 1],
-    ['stone_pickaxe', 1, 0, 0, 4, 4, 0, 1],
-    ['iron_pickaxe', 1, 0, 0, 6, 6, 6, 1],
-    ['mithril_pickaxe', 1, 0, 0, 12, 12, 12, 1],
-    ['meteor_pickaxe', 1, 0, 0, 24, 24, 24, 1],
+    ['iron_chestplate', 2, 0, 0, 0, 0, 0, 2],
+    ['mithril_chestplate', 2, 0, 0, 0, 0, 0, 2],
+    ['wood_shield', 2, 0, 0, 0, 0, 0, 2],
+    ['iron_shield', 2, 0, 0, 0, 0, 0, 2],
+    ['crystal_shield', 2, 0, 0, 0, 0, 0, 2],
+    ['workbench', 2, 0, 0, 0, 0, 0, 2],
+    ['furnace', 2, 0, 0, 0, 0, 0, 2],
+    ['anvil', 2, 0, 0, 0, 0, 0, 2],
+    ['wood_axe', 3, 0, 0, 0, 0, 0, 2],
+    ['stone_axe', 6, 6, 0, 0, 0, 0, 2],
+    ['iron_axe', 9, 9, 9, 0, 0, 0, 2],
+    ['mithril_axe', 18, 18, 18, 0, 0, 0, 2],
+    ['meteor_axe', 30, 30, 30, 0, 0, 0, 2],
+    ['wood_pickaxe', 2, 0, 0, 3, 0, 0, 2],
+    ['stone_pickaxe', 2, 0, 0, 6, 6, 0, 2],
+    ['iron_pickaxe', 2, 0, 0, 9, 9, 9, 2],
+    ['mithril_pickaxe', 2, 0, 0, 18, 18, 18, 2],
+    ['meteor_pickaxe', 2, 0, 0, 36, 36, 36, 2],
     // Las espadas no talan ni pican: como la mano.
-    ['wood_sword', 1, 0, 0, 0, 0, 0, 1],
-    ['stone_sword', 1, 0, 0, 0, 0, 0, 1],
-    ['iron_sword', 1, 0, 0, 0, 0, 0, 1],
-    ['mithril_sword', 1, 0, 0, 0, 0, 0, 1],
-    ['meteor_sword', 1, 0, 0, 0, 0, 0, 1],
+    ['wood_sword', 2, 0, 0, 0, 0, 0, 2],
+    ['stone_sword', 2, 0, 0, 0, 0, 0, 2],
+    ['iron_sword', 2, 0, 0, 0, 0, 0, 2],
+    ['mithril_sword', 2, 0, 0, 0, 0, 0, 2],
+    ['meteor_sword', 2, 0, 0, 0, 0, 0, 2],
   ]
   it.each(TABLE)(
     '%s: árbol %i, abedul %i, pino oscuro %i, roca %i, mena de hierro %i, mena de mithril %i, arbusto %i',
@@ -104,13 +104,13 @@ describe('niveles: daño contra props', () => {
   })
 
   it.each([
-    ['wood_axe', 'tree', 8, 'mithril_axe', 2],
-    ['wood_pickaxe', 'rock', 10, 'mithril_pickaxe', 2],
-    ['stone_axe', 'birch', 10, 'mithril_axe', 4],
-    ['stone_pickaxe', 'iron_ore', 15, 'mithril_pickaxe', 5],
-    ['iron_axe', 'darkpine', 12, 'mithril_axe', 6],
-    ['iron_pickaxe', 'mithril_ore', 16, 'mithril_pickaxe', 8],
-    ['mithril_axe', 'darkpine', 6, 'meteor_axe', 5],
+    ['wood_axe', 'tree', 6, 'mithril_axe', 1],
+    ['wood_pickaxe', 'rock', 7, 'mithril_pickaxe', 2],
+    ['stone_axe', 'birch', 7, 'mithril_axe', 3],
+    ['stone_pickaxe', 'iron_ore', 10, 'mithril_pickaxe', 4],
+    ['iron_axe', 'darkpine', 8, 'mithril_axe', 4],
+    ['iron_pickaxe', 'mithril_ore', 11, 'mithril_pickaxe', 6],
+    ['mithril_axe', 'darkpine', 4, 'meteor_axe', 3],
     ['mithril_pickaxe', 'coal_ore', 2, 'meteor_pickaxe', 1],
   ] as const)('%s rompe un %s en %i golpes y %s en %i: mejorar la herramienta es ganar tiempo', (worst, kind, slow, best, fast) => {
     expect(hits(worst, kind)).toBe(slow)
@@ -148,7 +148,7 @@ describe('niveles: daño contra props', () => {
       for (const item of ITEMS) {
         const damage = propDamage(item, kind)
         if (tier === 0) expect(damage, `${item} → ${kind}`).toBeGreaterThanOrEqual(1)
-        if (!(item && TOOL_DEFS[item])) expect(damage, `${item} → ${kind}`).toBe(tier === 0 ? 1 : 0)
+        if (!(item && TOOL_DEFS[item])) expect(damage, `${item} → ${kind}`).toBe(tier === 0 ? BASE_DAMAGE : 0)
         expect(canDamage(item, kind)).toBe(damage > 0)
       }
     }
@@ -186,17 +186,17 @@ describe('niveles: daño contra props', () => {
   })
 
   it('contra enemigos cuenta el ataque, sea cual sea la familia', () => {
-    expect(attackDamage(null, 'goblin')).toBe(10)
-    expect(attackDamage('stone', 'goblin')).toBe(10)
-    expect(attackDamage('wood_axe', 'goblin')).toBe(20)
-    expect(attackDamage('wood_pickaxe', 'goblin')).toBe(20)
-    expect(attackDamage('stone_axe', 'goblin')).toBe(30)
-    expect(attackDamage('stone_pickaxe', 'goblin')).toBe(30)
-    expect(attackDamage('iron_axe', 'goblin')).toBe(40)
-    expect(attackDamage('iron_pickaxe', 'goblin')).toBe(40)
-    expect(attackDamage('mithril_axe', 'goblin')).toBe(60)
-    expect(attackDamage('mithril_pickaxe', 'goblin')).toBe(60)
-    expect(attackDamage('meteor_axe', 'goblin')).toBe(80)
-    expect(attackDamage('meteor_pickaxe', 'goblin')).toBe(80)
+    expect(attackDamage(null, 'goblin')).toBe(15)
+    expect(attackDamage('stone', 'goblin')).toBe(15)
+    expect(attackDamage('wood_axe', 'goblin')).toBe(30)
+    expect(attackDamage('wood_pickaxe', 'goblin')).toBe(30)
+    expect(attackDamage('stone_axe', 'goblin')).toBe(42)
+    expect(attackDamage('stone_pickaxe', 'goblin')).toBe(42)
+    expect(attackDamage('iron_axe', 'goblin')).toBe(60)
+    expect(attackDamage('iron_pickaxe', 'goblin')).toBe(60)
+    expect(attackDamage('mithril_axe', 'goblin')).toBe(90)
+    expect(attackDamage('mithril_pickaxe', 'goblin')).toBe(90)
+    expect(attackDamage('meteor_axe', 'goblin')).toBe(120)
+    expect(attackDamage('meteor_pickaxe', 'goblin')).toBe(120)
   })
 })

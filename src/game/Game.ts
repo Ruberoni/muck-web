@@ -42,13 +42,15 @@ import { euclideanModulo } from '../sim/world/daycycle'
 import { BIOME_NAMES } from '../sim/world/biomes'
 import type { Island } from '../sim/world/island'
 import { createTerrain } from '../world/terrain'
-import { WATER_LEVEL } from '../sim/world/terrain'
+import { enemyFloor, WATER_LEVEL } from '../sim/world/terrain'
 import { isLitCampfire, placeableOf, structureSpot, warmAt, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
 import { warmHeals } from '../sim/survival'
 import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH, type EnemyType } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
+import { enemyChest, enemyImpact, propImpact, rayTo, type Ray, type StruckEnemy } from '../view/strikeImpact'
+import { hitEfficacy } from '../sim/tiers'
 import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { CameraShake } from './shake'
@@ -98,6 +100,10 @@ const PLACE_PROMPT: Record<StructureKind, string> = {
   furnace: 'Clic para colocar el horno',
   anvil: 'Clic para colocar el yunque',
 }
+/** Milisegundos en que el `enemyHit` de un golpe que ya se vio (el predicho, en red) no lo repite. */
+const STRUCK_WINDOW = 600
+/** Hacia dónde mira la cámara, para el golpe del jugador local. */
+const strikeDir = new THREE.Vector3()
 /** Segundos que se ve "Necesitas pico de madera" tras golpear algo que no se puede con lo que se lleva. */
 const TOOL_WARNING_TIME = 1.5
 /** La pantalla de carga no espera más que esto a los modelos (los que falten se ven al llegar). */
@@ -161,6 +167,9 @@ export class Game {
   private audio = new GameAudio(this.sound)
   /** El aviso de "Necesitas …" tras un golpe que no hace nada: a qué tipo de prop y los segundos que le quedan. */
   private toolWarning: { kind: PropKind | null; left: number } = { kind: null, left: 0 }
+  /** Dónde estaba cada enemigo en el último frame, y a quién se le acaba de ver el golpe de quién (para `sweepFx`). */
+  private enemiesSeen = new Map<number, Omit<StruckEnemy, 'floor'>>()
+  private struck = new Map<string, number>()
   readonly handheld = new Handheld(window.innerWidth / window.innerHeight)
 
   state: GameState = 'menu'
@@ -802,6 +811,10 @@ export class Game {
           break
         case 'playerStrike':
           this.swingAtProp(e)
+          this.strikeFx(e)
+          break
+        case 'enemyHit':
+          this.sweepFx(e)
           break
         case 'playerPlaced':
         case 'playerDropped':
@@ -914,6 +927,60 @@ export class Game {
     const { wobble, warn } = swingFeedback(e.item, prop.kind, prop.alive, e.id === this.slot.id)
     if (wobble) this.propView.wobble(prop.id)
     if (warn) this.toolWarning = { kind: prop.kind, left: TOOL_WARNING_TIME }
+  }
+
+  /**
+   * Lo que salta de un golpe que da en algo, en el punto exacto donde da: el del jugador local, por donde mira (con el
+   * tajo en la dirección de su golpe, y la herramienta rebota); el de los demás, desde donde están hacia lo que golpean.
+   */
+  private strikeFx(e: Extract<SimEvent, { type: 'playerStrike' }>) {
+    const { target } = e
+    if (!target) return
+    const own = e.id === this.slot.id
+    const slash = own ? (this.handheld.slashAngle() ?? undefined) : undefined
+    if (own) this.handheld.hit()
+    if (target.kind === 'prop') {
+      const prop = this.sim.world.props[target.id]
+      const ray = prop && this.strikeRay(e.id, prop.x, prop.y + 1, prop.z)
+      if (ray) this.attackFx.impact(propImpact(prop, e.item, ray, slash))
+      return
+    }
+    const enemy = this.struckEnemy(target.id)
+    const ray = enemy && this.strikeRay(e.id, enemy.x, enemyChest(enemy), enemy.z)
+    if (!ray) return
+    this.attackFx.impact(enemyImpact(enemy, e.item, ray, hitEfficacy(e.item, enemy.type), slash))
+    this.struck.set(`${e.id}:${target.id}`, performance.now())
+  }
+
+  /** Los demás enemigos que alcanza un golpe (el arco de la espada): el apuntado ya tuvo lo suyo con `playerStrike`. */
+  private sweepFx(e: Extract<SimEvent, { type: 'enemyHit' }>) {
+    const key = `${e.by}:${e.id}`
+    const at = this.struck.get(key)
+    this.struck.delete(key)
+    if (at !== undefined && performance.now() - at < STRUCK_WINDOW) return
+    const enemy = this.struckEnemy(e.id)
+    const ray = enemy && this.strikeRay(e.by, enemy.x, enemyChest(enemy), enemy.z)
+    if (!ray) return
+    const item = e.by === this.slot.id ? this.slot.inventory.selectedItem : (this.net?.client.shownPlayers.find((p) => p.id === e.by)?.data.item ?? null)
+    this.attackFx.impact(enemyImpact(enemy, item, ray, e.efficacy))
+  }
+
+  /** El rayo de un golpe de `id`: el local, por donde mira; el de otro, desde sus ojos hacia (x, y, z). */
+  private strikeRay(id: number, x: number, y: number, z: number): Ray | null {
+    if (id === this.slot.id) {
+      const dir = this.camera.getWorldDirection(strikeDir)
+      const eye = this.camera.position
+      return { x: eye.x, y: eye.y, z: eye.z, dx: dir.x, dy: dir.y, dz: dir.z }
+    }
+    const pose = this.net?.client.shownPlayers.find((p) => p.id === id)?.pose
+    return pose ? rayTo(pose.x, pose.y + EYE_HEIGHT, pose.z, x, y, z) : null
+  }
+
+  /** Un enemigo como lo necesita el golpe: el de la lista o, si acaba de morir del golpe, el último que se vio. */
+  private struckEnemy(id: number): StruckEnemy | null {
+    const e = this.sim.enemies.list.find((en) => en.id === id)
+    const seen = e ? { type: e.type, look: e.look, x: e.pos.x, z: e.pos.z } : this.enemiesSeen.get(id)
+    return seen ? { ...seen, floor: enemyFloor(this.sim.island, seen.x, seen.z) } : null
   }
 
   /** Lo que hacen los demás, ya en el tick de render: suena donde pasa, y su muerte se avisa. */
@@ -1136,6 +1203,8 @@ export class Game {
     this.smokeView.reset()
     this.hazardView.reset()
     this.attackFx.reset()
+    this.enemiesSeen.clear()
+    this.struck.clear()
     this.fishView.reset()
     this.structureView.reset()
     this.remotePlayers.reset()
@@ -1202,6 +1271,9 @@ export class Game {
     }
     this.showDaze(staged ? 0 : daze.amount)
     this.enemyView.update(dt, enemies.list, alpha)
+    // El enemigo que muera del próximo golpe ya no estará en la lista: su sitio, para lo que salta del golpe.
+    this.enemiesSeen.clear()
+    for (const e of enemies.list) this.enemiesSeen.set(e.id, { type: e.type, look: e.look, x: e.pos.x, z: e.pos.z })
     this.pickupView.update(sim.pickups.list, alpha)
     this.projectileView.update(dt, sim.projectiles.list, alpha)
     this.attackFx.update(dt, sim.projectiles.list, alpha, enemies.list, this.camera)
@@ -1300,7 +1372,7 @@ export class Game {
 
     this.handheld.setItem(slot.inventory.selectedItem)
     this.handheld.setShield(slot.inventory.equipped.shield, p.blocking)
-    this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky)
+    this.handheld.update(dt, Math.hypot(p.vel.x, p.vel.z), p.grounded, this.sky, this.look)
     this.renderer.clear()
     // Primero el cielo (no escribe profundidad) y encima la isla.
     this.renderer.render(this.sky.view.scene, this.camera)

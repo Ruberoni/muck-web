@@ -177,14 +177,17 @@ describe('equilibrio de las prioridades', () => {
 
 describe('equilibrio del combate: la espada, el arma más versátil', () => {
   it('la tabla de tiempos para matar a un trasgo', () => {
-    expect(timeToKill(null, 'goblin')).toBeCloseTo(6 * HIT_COOLDOWN, 6)
-    LEVELS.forEach(([tool], i) => expect(timeToKill(tool, 'goblin'), tool).toBeCloseTo([1.35, 0.9, 0.45, 0.45][i], 6))
-    LEVELS.forEach(([, sword], i) => expect(timeToKill(sword, 'goblin'), sword).toBeCloseTo([1.12, 0.56, 0.28, 0.28][i], 6))
-    expect(timeToKill('meteor_sword', 'goblin')).toBeCloseTo(0.25, 6)
+    // Con los golpes más lentos y más fuertes (HIT_COOLDOWN), lo de mithril ya lo tumba de un golpe.
+    expect(timeToKill(null, 'goblin')).toBeCloseTo(4 * HIT_COOLDOWN, 6)
+    LEVELS.forEach(([tool], i) => expect(timeToKill(tool, 'goblin'), tool).toBeCloseTo([1.35, 0.675, 0.675, 0][i], 6))
+    LEVELS.forEach(([, sword], i) => expect(timeToKill(sword, 'goblin'), sword).toBeCloseTo([0.84, 0.42, 0.42, 0][i], 6))
+    expect(timeToKill('meteor_sword', 'goblin')).toBe(0)
   })
 
-  it.each(LEVELS)('contra un trasgo, %s mata más despacio que %s', (tool, sword) => {
-    expect(timeToKill(sword, 'goblin')).toBeLessThan(timeToKill(tool, 'goblin'))
+  it.each(LEVELS)('contra un trasgo, %s mata más despacio que %s (o los dos de un golpe)', (tool, sword) => {
+    const slow = timeToKill(tool, 'goblin')
+    if (slow === 0) expect(timeToKill(sword, 'goblin')).toBe(0)
+    else expect(timeToKill(sword, 'goblin')).toBeLessThan(slow)
   })
 
   // La armadura castiga las armas débiles y rápidas: con la de madera, un jefe es cosa de otra arma.
@@ -217,7 +220,9 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
       const good = timeToKill(`${material}_${right}`, type)
       const sword = timeToKill(`${material}_sword`, type)
       expect(good, material).toBeLessThan(sword)
-      expect(sword, material).toBeLessThanOrEqual(good * 2)
+      // Si la buena lo tumba de un golpe, la espada no tarda más que dos golpes de la buena.
+      if (good === 0) expect(sword, material).toBeLessThanOrEqual(2 * swingCooldown(`${material}_${right}`))
+      else expect(sword, material).toBeLessThanOrEqual(good * 2)
     }
   })
 
@@ -253,9 +258,9 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
 
   it('la coraza del Coloso se rompe en pocos golpes con un pico bueno, y nada se la salta', () => {
     const swings = (item: ItemId) => Math.ceil(ENEMY_DEFS.colossus.shell! / attackDamage(item, 'colossus'))
-    expect((['stone_pickaxe', 'iron_pickaxe', 'mithril_pickaxe', 'meteor_pickaxe'] as const).map(swings)).toEqual([27, 16, 9, 7])
-    // Con la espada, sin romperla: un 10 % de lo que haría.
-    expect(ENEMY_DEFS.colossus.hp / (attackDamage('meteor_sword', 'colossus') * SHELL_RESIST)).toBeGreaterThan(500)
+    expect((['stone_pickaxe', 'iron_pickaxe', 'mithril_pickaxe', 'meteor_pickaxe'] as const).map(swings)).toEqual([31, 16, 9, 7])
+    // Con la espada, sin romperla: un 10 % de lo que haría, más de dos minutos dando golpes sin parar.
+    expect((ENEMY_DEFS.colossus.hp / (attackDamage('meteor_sword', 'colossus') * SHELL_RESIST)) * swingCooldown('meteor_sword')).toBeGreaterThan(120)
   })
 
   it('un grupo no mata a un jefe antes que uno solo: la vida sube igual que el daño', () => {
@@ -272,9 +277,9 @@ describe('equilibrio del combate: la espada, el arma más versátil', () => {
   })
 
   it('ejemplo: el gólem con equipo de piedra', () => {
-    expect(timeToKill('stone_pickaxe', 'golem')).toBeCloseTo(0.9, 6)
+    expect(timeToKill('stone_pickaxe', 'golem')).toBeCloseTo(1.35, 6)
     expect(timeToKill('stone_sword', 'golem')).toBeCloseTo(1.68, 6)
-    expect(timeToKill('stone_axe', 'golem')).toBeCloseTo(4.95, 6)
+    expect(timeToKill('stone_axe', 'golem')).toBeCloseTo(5.4, 6)
   })
 
   it('la mano siempre es lo peor, contra todos', () => {

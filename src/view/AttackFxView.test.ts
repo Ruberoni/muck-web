@@ -145,3 +145,71 @@ describe('AttackFxView', () => {
     expect(view.group.children).toHaveLength(0)
   })
 })
+
+describe('los golpes del jugador (impact)', () => {
+  const at = { x: 0, y: 30, z: 0, nx: 0, nz: 1 }
+  /** De qué tipos son las piezas que salen de un golpe. */
+  const kinds = (view: AttackFxView) => new Set(view['active'].map((p: { kind: string }) => p.kind))
+
+  it('cada material suelta lo suyo: astillas, lascas, cristales u hojas', () => {
+    const cases = [
+      ['wood', 'chip'],
+      ['stone', 'shard'],
+      ['iron', 'shard'],
+      ['crystal', 'glassShard'],
+      ['leaves', 'leaf'],
+    ] as const
+    for (const [material, debris] of cases) {
+      const view = new AttackFxView(mulberry32(3))
+      view.impact({ ...at, material, tool: 'pickaxe' })
+      expect(kinds(view), material).toContain(debris)
+    }
+    // La madera no echa chispas; el mineral sí.
+    const wood = new AttackFxView(mulberry32(3))
+    wood.impact({ ...at, material: 'wood', tool: 'axe' })
+    expect(kinds(wood)).not.toContain('spark')
+    const iron = new AttackFxView(mulberry32(3))
+    iron.impact({ ...at, material: 'iron', tool: 'pickaxe' })
+    expect(kinds(iron)).toContain('spark')
+  })
+
+  it('a un enemigo la espada le deja un tajo; el hacha, un golpe sordo sin tajo', () => {
+    const sword = new AttackFxView(mulberry32(3))
+    sword.impact({ ...at, material: 'creature', tool: 'sword', slash: 0.4 })
+    expect(kinds(sword)).toContain('cut')
+    const axe = new AttackFxView(mulberry32(3))
+    axe.impact({ ...at, material: 'creature', tool: 'axe' })
+    expect(kinds(axe)).not.toContain('cut')
+    expect(kinds(axe)).toContain('glow')
+  })
+
+  it('sin daño (falta la herramienta) solo es un golpe seco: no salta nada', () => {
+    const view = new AttackFxView(mulberry32(3))
+    view.impact({ ...at, material: 'iron', tool: 'pickaxe', blocked: true })
+    expect(kinds(view)).not.toContain('shard')
+  })
+
+  it('pocas piezas, que salen donde pega y se van enseguida', () => {
+    for (const material of ['wood', 'stone', 'iron', 'mithril', 'crystal', 'creature', 'rockCreature'] as const) {
+      const view = new AttackFxView(mulberry32(5))
+      view.impact({ ...at, material, tool: 'axe', canopy: 33 })
+      expect(view.live, material).toBeGreaterThan(2)
+      expect(view.live, material).toBeLessThan(30)
+      for (const mesh of view.group.children) expect(mesh.position.distanceTo(new THREE.Vector3(0, 30, 0)), material).toBeLessThan(5)
+      play(view, 1.6)
+      expect(view.live, material).toBe(0)
+    }
+  })
+
+  it('dos golpes iguales no se ven iguales', () => {
+    const view = new AttackFxView(mulberry32(9))
+    view.impact({ ...at, material: 'stone', tool: 'pickaxe' })
+    play(view, 0.1)
+    const first = view.group.children.map((m) => m.position.clone())
+    play(view, 2)
+    view.impact({ ...at, material: 'stone', tool: 'pickaxe' })
+    play(view, 0.1)
+    const second = view.group.children.map((m) => m.position.clone())
+    expect(second.some((p, i) => !first[i] || p.distanceTo(first[i]) > 1e-3)).toBe(true)
+  })
+})

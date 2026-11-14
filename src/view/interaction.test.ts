@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPropWorld, growBerries, type PropData } from '../sim/props'
 import { PropView, type PropInstance } from './PropView'
 import { heightAt } from '../sim/world/terrain'
-import { BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from '../sim/constants'
+import { BASE_DAMAGE, BERRIES_PER_BUSH, BERRY_REGROW, EYE_HEIGHT, HIT_COOLDOWN, STEP } from '../sim/constants'
 import type { SimEventData } from '../sim/events'
 import { aimPose, createCombat, Interaction, type Fighter } from '../sim/interaction'
 import { Inventory, type ItemId } from '../sim/inventory'
 import { Pickups } from '../sim/pickups'
 import { quickProps } from '../sim/quickProps'
 import { swingImpact } from '../sim/tiers'
+
+/** Lo que tardan en empezar tres golpes a mano: dos esperas (que no son un número entero de pasos) y un paso. */
+const THREE_HITS = HIT_COOLDOWN * 2 + 2 * STEP
 
 function setup() {
   const world = createPropWorld()
@@ -88,11 +91,11 @@ describe('recolección', () => {
 
   const firstOf = (kind: PropData['kind']) => ctx.world.props.find((p) => p.kind === kind)!
 
-  it('apunta al prop y mantener el ataque 1,2 s da exactamente 3 golpes y la madera cae al suelo', () => {
+  it('apunta al prop y mantener el ataque dos esperas da exactamente 3 golpes y la madera cae al suelo', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     expect(ctx.fighter.target).toBe(tree)
-    ctx.hold(1.2)
+    ctx.hold(THREE_HITS)
     expect(tree.alive).toBe(false)
     expect(tree.hp).toBe(0)
     expect(ctx.onGround('wood')).toBe(4)
@@ -103,7 +106,7 @@ describe('recolección', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     const hits: { kind: string; dropped: boolean }[] = []
-    for (let i = 0; i < Math.round(1.2 / STEP); i++) {
+    for (let i = 0; i < Math.round((THREE_HITS + swingImpact(null)) / STEP); i++) {
       ctx.interaction.updateTarget(ctx.fighter)
       const hit = ctx.interaction.step(ctx.fighter, STEP, true)
       if (hit) hits.push({ kind: hit.target?.kind ?? 'aire', dropped: hit.dropped })
@@ -129,7 +132,7 @@ describe('recolección', () => {
     ctx.interaction.step(ctx.fighter, STEP, true)
     expect(tree.hp).toBe(tree.maxHp)
     ctx.hold(HIT_COOLDOWN)
-    expect(tree.hp).toBe(tree.maxHp - 1)
+    expect(tree.hp).toBe(tree.maxHp - BASE_DAMAGE)
   })
 
   it('con pico de madera una roca necesita 2 golpes y da piedra', () => {
@@ -137,10 +140,10 @@ describe('recolección', () => {
     const rock = firstOf('rock')
     ctx.aimAt(rock)
     expect(ctx.fighter.target).toBe(rock)
-    ctx.hold(0.4)
-    expect(rock.hp).toBe(2)
+    ctx.hold(0.5)
+    expect(rock.hp).toBe(3)
     expect(rock.alive).toBe(true)
-    ctx.hold(0.4)
+    ctx.hold(0.5)
     expect(rock.alive).toBe(false)
     expect(ctx.onGround('stone')).toBe(3)
   })
@@ -148,7 +151,7 @@ describe('recolección', () => {
   it('tras destruirlo el raycast ya no lo selecciona', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
-    ctx.hold(1.2)
+    ctx.hold(THREE_HITS)
     ctx.interaction.updateTarget(ctx.fighter)
     expect(ctx.fighter.target).not.toBe(tree)
   })
@@ -156,7 +159,7 @@ describe('recolección', () => {
   it('un wobble activo no revive un prop destruido', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
-    ctx.hold(HIT_COOLDOWN * 2 + STEP) // 3 golpes: el último llega con el wobble del segundo aún activo
+    ctx.hold(THREE_HITS) // 3 golpes: el último llega con el wobble del segundo aún activo
     expect(tree.alive).toBe(false)
     ctx.view.update(0.05)
     ctx.view.update(0.2)
@@ -279,10 +282,11 @@ describe('bayas', () => {
     const tree = ctx.world.props.find((p) => p.kind === 'tree')!
     const rock = ctx.world.props.find((p) => p.kind === 'rock')!
     ctx.aimAt(tree)
-    ctx.hold(1.2)
+    ctx.hold(THREE_HITS)
     ctx.equip('wood_pickaxe')
     ctx.aimAt(rock)
-    ctx.hold(0.8)
+    // Con la espera del último golpe al árbol aún sin acabar.
+    ctx.hold(THREE_HITS)
     wait(BERRY_REGROW * BERRIES_PER_BUSH * 2)
     expect(tree.alive).toBe(false)
     expect(rock.alive).toBe(false)
@@ -293,13 +297,13 @@ describe('bayas', () => {
     const rock = ctx.world.props.find((p) => p.kind === 'rock')!
     const bush = firstBush()
     ctx.aimAt(tree)
-    ctx.hold(1.2)
+    ctx.hold(THREE_HITS)
     ctx.equip('wood_pickaxe')
     ctx.aimAt(rock)
     ctx.once()
     ctx.aimAt(bush)
     ctx.once()
-    expect(rock.hp).toBe(rock.maxHp - 2)
+    expect(rock.hp).toBe(rock.maxHp - 3)
 
     ctx.reset()
     for (const prop of [tree, rock, bush]) {
@@ -337,7 +341,7 @@ describe('herramientas', () => {
     if (item) equip(item)
     const rock = firstOf('rock')
     ctx.aimAt(rock)
-    ctx.hold(1.6)
+    ctx.hold(HIT_COOLDOWN * 3 + 2 * STEP)
     expect(rock.hp).toBe(rock.maxHp)
     expect(rock.alive).toBe(true)
     expect(ctx.onGround('stone')).toBe(0)
@@ -352,8 +356,8 @@ describe('herramientas', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     ctx.hold(STEP)
-    expect(tree.hp).toBe(1)
-    ctx.hold(0.4)
+    expect(tree.hp).toBe(3)
+    ctx.hold(HIT_COOLDOWN)
     expect(tree.alive).toBe(false)
     expect(ctx.onGround('wood')).toBe(4)
   })
@@ -373,7 +377,7 @@ describe('herramientas', () => {
     const tree = firstOf('tree')
     ctx.aimAt(tree)
     ctx.hold(STEP)
-    expect(tree.hp).toBe(2)
+    expect(tree.hp).toBe(tree.maxHp - BASE_DAMAGE)
   })
 
   it('el pico de piedra pica la mena de hierro en 3 golpes y da mineral; el de madera no le hace nada', () => {
@@ -386,7 +390,7 @@ describe('herramientas', () => {
     ctx.reset()
     equip('stone_pickaxe')
     ctx.aimAt(ore)
-    ctx.hold(STEP + HIT_COOLDOWN * 2)
+    ctx.hold(THREE_HITS)
     expect(ore.alive).toBe(false)
     expect(ctx.onGround('iron_ore')).toBe(3)
   })
@@ -401,7 +405,7 @@ describe('herramientas', () => {
     ctx.reset()
     equip('stone_axe')
     ctx.aimAt(birch)
-    ctx.hold(STEP + HIT_COOLDOWN * 2)
+    ctx.hold(THREE_HITS)
     expect(birch.alive).toBe(false)
     expect(ctx.onGround('birch_wood')).toBe(4)
   })
@@ -416,14 +420,14 @@ describe('herramientas', () => {
     ctx.reset()
     equip('iron_pickaxe')
     ctx.aimAt(ore)
-    ctx.hold(STEP + HIT_COOLDOWN * 2)
+    ctx.hold(THREE_HITS)
     expect(ore.alive).toBe(false)
     expect(ctx.onGround('mithril_ore')).toBe(5)
     ctx.reset()
     const other = ctx.world.props.find((p) => p.kind === 'mithril_ore' && p.alive)!
     equip('mithril_pickaxe')
     ctx.aimAt(other)
-    ctx.hold(STEP + HIT_COOLDOWN)
+    ctx.hold(HIT_COOLDOWN + 2 * STEP)
     expect(other.alive).toBe(false)
   })
 
@@ -437,14 +441,14 @@ describe('herramientas', () => {
     ctx.reset()
     equip('iron_axe')
     ctx.aimAt(pine)
-    ctx.hold(STEP + HIT_COOLDOWN * 2)
+    ctx.hold(THREE_HITS)
     expect(pine.alive).toBe(false)
     expect(ctx.onGround('dark_wood')).toBe(4)
     ctx.reset()
     const other = ctx.world.props.find((p) => p.kind === 'darkpine' && p.alive)!
     equip('mithril_axe')
     ctx.aimAt(other)
-    ctx.hold(STEP + HIT_COOLDOWN)
+    ctx.hold(HIT_COOLDOWN + 2 * STEP)
     expect(other.alive).toBe(false)
   })
 })

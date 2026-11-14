@@ -2,7 +2,7 @@ import { PROP_DEFS } from './constants'
 import type { PropData, PropKind } from './props'
 
 /** Pocos golpes por prop. */
-const QUICK_HP: Partial<Record<PropKind, number>> = { tree: 3, birch: 12, darkpine: 18, rock: 4, iron_ore: 12, mithril_ore: 18 }
+const QUICK_HP: Partial<Record<PropKind, number>> = { tree: 6, birch: 18, darkpine: 27, rock: 6, iron_ore: 18, mithril_ore: 27 }
 
 /**
  * Solo para pruebas: props que caen en pocos golpes. Lo que prueba cómo funciona romper algo no debe depender de cuánto

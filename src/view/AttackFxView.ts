@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { STEP } from '../sim/constants'
+import { STEP, type HitEfficacy, type WeaponClass } from '../sim/constants'
 import type { Projectile, ProjectileKind } from '../sim/projectiles'
 import { mulberry32 } from '../sim/random'
 import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
@@ -58,6 +58,11 @@ const SPEAR_HEIGHT = 2
 const SPEAR_AHEAD = 1.7
 /** Lo que se echa atrás la luz del golpe de la lanza (m), hacia el cuerpo. */
 const HIT_BACK = 0.9
+
+// Los golpes del jugador: un blanco cálido, distinto del color de cada jefe; en oro si es eficaz, gris si lo resiste.
+const PLAYER_HIT = '#fff3d6'
+const EFFECTIVE_HIT = '#ffd36b'
+const RESISTED_HIT = '#b8c0c8'
 
 // Las flechas del gigante: estela fina azul con chispas, la punta encendida, y chispas al clavarse.
 const SPARK_TIME = 0.4
@@ -176,6 +181,23 @@ function crackGeometry(seed: number) {
   return indexed(positions, colors, index)
 }
 
+/** El tajo de una espada al dar: un rombo muy fino a lo largo de x (de -1 a 1), blanco en medio. Mira a la cámara. */
+function cutGeometry() {
+  const positions = [-1, 0, 0, 0, 0.07, 0, 1, 0, 0, 0, -0.07, 0, 0, 0, 0]
+  const colors = [0, 0, 0, 0.6, 0.6, 0.6, 0, 0, 0, 0.6, 0.6, 0.6, 1, 1, 1]
+  return indexed(positions, colors, [0, 4, 1, 1, 4, 2, 2, 4, 3, 3, 4, 0])
+}
+
+/** Una hoja: un rombo plano, algo curvado por el nervio. */
+function leafGeometry() {
+  const positions = [0, 0, -0.07, 0.035, 0.01, 0, 0, 0, 0.07, -0.035, 0.01, 0, 0, 0.012, 0]
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setIndex([0, 4, 1, 1, 4, 2, 2, 4, 3, 3, 4, 0])
+  geometry.computeVertexNormals()
+  return geometry
+}
+
 /** Una raya de viento a lo largo de z (de -0,5 a 0,5), que se apaga en las dos puntas. */
 function streakGeometry() {
   const geometry = new THREE.CylinderGeometry(0.035, 0.035, 1, 5, 6, true).rotateX(Math.PI / 2)
@@ -229,11 +251,19 @@ const KINDS = {
   crack0: { geometry: crackGeometry(11), color: GIANT_BLUE, additive: true },
   crack1: { geometry: crackGeometry(23), color: GIANT_BLUE, additive: true },
   crack2: { geometry: crackGeometry(37), color: GIANT_BLUE, additive: true },
+  // Lo que salta de los golpes del jugador (impact): astillas, lascas de piedra, cristales, hojas y el tajo de la espada.
+  chip: { geometry: new THREE.BoxGeometry(0.08, 0.02, 0.04), color: WHITE, additive: false },
+  shard: { geometry: new THREE.TetrahedronGeometry(0.045, 0), color: WHITE, additive: false },
+  glassShard: { geometry: new THREE.OctahedronGeometry(0.04, 0).scale(0.6, 1.8, 0.6), color: WHITE, additive: true },
+  leaf: { geometry: leafGeometry(), color: WHITE, additive: false },
+  cut: { geometry: cutGeometry(), color: WHITE, additive: true },
 } as const
 type Kind = keyof typeof KINDS
 const CRACK_KINDS = ['crack0', 'crack1', 'crack2'] as const
 /** Las que miran siempre a la cámara. */
-const FACING: ReadonlySet<Kind> = new Set<Kind>(['glow', 'star'])
+const FACING: ReadonlySet<Kind> = new Set<Kind>(['glow', 'star', 'cut'])
+/** Las macizas: tapan en vez de sumar luz, y menguan en vez de transparentarse. */
+const SOLID: ReadonlySet<Kind> = new Set<Kind>(['pebble', 'chip', 'shard', 'leaf'])
 
 /** Una pieza en marcha: `move` la coloca en cada frame con `t` de 0 a 1 a lo largo de su vida. */
 interface Piece {
@@ -246,6 +276,8 @@ interface Piece {
   velocity: THREE.Vector3
   spin: THREE.Vector3
   size: number
+  /** Las que miran a la cámara, giradas este ángulo en la pantalla (el tajo de la espada). */
+  roll: number
 }
 
 /** Cómo se ve cada cosa que vuela con efecto: su estela, cada cuánto deja una marca en el camino y la luz de la punta. */
@@ -302,6 +334,80 @@ export interface FxEnemy {
   prev: { x: number; z: number }
   yaw: number
 }
+
+/** De qué es lo que golpea el jugador: decide qué salta (astillas, lascas, chispas, hojas…). */
+export type ImpactMaterial =
+  | 'wood'
+  | 'birch'
+  | 'darkwood'
+  | 'deadwood'
+  | 'leaves'
+  | 'stone'
+  | 'coal'
+  | 'iron'
+  | 'mithril'
+  | 'crystal'
+  | 'creature'
+  | 'rockCreature'
+  | 'woodCreature'
+
+/** Un golpe del jugador que da en algo: dónde, hacia dónde mira la cara golpeada (hacia quien golpea) y con qué. */
+export interface Impact {
+  x: number
+  y: number
+  z: number
+  /** Hacia quien golpea, en horizontal (unitario): por ahí salta lo que salta. */
+  nx: number
+  nz: number
+  material: ImpactMaterial
+  tool: WeaponClass
+  /** Cuánto daño le hace a un enemigo por su debilidad: lo eficaz brilla en oro, lo resistido apenas. */
+  efficacy?: HitEfficacy
+  /** No le hace nada (falta la herramienta que pide): solo un golpe seco, sin que salte nada. */
+  blocked?: boolean
+  /** A qué altura empieza la copa (árboles): de ahí caen unas hojas. */
+  canopy?: number
+  /** El tajo de la espada en la pantalla (radianes desde la horizontal): el corte se dibuja así. */
+  slash?: number
+}
+
+/** Lo que salta de cada material: los trozos (y sus colores), las chispas, el polvo y si brilla. */
+interface ImpactLook {
+  debris: 'chip' | 'shard' | 'glassShard' | 'leaf' | null
+  colors: readonly string[]
+  pieces: number
+  sparks: number
+  sparkColors: readonly string[]
+  dust: string | null
+  /** Una estrella de luz pequeña: el destello del metal o del cristal. */
+  glint?: string
+  /** Hojas de la copa (árboles con hojas), de este color. */
+  leaves?: string
+}
+
+const IMPACTS: Record<ImpactMaterial, ImpactLook> = {
+  wood: { debris: 'chip', colors: ['#d8a468', '#8a5a32', '#e8c08a'], pieces: 7, sparks: 0, sparkColors: [], dust: '#b89a72', leaves: '#3d7d35' },
+  birch: { debris: 'chip', colors: ['#f2eee4', '#d8c8a8', '#2f2c28'], pieces: 7, sparks: 0, sparkColors: [], dust: '#cfc6b0', leaves: '#5f9e3a' },
+  darkwood: { debris: 'chip', colors: ['#6b4a32', '#3e2c20', '#a07850'], pieces: 7, sparks: 0, sparkColors: [], dust: '#7a6450', leaves: '#24502e' },
+  deadwood: { debris: 'chip', colors: ['#b8a68f', '#8d7b68', '#5e5040'], pieces: 7, sparks: 0, sparkColors: [], dust: '#a89880' },
+  leaves: { debris: 'leaf', colors: ['#3d7d35', '#57a85a', '#2f6a2a'], pieces: 6, sparks: 0, sparkColors: [], dust: null },
+  stone: { debris: 'shard', colors: ['#9a978a', '#7d786c', '#b5b2a6'], pieces: 7, sparks: 3, sparkColors: ['#fff1c8'], dust: '#a8a294' },
+  coal: { debris: 'shard', colors: ['#2a2826', '#1c1b1a', '#4a4642'], pieces: 7, sparks: 2, sparkColors: ['#ffd9a0'], dust: '#5a554e' },
+  iron: { debris: 'shard', colors: ['#7b7268', '#9a978a', '#c8743a'], pieces: 6, sparks: 7, sparkColors: ['#ffb347', '#ffe2a0'], dust: '#9a9286', glint: '#ffd08a' },
+  mithril: { debris: 'shard', colors: ['#6c7080', '#4fb3f0', '#8a8e9c'], pieces: 6, sparks: 6, sparkColors: ['#7fd8ff', '#e8fbff'], dust: '#8a8e9c', glint: '#9fe6ff' },
+  crystal: { debris: 'glassShard', colors: ['#7ff0ff', '#c8fbff', '#4fd8f0'], pieces: 7, sparks: 4, sparkColors: ['#9ff4ff'], dust: null, glint: '#bff8ff' },
+  creature: { debris: null, colors: [], pieces: 0, sparks: 6, sparkColors: [PLAYER_HIT], dust: null },
+  rockCreature: { debris: 'shard', colors: ['#8a8578', '#6e6a60', '#a8a294'], pieces: 5, sparks: 5, sparkColors: ['#fff1c8'], dust: '#a8a294' },
+  woodCreature: { debris: 'chip', colors: ['#8a6a48', '#5e4630', '#b08a5e'], pieces: 5, sparks: 3, sparkColors: [PLAYER_HIT], dust: '#9a8466' },
+}
+/** Cuánto salta según con qué se golpea: lo pesado, más y más lejos; la espada y la mano contra un prop, poco. */
+const IMPACT_FORCE: Record<WeaponClass, number> = { axe: 1.15, pickaxe: 1.15, sword: 0.75, hand: 0.55 }
+/** Las chispas de los golpes del jugador, más finas que las de los jefes. */
+const PLAYER_SPARK = 0.22
+const DEBRIS_TIME = 0.7
+const DEBRIS_GRAVITY = 16
+const LEAF_TIME = 1.5
+const CUT_TIME = 0.18
 
 const ahead = new THREE.Vector3()
 const velocity = new THREE.Vector3()
@@ -468,6 +574,73 @@ export class AttackFxView {
   }
 
   /**
+   * Un golpe del jugador que da en algo, en el punto exacto del impacto: lo que salta depende del material (astillas de
+   * madera, lascas y chispas de la piedra y el mineral, cristales, hojas) y de con qué se golpea. A un enemigo, la espada
+   * le deja un tajo y un destello; el hacha y el pico, un golpe más sordo. Sin daño, solo un golpe seco. Todo con algo de
+   * azar (cuántos, hacia dónde, de qué tamaño) para que no haya dos iguales, y poco: se va en menos de un segundo.
+   */
+  impact(hit: Impact) {
+    const rng = this.rng
+    const look = IMPACTS[hit.material]
+    const { x, y, z } = hit
+    const toward = { x: hit.nx, z: hit.nz }
+    const creature = hit.material === 'creature' || hit.material === 'rockCreature' || hit.material === 'woodCreature'
+    if (hit.blocked) {
+      // Un golpe seco: la herramienta rebota. En la piedra, unas chispas; en la madera, un poco de polvo.
+      if (look.sparks > 0) this.sparks(x, y, z, 4, 2.6, WHITE, SPARK_TIME * 0.7, toward, PLAYER_SPARK)
+      this.flash(x, y, z, 0.35, 0.1, PLAYER_HIT)
+      if (look.dust) this.dust(x, y - 0.2, z, 2, 0.25, 0.35, 0.16, 0.4, look.dust)
+      return
+    }
+    const force = IMPACT_FORCE[hit.tool]
+    const tint = hit.efficacy === 'effective' ? EFFECTIVE_HIT : hit.efficacy === 'resisted' ? RESISTED_HIT : PLAYER_HIT
+    if (creature) {
+      const resisted = hit.efficacy === 'resisted'
+      if (hit.tool === 'sword') {
+        // El tajo: una raya de luz que se abre a lo largo del corte, y una estrella en medio.
+        const cut = this.take(
+          'cut',
+          CUT_TIME,
+          (p, t) => {
+            p.mesh.scale.set(p.size * (0.35 + 0.65 * easeOut(Math.min(1, t * 3))), p.size * (1 - t * 0.6), 1)
+            p.material.opacity = (1 - t) ** 1.5
+          },
+          tint,
+        )
+        cut.size = resisted ? 0.28 : 0.42
+        cut.roll = hit.slash ?? (rng() - 0.5) * 1.2
+        cut.mesh.position.set(x, y, z)
+        cut.mesh.scale.set(cut.size * 0.35, cut.size, 1)
+        this.star(x, y, z, resisted ? 0.18 : 0.3, 0.12, tint)
+      } else {
+        // Lo pesado (y la mano): un golpe sordo, un destello redondo y algo de polvo.
+        this.flash(x, y, z, hit.tool === 'hand' ? 0.3 : 0.5, 0.14, tint)
+        if (hit.tool !== 'hand') this.star(x, y, z, resisted ? 0.18 : 0.28, 0.12, tint)
+        this.dust(x, y - 0.2, z, hit.tool === 'hand' ? 2 : 3, 0.35, 0.4, 0.2, 0.4, look.dust ?? '#c8c0b0')
+      }
+      const sparks = Math.round((resisted ? 0.5 : 1) * (look.sparks * 0.7 + (hit.tool === 'sword' ? 1 : 0)) * (0.8 + rng() * 0.4))
+      this.sparks(x, y, z, sparks, 3.2, hit.efficacy === 'effective' ? EFFECTIVE_HIT : look.sparkColors[0] ?? tint, SPARK_TIME * 0.8, toward, PLAYER_SPARK)
+      if (look.debris) this.debris(look, x, y, z, toward, Math.round(look.pieces * (0.5 + rng() * 0.4)), 0.9)
+      return
+    }
+    // Un prop: lo que salta, hacia quien golpea.
+    const count = Math.max(1, Math.round(look.pieces * force * (0.75 + rng() * 0.5)))
+    if (look.debris) this.debris(look, x, y, z, toward, count, force)
+    for (let i = 0; i < look.sparks; i++) {
+      if (rng() > force) continue
+      this.sparks(x, y, z, 1, 3.6 * force, look.sparkColors[i % look.sparkColors.length], SPARK_TIME * 0.8, toward, PLAYER_SPARK)
+    }
+    if (look.dust) this.dust(x, y - 0.2, z, 2 + Math.round(rng()), 0.3 * force, 0.45, 0.18, 0.4, look.dust)
+    if (look.glint) this.star(x, y, z, 0.35 + rng() * 0.15, 0.12, look.glint)
+    this.flash(x, y, z, 0.3 * force, 0.09, PLAYER_HIT)
+    // Unas hojas que caen de la copa, como si el golpe la sacudiera.
+    if (look.leaves && hit.canopy !== undefined && hit.tool !== 'hand') {
+      const leaves = 2 + Math.floor(rng() * 2)
+      for (let i = 0; i < leaves; i++) this.leaf(x - hit.nx * 0.2 + (rng() - 0.5) * 1.6, hit.canopy + rng() * 0.8, z - hit.nz * 0.2 + (rng() - 0.5) * 1.6, look.leaves)
+    }
+  }
+
+  /**
    * Por frame: lo que vuela (estela y marcas por el camino), las ondas, las embestidas (`enemies`, para seguirlas) y las
    * piezas en marcha. Con `camera`, los brillos y las estrellas la miran.
    */
@@ -510,7 +683,7 @@ export class AttackFxView {
       piece.move(piece, t, dt)
       if (camera && FACING.has(piece.kind)) {
         piece.mesh.quaternion.copy(camera.quaternion)
-        if (piece.spin.z) piece.mesh.rotateZ(piece.spin.z * piece.age)
+        if (piece.spin.z || piece.roll) piece.mesh.rotateZ(piece.roll + piece.spin.z * piece.age)
       }
     }
   }
@@ -684,8 +857,91 @@ export class AttackFxView {
     piece.mesh.scale.setScalar(size * 0.7)
   }
 
+  /** Una estrella de luz que mira a la cámara, crece un poco y se apaga en `life` segundos. */
+  private star(x: number, y: number, z: number, size: number, life: number, color: string) {
+    const piece = this.take(
+      'star',
+      life,
+      (p, t) => {
+        p.mesh.scale.setScalar(p.size * (0.6 + 0.6 * easeOut(t)))
+        p.material.opacity = (1 - t) ** 1.2
+      },
+      color,
+    )
+    piece.size = size
+    piece.roll = this.rng() * Math.PI
+    piece.mesh.position.set(x, y, z)
+    piece.mesh.scale.setScalar(size * 0.6)
+  }
+
+  /**
+   * `count` trozos de `look` (astillas, lascas, cristales u hojas) que saltan hacia `toward` y algo hacia arriba, giran,
+   * caen y menguan. Rebotan un poco en el suelo.
+   */
+  private debris(look: ImpactLook, x: number, y: number, z: number, toward: { x: number; z: number }, count: number, force: number) {
+    const rng = this.rng
+    const kind = look.debris!
+    const light = kind === 'leaf' || kind === 'glassShard'
+    for (let i = 0; i < count; i++) {
+      const piece = this.take(
+        kind,
+        DEBRIS_TIME * (0.7 + rng() * 0.6) * (kind === 'leaf' ? 1.6 : 1),
+        (p, t, dt) => {
+          const floor = this.ground(p.mesh.position.x, p.mesh.position.z) + 0.03
+          p.velocity.y -= DEBRIS_GRAVITY * dt * (kind === 'leaf' ? 0.25 : 1)
+          if (kind === 'leaf') p.velocity.multiplyScalar(1 - Math.min(1, dt * 3))
+          p.mesh.position.addScaledVector(p.velocity, dt)
+          if (p.mesh.position.y <= floor) {
+            p.mesh.position.y = floor
+            p.velocity.set(p.velocity.x * 0.3, Math.abs(p.velocity.y) * 0.2, p.velocity.z * 0.3)
+          }
+          p.mesh.rotation.x += p.spin.x * dt
+          p.mesh.rotation.y += p.spin.y * dt
+          p.mesh.rotation.z += p.spin.z * dt
+          p.mesh.scale.setScalar(p.size * Math.min(1, (1 - t) * 4))
+          if (light) p.material.opacity = 1 - t * t
+        },
+        look.colors[Math.floor(rng() * look.colors.length)],
+      )
+      // Sobre todo a los lados de la cara golpeada y hacia arriba; hacia quien golpea, poco (no salta a la cara).
+      const side = (rng() < 0.5 ? -1 : 1) * (0.5 + rng() * 0.7)
+      const out = (1.2 + rng() * 1.6) * force
+      piece.velocity.set((toward.x * 0.45 - toward.z * side) * out, (1.4 + rng() * 2.4) * force, (toward.z * 0.45 + toward.x * side) * out)
+      piece.spin.set(rng() * 20 - 10, rng() * 20 - 10, rng() * 20 - 10)
+      piece.size = (0.6 + rng() * 0.8) * (kind === 'leaf' ? 1.4 : 1)
+      piece.mesh.position.set(x + toward.x * 0.05, y, z + toward.z * 0.05)
+      piece.mesh.rotation.set(rng() * 6, rng() * 6, rng() * 6)
+      piece.mesh.scale.setScalar(piece.size)
+    }
+  }
+
+  /** Una hoja que cae de la copa meciéndose, gira despacio y se queda un momento en el suelo. */
+  private leaf(x: number, y: number, z: number, color: string) {
+    const rng = this.rng
+    const phase = rng() * Math.PI * 2
+    const sway = 0.25 + rng() * 0.2
+    const piece = this.take(
+      'leaf',
+      LEAF_TIME * (0.8 + rng() * 0.4),
+      (p, t, dt) => {
+        const floor = this.ground(p.mesh.position.x, p.mesh.position.z) + 0.02
+        const fall = Math.max(floor, p.mesh.position.y - dt * 1.2)
+        p.mesh.position.set(p.velocity.x + Math.sin(phase + p.age * 4) * sway, fall, p.velocity.z + Math.cos(phase + p.age * 3) * sway * 0.6)
+        p.mesh.rotation.z = Math.sin(phase + p.age * 4) * 0.8
+        p.mesh.rotation.y += dt * p.spin.y
+        p.mesh.scale.setScalar(p.size * Math.min(1, (1 - t) * 5))
+      },
+      color,
+    )
+    // La velocidad guarda aquí el centro del vaivén.
+    piece.velocity.set(x, 0, z)
+    piece.spin.y = rng() * 4 - 2
+    piece.size = 1.3 + rng() * 0.5
+    piece.mesh.position.set(x, y, z)
+  }
+
   /** `count` chispas que saltan a hasta `speed` m/s, caen un poco y se apagan. */
-  private sparks(x: number, y: number, z: number, count: number, speed: number, color: string, life = SPARK_TIME) {
+  private sparks(x: number, y: number, z: number, count: number, speed: number, color: string, life = SPARK_TIME, toward?: { x: number; z: number }, size = 1) {
     const rng = this.rng
     for (let i = 0; i < count; i++) {
       const piece = this.take(
@@ -705,7 +961,10 @@ export class AttackFxView {
       const up = rng()
       const s = speed * (0.4 + rng() * 0.6)
       piece.velocity.set(Math.cos(a) * s * (1 - up * 0.5), s * (0.3 + up), Math.sin(a) * s * (1 - up * 0.5))
-      piece.size = 0.8 + rng() * 0.8
+      // Con `toward`, saltan algo más hacia ese lado (hacia quien golpea), pero sobre todo a los lados: no a la cara.
+      if (toward) piece.velocity.x += toward.x * s * 0.35
+      if (toward) piece.velocity.z += toward.z * s * 0.35
+      piece.size = (0.8 + rng() * 0.8) * size
       piece.mesh.position.set(x, y, z)
     }
   }
@@ -726,17 +985,22 @@ export class AttackFxView {
    * `count` bolas de polvo que se abren hasta `reach` metros a ras del suelo y se deshacen. `size` y `opacity` las hacen
    * más pequeñas y más claras (el polvo del gigante no debe tapar sus grietas azules).
    */
-  private dust(x: number, y: number, z: number, count: number, reach: number, life: number, size = 1, opacity = 0.75) {
+  private dust(x: number, y: number, z: number, count: number, reach: number, life: number, size = 1, opacity = 0.75, color: string = DUST_COLOR) {
     const rng = this.rng
     for (let i = 0; i < count; i++) {
       const angle = ((i + rng() * 0.6) / count) * Math.PI * 2
       const out = reach * (0.6 + rng() * 0.4)
-      const piece = this.take('dust', life * (0.8 + rng() * 0.3), (p, t) => {
-        const k = easeOut(t)
-        p.mesh.position.set(x + p.velocity.x * k, y + 0.2 + p.velocity.y * k, z + p.velocity.z * k)
-        p.mesh.scale.setScalar(p.size * (0.35 + 0.75 * k))
-        p.material.opacity = opacity * (1 - t) ** 1.4
-      })
+      const piece = this.take(
+        'dust',
+        life * (0.8 + rng() * 0.3),
+        (p, t) => {
+          const k = easeOut(t)
+          p.mesh.position.set(x + p.velocity.x * k, y + 0.2 + p.velocity.y * k, z + p.velocity.z * k)
+          p.mesh.scale.setScalar(p.size * (0.35 + 0.75 * k))
+          p.material.opacity = opacity * (1 - t) ** 1.4
+        },
+        color,
+      )
       piece.velocity.set(Math.cos(angle) * out, 0.3 + rng() * 0.6, Math.sin(angle) * out)
       piece.size = (0.6 + rng() * 0.5) * size
       piece.mesh.position.set(x, y + 0.2, z)
@@ -783,18 +1047,19 @@ export class AttackFxView {
         vertexColors: geometry.hasAttribute('color'),
         blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       })
-      // Las piedritas son macizas: menguan en vez de transparentarse.
-      if (kind === 'pebble') Object.assign(material, { transparent: false, depthWrite: true, side: THREE.FrontSide })
+      // Las piedritas (y astillas, lascas y hojas) son macizas: menguan en vez de transparentarse.
+      if (SOLID.has(kind)) Object.assign(material, { transparent: false, depthWrite: true, side: kind === 'leaf' ? THREE.DoubleSide : THREE.FrontSide })
       const mesh = new THREE.Mesh(geometry, material)
       mesh.renderOrder = 2
       mesh.frustumCulled = false
-      piece = { kind, mesh, material, age: 0, life, move, velocity: new THREE.Vector3(), spin: new THREE.Vector3(), size: 1 }
+      piece = { kind, mesh, material, age: 0, life, move, velocity: new THREE.Vector3(), spin: new THREE.Vector3(), size: 1, roll: 0 }
     }
     piece.material.color.set(color)
     piece.age = 0
     piece.life = life
     piece.move = move
     piece.size = 1
+    piece.roll = 0
     piece.velocity.set(0, 0, 0)
     piece.spin.set(0, 0, 0)
     piece.material.opacity = 1
