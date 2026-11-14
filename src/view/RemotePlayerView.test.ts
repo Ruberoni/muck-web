@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { swingDuration } from '../game/handheld'
 import { describe, expect, it, vi } from 'vitest'
 import type { RemotePlayer } from '../net/client'
 import type { Shown } from '../net/interp'
@@ -157,7 +158,7 @@ describe('RemotePlayerView', () => {
     view.present([{ type: 'playerSwing', id: 1, item: null, target: null }])
     view.update(0.1, [shown(1, 0)])
     expect(arm.rotation.x).not.toBeCloseTo(rest)
-    view.update(0.5, [shown(1, 0)])
+    view.update(swingDuration(null), [shown(1, 0)])
     expect(arm.rotation.x).toBeCloseTo(rest)
     view.update(0.016, [shown(1, 0, { alive: false })])
     expect(model.rotation.z).toBeCloseTo(Math.PI / 2)

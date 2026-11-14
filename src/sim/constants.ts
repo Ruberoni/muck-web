@@ -98,14 +98,19 @@ export const WHEEL_LINE_PX = 40
 export const WHEEL_GESTURE_GAP_MS = 150
 
 export const REACH = 3.5
-/** Segundos entre golpes, salvo que el arma diga otra cosa (ToolDef.cooldown). */
-export const HIT_COOLDOWN = 0.45
-const SWORD_COOLDOWN = 0.28
+/**
+ * Segundos entre golpes, salvo que el arma diga otra cosa (ToolDef.cooldown). Los golpes van un 50 % más lentos que
+ * al principio (0,45 y 0,28 s), para que se vea cómo se prepara, cae y vuelve cada uno; a cambio, todo el daño de los
+ * golpes (herramientas, espadas y mano) es ×1,5, y la armadura y la coraza de los jefes también: se tala, se pica y se
+ * mata casi en el mismo tiempo que antes, con menos golpes y más contundentes.
+ */
+export const HIT_COOLDOWN = 0.675
+const SWORD_COOLDOWN = 0.42
 /**
  * Segundos desde que empieza un golpe (`playerSwing`, la animación) hasta que pega (`playerStrike`), por clase de
- * arma: la espada, rápida; el hacha y el pico, que se levantan y caen. Siempre menos que la espera entre golpes.
+ * arma: casi la mitad del golpe, que es lo que tarda en echarse atrás y caer. Siempre menos que la espera entre golpes.
  */
-export const STRIKE_DELAY: Record<WeaponClass, number> = { sword: 0.12, axe: 0.18, pickaxe: 0.18, hand: 0.14 }
+export const STRIKE_DELAY: Record<WeaponClass, number> = { sword: 0.2, axe: 0.31, pickaxe: 0.31, hand: 0.26 }
 /** Enemigos a los que alcanza un golpe de espada como mucho, contando al apuntado (Interaction). */
 export const SWEEP_TARGETS = 4
 export const WOBBLE_DURATION = 0.15
@@ -184,10 +189,10 @@ export const PROP_DEFS: Record<'tree' | 'birch' | 'darkpine' | 'rock' | 'iron_or
   },
 }
 
-/** Daño de un golpe contra props a mano o con una herramienta de otra familia. */
-export const BASE_DAMAGE = 1
+/** Daño de un golpe contra props a mano o con una herramienta de otra familia (1 ×1,5, redondeado: ver HIT_COOLDOWN). */
+export const BASE_DAMAGE = 2
 /** Daño de un golpe contra enemigos a mano o con algo que no es un arma. */
-export const HAND_ATTACK = 10
+export const HAND_ATTACK = 15
 
 // Lo que sueltan árboles, rocas y trasgos cae al suelo (una pieza por unidad) y se recoge al pasar por encima.
 /** Segundos desde que cae hasta que se puede recoger: se ve saltar antes de que el jugador lo coja. */
@@ -213,27 +218,28 @@ export interface ToolDef {
 }
 
 export const TOOL_DEFS: Partial<Record<ItemId, ToolDef>> = {
-  wood_axe: { family: 'axe', tier: 1, damage: 2, attack: 20 },
-  stone_axe: { family: 'axe', tier: 2, damage: 4, attack: 30 },
-  iron_axe: { family: 'axe', tier: 3, damage: 6, attack: 40 },
+  wood_axe: { family: 'axe', tier: 1, damage: 3, attack: 30 },
+  stone_axe: { family: 'axe', tier: 2, damage: 6, attack: 42 },
+  iron_axe: { family: 'axe', tier: 3, damage: 9, attack: 60 },
   // El mithril no abre nada de nivel 4: da velocidad (abedul y mena de hierro de un golpe) y ataque.
-  mithril_axe: { family: 'axe', tier: 4, damage: 12, attack: 60 },
-  // Un tercio más que el mithril (×4/3), como el ataque de las dos. Tampoco abren nada: son pura velocidad.
-  meteor_axe: { family: 'axe', tier: 5, damage: 16, attack: 80 },
-  wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 2, attack: 20 },
-  stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 4, attack: 30 },
-  iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 6, attack: 40 },
-  mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 12, attack: 60 },
-  // El doble que el mithril, no ×4/3: con 16 la roca y la mena de carbón seguirían en 2 golpes, los mismos que con
+  mithril_axe: { family: 'axe', tier: 4, damage: 18, attack: 90 },
+  // Un tercio más de ataque que el mithril (×4/3). Tampoco abren nada: son pura velocidad. El hacha hace 30, no 24: con
+  // 24 el árbol muerto seguiría en 2 golpes, los mismos que con la de mithril (tiers.test.ts).
+  meteor_axe: { family: 'axe', tier: 5, damage: 30, attack: 120 },
+  wood_pickaxe: { family: 'pickaxe', tier: 1, damage: 3, attack: 30 },
+  stone_pickaxe: { family: 'pickaxe', tier: 2, damage: 6, attack: 42 },
+  iron_pickaxe: { family: 'pickaxe', tier: 3, damage: 9, attack: 60 },
+  mithril_pickaxe: { family: 'pickaxe', tier: 4, damage: 18, attack: 90 },
+  // El doble que el mithril, no ×4/3: con 24 la roca y la mena de carbón seguirían en 2 golpes, los mismos que con
   // el de mithril, y tiers.test.ts exige que cada nivel rompa más deprisa lo que el anterior no rompía de un golpe.
-  meteor_pickaxe: { family: 'pickaxe', tier: 5, damage: 24, attack: 80 },
+  meteor_pickaxe: { family: 'pickaxe', tier: 5, damage: 36, attack: 120 },
   // Algo menos de daño que una herramienta de su nivel, pero más cadencia y golpe en arco: las armas para pelear.
-  wood_sword: { family: 'sword', tier: 1, damage: 1, attack: 16, cooldown: SWORD_COOLDOWN },
-  stone_sword: { family: 'sword', tier: 2, damage: 1, attack: 25, cooldown: SWORD_COOLDOWN },
-  iron_sword: { family: 'sword', tier: 3, damage: 1, attack: 35, cooldown: SWORD_COOLDOWN },
-  mithril_sword: { family: 'sword', tier: 4, damage: 1, attack: 50, cooldown: SWORD_COOLDOWN },
+  wood_sword: { family: 'sword', tier: 1, damage: 1, attack: 25, cooldown: SWORD_COOLDOWN },
+  stone_sword: { family: 'sword', tier: 2, damage: 1, attack: 37.5, cooldown: SWORD_COOLDOWN },
+  iron_sword: { family: 'sword', tier: 3, damage: 1, attack: 52.5, cooldown: SWORD_COOLDOWN },
+  mithril_sword: { family: 'sword', tier: 4, damage: 1, attack: 75, cooldown: SWORD_COOLDOWN },
   // La mejor arma del juego, y la única con más cadencia que las demás espadas.
-  meteor_sword: { family: 'sword', tier: 5, damage: 1, attack: 65, cooldown: 0.25 },
+  meteor_sword: { family: 'sword', tier: 5, damage: 1, attack: 97.5, cooldown: 0.375 },
 }
 
 /** Con qué se golpea a un enemigo: una familia de herramienta o, con cualquier otra cosa, la mano. */
@@ -457,7 +463,7 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     name: 'Trasgo gigante',
     verb: 'atacar',
     hp: 1800,
-    armor: 10,
+    armor: 15,
     speed: 6.5,
     radius: 0.95,
     scale: 2.25,
@@ -492,7 +498,7 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     name: 'Lanzarrocas',
     verb: 'atacar',
     hp: 1400,
-    armor: 5,
+    armor: 7.5,
     speed: 5,
     radius: 0.8,
     scale: 1.9,
@@ -525,7 +531,7 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     name: 'Guardián del meteorito',
     verb: 'atacar',
     hp: 1500,
-    armor: 10,
+    armor: 15,
     speed: 4.5,
     radius: 0.9,
     scale: 2,
@@ -557,8 +563,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     name: 'Coloso de Cristal',
     verb: 'atacar',
     hp: 3000,
-    armor: 15,
-    shell: 400,
+    armor: 22.5,
+    shell: 600,
     speed: 4.5,
     radius: 1.1,
     scale: 2.6,

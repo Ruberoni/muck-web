@@ -73,16 +73,17 @@ describe('eventos de la simulación', () => {
     const ctx = setup()
     const tree = world.props.find((p) => p.kind === 'tree' && p.alive)!
     ctx.aimAt(tree)
-    ctx.hold(HIT_COOLDOWN * 2 + STEP)
+    // La espera no es un número entero de pasos: el tercero empieza en el paso siguiente.
+    ctx.hold(HIT_COOLDOWN * 2 + 2 * STEP)
     const target = { kind: 'prop', id: tree.id }
     // Cada golpe empieza (playerSwing) y pega después (playerStrike), y entonces le quita vida.
     expect(ctx.events.slice(0, 9)).toEqual([
       { type: 'playerSwing', id: 0, item: null, target },
       { type: 'playerStrike', id: 0, item: null, target },
-      { type: 'propHit', id: tree.id, hp: 2, by: 0 },
+      { type: 'propHit', id: tree.id, hp: 4, by: 0 },
       { type: 'playerSwing', id: 0, item: null, target },
       { type: 'playerStrike', id: 0, item: null, target },
-      { type: 'propHit', id: tree.id, hp: 1, by: 0 },
+      { type: 'propHit', id: tree.id, hp: 2, by: 0 },
       { type: 'playerSwing', id: 0, item: null, target },
       { type: 'playerStrike', id: 0, item: null, target },
       { type: 'propDestroyed', id: tree.id, by: 0 },
