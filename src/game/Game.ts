@@ -10,6 +10,7 @@ import { PickupView } from '../view/PickupView'
 import { MeteorView } from '../view/MeteorView'
 import { SpawnSmokeView } from '../view/SpawnSmokeView'
 import { HazardView } from '../view/HazardView'
+import { AttackFxView } from '../view/AttackFxView'
 import { ProjectileView } from '../view/ProjectileView'
 import { StructureView } from '../view/StructureView'
 import { autoSkin } from '../net/skins'
@@ -44,13 +45,14 @@ import { createTerrain } from '../world/terrain'
 import { WATER_LEVEL } from '../sim/world/terrain'
 import { isLitCampfire, placeableOf, structureSpot, warmAt, type Structure, type StructureKind, type StructureSpot } from '../sim/structures'
 import { warmHeals } from '../sim/survival'
-import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH } from '../sim/constants'
+import { CONSUMABLE_DEFS, ENEMY_DEFS, EYE_HEIGHT, HEALTH_MAX, HUNGER_MAX, MAX_FRAME_DT, MAX_STEPS_PER_FRAME, MOUSE_SENSITIVITY, STAMINA_MAX, STEP, WADE_DEPTH, type EnemyType } from '../sim/constants'
 import { inputButtons, type ActionData } from '../sim/commands'
 import { aimedStation, CLIENT_STATION_RANGE, clientCraftWorld, nearestProcessor, sendableActions } from '../ui/recipes'
 import { missingTool, swingFeedback } from '../ui/tools'
 import type { PropKind } from '../sim/props'
 import { Handheld } from './handheld'
 import { CameraShake } from './shake'
+import { Daze } from './daze'
 import { Input, RIGHT_CLICK } from './input'
 import { holdsFood, stepActions, type InventoryFocus } from './actions'
 import { anyOf, bindingLabel } from './bindings'
@@ -144,6 +146,7 @@ export class Game {
   readonly meteorView = new MeteorView()
   readonly smokeView = new SpawnSmokeView()
   readonly hazardView = new HazardView()
+  readonly attackFx = new AttackFxView()
   readonly fishView = new FishView()
   readonly structureView: StructureView
   readonly remotePlayers = new RemotePlayerView(loadCharacter)
@@ -194,6 +197,10 @@ export class Game {
   private biomeNotice = new BiomeNotice()
   private bossWatch = new BossWatch()
   private shake = new CameraShake()
+  /** Aturdido por una flecha: la cámara se tambalea y la pantalla se nubla con el borde azul (`.daze`). */
+  private daze = new Daze()
+  private dazeOverlay = document.createElement('div')
+  private dazeShown = 0
   /** Las estaciones al fabricar, como las ve el cliente (con margen): para el filtro de envío y la pantalla. */
   private craftWorld = clientCraftWorld(() => this.sim.structures.list)
   /** Dónde un mob ya no hace pie y nada (la regla de la simulación): ahí sus pasos son chapoteos. */
@@ -229,6 +236,8 @@ export class Game {
     // Se borra a mano en render(): la mano se dibuja encima del mundo sin borrar el color.
     this.renderer.autoClear = false
     container.appendChild(this.renderer.domElement)
+    this.dazeOverlay.className = 'daze'
+    container.appendChild(this.dazeOverlay)
 
     this.camera = new THREE.PerspectiveCamera(this.settings.fov, window.innerWidth / window.innerHeight, 0.1, 600)
     this.camera.rotation.order = 'YXZ'
@@ -250,7 +259,7 @@ export class Game {
       (error) => console.warn('No se han podido cargar los modelos de naturaleza', error),
     )
     this.structureView = new StructureView(scene)
-    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.hazardView.group, this.fishView.group, this.remotePlayers.group, this.menuStage.group)
+    scene.add(this.enemyView.group, this.pickupView.group, this.projectileView.group, this.meteorView.group, this.smokeView.group, this.hazardView.group, this.attackFx.group, this.fishView.group, this.remotePlayers.group, this.menuStage.group)
     this.lookFromPlayer()
 
     this.hud = new Hud(container)
@@ -786,6 +795,7 @@ export class Game {
           break
         case 'playerHurt':
           if (e.id === slot.id) this.hud.flashHurt()
+          if (e.id === slot.id && e.dazed) this.daze.start()
           break
         case 'playerSwing':
           if (e.id === slot.id) this.handheld.play('swing')
@@ -855,17 +865,26 @@ export class Game {
           this.hud.showBanner(`¡Cae un meteorito al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}!`)
           this.audio.meteorIncoming()
           break
-        case 'hazardAdded':
-          // El pisotón hace temblar el suelo.
-          if (e.hazard.look === 'stomp') this.shake.start(Math.hypot(e.hazard.x - this.renderPos.x, e.hazard.z - this.renderPos.z))
+        case 'hazardAdded': {
+          // El pisotón y el golpe al suelo del Lanzarrocas hacen temblar el suelo; el golpe, además, levanta viento.
+          const { look, x, z } = e.hazard
+          if (look === 'stomp' || look === 'rock') this.shake.start(Math.hypot(x - this.renderPos.x, z - this.renderPos.z))
+          if (look === 'rock') this.attackFx.smash(x, z, this.nearestEnemy('thrower', x, z))
+          if (look === 'stomp' && e.hazard.ring) this.attackFx.stomp(x, z, e.hazard.radius, e.hazard.ring.speed)
+          break
+        }
+        case 'enemyCharge':
+          // La embestida del gigante: al salir corriendo y al pararse (pegando o no, en este mismo paso).
+          if (e.state === 'rush') this.attackFx.rushStart(e.id)
+          if (e.state === 'dazed') this.attackFx.rushEnd(e.id, events.some((other) => other.type === 'enemyAttack' && other.id === e.id))
           break
         case 'enemyIncoming':
           this.smokeView.puff(e.x, e.z)
           this.audio.spawnPuff(e.x, e.z, this.listener())
           break
         case 'enemySpawn':
-          // Los comunes ya echaron humo al anunciarse; los jefes salen al momento, con su humo.
-          if (!isCommon(e.enemy)) {
+          // Los comunes ya echaron humo al anunciarse; los jefes y los que llama el Lanzarrocas salen al momento, con su humo.
+          if (!isCommon(e.enemy) || e.called) {
             this.smokeView.puff(e.x, e.z)
             this.audio.spawnPuff(e.x, e.z, this.listener())
           }
@@ -911,6 +930,8 @@ export class Game {
         case 'projectileThrown':
         case 'projectileHit':
           return e
+        case 'hazardAdded':
+          return e.hazard
         case 'enemyDied':
           return sim.enemies.list.find((en) => en.id === e.id)?.pos ?? playerAt(e.by)
         case 'playerSwing':
@@ -928,6 +949,28 @@ export class Game {
     }
     this.audio.remote(events, this.listener(), locate, (id) => sim.world.props[id].kind)
     for (const e of events) if (e.type === 'playerDied' && e.id !== net.me) this.hud.net.notice(`${this.nameOf(net, e.id)} ha muerto`)
+  }
+
+  /** El borde azul y lo nublado del aturdimiento; solo se toca el DOM cuando cambia de verdad. */
+  private showDaze(amount: number) {
+    const shown = Math.round(amount * 50) / 50
+    if (shown === this.dazeShown) return
+    this.dazeShown = shown
+    this.dazeOverlay.style.opacity = String(shown)
+    this.renderer.domElement.style.filter = shown > 0 ? `blur(${(shown * 2.5).toFixed(2)}px)` : ''
+  }
+
+  /** El enemigo de tipo `type` más cercano a (x, z), para saber desde dónde viene un golpe. */
+  private nearestEnemy(type: EnemyType, x: number, z: number) {
+    let best: { x: number; z: number } | undefined
+    let distance = Infinity
+    for (const e of this.sim.enemies.list) {
+      const d = Math.hypot(e.pos.x - x, e.pos.z - z)
+      if (e.type !== type || !e.alive || d >= distance) continue
+      distance = d
+      best = e.pos
+    }
+    return best
   }
 
   /** Quién escucha: en espectador, el compañero al que se mira (renderPos ya es él) con el giro de la cámara que lo sigue. */
@@ -1057,7 +1100,7 @@ export class Game {
       this.terrain = createTerrain(island)
       this.scene.add(this.terrain)
       this.hud.minimap.setIsland(island)
-      this.enemyView.island = this.meteorView.island = this.smokeView.island = this.hazardView.island = island
+      this.enemyView.island = this.meteorView.island = this.smokeView.island = this.hazardView.island = this.attackFx.island = island
     }
     if (this.propView.placements !== this.sim.world.placements) this.propView = this.buildPropView(this.propView)
   }
@@ -1092,6 +1135,7 @@ export class Game {
     this.meteorView.reset()
     this.smokeView.reset()
     this.hazardView.reset()
+    this.attackFx.reset()
     this.fishView.reset()
     this.structureView.reset()
     this.remotePlayers.reset()
@@ -1150,9 +1194,19 @@ export class Game {
       this.camera.position.x += shake.x
       this.camera.position.y += shake.y
     }
+    // Aturdido por una flecha: la cámara se tambalea y la pantalla se nubla (en el menú, nada).
+    const daze = this.daze.update(dt)
+    if (!staged) {
+      this.camera.rotation.z += daze.roll
+      this.camera.translateX(daze.sway)
+    }
+    this.showDaze(staged ? 0 : daze.amount)
     this.enemyView.update(dt, enemies.list, alpha)
     this.pickupView.update(sim.pickups.list, alpha)
     this.projectileView.update(dt, sim.projectiles.list, alpha)
+    this.attackFx.update(dt, sim.projectiles.list, alpha, enemies.list, this.camera)
+    // La roca del Lanzarrocas silba mientras vuela (en pausa o en el menú, se calla).
+    this.audio.flyby(inGame(this.state) ? sim.projectiles.list : [], this.listener())
     this.smokeView.update(dt)
     // Las zonas y las ondas, en el tick que se ve: el predicho en red (como los proyectiles).
     this.hazardView.update(sim.hazards.list, net ? (net.client.predictedTick ?? net.client.renderTick()) : sim.tick)

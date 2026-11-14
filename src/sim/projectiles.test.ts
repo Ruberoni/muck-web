@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { SpatialGrid, type Collider } from './collision'
-import { ENEMY_DEFS, GRAVITY, HEALTH_REGEN_DELAY, PLAYER_RADIUS, STEP } from './constants'
+import { ARROW_DAZE, ENEMY_DEFS, GRAVITY, HEALTH_REGEN_DELAY, PLAYER_RADIUS, STEP } from './constants'
 import type { SimEventData } from './events'
 import { aimedVelocity, projectilePos, PROJECTILE_DEFS, Projectiles } from './projectiles'
 import { Simulation } from './Simulation'
@@ -160,6 +160,28 @@ describe('proyectiles', () => {
     sim.throwRock(player.pos.x + 5, player.pos.z, 0)
     sim.reset()
     expect(sim.projectiles.list).toEqual([])
+  })
+
+  it('una flecha que pega aturde (anda más despacio un momento) y lo avisa; una roca, no', () => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player } = sim.slot(0)
+    /** Lanza `kind` desde 5 m hacia el pecho del jugador y avanza hasta que le da. */
+    const hit = (kind: 'arrow' | 'rock') => {
+      const from = { x: player.pos.x + 5, y: player.pos.y + 1.2, z: player.pos.z }
+      sim.projectiles.launch(sim.tick, kind, from, aimedVelocity(from, { x: player.pos.x, y: player.pos.y + 1.2, z: player.pos.z }, 30), 5)
+      for (let i = 0; i < 60; i++) {
+        const hurt = sim.step(new Map()).find((e) => e.type === 'playerHurt')
+        if (hurt) return hurt
+      }
+      return null
+    }
+    expect(hit('rock')).not.toHaveProperty('dazed')
+    expect(player.slowLeft).toBe(0)
+    expect(hit('arrow')).toMatchObject({ id: 0, dazed: true })
+    expect(player.slowLeft).toBeGreaterThan(ARROW_DAZE.seconds - 0.05)
+    for (let i = 0; i < Math.ceil(ARROW_DAZE.seconds / STEP) + 1; i++) sim.step(new Map())
+    expect(player.slowLeft).toBe(0)
   })
 
   describe('el lanzarrocas en la partida', () => {

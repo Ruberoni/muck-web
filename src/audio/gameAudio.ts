@@ -1,10 +1,10 @@
-import { enemyScale, PROP_DEFS, type EnemyType, type MobLook, type PropFamily } from '../sim/constants'
+import { enemyScale, PROP_DEFS, STEP, type EnemyType, type MobLook, type PropFamily } from '../sim/constants'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
 import type { ItemId } from '../sim/inventory'
-import type { ProjectileEnd } from '../sim/projectiles'
+import type { ProjectileEnd, ProjectileKind } from '../sim/projectiles'
 import type { PropKind } from '../sim/props'
 import { canDamage } from '../sim/tiers'
-import type { SoundName, SoundOut } from './sound'
+import type { SoundLoop, SoundName, SoundOut } from './sound'
 import { spatialize } from './sound'
 
 /** Metros recorridos entre dos pasos: al correr suenan más seguidos sin tocar nada. */
@@ -52,6 +52,17 @@ export const ENEMY_STEPS_PER_FRAME = 2
 /** Una roca que sale y una que choca con algo, más bajo que un golpe propio. */
 const ROCK_THROW_GAIN = 0.5
 const ROCK_HIT_GAIN = 0.4
+
+/** Lo que suena al lanzar: la roca del Lanzarrocas corta el aire, la flecha del gigante suena a arco; lo demás, como un golpe al aire. */
+const throwSound = (kind: ProjectileKind): SoundName => (kind === 'rock' ? 'pierce' : kind === 'arrow' ? 'arrowShot' : 'swing')
+/** Lo que suena al clavarse en el mundo: la flecha, seco y con chispas; lo demás, a piedra. */
+const landSound = (kind: ProjectileKind | undefined): SoundName => (kind === 'arrow' ? 'arrowHit' : 'hitStone')
+/** Hasta dónde se oye silbar lo que vuela. */
+const WHISTLE_HEARING = 45
+/** Lo que silba en el aire: cuánto más agudo que la roca y a qué volumen. La flecha, fina y más baja. */
+const WHISTLES: Partial<Record<ProjectileKind, { tone: number; gain: number }>> = { rock: { tone: 1, gain: 1 }, arrow: { tone: 1.9, gain: 0.55 } }
+/** Cuánto sube (o baja) el tono por cada m/s que se acerca (o se aleja): el efecto Doppler, exagerado. */
+const DOPPLER = 1 / 70
 
 /** Una roca suena al chocar con el mundo; al dar a un jugador ya suena su daño. */
 const rockLands = (end: ProjectileEnd) => end === 'ground' || end === 'obstacle'
@@ -130,6 +141,13 @@ export class GameAudio {
   private airTime = 0
   private stride = 0
   private growlTimer = GROWL_MIN_INTERVAL
+  /** Las rocas que silban en el aire, por proyectil (null: sin sonido todavía). */
+  private whistles = new Map<number, SoundLoop | null>()
+  private flying = new Set<number>()
+  /** Lo lanzado que aún vuela, por id: al caer se sabe qué era (el evento del golpe no lo dice). */
+  private thrown = new Map<number, ProjectileKind>()
+  /** Los gigantes que están embistiendo: al pararse suena si han pegado o no. */
+  private rushing = new Set<number>()
   /** Pasos de los demás: dónde estaban en el frame anterior y cuánto llevan andado desde el último paso. */
   private walkers = new Map<PlayerId, { x: number; z: number; stride: number }>()
   /** Pasos de los mobs: lo mismo, por id de enemigo. */
@@ -205,6 +223,7 @@ export class GameAudio {
         case 'enemyCharge':
           if (e.state === 'crouch') s.play('roar')
           if (e.state === 'aim') s.play('growl')
+          this.rushSound(e.id, e.state, list, (name) => s.play(name))
           break
         case 'eternalNight':
         case 'bell':
@@ -214,12 +233,17 @@ export class GameAudio {
           // Una mejora es un paso adelante, no una recogida: suena como fabricar.
           if (e.id === me) s.play(e.op === 'boost' ? 'craft' : 'pickup')
           break
-        // Como un golpe al aire.
         case 'projectileThrown':
-          s.play('swing', { gain: ROCK_THROW_GAIN })
+          this.thrown.set(e.id, e.kind)
+          s.play(throwSound(e.kind), { gain: ROCK_THROW_GAIN })
+          break
+        case 'hazardAdded':
+          if (e.hazard.look === 'rock') s.play('smash')
+          if (e.hazard.look === 'stomp') s.play('quake')
           break
         case 'projectileHit':
-          if (rockLands(e.end)) s.play('hitStone', { gain: ROCK_HIT_GAIN })
+          if (rockLands(e.end)) s.play(landSound(this.thrown.get(e.id)), { gain: ROCK_HIT_GAIN })
+          this.thrown.delete(e.id)
           break
         // Las bayas van directas al inventario; lo demás suena al recogerlo del suelo.
         case 'berryTaken':
@@ -235,6 +259,7 @@ export class GameAudio {
         // Lo que para el escudo suena a metal.
         case 'playerHurt':
           if (e.id === me) s.play(e.blocked ? 'clank' : 'hurt')
+          if (e.id === me && e.dazed) s.play('daze')
           break
         case 'playerEquipped':
           if (e.id === me) s.play('place')
@@ -258,6 +283,50 @@ export class GameAudio {
           if (e.id === me) s.play('death')
           break
       }
+    }
+  }
+
+  /**
+   * La embestida del gigante: suena al salir corriendo, y al pararse (`dazed`, justo después) según si ha pegado en
+   * ese mismo paso.
+   */
+  private rushSound(id: number, state: string, list: readonly SimEvent[], play: (name: SoundName) => void) {
+    if (state === 'rush') {
+      this.rushing.add(id)
+      play('rush')
+    } else if (state === 'dazed' && this.rushing.delete(id)) {
+      play(list.some((other) => other.type === 'enemyAttack' && other.id === id) ? 'spearHit' : 'rushStop')
+    }
+  }
+
+  /**
+   * Por frame: cada roca y cada flecha en el aire silba desde donde va, más fuerte cuanto más cerca, más aguda si se acerca y más
+   * grave si se aleja. Al caer (o al pasar la lista vacía, en pausa) se calla.
+   */
+  flyby(projectiles: readonly { id: number; kind: ProjectileKind; pos: { x: number; z: number }; prev: { x: number; z: number } }[], listener: Listener) {
+    this.flying.clear()
+    for (const p of projectiles) {
+      const whistle = WHISTLES[p.kind]
+      if (!whistle) continue
+      this.flying.add(p.id)
+      let loop = this.whistles.get(p.id) ?? null
+      if (!loop) {
+        loop = this.sound.whistle?.(whistle.tone) ?? null
+        this.whistles.set(p.id, loop)
+      }
+      if (!loop) continue
+      const dx = p.pos.x - listener.x
+      const dz = p.pos.z - listener.z
+      const d = Math.hypot(dx, dz)
+      const { gain, pan } = spatialize(dx, dz, listener.yaw, WHISTLE_HEARING)
+      // Lo que se acerca por segundo (negativo: se aleja).
+      const closing = d < 1e-6 ? 0 : -(dx * (p.pos.x - p.prev.x) + dz * (p.pos.z - p.prev.z)) / d / STEP
+      loop.set(gain * whistle.gain, pan, Math.max(0.7, Math.min(1.4, 1 + closing * DOPPLER)))
+    }
+    for (const [id, loop] of this.whistles) {
+      if (this.flying.has(id)) continue
+      loop?.stop()
+      this.whistles.delete(id)
     }
   }
 
@@ -309,16 +378,23 @@ export class GameAudio {
         case 'enemyCharge':
           if (e.state === 'crouch') this.sound.play('roar')
           if (e.state === 'aim') this.sound.play('growl')
+          this.rushSound(e.id, e.state, list, (name) => this.sound.play(name))
           break
         case 'eternalNight':
         case 'bell':
           this.sound.play('bell')
           break
         case 'projectileThrown':
-          at(e, REMOTE_HEARING.hit, 'swing')
+          this.thrown.set(e.id, e.kind)
+          at(e, REMOTE_HEARING.hit, throwSound(e.kind))
+          break
+        case 'hazardAdded':
+          if (e.hazard.look === 'rock') at(e, REMOTE_HEARING.hit, 'smash')
+          if (e.hazard.look === 'stomp') at(e, REMOTE_HEARING.hit, 'quake')
           break
         case 'projectileHit':
-          if (rockLands(e.end)) at(e, REMOTE_HEARING.hit, 'hitStone')
+          if (rockLands(e.end)) at(e, REMOTE_HEARING.hit, landSound(this.thrown.get(e.id)))
+          this.thrown.delete(e.id)
           break
         case 'structurePlaced':
           at(e, REMOTE_HEARING.place, 'place')

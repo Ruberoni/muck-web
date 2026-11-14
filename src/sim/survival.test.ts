@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ARROW_DAZE,
   CAMPFIRE_HEAL_PER_SEC,
   HEALTH_MAX,
   HEALTH_REGEN_DELAY,
@@ -165,6 +166,17 @@ describe('supervivencia', () => {
     expect(speedFactor(v)).toBe(1.3)
     run(v, 2)
     expect(speedFactor(v)).toBe(1)
+  })
+
+  it('aturdido por una flecha anda más despacio un momento, también con la poción de velocidad', () => {
+    const v = vitals(HEALTH_MAX, HUNGER_MAX)
+    v.slowLeft = ARROW_DAZE.seconds
+    expect(speedFactor(v)).toBe(ARROW_DAZE.factor)
+    eat(v, { time: 1, food: 0, speed: { factor: 1.3, seconds: 5 } })
+    expect(speedFactor(v)).toBeCloseTo(1.3 * ARROW_DAZE.factor)
+    run(v, ARROW_DAZE.seconds + 0.1)
+    expect(v.slowLeft).toBe(0)
+    expect(speedFactor(v)).toBe(1.3)
   })
 })
 

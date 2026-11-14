@@ -46,6 +46,8 @@ export const CAMPFIRE_HEAL_PER_SEC = 0.5
 export const EAT_KEY = 'KeyF'
 /** Comiendo o bebiendo se anda a esta parte de la velocidad, sin correr. */
 export const EAT_SPEED_FACTOR = 0.5
+/** Una flecha del trasgo gigante aturde un poco: tantos segundos andando a esta parte de la velocidad. */
+export const ARROW_DAZE = { seconds: 0.5, factor: 0.6 }
 
 export interface ConsumableDef {
   /** Segundos que se tarda en comerlo o beberlo: el efecto llega al acabar. */
@@ -473,8 +475,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     loot: [{ item: 'raw_meat', amount: 3 }, { item: 'iron_bar', amount: 2 }, { item: 'boss_trophy', amount: 1 }, { item: 'coin', amount: 12 }],
     cost: 8,
     boss: true,
-    // Embestida: corre hacia el jugador y, si lo alcanza, le da un golpe fuerte con la lanza.
-    charge: { speed: 16, time: 0.6, damage: 40 },
+    // Embestida: corre hacia el jugador y, si lo alcanza, le da un golpe con la lanza que mata sin armadura.
+    charge: { speed: 16, time: 0.6, damage: 100 },
     specials: [
       // Pisotón: salta y cae clavando la lanza, con una onda de 7 m que se esquiva saltando o alejándose.
       { id: 'stomp', min: 0, max: 6, windup: 0.8, cooldown: 5, recover: 1.4, look: 'crouch' },

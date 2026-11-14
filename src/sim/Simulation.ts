@@ -5,6 +5,7 @@ import { findLandmarks } from './landmarks'
 import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
 import {
+  ARROW_DAZE,
   DEATH_DROP_HEIGHT,
   ENEMY_DEFS,
   EYE_HEIGHT,
@@ -67,24 +68,27 @@ const TOSS_HEIGHT = 1.2
 /** Altura sobre el suelo desde la que sale lo que termina una estación. */
 /** Intentos de encontrar dónde cae el avión o dónde va la tumba. */
 const CRASH_ATTEMPTS = 20
-// Los ataques especiales de los jefes (ver `special`).
+// Los ataques especiales de los jefes (ver `special`). Los del trasgo gigante y del Lanzarrocas se esquivan bien, pero
+// castigan mucho al que se los come: sin armadura uno de los fuertes mata y los otros dejan al borde de la muerte; con
+// la de hierro (−25 %) o la de mithril (−42 %) se aguanta algo más.
 const STOMP_RADIUS = 7
 const STOMP_SPEED = 12
 const STOMP_WIDTH = 1.2
-const STOMP_DAMAGE = 20
+const STOMP_DAMAGE = 85
 const ARROW_SPEED = 30
-const ARROW_DAMAGE = 20
+/** Cada una de las tres: las tres juntas matan sin armadura (y cada una frena, ARROW_DAZE). */
+const ARROW_DAMAGE = 35
 const ARROW_HEIGHT = 2.6
 const SMASH_REACH = 2
 const SMASH_RADIUS = 2.6
-const SMASH_DAMAGE = 35
+const SMASH_DAMAGE = 100
 /** Gólems que llama el lanzarrocas cada vez, cuántos puede tener a la vez a su alrededor (SUMMON_AREA) y a qué distancia salen. */
 const SUMMON_COUNT = 2
 const SUMMON_MAX = 3
 const SUMMON_AREA = 20
 const SUMMON_RING = 3.5
 const FAST_ROCK_SPEED = 30
-const FAST_ROCK_DAMAGE = 28
+const FAST_ROCK_DAMAGE = 85
 const FAST_ROCK_HEIGHT = 3.2
 const FIRE_RING_RADIUS = 9
 const FIRE_RING_SPEED = 8
@@ -417,7 +421,7 @@ export class Simulation {
     // Los que salgan ahora, con la apariencia de la amenaza: la del tótem, la de la Noche Eterna o la de siempre.
     this.enemies.look = this.threat.state.totem ? 2 : this.threat.state.eternal ? 1 : 0
     // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
-    const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number } }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
+    const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number }; daze?: true }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
     // Detrás de los proyectiles: la roca gorda estalla en el mismo paso en que cae. En el aire, la onda pasa por debajo.
     hits.push(...this.hazards.step(this.tick, present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil, grounded: player.grounded }))))
@@ -436,8 +440,8 @@ export class Simulation {
       ),
     )
     // Golpe a golpe, por si el escudo para unos y otros no; el aviso, uno por jugador y paso.
-    const taken = new Map<PlayerId, { dmg: number; blocked: number }>()
-    for (const { playerId, damage, from } of hits) {
+    const taken = new Map<PlayerId, { dmg: number; blocked: number; dazed: boolean }>()
+    for (const { playerId, damage, from, daze } of hits) {
       if (playerId === PLANE_TARGET) {
         this.hurtPlane(damage)
         continue
@@ -448,12 +452,16 @@ export class Simulation {
       // La poción de piedra quita una parte de lo que pasa del escudo y el peto.
       const dealt = hit.damage * guardFactor(player)
       hurt(player, dealt)
-      const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0 }
+      // La flecha que pasa del escudo aturde: un momento más despacio.
+      const dazed = daze === true && dealt > 0
+      if (dazed) player.slowLeft = ARROW_DAZE.seconds
+      const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0, dazed: false }
       sum.dmg += dealt
       sum.blocked += hit.blocked
+      sum.dazed ||= dazed
       taken.set(playerId, sum)
     }
-    for (const [id, { dmg, blocked }] of taken) this.events.emit({ type: 'playerHurt', id, dmg, ...(blocked > 0 ? { blocked } : {}) })
+    for (const [id, { dmg, blocked, dazed }] of taken) this.events.emit({ type: 'playerHurt', id, dmg, ...(blocked > 0 ? { blocked } : {}), ...(dazed ? { dazed: true as const } : {}) })
 
     growBerries(this.world.regrowing, STEP, this.events.emit)
     this.structures.burn(STEP, this.oilUnit, isNight(this.clock.phase))
@@ -627,7 +635,7 @@ export class Simulation {
           const gx = x + Math.cos(angle) * SUMMON_RING
           const gz = z + Math.sin(angle) * SUMMON_RING
           if (this.island.heightAt(gx, gz) <= WATER_LEVEL) continue
-          this.enemies.spawnAt(gx, gz, 'golem')
+          this.enemies.spawnAt(gx, gz, 'golem', 1, true)
           made++
         }
         break

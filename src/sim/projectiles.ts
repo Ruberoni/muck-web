@@ -56,6 +56,8 @@ export interface ProjectileDamage {
   damage: number
   /** De dónde llega: el último punto antes del golpe. */
   from: { x: number; z: number }
+  /** Una flecha: aturde un poco (ARROW_DAZE). */
+  daze?: true
 }
 
 /** Los proyectiles como datos, para guardar y restaurar la partida. */
@@ -129,7 +131,7 @@ export class Projectiles {
       if (!end) continue
       this.remove(p.id)
       this.emit({ type: 'projectileHit', id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, end })
-      if (target) damage.push({ playerId: target.id, damage: p.damage, from: { x: p.prev.x, z: p.prev.z } })
+      if (target) damage.push({ playerId: target.id, damage: p.damage, from: { x: p.prev.x, z: p.prev.z }, ...(p.kind === 'arrow' ? { daze: true as const } : {}) })
       this.landed(p, end)
     }
     return damage

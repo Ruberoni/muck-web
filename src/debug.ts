@@ -6,7 +6,7 @@ import type { PlayerInput } from './sim/player'
 import { computeWorldHash } from './world/hash'
 import { islandMeshes } from './view/PropView'
 import { enemyFloor, WATER_LEVEL } from './sim/world/terrain'
-import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH, type EnemyType } from './sim/constants'
+import { EYE_HEIGHT, FLOAT_DEPTH, PLAYER_RADIUS, PROP_DEFS, WADE_DEPTH, type EnemyType, type SpecialId } from './sim/constants'
 import type { PropKind } from './sim/props'
 import { enemyAimHeight } from './sim/enemies'
 import type { Difficulty } from './sim/match'
@@ -336,6 +336,11 @@ export function installDebug(game: Game) {
     meteorState: () => sim().worldEvents.meteor,
     /** Con un jugador devuelve su id; en red aparece en el siguiente `snap`. */
     spawnEnemy: (x: number, z: number, enemy: EnemyType = 'goblin') => dev({ op: 'spawnEnemy', x, z, enemy }, () => sim().enemies.spawnAt(x, z, enemy).id),
+    /** Con un jugador: el enemigo `id` empieza ya su ataque especial `attack` (p. ej. `special(3, 'smash')`); devuelve si ha podido. */
+    special(id: number, attack: SpecialId) {
+      localOnly('forzar un ataque especial')
+      return sim().enemies.forceSpecial(id, attack)
+    },
     /** Gira la cámara hacia el enemigo sin mover al jugador; devuelve si queda apuntado (en red, en una promesa). */
     aimAtEnemy(id: number) {
       const e = sim().enemies.list.find((en) => en.id === id)

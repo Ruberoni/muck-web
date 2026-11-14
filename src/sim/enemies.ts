@@ -522,6 +522,13 @@ export class Enemies {
     if (s.gap > 1e-9 || e.charge.state !== 'idle') return null
     const ready = list.find((d) => (s.cooldowns[d.id] ?? 0) <= 1e-9 && dist >= d.min && dist <= d.max && (d.id !== 'charge' || enemy.charge))
     if (!ready) return null
+    this.startSpecial(e, enemy, ready)
+    return false
+  }
+
+  /** Empieza el ataque especial `ready`: el aviso, su espera y lo que ve la vista. */
+  private startSpecial(e: EnemyData, enemy: EnemyDef, ready: SpecialDef) {
+    const s = (e.special ??= { ...NO_SPECIAL, cooldowns: {} })
     s.id = ready.id
     s.time = ready.windup
     s.cooldowns[ready.id] = ready.cooldown * (enemy.shell && e.shell <= 0 ? SHELL_BROKEN_PACE : 1)
@@ -531,7 +538,21 @@ export class Enemies {
     }
     this.emit({ type: 'enemyCharge', id: e.id, state: ready.look })
     this.emit({ type: 'enemySpecial', id: e.id, attack: ready.id })
-    return false
+  }
+
+  /**
+   * Para depurar y para la ventana de muestra: el enemigo `id` empieza ya su ataque especial `attack`, sin mirar la
+   * espera ni la distancia (lo acaba en los pasos siguientes, si tiene a quién). Devuelve si ha podido: vivo, con ese
+   * ataque y sin estar haciendo otro.
+   */
+  forceSpecial(id: number, attack: SpecialId): boolean {
+    const e = this.list.find((en) => en.id === id && en.alive)
+    if (!e) return false
+    const enemy = ENEMY_DEFS[e.type]
+    const ready = enemy.specials?.find((d) => d.id === attack)
+    if (!ready || e.special?.id || e.charge.state !== 'idle') return false
+    this.startSpecial(e, enemy, ready)
+    return true
   }
 
   /** Sin nadie a quien perseguir, un guardián vuelve a su sitio. La vida que le hayan quitado no la recupera. */
@@ -765,8 +786,11 @@ export class Enemies {
     return null
   }
 
-  /** Crea un enemigo de tipo `type` en (x, z) mirando hacia +Z. Un jefe o un guardián sale con más vida cuantos más `players` haya. */
-  spawnAt(x: number, z: number, type: EnemyType = 'goblin', players = 1): EnemyData {
+  /**
+   * Crea un enemigo de tipo `type` en (x, z) mirando hacia +Z. Un jefe o un guardián sale con más vida cuantos más
+   * `players` haya. `called`: lo llama un jefe (sale sin aviso, y la vista le pone su humo).
+   */
+  spawnAt(x: number, z: number, type: EnemyType = 'goblin', players = 1, called = false): EnemyData {
     const def = ENEMY_DEFS[type]
     const lootScale = lootScaleOf(def, players)
     const hp = Math.round(def.hp * hpScale(def, players) * (isCommon(type) ? this.scaling.hp : 1))
@@ -797,7 +821,7 @@ export class Enemies {
       look: isCommon(type) ? this.look : 0,
     }
     this.list.push(e)
-    this.emit({ type: 'enemySpawn', id: e.id, enemy: type, x, z })
+    this.emit({ type: 'enemySpawn', id: e.id, enemy: type, x, z, ...(called ? { called: true as const } : {}) })
     return e
   }
 
