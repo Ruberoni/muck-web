@@ -231,15 +231,53 @@ describe('sonido', () => {
     expect(names()).toEqual(['hurt', 'daze'])
   })
 
-  it('el golpe al suelo del Lanzarrocas suena al caer; los demás peligros, no', () => {
+  it('el golpe al suelo del Lanzarrocas suena al caer; los de luz y cristal del Coloso, no', () => {
     const { audio, names } = setup()
-    const hazard = (look: 'rock' | 'fire'): SimEvent => ({
+    const hazard = (look: 'rock' | 'light' | 'crystal'): SimEvent => ({
       tick: 1,
       type: 'hazardAdded',
       hazard: { id: 0, look, x: 0, z: 0, radius: 2, startTick: 1, hitTick: 1, endTick: 1, damage: 1, hit: [] },
     })
-    audio.events([hazard('rock'), hazard('fire')], 0, () => 'tree')
+    audio.events([hazard('rock'), hazard('light'), hazard('crystal')], 0, () => 'tree')
     expect(names()).toEqual(['smash'])
+  })
+
+  it('el fuego del Guardián suena cuando pasa: el tajo y cada anillo al salir, los charcos una vez y el meteorito al caer', () => {
+    const { audio, played } = setup()
+    const hazard = (look: 'fire' | 'lava' | 'meteor', hitTick: number, ring = false): SimEvent => ({
+      tick: 1,
+      type: 'hazardAdded',
+      hazard: { id: 0, look, x: 0, z: 0, radius: 2, startTick: 1, hitTick, endTick: hitTick, damage: 1, hit: [], ...(ring ? { ring: { speed: 8, width: 1.4 } } : {}) },
+    })
+    const after = (ticks: number) => expect.closeTo(ticks * STEP, 6)
+    audio.events([hazard('fire', 1), hazard('fire', 1, true), hazard('fire', 46, true)], 0, () => 'tree')
+    expect(played).toEqual([
+      { name: 'lavaSlash', options: { delay: 0 } },
+      { name: 'flameWave', options: { delay: 0 } },
+      { name: 'flameWave', options: { delay: after(45) } },
+    ])
+    played.length = 0
+    audio.events([hazard('lava', 49), hazard('lava', 49), hazard('lava', 49), hazard('meteor', 61)], 0, () => 'tree')
+    expect(played).toEqual([
+      { name: 'lavaHiss', options: { delay: 0 } },
+      { name: 'lavaIgnite', options: { delay: after(48) } },
+      { name: 'meteorFall', options: { delay: 0 } },
+      { name: 'meteorCrash', options: { delay: after(60) } },
+    ])
+  })
+
+  it('arder suena a chisporroteo, no a golpe; prender, a llamarada; y la furia de un jefe, en toda la isla', () => {
+    const { audio, names } = setup()
+    audio.events(
+      [
+        { tick: 1, type: 'playerHurt', id: 0, dmg: 80, ignited: true },
+        { tick: 1, type: 'playerHurt', id: 0, dmg: 4, burning: true },
+        { tick: 1, type: 'enemyFury', id: 3 },
+      ],
+      0,
+      () => 'tree',
+    )
+    expect(names()).toEqual(['hurt', 'ignite', 'burnTick', 'fury'])
   })
 
   it('fabricar varias en un paso (Mayúsculas + clic) suena una vez; en el siguiente, otra', () => {

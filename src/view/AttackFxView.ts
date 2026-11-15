@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { STEP, type HitEfficacy, type WeaponClass } from '../sim/constants'
+import { STEP, type EnemyType, type HitEfficacy, type SpecialId, type WeaponClass } from '../sim/constants'
+import { furious } from '../sim/enemies'
 import type { Projectile, ProjectileKind } from '../sim/projectiles'
 import { mulberry32 } from '../sim/random'
 import { DEFAULT_ISLAND, type Island } from '../sim/world/island'
@@ -66,6 +67,38 @@ const RESISTED_HIT = '#b8c0c8'
 
 // Las flechas del gigante: estela fina azul con chispas, la punta encendida, y chispas al clavarse.
 const SPARK_TIME = 0.4
+
+// El Guardián del meteorito: lava naranja con el centro blanco amarillento, brasas que suben y humo oscuro, que es lo
+// que se lee de día (sale de día y de noche). Lo que quema deja el suelo negro un rato.
+export const MAGMA = '#ff6a1f'
+const EMBER = '#ffb347'
+const HOT = '#fff1c4'
+const SMOKE_COLOR = '#2e2622'
+const SCORCH_COLOR = '#140e0b'
+/** Lo que mide el Guardián (m): de dónde le salen las brasas y a qué altura alza el espadón. */
+const GUARDIAN_HEIGHT = 3.6
+/** Cada cuánto le sale una brasa del cuerpo (s): tranquilo y enfurecido. */
+const BODY_EMBER_EVERY = 0.09
+const FURY_EMBER_EVERY = 0.025
+/** El anillo de fuego: lenguas repartidas por el aro, y cada cuánto deja brasas, humo y fuego por donde pasa (s). */
+const RING_FLAMES = 44
+const RING_EVERY = 0.04
+/** Lo que tarda en irse el suelo quemado (s). */
+const SCORCH_TIME = 4
+/**
+ * El meteorito pequeño viene del cielo por detrás de quien lo llama, bajo, para que se le vea venir mirándolo:
+ * DROP_SLOPE metros de lado por cada uno de alto (unos 30°). Sin quien lo llame, de DROP_FROM.
+ */
+const DROP_SLOPE = 1.8
+const DROP_FROM = new THREE.Vector3(0.45, 1, -0.55).normalize()
+const DROP_DISTANCE = 42
+const DROP_ROCK = 0.75
+/** La estela de fuego del meteorito, como mucho (m). Cerca de la cámara se desvanece (no la atraviesa). */
+const DROP_TRAIL = 9
+const DROP_FADE = 5
+/** Los charcos de lava: cada cuánto sueltan una burbuja, una llama o una brasa mientras arden, y lo que tardan en enfriarse. */
+const POOL_EVERY = 0.05
+const POOL_COOL = 0.8
 
 const easeOut = (t: number) => 1 - (1 - t) ** 3
 
@@ -204,6 +237,73 @@ function streakGeometry() {
   return shade(geometry, (_x, _y, z) => Math.sin(Math.PI * (z + 0.5)))
 }
 
+/**
+ * Una lengua de fuego en el plano XY, de pie: base redonda en y = 0 y punta en y = 1. Maciza (se mezcla sin sumar
+ * luz, para que de día siga naranja): el color y la transparencia van en los vértices. Por el eje, blanco amarillento
+ * abajo que se vuelve naranja y rojo hacia la punta; a los lados, naranja más transparente, y el borde se desvanece.
+ */
+function flameGeometry() {
+  const rows = 10
+  const positions: number[] = []
+  const colors: number[] = []
+  const index: number[] = []
+  for (let k = 0; k <= rows; k++) {
+    const t = k / rows
+    const half = 0.42 * Math.sin(Math.PI * (0.14 + 0.86 * t ** 0.6))
+    const hot = Math.max(0, 1 - t * 1.8)
+    const core = [1, 0.3 + 0.62 * hot, 0.06 + 0.6 * hot, 0.95 * (1 - t ** 2.2)]
+    const side = [1, 0.36 * (1 - t * 0.5), 0.06, 0.7 * (1 - t) ** 1.2]
+    positions.push(-half, t, 0, -half * 0.5, t, 0, 0, t, 0, half * 0.5, t, 0, half, t, 0)
+    colors.push(side[0], side[1], side[2], 0, ...side, ...core, ...side, side[0], side[1], side[2], 0)
+    if (k < rows) {
+      const o = k * 5
+      for (let c = 0; c < 4; c++) index.push(o + c, o + c + 1, o + c + 5, o + c + 1, o + c + 6, o + c + 5)
+    }
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4))
+  geometry.setIndex(index)
+  return geometry
+}
+
+/** Una mancha en el suelo (plano XZ), de radio 1: opaca en el centro, irregular y que se desvanece hacia el borde. */
+function scorchGeometry() {
+  const rng = mulberry32(7)
+  const segments = 20
+  const positions = [0, 0, 0]
+  const colors = [1, 1, 1, 1]
+  const index: number[] = []
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2
+    const inner = 0.55 * (0.85 + rng() * 0.3)
+    const outer = 0.85 + rng() * 0.3
+    positions.push(Math.cos(a) * inner, 0, Math.sin(a) * inner, Math.cos(a) * outer, 0, Math.sin(a) * outer)
+    colors.push(1, 1, 1, 0.85, 1, 1, 1, 0)
+    const o = 1 + i * 2
+    const n = 1 + ((i + 1) % segments) * 2
+    index.push(0, o, n, o, o + 1, n, n, o + 1, n + 1)
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4))
+  geometry.setIndex(index)
+  return geometry
+}
+
+/** La roca del meteorito pequeño, de radio 1: caras oscuras y algunas al rojo, que se ven aunque sea de día. */
+function meteorRockGeometry() {
+  const geometry = new THREE.IcosahedronGeometry(1, 0).toNonIndexed()
+  const rng = mulberry32(5)
+  const colors: number[] = []
+  for (let f = 0; f < geometry.getAttribute('position').count / 3; f++) {
+    const color = rng() < 0.35 ? [1, 0.42, 0.1] : [0.24, 0.19, 0.16]
+    colors.push(...color, ...color, ...color)
+  }
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+  return geometry
+}
+
 function indexed(positions: number[], colors: number[], index: number[]) {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
@@ -257,13 +357,25 @@ const KINDS = {
   glassShard: { geometry: new THREE.OctahedronGeometry(0.04, 0).scale(0.6, 1.8, 0.6), color: WHITE, additive: true },
   leaf: { geometry: leafGeometry(), color: WHITE, additive: false },
   cut: { geometry: cutGeometry(), color: WHITE, additive: true },
+  /** De pie: gira hacia la cámara sin inclinarse (`UPRIGHT`). El color va en sus vértices. */
+  flame: { geometry: flameGeometry(), color: WHITE, additive: false },
+  /** Las brasas y chispas del Guardián: sin sumar luz, para que de día sigan naranjas (las aditivas se vuelven blancas). */
+  ember: { geometry: new THREE.OctahedronGeometry(0.06, 0).scale(1, 1, 2), color: MAGMA, additive: false },
+  scorch: { geometry: scorchGeometry(), color: SCORCH_COLOR, additive: false },
+  groundGlow: { geometry: glowGeometry().rotateX(-Math.PI / 2), color: MAGMA, additive: true },
+  bubble: { geometry: new THREE.IcosahedronGeometry(1, 1), color: EMBER, additive: true },
+  meteorRock: { geometry: meteorRockGeometry(), color: WHITE, additive: false },
+  fireTrail: { geometry: trailGeometry(0.75), color: MAGMA, additive: true },
+  fireCore: { geometry: trailGeometry(0.28), color: HOT, additive: true },
 } as const
 type Kind = keyof typeof KINDS
 const CRACK_KINDS = ['crack0', 'crack1', 'crack2'] as const
 /** Las que miran siempre a la cámara. */
 const FACING: ReadonlySet<Kind> = new Set<Kind>(['glow', 'star', 'cut'])
+/** Las que giran hacia la cámara pero siguen de pie. */
+const UPRIGHT: ReadonlySet<Kind> = new Set<Kind>(['flame'])
 /** Las macizas: tapan en vez de sumar luz, y menguan en vez de transparentarse. */
-const SOLID: ReadonlySet<Kind> = new Set<Kind>(['pebble', 'chip', 'shard', 'leaf'])
+const SOLID: ReadonlySet<Kind> = new Set<Kind>(['pebble', 'chip', 'shard', 'leaf', 'meteorRock'])
 
 /** Una pieza en marcha: `move` la coloca en cada frame con `t` de 0 a 1 a lo largo de su vida. */
 interface Piece {
@@ -327,12 +439,66 @@ interface Rush {
   foot: number
 }
 
-/** Lo justo de un enemigo para seguirlo: dónde estaba, dónde está y hacia dónde mira. */
+/** Algo que va soltando piezas un rato: cada `every` segundos llama a `emit` con lo que lleva de vida (0 a 1). */
+interface Emitter {
+  age: number
+  life: number
+  every: number
+  toEmit: number
+  emit: (k: number) => void
+}
+
+/** Un anillo de fuego del Guardián: sus llamas van con el aro hasta su radio. `age` empieza negativo si sale más tarde. */
+interface FlameRing {
+  x: number
+  z: number
+  speed: number
+  radius: number
+  age: number
+  flames: Piece[]
+  toEmit: number
+}
+
+/** Un charco de lava: avisa `warn` segundos, arde `burn` y se enfría; `glow` es la luz del suelo. */
+interface Pool {
+  x: number
+  y: number
+  z: number
+  radius: number
+  age: number
+  warn: number
+  burn: number
+  glow: Piece
+  lit: boolean
+  toEmit: number
+}
+
+/** Un meteorito pequeño que baja hacia (x, y, z) y llega en `fall` segundos: la roca, sus luces y su estela. */
+interface Drop {
+  x: number
+  y: number
+  z: number
+  /** Hacia dónde queda el cielo del que viene. */
+  dir: THREE.Vector3
+  age: number
+  fall: number
+  pieces: Piece[]
+  toEmit: number
+}
+
+/**
+ * Lo justo de un enemigo para seguirlo: dónde estaba, dónde está y hacia dónde mira. Con su tipo, si está vivo y su
+ * vida, al Guardián le salen brasas del cuerpo (más enfurecido).
+ */
 export interface FxEnemy {
   id: number
   pos: { x: number; z: number }
   prev: { x: number; z: number }
   yaw: number
+  type?: EnemyType
+  alive?: boolean
+  hp?: number
+  maxHp?: number
 }
 
 /** De qué es lo que golpea el jugador: decide qué salta (astillas, lascas, chispas, hojas…). */
@@ -416,7 +582,8 @@ const spot = new THREE.Vector3()
 
 /**
  * Los efectos de los ataques de los jefes, cada jefe con su color: el viento del golpe al suelo y la roca que perfora
- * el aire del Lanzarrocas; las grietas del pisotón, la embestida y las flechas azules del trasgo gigante. Solo vista, sin
+ * el aire del Lanzarrocas; las grietas del pisotón, la embestida y las flechas azules del trasgo gigante; el fuego, la
+ * lava y el meteorito pequeño del Guardián, que echa brasas siempre (muchas más enfurecido). Solo vista, sin
  * colisión. No dependen de la luz ni de la niebla, para que se vean igual de noche. Las piezas se guardan al acabar y
  * se reutilizan. Lo que vuela sale de la lista de proyectiles, que en red es la del cliente: se ve igual en los dos casos.
  */
@@ -429,6 +596,16 @@ export class AttackFxView {
   private seen = new Set<number>()
   private waves: Wave[] = []
   private rushes = new Map<number, Rush>()
+  private emitters: Emitter[] = []
+  private rings: FlameRing[] = []
+  private pools: Pool[] = []
+  private drops: Drop[] = []
+  /** Lo que le falta a cada Guardián para soltar la siguiente brasa del cuerpo (s). */
+  private embers = new Map<number, number>()
+  /** Cae un meteorito pequeño en (x, z): para que tiemble la pantalla. */
+  onImpact?: (x: number, z: number) => void
+  /** Dónde está la cámara (la del último `update`): lo que se le acerca mucho se desvanece. */
+  private eye = new THREE.Vector3(0, 1e6, 0)
 
   constructor(private rng: () => number = Math.random) {}
 
@@ -574,6 +751,7 @@ export class AttackFxView {
   }
 
   /**
+  /**
    * Un golpe del jugador que da en algo, en el punto exacto del impacto: lo que salta depende del material (astillas de
    * madera, lascas y chispas de la piedra y el mineral, cristales, hojas) y de con qué se golpea. A un enemigo, la espada
    * le deja un tajo y un destello; el hacha y el pico, un golpe más sordo. Sin daño, solo un golpe seco. Todo con algo de
@@ -641,11 +819,188 @@ export class AttackFxView {
   }
 
   /**
+   * El Guardián (en x, z, mirando a `yaw`) prepara `attack`, que tarda `windup` segundos: el suelo se calienta bajo él,
+   * le suben brasas y se enciende lo que prepara. El anillo de fuego abre grietas de lava a sus pies; el tajo, el
+   * espadón en alto; el meteorito, una bola de fuego encima que lo llama; los charcos, el fuego de su mano izquierda.
+   */
+  guardianWindup(x: number, z: number, yaw: number, attack: SpecialId, windup: number) {
+    const y = this.ground(x, z)
+    const rng = this.rng
+    const fx = Math.sin(yaw)
+    const fz = Math.cos(yaw)
+    // Su derecha (mirando a +z, la mano derecha queda en -x).
+    const rx = -fz
+    const rz = fx
+    const heat = this.take('groundGlow', windup + 0.25, (p, t) => {
+      p.mesh.scale.setScalar(1.2 + 2.6 * easeOut(Math.min(1, t * 1.2)))
+      p.material.opacity = Math.min(1, t * 1.6) * (t > 0.8 ? (1 - t) / 0.2 : 1) * (0.55 + 0.15 * Math.sin(p.age * 30))
+    })
+    heat.mesh.position.set(x, y + 0.07, z)
+    this.emitters.push({
+      age: 0,
+      life: windup,
+      every: 0.03,
+      toEmit: 0,
+      emit: (k) => {
+        const a = rng() * Math.PI * 2
+        const r = 0.5 + rng() * 1.2
+        this.ember(x + Math.cos(a) * r, y + 0.2 + rng() * 0.8, z + Math.sin(a) * r, 1.6 + k * 2.5, 1.2)
+      },
+    })
+    switch (attack) {
+      case 'fireRing':
+        this.cracks(x, y, z, 7, 2.2, 1.6, windup + 0.9, windup)
+        break
+      case 'lavaSlash':
+        this.charging(x + rx * 0.9 - fx * 0.4, y + GUARDIAN_HEIGHT * 1.05, z + rz * 0.9 - fz * 0.4, windup, 1.2)
+        break
+      case 'meteorDrop': {
+        const top = y + GUARDIAN_HEIGHT + 2.2
+        this.charging(x, top, z, windup, 1.6)
+        // Chispas que suben deprisa al cielo: de ahí bajará.
+        this.emitters.push({ age: 0, life: windup, every: 0.04, toEmit: 0, emit: () => this.ember(x + (rng() - 0.5) * 0.6, top, z + (rng() - 0.5) * 0.6, 14, 0.5, HOT) })
+        break
+      }
+      case 'burningGround':
+        this.charging(x - rx * 0.8 + fx * 0.3, y + GUARDIAN_HEIGHT * 0.6, z - rz * 0.8 + fz * 0.3, windup, 1.4)
+        break
+    }
+  }
+
+  /**
+   * El tajo de lava en (x, z): un destello, el arco del espadón desde `from` (quien golpea), grietas al rojo, una onda,
+   * llamas, chispas, humo y el suelo quemado.
+   */
+  lavaSlash(x: number, z: number, from?: { x: number; z: number }) {
+    const y = this.ground(x, z)
+    const rng = this.rng
+    this.flash(x, y + 0.8, z, 2, 0.3, MAGMA)
+    this.flash(x, y + 0.6, z, 0.9, 0.2, HOT)
+    if (from) {
+      const dx = x - from.x
+      const dz = z - from.z
+      const length = Math.hypot(dx, dz) || 1
+      const fx = dx / length
+      const fz = dz / length
+      const radius = SWING_RADIUS * 1.25
+      const cx = x - fx * radius * Math.cos(-0.95)
+      const cz = z - fz * radius * Math.cos(-0.95)
+      for (const [color, k] of [[MAGMA, 1], [HOT, 0.93]] as const) {
+        const piece = this.take(
+          'swing',
+          SWING_TIME * 1.4,
+          (p, t) => {
+            p.mesh.scale.setScalar(p.size * (1 + t * 0.12))
+            p.material.opacity = (1 - t) ** 2
+          },
+          color,
+        )
+        piece.size = radius * k
+        piece.mesh.position.set(cx, y - radius * Math.sin(-0.95), cz)
+        piece.mesh.rotation.set(0, Math.atan2(-fz, fx), 0)
+        piece.mesh.scale.setScalar(piece.size)
+      }
+    }
+    this.cracks(x, y, z, 6, 1.8, 1.4, 1.8)
+    const wave = this.take(
+      'wave',
+      WAVE_TIME,
+      (p, t) => {
+        p.mesh.scale.setScalar(0.5 + 3 * easeOut(t))
+        p.material.opacity = 0.9 * (1 - t)
+      },
+      MAGMA,
+    )
+    wave.mesh.position.set(x, y + 0.06, z)
+    this.sparks(x, y + 0.4, z, 18, 6.5, MAGMA, SPARK_TIME, 'ember')
+    for (let i = 0; i < 7; i++) {
+      const a = rng() * Math.PI * 2
+      const r = 0.4 + rng() * 1.6
+      this.flame(x + Math.cos(a) * r, y, z + Math.sin(a) * r, 1 + rng() * 0.9, 0.55 + rng() * 0.4, 0.9)
+    }
+    for (let i = 0; i < 12; i++) this.ember(x + (rng() - 0.5) * 2, y + 0.3, z + (rng() - 0.5) * 2, 2.2, 1.3)
+    this.smoke(x, y + 0.3, z, 4, 1.4, 2.5, 1.5, 0.75, 0.45)
+    this.pebbles(x, y, z, 6, 1)
+    this.scorch(x, z, 2.6)
+  }
+
+  /**
+   * El anillo de fuego que sale de (x, z) a `speed` m/s hasta `radius`, dentro de `delay` segundos: una pared de llamas
+   * que corre por el suelo y deja brasas, humo y fuego por donde pasa.
+   */
+  flameRing(x: number, z: number, radius: number, speed: number, delay = 0) {
+    this.rings.push({ x, z, speed, radius, age: -delay, flames: [], toEmit: 0 })
+  }
+
+  /**
+   * Un charco de lava en (x, z), de `radius` metros: avisa `warn` segundos (el suelo humea y se agrieta), arde `burn`
+   * (burbujas, llamas y brasas) y se enfría dejando el suelo negro.
+   */
+  lavaPool(x: number, z: number, radius: number, warn: number, burn: number) {
+    const y = this.ground(x, z)
+    const glow = this.take('groundGlow', Infinity, () => {})
+    glow.mesh.position.set(x, y + 0.09, z)
+    glow.material.opacity = 0
+    this.pools.push({ x, y, z, radius, age: 0, warn, burn, glow, lit: false, toEmit: 0 })
+    this.cracks(x, y, z, 4, radius * 0.6, radius * 0.4, warn + burn + POOL_COOL, warn, 0.6)
+  }
+
+  /**
+   * Un meteorito pequeño que cae del cielo en (x, z) dentro de `fall` segundos, con su estela de fuego. `from`: quien lo
+   * llama; viene por detrás de él.
+   */
+  meteorDrop(x: number, z: number, fall: number, from?: { x: number; z: number }) {
+    const rng = this.rng
+    const rock = this.take('meteorRock', Infinity, () => {})
+    rock.mesh.scale.setScalar(DROP_ROCK)
+    rock.spin.set(rng() * 6 - 3, rng() * 6 - 3, rng() * 6 - 3)
+    const glow = this.take('glow', Infinity, () => {}, MAGMA)
+    glow.mesh.scale.setScalar(2)
+    const hot = this.take('glow', Infinity, () => {}, HOT)
+    hot.mesh.scale.setScalar(0.9)
+    const trail = this.take('fireTrail', Infinity, () => {})
+    trail.material.opacity = 0.85
+    const core = this.take('fireCore', Infinity, () => {})
+    const dir = DROP_FROM.clone()
+    if (from && Math.hypot(from.x - x, from.z - z) > 0.5) dir.set(from.x - x, 0, from.z - z).setLength(DROP_SLOPE).setY(1).normalize()
+    const drop = { x, y: this.ground(x, z), z, dir, age: 0, fall: Math.max(0.05, fall), pieces: [rock, glow, hot, trail, core], toEmit: 0 }
+    this.drops.push(drop)
+    this.fall(drop, 0)
+  }
+
+  /** El Guardián se enfurece en (x, z): un estallido de fuego a su alrededor. Luego le salen más brasas (`update`). */
+  fury(x: number, z: number) {
+    const y = this.ground(x, z)
+    const rng = this.rng
+    this.flash(x, y + 1.8, z, 3.2, 0.45, MAGMA)
+    this.flash(x, y + 1.6, z, 1.4, 0.3, HOT)
+    const ring = this.take(
+      'groundRing',
+      0.6,
+      (p, t) => {
+        p.mesh.scale.setScalar(1 + 5 * easeOut(t))
+        p.material.opacity = 1 - t
+      },
+      MAGMA,
+    )
+    ring.mesh.position.set(x, y + 0.08, z)
+    this.sparks(x, y + 1.5, z, 30, 8, MAGMA, SPARK_TIME * 1.3, 'ember')
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + rng() * 0.3
+      const r = 1.6 + rng() * 1.2
+      this.flame(x + Math.cos(a) * r, y, z + Math.sin(a) * r, 1.5 + rng(), 0.7 + rng() * 0.4, 1.1)
+    }
+    this.smoke(x, y + 0.5, z, 7, 2.5, 4, 2, 1, 0.5)
+    this.scorch(x, z, 3.5)
+  }
+
+  /**
    * Por frame: lo que vuela (estela y marcas por el camino), las ondas, las embestidas (`enemies`, para seguirlas) y las
    * piezas en marcha. Con `camera`, los brillos y las estrellas la miran.
    */
   update(dt: number, projectiles: readonly Projectile[], alpha: number, enemies: readonly FxEnemy[] = [], camera?: THREE.Camera) {
     this.seen.clear()
+    if (camera) this.eye.copy(camera.position)
     for (const p of projectiles) {
       const look = FLIGHTS[p.kind]
       if (!look) continue
@@ -667,6 +1022,19 @@ export class AttackFxView {
       this.flights.delete(id)
     }
     for (const wave of [...this.waves]) this.spread(wave, dt)
+    for (const ring of [...this.rings]) this.burnRing(ring, dt)
+    for (const pool of [...this.pools]) this.burnPool(pool, dt)
+    for (const drop of [...this.drops]) this.fall(drop, dt)
+    for (const emitter of [...this.emitters]) {
+      emitter.age += dt
+      emitter.toEmit -= dt
+      while (emitter.toEmit <= 1e-9) {
+        emitter.emit(Math.min(1, emitter.age / emitter.life))
+        emitter.toEmit += emitter.every
+      }
+      if (emitter.age >= emitter.life) this.emitters.splice(this.emitters.indexOf(emitter), 1)
+    }
+    this.bodyEmbers(enemies, alpha, dt)
     for (const rush of [...this.rushes.values()]) {
       const e = enemies.find((en) => en.id === rush.id)
       if (e) this.charge(rush, e, alpha)
@@ -685,6 +1053,10 @@ export class AttackFxView {
         piece.mesh.quaternion.copy(camera.quaternion)
         if (piece.spin.z || piece.roll) piece.mesh.rotateZ(piece.roll + piece.spin.z * piece.age)
       }
+      if (camera && UPRIGHT.has(piece.kind)) {
+        const { position } = piece.mesh
+        piece.mesh.rotation.set(0, Math.atan2(camera.position.x - position.x, camera.position.z - position.z), 0)
+      }
     }
   }
 
@@ -694,6 +1066,11 @@ export class AttackFxView {
     this.flights.clear()
     this.waves.length = 0
     this.rushes.clear()
+    this.emitters.length = 0
+    this.rings.length = 0
+    this.pools.length = 0
+    this.drops.length = 0
+    this.embers.clear()
   }
 
   /**
@@ -841,6 +1218,386 @@ export class AttackFxView {
     }
   }
 
+  /** Un anillo de fuego avanza: al salir, un estallido; luego sus llamas van con el aro y dejan fuego por donde pasa. */
+  private burnRing(ring: FlameRing, dt: number) {
+    const started = ring.age >= 0
+    ring.age += dt
+    if (ring.age < 0) return
+    const rng = this.rng
+    const { x, z } = ring
+    if (!started || ring.flames.length === 0) {
+      const y = this.ground(x, z)
+      this.flash(x, y + 0.8, z, 2.4, 0.35, MAGMA)
+      const burst = this.take(
+        'groundRing',
+        0.45,
+        (p, t) => {
+          p.mesh.scale.setScalar(0.6 + 3 * easeOut(t))
+          p.material.opacity = 1 - t
+        },
+        MAGMA,
+      )
+      burst.mesh.position.set(x, y + 0.08, z)
+      this.sparks(x, y + 0.4, z, 20, 6, MAGMA, SPARK_TIME, 'ember')
+      this.smoke(x, y + 0.2, z, 5, 2, 2.5, 1.6, 0.75, 0.45)
+      this.scorch(x, z, 3.2)
+      for (let i = 0; i < RING_FLAMES; i++) {
+        const flame = this.take('flame', Infinity, () => {})
+        flame.spin.set(rng() * 10, (i / RING_FLAMES) * Math.PI * 2 + (rng() - 0.5) * 0.08, 0)
+        flame.size = 0.85 + rng() * 0.45
+        ring.flames.push(flame)
+      }
+    }
+    const r = ring.age * ring.speed
+    if (r > ring.radius + 0.6) {
+      for (const flame of ring.flames) this.give(flame)
+      this.rings.splice(this.rings.indexOf(ring), 1)
+      return
+    }
+    // Más anchas cuanto más grande el aro, para que la pared no tenga huecos; se apagan al llegar al final.
+    const width = Math.min(1.9, Math.max(0.35, ((Math.PI * 2 * r) / RING_FLAMES) * 1.5))
+    const k = r / ring.radius
+    const fade = k > 0.8 ? Math.max(0, (1 - k) / 0.2) : 1
+    const grow = Math.min(1, 0.45 + r / 2.5)
+    for (const flame of ring.flames) {
+      const a = flame.spin.y
+      const fx = x + Math.cos(a) * r
+      const fz = z + Math.sin(a) * r
+      const flicker = 1 + 0.2 * Math.sin(ring.age * 24 + flame.spin.x) + 0.1 * Math.sin(ring.age * 39 + flame.spin.x * 2)
+      flame.mesh.position.set(fx, this.ground(fx, fz), fz)
+      flame.mesh.scale.set(width, flame.size * grow * flicker, 1)
+      flame.material.opacity = fade * this.clear(flame.mesh.position, 0.8, 2)
+    }
+    ring.toEmit -= dt
+    while (ring.toEmit <= 0) {
+      ring.toEmit += RING_EVERY
+      for (let i = 0; i < 3; i++) {
+        const a = rng() * Math.PI * 2
+        const ex = x + Math.cos(a) * r
+        const ez = z + Math.sin(a) * r
+        const ey = this.ground(ex, ez)
+        if (i === 0) this.ember(ex, ey + 0.4, ez, 2, 1.1)
+        if (i === 1 && rng() < 0.6) this.smoke(ex, ey + 0.3, ez, 1, 0.3, 1.8, 1.3, 0.8, 0.45)
+        // Lo que queda ardiendo detrás del aro, un momento.
+        if (i === 2) this.flame(ex, ey, ez, 0.45 + rng() * 0.3, 0.4, 0.7)
+      }
+    }
+  }
+
+  /** Un charco de lava por frame: su luz, el estallido al prender y lo que suelta mientras avisa, arde y se enfría. */
+  private burnPool(pool: Pool, dt: number) {
+    pool.age += dt
+    const { x, y, z, radius, glow } = pool
+    const rng = this.rng
+    const end = pool.warn + pool.burn
+    if (pool.age >= end + POOL_COOL) {
+      this.give(glow)
+      this.pools.splice(this.pools.indexOf(pool), 1)
+      return
+    }
+    if (pool.age < pool.warn) {
+      const k = pool.age / pool.warn
+      glow.mesh.scale.setScalar(radius * (0.6 + 0.4 * k))
+      glow.material.opacity = (0.15 + 0.35 * k) * (0.7 + 0.3 * Math.sin(pool.age * 20))
+    } else if (pool.age < end) {
+      glow.mesh.scale.setScalar(radius * 1.25)
+      glow.material.opacity = 0.8 + 0.12 * Math.sin(pool.age * 9) + 0.08 * Math.sin(pool.age * 23)
+    } else {
+      glow.material.opacity = 0.8 * (1 - (pool.age - end) / POOL_COOL)
+    }
+    if (!pool.lit && pool.age >= pool.warn) {
+      pool.lit = true
+      this.flash(x, y + 0.6, z, radius * 1.1, 0.35, MAGMA)
+      this.sparks(x, y + 0.3, z, 12, 5, MAGMA, SPARK_TIME, 'ember')
+      for (let i = 0; i < 8; i++) {
+        const a = rng() * Math.PI * 2
+        const r = radius * 0.8 * Math.sqrt(rng())
+        this.flame(x + Math.cos(a) * r, y, z + Math.sin(a) * r, 0.8 + rng() * 0.6, 0.6 + rng() * 0.3)
+      }
+    }
+    if (pool.age >= end && pool.age - dt < end) {
+      // Se apaga: queda negro y echa humo.
+      this.scorch(x, z, radius * 1.15, 3)
+      this.smoke(x, y + 0.2, z, 6, radius * 0.7, 2.5, 1.8, 1, 0.5)
+    }
+    pool.toEmit -= dt
+    while (pool.toEmit <= 0) {
+      pool.toEmit += POOL_EVERY
+      const a = rng() * Math.PI * 2
+      const r = radius * 0.85 * Math.sqrt(rng())
+      const px = x + Math.cos(a) * r
+      const pz = z + Math.sin(a) * r
+      if (pool.age < pool.warn) {
+        if (rng() < 0.4) this.smoke(px, y + 0.05, pz, 1, 0.2, 0.9, 0.9, 0.28, 0.3)
+      } else if (pool.age < end) {
+        const roll = rng()
+        if (roll < 0.35) this.bubble(px, y, pz)
+        else if (roll < 0.7) this.flame(px, y, pz, 0.35 + rng() * 0.55, 0.45 + rng() * 0.3, 0.6)
+        else this.ember(px, y + 0.2, pz, 1.5, 1.1)
+        if (rng() < 0.08) this.smoke(px, y + 0.3, pz, 1, 0.3, 2.2, 1.6, 0.5, 0.35)
+      }
+    }
+  }
+
+  /** El meteorito pequeño baja: la roca girando, sus luces y la estela, brasas y humo detrás; al llegar, `crash`. */
+  private fall(drop: Drop, dt: number) {
+    drop.age += dt
+    if (drop.age >= drop.fall) {
+      this.drops.splice(this.drops.indexOf(drop), 1)
+      this.crash(drop)
+      return
+    }
+    const left = 1 - drop.age / drop.fall
+    point.set(drop.x, drop.y + DROP_ROCK * 0.6, drop.z).addScaledVector(drop.dir, DROP_DISTANCE * left)
+    velocity.copy(drop.dir).multiplyScalar(-DROP_DISTANCE / drop.fall)
+    // Si cae encima de la cámara, la estela y las luces no la atraviesan: se desvanecen al llegar.
+    const near = Math.min(1, Math.max(0, (point.distanceTo(this.eye) - 1.5) / DROP_FADE))
+    ahead.copy(point).add(velocity)
+    const [rock, glow, hot, trail, core] = drop.pieces
+    rock.mesh.position.copy(point)
+    rock.mesh.scale.setScalar(DROP_ROCK * Math.min(1, near * 3))
+    rock.mesh.rotation.x += rock.spin.x * dt
+    rock.mesh.rotation.y += rock.spin.y * dt
+    rock.mesh.rotation.z += rock.spin.z * dt
+    glow.mesh.position.copy(point)
+    glow.mesh.scale.setScalar(2 * (1 + 0.1 * Math.sin(drop.age * 33)))
+    glow.material.opacity = near
+    hot.mesh.position.copy(point)
+    hot.material.opacity = near
+    trail.material.opacity = 0.85 * near
+    core.material.opacity = near
+    const length = Math.max(0.01, Math.min(DROP_TRAIL, DROP_DISTANCE * (1 - left)))
+    for (const piece of [trail, core]) {
+      piece.mesh.position.copy(point)
+      piece.mesh.lookAt(ahead)
+      piece.mesh.scale.set(1, 1, length)
+    }
+    drop.toEmit -= dt
+    const rng = this.rng
+    while (drop.toEmit <= 0) {
+      drop.toEmit += 0.025
+      this.ember(point.x + (rng() - 0.5) * 0.8, point.y + (rng() - 0.5) * 0.8, point.z + (rng() - 0.5) * 0.8, 0.6, 0.6)
+      if (rng() < 0.5) this.smoke(point.x, point.y, point.z, 1, 0.3, 0.6, 1.1, 0.9, 0.45)
+    }
+  }
+
+  /** El meteorito pequeño llega al suelo: estalla en fuego, salta tierra, se agrieta y queda ardiendo y quemado. */
+  private crash(drop: Drop) {
+    for (const piece of drop.pieces) this.give(piece)
+    const { x, y, z } = drop
+    const rng = this.rng
+    this.flash(x, y + 1, z, 3, 0.4, MAGMA)
+    this.flash(x, y + 0.8, z, 1.2, 0.25, HOT)
+    const star = this.take(
+      'star',
+      0.35,
+      (p, t) => {
+        p.mesh.scale.setScalar(p.size * (0.6 + 0.6 * easeOut(Math.min(1, t * 3))))
+        p.material.opacity = 0.9 * (1 - t) ** 1.3
+      },
+      HOT,
+    )
+    star.size = 2.8
+    star.spin.z = 1.2
+    star.mesh.position.set(x, y + 1, z)
+    const ring = this.take(
+      'groundRing',
+      0.5,
+      (p, t) => {
+        p.mesh.scale.setScalar(0.6 + 4 * easeOut(t))
+        p.material.opacity = 1 - t
+      },
+      MAGMA,
+    )
+    ring.mesh.position.set(x, y + 0.08, z)
+    this.cracks(x, y, z, 6, 1.6, 1.2, 2)
+    this.sparks(x, y + 0.5, z, 26, 9, MAGMA, SPARK_TIME * 1.3, 'ember')
+    this.pebbles(x, y, z, 10, 1.4)
+    this.smoke(x, y + 0.3, z, 6, 2, 4, 2, 0.9, 0.5)
+    for (let i = 0; i < 10; i++) {
+      const a = rng() * Math.PI * 2
+      const r = rng() * 1.6
+      this.flame(x + Math.cos(a) * r, y, z + Math.sin(a) * r, 1 + rng(), 0.7 + rng() * 0.4)
+    }
+    for (let i = 0; i < 16; i++) this.ember(x + (rng() - 0.5) * 2.5, y + 0.3, z + (rng() - 0.5) * 2.5, 2.5, 1.4)
+    this.scorch(x, z, 3, 5)
+    this.onImpact?.(x, z)
+  }
+
+  /** Brasas que le suben del cuerpo a cada Guardián vivo, muchas más enfurecido. */
+  private bodyEmbers(enemies: readonly FxEnemy[], alpha: number, dt: number) {
+    const rng = this.rng
+    for (const e of enemies) {
+      if (e.type !== 'guardian' || e.alive === false) continue
+      const angry = e.hp !== undefined && e.maxHp !== undefined && furious({ type: e.type, hp: e.hp, maxHp: e.maxHp })
+      const every = angry ? FURY_EMBER_EVERY : BODY_EMBER_EVERY
+      const x = e.prev.x + (e.pos.x - e.prev.x) * alpha
+      const z = e.prev.z + (e.pos.z - e.prev.z) * alpha
+      const y = this.ground(x, z)
+      let left = (this.embers.get(e.id) ?? rng() * every) - dt
+      for (let n = 0; left <= 0 && n < 40; n++) {
+        left += every
+        const a = rng() * Math.PI * 2
+        const r = 0.3 + rng() * 0.6
+        this.ember(x + Math.cos(a) * r, y + 0.6 + rng() * GUARDIAN_HEIGHT * 0.85, z + Math.sin(a) * r, 1.2 + rng(), 1.2)
+        // Enfurecido arde: llamitas a los pies y humo.
+        if (angry && rng() < 0.18) this.flame(x + Math.cos(a) * (r + 0.4), y, z + Math.sin(a) * (r + 0.4), 0.7 + rng() * 0.6, 0.45, 0.8)
+        if (angry && rng() < 0.08) this.smoke(x, y + GUARDIAN_HEIGHT * 0.7, z, 1, 0.6, 2, 1.6, 0.9, 0.4)
+      }
+      this.embers.set(e.id, left)
+    }
+    for (const id of this.embers.keys()) if (!enemies.some((e) => e.id === id && e.type === 'guardian' && e.alive !== false)) this.embers.delete(id)
+  }
+
+  /** Luz que crece donde un ataque se prepara durante `life` segundos: naranja por fuera y blanca por dentro. */
+  private charging(x: number, y: number, z: number, life: number, size: number) {
+    for (const [color, k] of [[MAGMA, 1], [HOT, 0.45]] as const) {
+      const piece = this.take(
+        'glow',
+        life + 0.1,
+        (p, t) => {
+          p.mesh.scale.setScalar(p.size * (0.3 + 0.7 * easeOut(t)) * (1 + 0.08 * Math.sin(p.age * 40)))
+          p.material.opacity = Math.min(1, t * 3)
+        },
+        color,
+      )
+      piece.size = size * k
+      piece.mesh.position.set(x, y, z)
+      piece.mesh.scale.setScalar(piece.size * 0.3)
+    }
+  }
+
+  /**
+   * `count` grietas de lava desde (x, z), de `length` a `length + extra` metros, que se abren en `open` segundos y se
+   * apagan al final de `life`; `glow` las atenúa (las de los charcos, más tenues).
+   */
+  private cracks(x: number, y: number, z: number, count: number, length: number, extra: number, life: number, open = life * CRACK_OPEN, glow = 1) {
+    const rng = this.rng
+    const turn = rng() * Math.PI * 2
+    for (let i = 0; i < count; i++) {
+      const kind = CRACK_KINDS[i % CRACK_KINDS.length]
+      const angle = turn + (i / count) * Math.PI * 2 + (rng() - 0.5) * 0.5
+      const size = length + rng() * extra
+      for (const [color, width] of [[MAGMA, 4.5], [HOT, 1.5]] as const) {
+        const piece = this.take(
+          kind,
+          life,
+          (p) => {
+            const opened = Math.min(1, p.age / Math.max(1e-3, open))
+            p.mesh.scale.set(p.size * (0.1 + 0.9 * easeOut(opened)), 1, width)
+            const after = Math.max(0, (p.age - open) / Math.max(1e-3, p.life - open))
+            p.material.opacity = glow * (p.age < open ? 0.4 + 0.6 * opened : after < 0.4 ? 1 : (1 - (after - 0.4) / 0.6) ** 1.5)
+          },
+          color,
+        )
+        piece.size = size
+        piece.mesh.position.set(x, y + 0.05, z)
+        piece.mesh.rotation.set(0, angle, 0)
+        piece.mesh.scale.set(0.01, 1, width)
+      }
+    }
+  }
+
+  /** Una lengua de fuego de `height` metros en (x, y, z): crece, tiembla y se apaga en unos `life` segundos. */
+  private flame(x: number, y: number, z: number, height: number, life: number, width = 1) {
+    const rng = this.rng
+    const piece = this.take('flame', life * (0.8 + rng() * 0.4), (p, t) => {
+      const grow = easeOut(Math.min(1, t * 4))
+      const flicker = 1 + 0.18 * Math.sin(p.age * 26 + p.spin.x) + 0.1 * Math.sin(p.age * 41 + p.spin.x * 2)
+      // `velocity` guarda su ancho (x) y la altura del suelo (y).
+      p.mesh.scale.set(p.velocity.x * (1 - t * 0.4), p.size * grow * flicker * (1 - t * 0.5), 1)
+      p.mesh.position.y = p.velocity.y + t * 0.4
+      p.material.opacity = (1 - t) ** 0.7 * this.clear(p.mesh.position, 0.8, 2)
+    })
+    piece.size = height
+    piece.velocity.set(width * (0.8 + rng() * 0.4), y, 0)
+    piece.spin.x = rng() * 10
+    piece.mesh.position.set(x, y, z)
+    piece.mesh.scale.set(width, 0.01, 1)
+  }
+
+  /** Una brasa que sube a unos `rise` m/s meciéndose y se apaga en unos `life` segundos. */
+  private ember(x: number, y: number, z: number, rise: number, life: number, color?: string) {
+    const rng = this.rng
+    const piece = this.take(
+      'ember',
+      life * (0.7 + rng() * 0.6),
+      (p, t, dt) => {
+        p.velocity.y = Math.max(0.3, p.velocity.y - 0.8 * dt)
+        p.mesh.position.x += (p.velocity.x + Math.sin(p.age * 7 + p.spin.x) * 0.6) * dt
+        p.mesh.position.y += p.velocity.y * dt
+        p.mesh.position.z += (p.velocity.z + Math.cos(p.age * 6 + p.spin.x) * 0.6) * dt
+        ahead.copy(p.mesh.position).add(p.velocity)
+        p.mesh.lookAt(ahead)
+        p.mesh.scale.setScalar(p.size * (1 - t * 0.6))
+        p.material.opacity = (t < 0.15 ? t / 0.15 : (1 - t) ** 0.8) * this.clear(p.mesh.position, 0.5, 1.2)
+      },
+      color ?? (rng() < 0.35 ? EMBER : rng() < 0.2 ? HOT : MAGMA),
+    )
+    piece.velocity.set((rng() - 0.5) * 0.8, rise * (0.7 + rng() * 0.6), (rng() - 0.5) * 0.8)
+    piece.spin.x = rng() * 10
+    piece.size = 0.8 + rng() * 0.6
+    piece.mesh.position.set(x, y, z)
+  }
+
+  /** Una burbuja de lava que crece y revienta en chispas. */
+  private bubble(x: number, y: number, z: number) {
+    const rng = this.rng
+    const life = 0.35 + rng() * 0.25
+    const piece = this.take(
+      'bubble',
+      life,
+      (p, t) => {
+        p.mesh.scale.setScalar(p.size * (0.3 + 0.7 * t))
+        p.mesh.position.y = p.velocity.y + p.size * 0.3 * t
+        p.material.opacity = 0.9 * (1 - t * 0.3) * this.clear(p.mesh.position, 0.6, 1.5)
+      },
+      rng() < 0.5 ? EMBER : HOT,
+    )
+    piece.size = 0.18 + rng() * 0.2
+    piece.velocity.y = y + 0.05
+    piece.mesh.position.set(x, y + 0.05, z)
+    this.emitters.push({ age: 0, life, every: Infinity, toEmit: life, emit: () => this.sparks(x, y + 0.2, z, 3, 2.5, MAGMA, 0.3, 'ember') })
+  }
+
+  /** `count` bocanadas de humo oscuro que suben unos `rise` metros abriéndose y se deshacen en `life` segundos. */
+  private smoke(x: number, y: number, z: number, count: number, spread: number, rise: number, life: number, size = 1, opacity = 0.55) {
+    const rng = this.rng
+    for (let i = 0; i < count; i++) {
+      const a = rng() * Math.PI * 2
+      const out = spread * rng()
+      const piece = this.take(
+        'dust',
+        life * (0.8 + rng() * 0.4),
+        (p, t) => {
+          const k = easeOut(t)
+          // `spin` guarda de dónde sale.
+          p.mesh.position.set(p.spin.x + p.velocity.x * k, p.spin.y + p.velocity.y * k, p.spin.z + p.velocity.z * k)
+          p.mesh.scale.setScalar(p.size * (0.4 + 0.9 * k))
+          p.material.opacity = opacity * Math.min(1, t * 5) * (1 - t) ** 1.2 * this.clear(p.mesh.position, 1, 3)
+        },
+        SMOKE_COLOR,
+      )
+      piece.spin.set(x + Math.cos(a) * out, y, z + Math.sin(a) * out)
+      piece.velocity.set(Math.cos(a) * out * 0.5, rise * (0.7 + rng() * 0.6), Math.sin(a) * out * 0.5)
+      piece.size = (0.5 + rng() * 0.5) * size
+      piece.mesh.position.copy(piece.spin)
+      piece.mesh.scale.setScalar(piece.size * 0.4)
+      piece.material.opacity = 0
+    }
+  }
+
+  /** El suelo quemado en (x, z), de `radius` metros: negro, se va en `life` segundos. */
+  private scorch(x: number, z: number, radius: number, life = SCORCH_TIME) {
+    const piece = this.take('scorch', life, (p, t) => {
+      p.material.opacity = 0.75 * Math.min(1, t * 12) * (t > 0.6 ? (1 - t) / 0.4 : 1)
+    })
+    piece.mesh.position.set(x, this.ground(x, z) + 0.04, z)
+    piece.mesh.rotation.y = this.rng() * Math.PI * 2
+    piece.mesh.scale.set(radius, 1, radius)
+    piece.material.opacity = 0
+  }
+
   /** Un brillo redondo que crece un poco y se apaga en `life` segundos. */
   private flash(x: number, y: number, z: number, size: number, life: number, color: string = GIANT_BLUE) {
     const piece = this.take(
@@ -941,11 +1698,19 @@ export class AttackFxView {
   }
 
   /** `count` chispas que saltan a hasta `speed` m/s, caen un poco y se apagan. */
-  private sparks(x: number, y: number, z: number, count: number, speed: number, color: string, life = SPARK_TIME, toward?: { x: number; z: number }, size = 1) {
+  private sparks(
+    x: number, y: number, z: number, count: number, speed: number, color: string,
+    life = SPARK_TIME,
+    towardOrKind?: { x: number; z: number } | 'spark' | 'ember',
+    sizeOrKind: number | 'spark' | 'ember' = 1,
+  ) {
+    const toward = typeof towardOrKind === 'object' ? towardOrKind : undefined
+    const kind = typeof towardOrKind === 'string' ? towardOrKind : typeof sizeOrKind === 'string' ? sizeOrKind : 'spark'
+    const size = typeof sizeOrKind === 'number' ? sizeOrKind : 1
     const rng = this.rng
     for (let i = 0; i < count; i++) {
       const piece = this.take(
-        'spark',
+        kind,
         life * (0.7 + rng() * 0.6),
         (p, t, dt) => {
           p.velocity.y -= 6 * dt
@@ -953,9 +1718,10 @@ export class AttackFxView {
           ahead.copy(p.mesh.position).add(p.velocity)
           p.mesh.lookAt(ahead)
           p.mesh.scale.setScalar(p.size * (1 - t))
-          p.material.opacity = 1 - t * t
+          // Las brasas del Guardián caen a tus pies: pegadas a la cámara se desvanecen.
+          p.material.opacity = (1 - t * t) * (kind === 'ember' ? this.clear(p.mesh.position, 0.5, 1.2) : 1)
         },
-        i % 3 === 0 ? WHITE : color,
+        i % 3 === 0 ? (kind === 'ember' ? HOT : WHITE) : color,
       )
       const a = rng() * Math.PI * 2
       const up = rng()
@@ -1047,7 +1813,7 @@ export class AttackFxView {
         vertexColors: geometry.hasAttribute('color'),
         blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       })
-      // Las piedritas (y astillas, lascas y hojas) son macizas: menguan en vez de transparentarse.
+      // Las piedritas, astillas, lascas, hojas y la roca del meteorito son macizas: menguan en vez de transparentarse.
       if (SOLID.has(kind)) Object.assign(material, { transparent: false, depthWrite: true, side: kind === 'leaf' ? THREE.DoubleSide : THREE.FrontSide })
       const mesh = new THREE.Mesh(geometry, material)
       mesh.renderOrder = 2
@@ -1079,6 +1845,14 @@ export class AttackFxView {
     let list = this.free.get(piece.kind)
     if (!list) this.free.set(piece.kind, (list = []))
     list.push(piece)
+  }
+
+  /**
+   * Lo que se ve de algo en `at` según lo cerca que está de la cámara: nada a menos de `near` metros, todo a `near +
+   * span` o más. El humo y las llamas que caen a tus pies no tapan la pantalla.
+   */
+  private clear(at: THREE.Vector3, near: number, span: number) {
+    return Math.min(1, Math.max(0, (at.distanceTo(this.eye) - near) / span))
   }
 
   private ground(x: number, z: number) {

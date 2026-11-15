@@ -1,5 +1,6 @@
 import { enemyScale, PROP_DEFS, STEP, type EnemyType, type MobLook, type PropFamily } from '../sim/constants'
 import type { PlayerId, SimEvent, TargetRef } from '../sim/events'
+import type { Hazard } from '../sim/hazards'
 import type { ItemId } from '../sim/inventory'
 import type { ProjectileEnd, ProjectileKind } from '../sim/projectiles'
 import type { PropKind } from '../sim/props'
@@ -63,6 +64,33 @@ const WHISTLE_HEARING = 45
 const WHISTLES: Partial<Record<ProjectileKind, { tone: number; gain: number }>> = { rock: { tone: 1, gain: 1 }, arrow: { tone: 1.9, gain: 0.55 } }
 /** Cuánto sube (o baja) el tono por cada m/s que se acerca (o se aleja): el efecto Doppler, exagerado. */
 const DOPPLER = 1 / 70
+
+/**
+ * Cómo suenan los peligros del Guardián: el tajo y cada anillo de fuego, al salir; los charcos sisean al avisar y
+ * prenden al acabar el aviso; el meteorito pequeño silba al bajar y estalla al caer (con `delay`, lo que tarda).
+ */
+export function guardianSounds(h: Pick<Hazard, 'look' | 'ring' | 'startTick' | 'hitTick'>): { name: SoundName; delay: number }[] {
+  const delay = (h.hitTick - h.startTick) * STEP
+  switch (h.look) {
+    case 'fire':
+      return [{ name: h.ring ? 'flameWave' : 'lavaSlash', delay }]
+    case 'lava':
+      return [
+        { name: 'lavaHiss', delay: 0 },
+        { name: 'lavaIgnite', delay },
+      ]
+    case 'meteor':
+      return [
+        { name: 'meteorFall', delay: 0 },
+        { name: 'meteorCrash', delay },
+      ]
+    default:
+      return []
+  }
+}
+
+/** Lo que quita el escudo suena a metal; lo que quita el fuego mientras arde, a chisporroteo. */
+const hurtSound = (e: { blocked?: number; burning?: true }): SoundName => (e.blocked ? 'clank' : e.burning ? 'burnTick' : 'hurt')
 
 /** Una roca suena al chocar con el mundo; al dar a un jugador ya suena su daño. */
 const rockLands = (end: ProjectileEnd) => end === 'ground' || end === 'obstacle'
@@ -202,6 +230,8 @@ export class GameAudio {
     // Recoger varias piezas en el mismo paso suena una sola vez, y fabricar varias (Mayúsculas + clic), también.
     let collected = false
     const crafted = new Set<number>()
+    // Los charcos de lava salen juntos: suenan una vez.
+    let pools = false
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
@@ -240,6 +270,12 @@ export class GameAudio {
         case 'hazardAdded':
           if (e.hazard.look === 'rock') s.play('smash')
           if (e.hazard.look === 'stomp') s.play('quake')
+          if (e.hazard.look === 'lava' && pools) break
+          pools ||= e.hazard.look === 'lava'
+          for (const { name, delay } of guardianSounds(e.hazard)) s.play(name, { delay })
+          break
+        case 'enemyFury':
+          s.play('fury')
           break
         case 'projectileHit':
           if (rockLands(e.end)) s.play(landSound(this.thrown.get(e.id)), { gain: ROCK_HIT_GAIN })
@@ -258,8 +294,9 @@ export class GameAudio {
           break
         // Lo que para el escudo suena a metal.
         case 'playerHurt':
-          if (e.id === me) s.play(e.blocked ? 'clank' : 'hurt')
+          if (e.id === me) s.play(hurtSound(e))
           if (e.id === me && e.dazed) s.play('daze')
+          if (e.id === me && e.ignited) s.play('ignite')
           break
         case 'playerEquipped':
           if (e.id === me) s.play('place')
@@ -352,15 +389,16 @@ export class GameAudio {
    * cada evento (null: no se sabe, no suena). Lo que solo le importa a quien lo hace (recoger, bayas) no suena.
    */
   remote(list: readonly SimEvent[], listener: Listener, locate: (e: SimEvent) => Point | null, propKind: (id: number) => PropKind) {
-    const at = (e: SimEvent, distance: number, name: SoundName | null, minGain = 0) => {
+    const at = (e: SimEvent, distance: number, name: SoundName | null, minGain = 0, delay = 0) => {
       const where = name && locate(e)
       if (!where) return
       const { gain, pan } = spatialize(where.x - listener.x, where.z - listener.z, listener.yaw, distance)
       const g = Math.max(gain, minGain)
-      if (g > 0) this.sound.play(name, { gain: g, pan })
+      if (g > 0) this.sound.play(name, { gain: g, pan, ...(delay > 0 ? { delay } : {}) })
     }
-    // Lo que fabrica cada uno en un mismo paso suena una vez.
+    // Lo que fabrica cada uno en un mismo paso suena una vez, y los charcos de lava que salen juntos, también.
     const crafted = new Set<string>()
+    let pools = false
     for (const e of list) {
       switch (e.type) {
         case 'playerSwing':
@@ -391,6 +429,12 @@ export class GameAudio {
         case 'hazardAdded':
           if (e.hazard.look === 'rock') at(e, REMOTE_HEARING.hit, 'smash')
           if (e.hazard.look === 'stomp') at(e, REMOTE_HEARING.hit, 'quake')
+          if (e.hazard.look === 'lava' && pools) break
+          pools ||= e.hazard.look === 'lava'
+          for (const { name, delay } of guardianSounds(e.hazard)) at(e, REMOTE_HEARING.hit, name, 0, delay)
+          break
+        case 'enemyFury':
+          this.sound.play('fury')
           break
         case 'projectileHit':
           if (rockLands(e.end)) at(e, REMOTE_HEARING.hit, landSound(this.thrown.get(e.id)))
@@ -400,7 +444,7 @@ export class GameAudio {
           at(e, REMOTE_HEARING.place, 'place')
           break
         case 'playerHurt':
-          at(e, REMOTE_HEARING.hurt, e.blocked ? 'clank' : 'hurt')
+          at(e, REMOTE_HEARING.hurt, hurtSound(e))
           break
         case 'fishAppeared':
           at(e, REMOTE_HEARING.other, 'growl')

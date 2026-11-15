@@ -134,13 +134,101 @@ describe('AttackFxView', () => {
     expect(view.live).toBe(0)
   })
 
+  it('el Guardián, al preparar un ataque, calienta el suelo y echa brasas; el anillo abre grietas antes de salir', () => {
+    const view = new AttackFxView(mulberry32(1))
+    view.guardianWindup(0, 0, 0, 'meteorDrop', 0.8)
+    const meteor = view.live
+    const ring = new AttackFxView(mulberry32(1))
+    ring.guardianWindup(0, 0, 0, 'fireRing', 0.9)
+    // Siete grietas, cada una dos veces (halo y centro), además del suelo y la primera brasa.
+    expect(ring.live).toBeGreaterThan(meteor + 10)
+    play(view, 0.4)
+    expect(view.live).toBeGreaterThan(meteor)
+    play(view, 3)
+    play(ring, 3)
+    expect(view.live + ring.live).toBe(0)
+  })
+
+  it('el tajo de lava: arco, llamas, grietas, humo y el suelo quemado; se recoge todo al acabar', () => {
+    const view = new AttackFxView(mulberry32(1))
+    view.lavaSlash(0, 0, { x: -2, z: 0 })
+    expect(view.live).toBeGreaterThan(40)
+    play(view, 1)
+    // El suelo sigue quemado un rato.
+    expect(view.live).toBeGreaterThan(0)
+    play(view, 5)
+    expect(view.live).toBe(0)
+    expect(view.group.children).toHaveLength(0)
+  })
+
+  it('el anillo de fuego no sale antes de tiempo y lleva su pared de llamas hasta su radio', () => {
+    const view = new AttackFxView(mulberry32(1))
+    view.flameRing(0, 0, 9, 8, 0.5)
+    play(view, 0.3)
+    expect(view.live).toBe(0)
+    play(view, 0.5)
+    expect(view.live).toBeGreaterThan(44)
+    play(view, 6)
+    expect(view.live).toBe(0)
+  })
+
+  it('un charco de lava avisa, arde echando llamas y burbujas y se enfría sin dejar nada', () => {
+    const view = new AttackFxView(mulberry32(1))
+    view.lavaPool(0, 0, 2.2, 0.8, 5)
+    const warning = view.live
+    play(view, 0.5)
+    const burning = () => view.live
+    play(view, 1)
+    expect(burning()).toBeGreaterThan(warning + 5)
+    play(view, 10)
+    expect(view.live).toBe(0)
+  })
+
+  it('el meteorito pequeño baja con su estela y, al llegar, estalla y avisa (para que tiemble la pantalla)', () => {
+    const view = new AttackFxView(mulberry32(1))
+    const impacts: { x: number; z: number }[] = []
+    view.onImpact = (x, z) => impacts.push({ x, z })
+    view.meteorDrop(3, 4, 1)
+    expect(view.live).toBeGreaterThanOrEqual(5)
+    play(view, 0.9)
+    expect(impacts).toEqual([])
+    play(view, 0.2)
+    expect(impacts).toEqual([{ x: 3, z: 4 }])
+    play(view, 6)
+    expect(view.live).toBe(0)
+  })
+
+  it('al Guardián le salen brasas del cuerpo, muchas más enfurecido, y dejan de salir si muere', () => {
+    const embers = (hp: number) => {
+      const view = new AttackFxView(mulberry32(1))
+      const guardian = { id: 2, type: 'guardian' as const, alive: true, hp, maxHp: 1500, pos: { x: 0, z: 0 }, prev: { x: 0, z: 0 }, yaw: 0 }
+      for (let i = 0; i < 60; i++) view.update(0.016, [], 1, [guardian])
+      const live = view.live
+      guardian.alive = false
+      for (let i = 0; i < 300; i++) view.update(0.016, [], 1, [guardian])
+      expect(view.live).toBe(0)
+      return live
+    }
+    expect(embers(1500)).toBeGreaterThan(3)
+    expect(embers(600)).toBeGreaterThan(embers(1500) * 2)
+    // Los demás jefes, no.
+    const view = new AttackFxView(mulberry32(1))
+    view.update(0.5, [], 1, [{ id: 1, type: 'giant', alive: true, hp: 10, maxHp: 1800, pos: { x: 0, z: 0 }, prev: { x: 0, z: 0 }, yaw: 0 }])
+    expect(view.live).toBe(0)
+  })
+
   it('reiniciar no deja nada', () => {
     const projectiles = new Projectiles()
     const view = new AttackFxView(mulberry32(1))
     projectiles.launch(0, 'rock', { x: 0, y: 30, z: 0 }, { x: 30, y: 0, z: 0 }, 1)
     view.update(0.016, projectiles.list, 1)
     view.smash(0, 0)
+    view.lavaPool(0, 0, 2, 0.8, 5)
+    view.meteorDrop(0, 0, 1)
+    view.flameRing(0, 0, 9, 8)
+    view.update(0.016, [], 1)
     view.reset()
+    view.update(2, [], 1)
     expect(view.live).toBe(0)
     expect(view.group.children).toHaveLength(0)
   })

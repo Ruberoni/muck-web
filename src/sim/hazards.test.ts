@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DAZED_DAMAGE, ENEMY_DEFS, SHELL_BROKEN_PACE, SPECIAL_GAP, STEP } from './constants'
-import { Enemies } from './enemies'
-import { Hazards, ticks } from './hazards'
+import { BURN, DAZED_DAMAGE, ENEMY_DEFS, SHELL_BROKEN_PACE, SPECIAL_GAP, STEP, type SpecialId } from './constants'
+import { Enemies, furious, type EnemyData } from './enemies'
+import { Hazards, ticks, type Hazard } from './hazards'
 import { mulberry32 } from './random'
 import type { SimEventData } from './events'
 import { Simulation } from './Simulation'
@@ -68,11 +68,12 @@ describe('los peligros de los jefes', () => {
 
 describe('los ataques del guardián y del Coloso', () => {
   /** Un jefe a `distance` metros del jugador, quieto: hasta su primer ataque especial; devuelve cuál y lo que deja. */
-  const first = (type: 'guardian' | 'colossus', distance: number) => {
+  const first = (type: 'guardian' | 'colossus', distance: number, cooling: SpecialId[] = []) => {
     const sim = new Simulation(1)
     sim.addPlayer(0)
     const { player } = sim.slot(0)
     const boss = sim.enemies.spawnAt(player.pos.x + distance, player.pos.z, type)
+    for (const id of cooling) boss.special.cooldowns[id] = 1e9
     let attack: string | null = null
     for (let i = 0; i < ticks(4) && !attack; i++) {
       Object.assign(player, { health: 100 })
@@ -83,22 +84,30 @@ describe('los ataques del guardián y del Coloso', () => {
     return { sim, boss, player, attack, hazards: sim.hazards.list, projectiles: sim.projectiles.list }
   }
 
-  it('el guardián, pegado, suelta un anillo de fuego que se esquiva saltando', () => {
-    const { attack, hazards } = first('guardian', 2.5)
-    expect(attack).toBe('fireRing')
-    expect(hazards).toHaveLength(1)
-    expect(hazards[0]).toMatchObject({ look: 'fire', ring: { speed: expect.any(Number) } })
+  it('el guardián, pegado, baja el espadón: su tajo de lava es lo primero', () => {
+    expect(first('guardian', 2.5).attack).toBe('lavaSlash')
   })
 
-  it('el guardián, de lejos, prende tres charcos alrededor del jugador que queman a pulsos', () => {
+  it('el guardián, cerca, suelta un anillo de fuego que se esquiva saltando', () => {
+    const { attack, hazards } = first('guardian', 5)
+    expect(attack).toBe('fireRing')
+    expect(hazards).toHaveLength(1)
+    expect(hazards[0]).toMatchObject({ look: 'fire', ring: { speed: expect.any(Number) }, burn: true })
+  })
+
+  it('el guardián, de lejos, prende cuatro charcos de lava alrededor del jugador que queman a pulsos', () => {
     const { attack, hazards, player } = first('guardian', 10)
     expect(attack).toBe('burningGround')
-    expect(hazards).toHaveLength(3)
+    expect(hazards).toHaveLength(4)
     for (const h of hazards) {
-      expect(h).toMatchObject({ look: 'fire', pulse: ticks(0.5) })
+      expect(h).toMatchObject({ look: 'lava', pulse: ticks(0.5), burn: true })
       expect(Math.hypot(h.x - player.pos.x, h.z - player.pos.z)).toBeLessThan(6)
       expect((h.endTick - h.hitTick) * STEP).toBeCloseTo(5)
     }
+  })
+
+  it('el guardián, de lejos y con los charcos en espera, llama un meteorito pequeño', () => {
+    expect(first('guardian', 10, ['burningGround']).attack).toBe('meteorDrop')
   })
 
   it('el Coloso, pegado, avisa y estalla a su alrededor', () => {
@@ -253,6 +262,142 @@ describe('los jefes solo atacan con sus ataques especiales', () => {
       const near = specials.filter((s) => d >= s.min && d <= s.max)
       expect(near.length, `${type} a ${d} m`).toBeGreaterThan(0)
       expect(Math.min(...near.map((s) => s.cooldown)), `${type} a ${d} m`).toBeLessThanOrEqual(10)
+    }
+  })
+})
+
+describe('el fuego del Guardián del meteorito', () => {
+  /** El Guardián a `distance` m del jugador hace ya `attack` (con `prepare` antes): los peligros que deja y lo que pasa. */
+  const strike = (attack: SpecialId, distance = 4, prepare = (_boss: EnemyData) => {}) => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player } = sim.slot(0)
+    const boss = sim.enemies.spawnAt(player.pos.x + distance, player.pos.z, 'guardian')
+    prepare(boss)
+    const start = { x: player.pos.x, z: player.pos.z }
+    expect(sim.enemies.forceSpecial(boss.id, attack)).toBe(true)
+    const def = ENEMY_DEFS.guardian.specials!.find((s) => s.id === attack)!
+    const hazards: Hazard[] = []
+    const hurt: SimEventData[] = []
+    for (let i = 0; i < ticks(def.windup) + 2; i++)
+      for (const e of sim.step(new Map())) {
+        if (e.type === 'hazardAdded') hazards.push(e.hazard)
+        if (e.type === 'playerHurt') hurt.push(e)
+      }
+    return { sim, boss, player, start, hazards, hurt }
+  }
+  const angry = (boss: EnemyData) => {
+    boss.hp = boss.maxHp * 0.4
+  }
+
+  it('el tajo de lava da delante, hacia el jugador, y le prende fuego', () => {
+    const { hazards, boss, player, hurt } = strike('lavaSlash', 2.5)
+    expect(hazards).toHaveLength(1)
+    expect(hazards[0]).toMatchObject({ look: 'fire', burn: true })
+    expect(hazards[0].ring).toBeUndefined()
+    expect(hazards[0].x).toBeLessThan(boss.pos.x)
+    expect(hurt[0]).toMatchObject({ ignited: true })
+    expect(player.burnLeft).toBeGreaterThan(BURN.seconds - 0.1)
+  })
+
+  it('enfurecido, el anillo de fuego sale dos veces, uno detrás de otro', () => {
+    expect(strike('fireRing').hazards).toHaveLength(1)
+    const [first, second] = strike('fireRing', 4, angry).hazards
+    expect(second).toMatchObject({ look: 'fire', ring: first.ring })
+    expect((second.hitTick - first.hitTick) * STEP).toBeGreaterThan(0.5)
+  })
+
+  it('el meteorito cae donde estaba el jugador al segundo; enfurecido caen tres, uno tras otro', () => {
+    const calm = strike('meteorDrop', 10)
+    expect(calm.hazards).toHaveLength(1)
+    expect(calm.hazards[0]).toMatchObject({ look: 'meteor', burn: true })
+    expect(Math.hypot(calm.hazards[0].x - calm.start.x, calm.hazards[0].z - calm.start.z)).toBeLessThan(0.01)
+    expect((calm.hazards[0].hitTick - calm.hazards[0].startTick) * STEP).toBeCloseTo(1, 1)
+    const fury = strike('meteorDrop', 10, angry).hazards
+    expect(fury).toHaveLength(3)
+    expect(fury[1].hitTick).toBeGreaterThan(fury[0].hitTick)
+    expect(fury[2].hitTick).toBeGreaterThan(fury[1].hitTick)
+    for (const h of fury.slice(1)) expect(Math.hypot(h.x - fury[0].x, h.z - fury[0].z)).toBeGreaterThan(3)
+  })
+
+  it('se enfurece una vez, al bajar de media vida, y entonces ataca más seguido', () => {
+    const events: SimEventData[] = []
+    const enemies = new Enemies([], mulberry32(1), (e) => events.push(e), undefined, undefined, () => {})
+    const boss = enemies.spawnAt(0, 0, 'guardian')
+    const player = { x: 3, z: 0 }
+    enemies.hit(boss, boss.maxHp * 0.4, player, 0)
+    expect(furious(boss)).toBe(false)
+    enemies.hit(boss, boss.maxHp * 0.2, player, 0)
+    enemies.hit(boss, 10, player, 0)
+    expect(furious(boss)).toBe(true)
+    expect(events.filter((e) => e.type === 'enemyFury')).toEqual([{ type: 'enemyFury', id: boss.id }])
+    const cooldownAfter = (hp: number) => {
+      const e = new Enemies([], mulberry32(1), undefined, undefined, undefined, () => {}).spawnAt(0, 0, 'guardian')
+      e.hp = e.maxHp * hp
+      const list = new Enemies([], mulberry32(1), undefined, undefined, undefined, () => {})
+      list.list.push(e)
+      list.step(STEP, [{ id: 0, pos: { x: 2.5, z: 0 }, alive: true }], 0.3, 1)
+      return e.special.cooldowns.lavaSlash!
+    }
+    expect(cooldownAfter(0.4) / cooldownAfter(1)).toBeCloseTo(ENEMY_DEFS.guardian.fury!.pace, 2)
+  })
+
+  it('arder quita BURN.damage cada BURN.every durante BURN.seconds, y otro fuego vuelve a empezar la cuenta', () => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player } = sim.slot(0)
+    sim.hazards.add({ look: 'lava', x: player.pos.x, z: player.pos.z, radius: 2, startTick: 0, hitTick: sim.tick + 1, damage: 10, burn: true })
+    const hurt: SimEventData[] = []
+    for (let i = 0; i < ticks(BURN.seconds + 1); i++) for (const e of sim.step(new Map())) if (e.type === 'playerHurt') hurt.push(e)
+    expect(hurt[0]).toMatchObject({ dmg: 10, ignited: true })
+    const burns = hurt.slice(1)
+    expect(burns).toHaveLength(BURN.seconds / BURN.every)
+    for (const e of burns) expect(e).toMatchObject({ dmg: BURN.damage, burning: true })
+    expect(player.burnLeft).toBe(0)
+  })
+
+  it('en el agua no prende, y si ya ardía se apaga', () => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player } = sim.slot(0)
+    player.burnLeft = BURN.seconds
+    sim.teleport(0, 0, 94, 0, 0)
+    const hurt: SimEventData[] = []
+    for (let i = 0; i < ticks(1); i++) for (const e of sim.step(new Map())) if (e.type === 'playerHurt') hurt.push(e)
+    expect(player.burnLeft).toBe(0)
+    expect(hurt.filter((e) => e.type === 'playerHurt' && e.burning)).toEqual([])
+  })
+})
+
+describe('los ataques del Guardián castigan como los de los otros jefes', () => {
+  /** Un ataque del Guardián que da de lleno a un jugador con toda la vida y la armadura `armor`: la vida que le queda al apagarse. */
+  const left = (attack: SpecialId, distance: number, armor: 'iron' | 'mithril' | null) => {
+    const sim = new Simulation(1)
+    sim.addPlayer(0)
+    const { player, inventory } = sim.slot(0)
+    if (armor) Object.assign(inventory.equipped, { head: `${armor}_helmet`, chest: `${armor}_chestplate`, legs: `${armor}_leggings`, feet: `${armor}_boots` })
+    const boss = sim.enemies.spawnAt(player.pos.x + distance, player.pos.z, 'guardian')
+    boss.special.gap = 1e9
+    sim.enemies.forceSpecial(boss.id, attack)
+    // Hasta que pega y se apaga el fuego; el jugador no se mueve (y salta poco: el anillo le da en el suelo).
+    for (let i = 0; i < ticks(5); i++) sim.step(new Map())
+    return player.health
+  }
+
+  it('sin armadura, el tajo de lava, el anillo y el meteorito matan con lo que queman', () => {
+    expect(left('lavaSlash', 2.5, null)).toBe(0)
+    expect(left('fireRing', 4, null)).toBe(0)
+    expect(left('meteorDrop', 10, null)).toBe(0)
+  })
+
+  it('con armadura se aguantan: con la de hierro, a duras penas; con la de mithril, con algo de vida', () => {
+    for (const [attack, distance] of [['lavaSlash', 2.5], ['fireRing', 4], ['meteorDrop', 10]] as const) {
+      const iron = left(attack, distance, 'iron')
+      const mithril = left(attack, distance, 'mithril')
+      expect(iron, attack).toBeGreaterThan(0)
+      expect(iron, attack).toBeLessThan(30)
+      expect(mithril, attack).toBeGreaterThan(iron)
+      expect(mithril, attack).toBeLessThan(55)
     }
   })
 })

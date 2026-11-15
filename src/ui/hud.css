@@ -580,6 +580,21 @@
 /* En el menú: la isla de fondo, sin barras, hotbar, minimapa, día ni mira. El chat y los avisos de la sala se quedan. */
 .hud.in-menu > :not(.chat):not(.notices) { visibility: hidden; }
 
+/*
+ * Ardiendo por el fuego del Guardián del meteorito: los bordes arden en naranja (su color) y tiemblan mientras dura
+ * (Game.showBurn). Abajo, más fuerte: es de donde sube el fuego.
+ */
+.burn {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 115%, rgb(255 210 120 / 0.55) 0%, rgb(255 106 31 / 0.45) 35%, transparent 70%),
+    radial-gradient(ellipse at center, transparent 45%, rgb(255 106 31 / 0.3) 72%, rgb(200 40 10 / 0.65) 100%);
+  mix-blend-mode: screen;
+}
+
 /* Aturdido por una flecha del trasgo gigante: el borde se tiñe de azul (su color) y se va pasando (Game.showDaze). */
 .daze {
   position: fixed;

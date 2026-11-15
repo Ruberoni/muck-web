@@ -1,8 +1,11 @@
 import { STEP } from './constants'
 import { NO_EMIT, type Emit, type PlayerId } from './events'
 
-/** Cómo se ve un peligro: lo elige el ataque que lo crea (la vista lo pinta de su color). */
-export type HazardLook = 'stomp' | 'rock' | 'fire' | 'light' | 'crystal'
+/**
+ * Cómo se ve un peligro: lo elige el ataque que lo crea (la vista lo pinta de su color). Del Guardián: `fire` (el anillo
+ * y el tajo de lava), `lava` (los charcos) y `meteor` (el meteorito pequeño).
+ */
+export type HazardLook = 'stomp' | 'rock' | 'fire' | 'lava' | 'meteor' | 'light' | 'crystal'
 
 /**
  * Un peligro en el suelo, con centro fijo y por ticks, como los proyectiles: así el cliente lo dibuja en su tick
@@ -25,6 +28,8 @@ export interface Hazard {
   damage: number
   pulse?: number
   ring?: { speed: number; width: number }
+  /** Prende fuego al que le da (BURN). */
+  burn?: true
   /** A quién ha dado ya una onda. */
   hit: PlayerId[]
 }
@@ -40,6 +45,7 @@ export interface HazardTarget {
 export interface HazardDamage {
   playerId: PlayerId
   damage: number
+  burn?: true
 }
 
 export interface HazardsState {
@@ -83,9 +89,9 @@ export class Hazards {
           const r = ringRadius(h, tick)
           if (!p.grounded || h.hit.includes(p.id) || d > r || d < r - h.ring.width || d > h.radius + h.ring.width) continue
           h.hit.push(p.id)
-          damage.push({ playerId: p.id, damage: h.damage })
+          damage.push({ playerId: p.id, damage: h.damage, ...(h.burn ? { burn: true as const } : {}) })
         } else if (d <= h.radius && (h.pulse ? (tick - h.hitTick) % h.pulse === 0 : tick === h.hitTick)) {
-          damage.push({ playerId: p.id, damage: h.damage })
+          damage.push({ playerId: p.id, damage: h.damage, ...(h.burn ? { burn: true as const } : {}) })
         }
       }
       if (tick >= h.endTick) this.list.splice(this.list.indexOf(h), 1)

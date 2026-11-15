@@ -104,6 +104,12 @@ export interface EnemySpecial {
 
 export const NO_SPECIAL: EnemySpecial = { id: null, time: 0, recover: false, gap: 0, cooldowns: {} }
 
+/** Enfurecido (`EnemyDef.fury`): vivo y con la vida que dice su furia o menos. */
+export function furious(e: Pick<EnemyData, 'type' | 'hp' | 'maxHp'>) {
+  const fury = ENEMY_DEFS[e.type].fury
+  return !!fury && e.hp > 0 && e.hp <= e.maxHp * fury.below
+}
+
 /** Hace un ataque especial al acabar su aviso, contra `target` (la simulación tiene los proyectiles y los peligros). */
 export type OnSpecial = (e: EnemyData, id: SpecialId, target: EnemyPrey) => void
 
@@ -531,7 +537,7 @@ export class Enemies {
     const s = (e.special ??= { ...NO_SPECIAL, cooldowns: {} })
     s.id = ready.id
     s.time = ready.windup
-    s.cooldowns[ready.id] = ready.cooldown * (enemy.shell && e.shell <= 0 ? SHELL_BROKEN_PACE : 1)
+    s.cooldowns[ready.id] = ready.cooldown * (enemy.shell && e.shell <= 0 ? SHELL_BROKEN_PACE : 1) * (furious(e) ? enemy.fury!.pace : 1)
     if (ready.id === 'charge') {
       e.charge.state = 'crouch'
       e.charge.time = ready.windup
@@ -839,12 +845,14 @@ export class Enemies {
     // Aturdido tras embestir o agotado tras un ataque especial: es el momento de golpearlo.
     const dazed = e.charge.state === 'dazed' || e.special?.recover === true
     if (dazed) efficacy = 'effective'
+    const calm = !furious(e)
     e.hp = Math.max(0, e.hp - (dazed ? damage * DAZED_DAMAGE : damage))
     if (e.hp <= 0) {
       this.kill(e)
       this.emit({ type: 'enemyDied', id: e.id, by })
       return true
     }
+    if (calm && furious(e)) this.emit({ type: 'enemyFury', id: e.id })
     const def = ENEMY_DEFS[e.type]
     // Lo aguanta: si cada golpe lo aturdiera, golpeando sin parar nunca llegaría a atacar.
     if (def.stagger <= 0 || e.staggerGuard > 1e-9) {

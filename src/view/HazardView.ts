@@ -11,8 +11,17 @@ const PULSE = 6
 /** Segundos que se ve el golpe de una zona al caer. */
 const BURST_TIME = 0.35
 
-// El pisotón es del trasgo gigante: azul, su color (ver AttackFxView).
-const COLORS: Record<HazardLook, string> = { stomp: '#4fb8ff', rock: '#ff3b2f', fire: '#ff6a1f', light: '#fff2b0', crystal: '#2fb4ff' }
+// El pisotón es del trasgo gigante: azul, su color; el fuego, la lava y el meteorito pequeño, del Guardián: naranja de
+// lava, y rojo donde va a caer el meteorito (ver AttackFxView).
+const COLORS: Record<HazardLook, string> = {
+  stomp: '#4fb8ff',
+  rock: '#ff3b2f',
+  fire: '#ff6a1f',
+  lava: '#ff4a12',
+  meteor: '#ff2a1a',
+  light: '#fff2b0',
+  crystal: '#2fb4ff',
+}
 
 const discGeometry = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2)
 const ringGeometry = new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2)

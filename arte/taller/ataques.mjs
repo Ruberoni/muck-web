@@ -46,6 +46,14 @@ const tired = (deep) => ({ body: deep ? -0.1 : -0.07, lean: deep ? 26 : 20, head
 // Cada uno: windup y recover como en constants.ts, y [segundo, pose] hasta un poco después del golpe.
 const ATAQUES = {
   // Guardián del meteorito
+  lavaSlash: { // Tajo de lava: alza el espadón por encima del hombro derecho y lo baja cruzado, delante, contra el suelo.
+    windup: 0.7, recover: 1.1, keys: [
+      [0.35, { twist: 30, lean: -10, head: -5, arm: [-0.45, 0.85, -0.3], fore: [-0.2, 1, -0.2], armL: [0.5, -0.5, 0.6] }],
+      [0.62, { twist: 38, lean: -14, arm: [-0.4, 0.9, -0.45], fore: [-0.1, 1, -0.4], armL: [0.45, -0.45, 0.65] }],
+      [0.7, { body: -0.15, twist: -20, lean: 32, head: 6, arm: [0.15, -0.55, 0.8], fore: [0.25, -0.8, 0.55], armL: [0.5, -0.7, 0.4] }],
+      [0.86, { body: -0.17, twist: -24, lean: 34, head: 8, arm: [0.2, -0.6, 0.75], fore: [0.3, -0.85, 0.45], armL: [0.5, -0.72, 0.4] }],
+    ],
+  },
   fireRing: { // Anillo de fuego: alza los puños y golpea el suelo con los dos.
     windup: 0.9, recover: 1.4, keys: [
       [0.45, { body: 0.03, lean: -12, head: -15, arm: [-0.25, 1, 0.15], fore: [-0.1, 1, 0.2] }],
@@ -62,7 +70,7 @@ const ATAQUES = {
       [1.15, { twist: -30, lean: 18, armL: [-0.15, -0.3, 0.95], foreL: [-0.1, -0.45, 0.9], arm: [-0.6, -0.45, -0.5] }],
     ],
   },
-  lightning: { // Rayo: levanta la maza al cielo, apunta con la otra mano y baja la maza hacia el jugador.
+  meteorDrop: { // Meteorito: levanta el espadón al cielo, apunta con la otra mano y lo baja hacia el jugador.
     windup: 0.8, recover: 1, keys: [
       [0.4, { lean: -10, head: -20, arm: [-0.15, 1, 0.05], fore: [0, 1, 0.1], armL: [0.5, 0.1, 0.85], foreL: [0.3, 0.1, 0.95] }],
       [0.7, { lean: -14, head: -25, arm: [-0.05, 1, -0.05], fore: [0, 1, 0], armL: [0.45, 0.12, 0.88], foreL: [0.25, 0.12, 0.96] }],
@@ -210,22 +218,31 @@ function weaponTracks(doc, specs, poses) {
 
 /** Qué ataques hace cada jefe (como en constants.ts). */
 export const JEFES = {
-  guardian: ['fireRing', 'burningGround', 'lightning'],
+  guardian: ['lavaSlash', 'fireRing', 'burningGround', 'meteorDrop'],
   coloso: ['pulse', 'pillars', 'shardFan', 'lightBeam'],
   gigante: ['stomp', 'arrowVolley', 'charge'],
   lanzarrocas: ['smash', 'summonGolems', 'fastRock'],
 }
 
+/** Ataques que ya no existen (el rayo del Guardián es ahora `meteorDrop`): su animación se quita de cualquier modelo. */
+const RETIRADOS = ['lightning']
+
+/** Quita de `doc` la animación `name`, si la tiene. */
+function quitar(doc, name) {
+  for (const a of doc.getRoot().listAnimations()) if (a.getName() === name) {
+    for (const c of a.listChannels()) c.dispose()
+    for (const s of a.listSamplers()) { s.getInput()?.dispose(); s.getOutput()?.dispose(); s.dispose() }
+    a.dispose()
+  }
+}
+
 /** Agrega a `doc` las animaciones de los ataques `ids` (reemplaza las que ya estén). */
 export function agregarAtaques(doc, ids) {
   const idle = new Pose(doc)
+  for (const name of RETIRADOS) quitar(doc, name)
   for (const id of ids) {
     const { windup, recover, keys, carrera } = ATAQUES[id]
-    for (const a of doc.getRoot().listAnimations()) if (a.getName() === id) {
-      for (const c of a.listChannels()) c.dispose()
-      for (const s of a.listSamplers()) { s.getInput()?.dispose(); s.getOutput()?.dispose(); s.dispose() }
-      a.dispose()
-    }
+    quitar(doc, id)
     const last = keys.at(-1)[0]
     const end = (carrera ?? 0) + windup
     const keep = ATAQUES[id].end ?? {}

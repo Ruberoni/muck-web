@@ -210,6 +210,9 @@ export class Game {
   private daze = new Daze()
   private dazeOverlay = document.createElement('div')
   private dazeShown = 0
+  /** Ardiendo por el fuego del Guardián: los bordes de la pantalla arden y tiemblan (`.burn`) mientras dura. */
+  private burnOverlay = document.createElement('div')
+  private burnShown = 0
   /** Las estaciones al fabricar, como las ve el cliente (con margen): para el filtro de envío y la pantalla. */
   private craftWorld = clientCraftWorld(() => this.sim.structures.list)
   /** Dónde un mob ya no hace pie y nada (la regla de la simulación): ahí sus pasos son chapoteos. */
@@ -247,6 +250,10 @@ export class Game {
     container.appendChild(this.renderer.domElement)
     this.dazeOverlay.className = 'daze'
     container.appendChild(this.dazeOverlay)
+    this.burnOverlay.className = 'burn'
+    container.appendChild(this.burnOverlay)
+    // El meteorito pequeño del Guardián hace temblar el suelo al caer.
+    this.attackFx.onImpact = (x, z) => this.shake.start(Math.hypot(x - this.renderPos.x, z - this.renderPos.z))
 
     this.camera = new THREE.PerspectiveCamera(this.settings.fov, window.innerWidth / window.innerHeight, 0.1, 600)
     this.camera.rotation.order = 'YXZ'
@@ -803,7 +810,8 @@ export class Game {
           if (e.id === slot.id) this.hud.showBanner('¡Un pez te ronda! Sal del agua')
           break
         case 'playerHurt':
-          if (e.id === slot.id) this.hud.flashHurt()
+          // Lo que quita el fuego mientras arde ya se ve en los bordes (`.burn`): no destella cada vez.
+          if (e.id === slot.id && !e.burning) this.hud.flashHurt()
           if (e.id === slot.id && e.dazed) this.daze.start()
           break
         case 'playerSwing':
@@ -854,6 +862,22 @@ export class Game {
           this.hud.showBanner('¡La coraza se ha roto!')
           this.sound.play('breakStone')
           break
+        case 'enemyFury': {
+          // El sonido va con los demás (GameAudio): aquí, el aviso y el estallido de fuego.
+          const boss = this.sim.enemies.list.find((en) => en.id === e.id)
+          if (!boss) break
+          this.hud.showBanner(`¡El ${ENEMY_DEFS[boss.type].name} se enfurece!`)
+          this.attackFx.fury(boss.pos.x, boss.pos.z)
+          this.shake.start(Math.hypot(boss.pos.x - this.renderPos.x, boss.pos.z - this.renderPos.z))
+          break
+        }
+        case 'enemySpecial': {
+          // El Guardián avisa de lo que prepara con fuego (los demás jefes, con su pose y su sonido).
+          const boss = this.sim.enemies.list.find((en) => en.id === e.id)
+          const windup = boss?.type === 'guardian' ? ENEMY_DEFS.guardian.specials?.find((d) => d.id === e.attack)?.windup : undefined
+          if (boss && windup !== undefined) this.attackFx.guardianWindup(boss.pos.x, boss.pos.z, boss.yaw, e.attack, windup)
+          break
+        }
         case 'planeCrashed':
           this.hud.showBanner(`El avión ha caído al ${compassName(e.x - this.renderPos.x, e.z - this.renderPos.z)}`)
           this.shake.start(Math.hypot(e.x - this.renderPos.x, e.z - this.renderPos.z))
@@ -879,11 +903,17 @@ export class Game {
           this.audio.meteorIncoming()
           break
         case 'hazardAdded': {
-          // El pisotón y el golpe al suelo del Lanzarrocas hacen temblar el suelo; el golpe, además, levanta viento.
-          const { look, x, z } = e.hazard
-          if (look === 'stomp' || look === 'rock') this.shake.start(Math.hypot(x - this.renderPos.x, z - this.renderPos.z))
+          // El pisotón, el golpe al suelo del Lanzarrocas y el fuego del Guardián (su tajo y su anillo) hacen temblar el
+          // suelo; el meteorito pequeño, al caer (`attackFx.onImpact`).
+          const { look, x, z, ring, startTick, hitTick, endTick } = e.hazard
+          const delay = (hitTick - startTick) * STEP
+          if (look === 'stomp' || look === 'rock' || (look === 'fire' && delay === 0)) this.shake.start(Math.hypot(x - this.renderPos.x, z - this.renderPos.z))
           if (look === 'rock') this.attackFx.smash(x, z, this.nearestEnemy('thrower', x, z))
-          if (look === 'stomp' && e.hazard.ring) this.attackFx.stomp(x, z, e.hazard.radius, e.hazard.ring.speed)
+          if (look === 'stomp' && ring) this.attackFx.stomp(x, z, e.hazard.radius, ring.speed)
+          if (look === 'fire' && ring) this.attackFx.flameRing(x, z, e.hazard.radius, ring.speed, delay)
+          if (look === 'fire' && !ring) this.attackFx.lavaSlash(x, z, this.nearestEnemy('guardian', x, z))
+          if (look === 'lava') this.attackFx.lavaPool(x, z, e.hazard.radius, delay, (endTick - hitTick) * STEP)
+          if (look === 'meteor') this.attackFx.meteorDrop(x, z, delay, this.nearestEnemy('guardian', x, z))
           break
         }
         case 'enemyCharge':
@@ -1016,6 +1046,18 @@ export class Game {
     }
     this.audio.remote(events, this.listener(), locate, (id) => sim.world.props[id].kind)
     for (const e of events) if (e.type === 'playerDied' && e.id !== net.me) this.hud.net.notice(`${this.nameOf(net, e.id)} ha muerto`)
+  }
+
+  /**
+   * Los bordes que arden mientras quedan `left` segundos de fuego: fuertes al prender, temblando, y se apagan en el
+   * último medio segundo. Solo se toca el DOM cuando cambia de verdad.
+   */
+  private showBurn(left: number, time: number) {
+    const flicker = 0.85 + 0.1 * Math.sin(time * 0.023) + 0.05 * Math.sin(time * 0.061)
+    const shown = left > 0 ? Math.round(Math.min(1, left / 0.5) * flicker * 50) / 50 : 0
+    if (shown === this.burnShown) return
+    this.burnShown = shown
+    this.burnOverlay.style.opacity = String(shown)
   }
 
   /** El borde azul y lo nublado del aturdimiento; solo se toca el DOM cuando cambia de verdad. */
@@ -1270,6 +1312,7 @@ export class Game {
       this.camera.translateX(daze.sway)
     }
     this.showDaze(staged ? 0 : daze.amount)
+    this.showBurn(staged || !slot.alive ? 0 : p.burnLeft, time)
     this.enemyView.update(dt, enemies.list, alpha)
     // El enemigo que muera del próximo golpe ya no estará en la lista: su sitio, para lo que salta del golpe.
     this.enemiesSeen.clear()
@@ -1314,7 +1357,7 @@ export class Game {
     this.hud.setHealth(p.health, maxHealthOf(p.boosts), p.regenLeft, warmHeals(p, warm))
     this.hud.setHunger(p.hunger, HUNGER_MAX)
     this.hud.setStamina(p.stamina, STAMINA_MAX, p.exhausted)
-    this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft, warm })
+    this.hud.setEffects({ breath: p.breathLeft, speed: p.speedLeft, guard: p.guardLeft, warm, burn: slot.alive ? p.burnLeft : 0 })
     const eating = p.eatItem && CONSUMABLE_DEFS[p.eatItem]
     this.hud.setEating(eating && p.eatLeft > 0 ? 1 - p.eatLeft / eating.time : null)
     this.toolWarning.left = Math.max(0, this.toolWarning.left - dt)

@@ -15,6 +15,8 @@ interface Sample {
   attacks: Record<string, { attack: SpecialId; label: string }>
   /** El texto de la tecla que quita los mobs que llama (sin él, no hay tecla). */
   clear?: string
+  /** El texto de la tecla que lo enfurece (le baja la vida a su furia) o lo calma (sin él, no hay tecla). */
+  fury?: string
 }
 
 // Las teclas: el juego no usa ninguna de estas.
@@ -43,10 +45,27 @@ const SAMPLES: Record<string, Sample> = {
       KeyL: { attack: 'arrowVolley', label: 'Tres flechas' },
     },
   },
+  // A unos 8 m se le ve entero (mide unos 3,6 m) y llega su anillo de fuego; los charcos y el meteorito caen donde
+  // estás. Enfurecido, el anillo sale dos veces y caen tres meteoritos.
+  guardian: {
+    type: 'guardian',
+    name: 'Guardián del meteorito',
+    distance: 8,
+    keep: { flee: 7.5, max: 8.5 },
+    attacks: {
+      KeyJ: { attack: 'lavaSlash', label: 'Tajo de lava' },
+      KeyK: { attack: 'fireRing', label: 'Anillo de fuego' },
+      KeyL: { attack: 'burningGround', label: 'Charcos de lava' },
+      KeyU: { attack: 'meteorDrop', label: 'Meteorito' },
+    },
+    fury: 'Enfurecer / calmar',
+  },
 }
 const NIGHT_KEY = 'KeyN'
 /** Quita los mobs comunes (los que llama el jefe): se ponen delante y lo tapan. */
 const CLEAR_KEY = 'KeyG'
+/** Enfurece al jefe que tiene furia (o lo calma devolviéndole la vida). */
+const FURY_KEY = 'KeyH'
 /** Mediodía y medianoche (fase del día). */
 const NOON = 0.3
 const MIDNIGHT = 0.82
@@ -56,9 +75,10 @@ const TICK_MS = 200
 const QUIET = 999
 
 /**
- * Ventana de muestra, solo en desarrollo (`?muestra=lanzarrocas` o `?muestra=gigante`): una partida sola, de día, con el
- * jefe delante, para ver sus ataques como en el juego. El jefe no ataca solo: J, K y L hacen cada uno de sus ataques;
- * N cambia entre día y noche y G quita los mobs que haya llamado. El jugador no muere ni pasa hambre.
+ * Ventana de muestra, solo en desarrollo (`?muestra=lanzarrocas`, `?muestra=gigante` o `?muestra=guardian`): una partida
+ * sola, de día, con el jefe delante, para ver sus ataques como en el juego. El jefe no ataca solo: J, K, L (y U) hacen
+ * cada uno de sus ataques; N cambia entre día y noche, G quita los mobs que haya llamado y H enfurece al Guardián. El
+ * jugador no muere ni pasa hambre.
  */
 export function installMuestra(game: Game, debug: DebugApi, which: string) {
   const sample = SAMPLES[which]
@@ -77,7 +97,7 @@ export function installMuestra(game: Game, debug: DebugApi, which: string) {
   const row = (code: string, label: string) => `<div data-key="${code}"><kbd>${code.slice(3)}</kbd> ${label}</div>`
   panel.innerHTML = `<b>Muestra · ${sample.name}</b>${Object.entries(sample.attacks)
     .map(([code, { label }]) => row(code, label))
-    .join('')}${row(NIGHT_KEY, 'Día / noche')}${sample.clear ? row(CLEAR_KEY, sample.clear) : ''}`
+    .join('')}${row(NIGHT_KEY, 'Día / noche')}${sample.clear ? row(CLEAR_KEY, sample.clear) : ''}${sample.fury ? row(FURY_KEY, sample.fury) : ''}`
   const style = document.createElement('style')
   // A la izquierda, debajo del día: arriba en el centro va la vida del jefe.
   style.textContent = `.muestra { position: fixed; top: 64px; left: 12px; z-index: 50;
@@ -111,6 +131,19 @@ export function installMuestra(game: Game, debug: DebugApi, which: string) {
     }
     if (ev.code === CLEAR_KEY && sample.clear) {
       for (const spot of game.sim.enemies.calmAll()) game.smokeView.puff(spot.x, spot.z)
+      flash(ev.code)
+      return
+    }
+    const fury = ENEMY_DEFS[sample.type].fury
+    if (ev.code === FURY_KEY && sample.fury && fury) {
+      const e = game.sim.enemies.list.find((en) => en.id === boss && en.alive)
+      if (!e) return
+      // Calmado: se le deja justo encima de su furia y un golpecito lo enfurece, como en el juego (con su aviso).
+      if (e.hp <= e.maxHp * fury.below) e.hp = e.maxHp
+      else {
+        e.hp = e.maxHp * fury.below + 1
+        game.sim.enemies.hit(e, 2, e.pos, game.slot.id)
+      }
       flash(ev.code)
       return
     }
