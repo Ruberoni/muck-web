@@ -16,6 +16,6 @@ export default defineConfig({
   },
   test: {
     // Los de la Durable Object (arrancan workerd) y la medida de CPU van aparte, con `npm run test:server`.
-    exclude: [...configDefaults.exclude, 'server/**/*.workerd.test.ts', 'server/**/*.perf.test.ts'],
+    exclude: [...configDefaults.exclude, 'server/**/*.workerd.test.ts', 'server/**/*.perf.test.ts', '**/.claude/**'],
   },
 })
