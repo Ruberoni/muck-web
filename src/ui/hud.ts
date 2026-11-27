@@ -137,8 +137,9 @@ export class Hud {
    * Los efectos con tiempo que siguen en marcha (aliento, rapidez, piedra), con los segundos que les quedan, y
    * `warm`: al calor de una fogata encendida, sin tiempo ("Calor").
    */
-  setEffects(effects: { breath: number; speed: number; guard: number; warm?: boolean }) {
+  setEffects(effects: { breath: number; speed: number; guard: number; warm?: boolean; burn?: number }) {
     const parts = [
+      (effects.burn ?? 0) > 0 ? `Ardiendo ${Math.ceil(effects.burn!)} s` : '',
       effects.warm ? 'Calor' : '',
       effects.breath > 0 ? `Aliento ${Math.ceil(effects.breath)} s` : '',
       effects.speed > 0 ? `Rapidez ${Math.ceil(effects.speed)} s` : '',

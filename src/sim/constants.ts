@@ -48,6 +48,11 @@ export const EAT_KEY = 'KeyF'
 export const EAT_SPEED_FACTOR = 0.5
 /** Una flecha del trasgo gigante aturde un poco: tantos segundos andando a esta parte de la velocidad. */
 export const ARROW_DAZE = { seconds: 0.5, factor: 0.6 }
+/**
+ * El fuego del Guardián del meteorito prende al que le da: arde `seconds` segundos y cada `every` pierde `damage` (lo
+ * resta la armadura, no el escudo). Otro fuego vuelve a empezar la cuenta; meterse en el agua lo apaga.
+ */
+export const BURN = { seconds: 3, every: 0.5, damage: 4 }
 
 export interface ConsumableDef {
   /** Segundos que se tarda en comerlo o beberlo: el efecto llega al acabar. */
@@ -291,8 +296,9 @@ export type SpecialId =
   | 'summonGolems'
   | 'smash'
   | 'fastRock'
+  | 'lavaSlash'
   | 'fireRing'
-  | 'lightning'
+  | 'meteorDrop'
   | 'burningGround'
   | 'pulse'
   | 'pillars'
@@ -320,6 +326,12 @@ export interface SpecialDef {
 export const SPECIAL_GAP = 2.5
 /** Con la coraza rota, las esperas de los ataques especiales se quedan en esto: el Coloso se enfada. */
 export const SHELL_BROKEN_PACE = 0.75
+
+/** Furia: con la vida en `below` (fracción de la máxima) o menos, las esperas de sus ataques se quedan en `pace`. */
+export interface FuryDef {
+  below: number
+  pace: number
+}
 
 /** Guarda un sitio: se despierta con un jugador a `aggro` metros y persigue mientras siga a menos de `leash` de ese sitio. */
 export interface GuardDef {
@@ -380,6 +392,8 @@ export interface EnemyDef {
   light?: boolean
   /** Coraza, por jugador: hasta romperla a pico casi no recibe daño. */
   shell?: number
+  /** Se enfurece con poca vida: ataca más seguido y algunos ataques se doblan (ver Simulation.special). */
+  fury?: FuryDef
   /** Ataques especiales, en orden de preferencia cuando hay varios listos. */
   specials?: SpecialDef[]
 }
@@ -526,7 +540,8 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
       { id: 'fastRock', min: 4, max: 24, windup: 0.6, cooldown: 5, recover: 0.8, look: 'aim' },
     ],
   },
-  // Guarda el meteorito de día y de noche, hasta que lo matan. Más lento que andar, y el pico lo rompe antes.
+  // Guarda el meteorito de día y de noche, hasta que lo matan. Más lento que andar, y el pico lo rompe antes. Su fuego
+  // quema (BURN) y sus ataques casi matan, como los de los otros jefes; con media vida se enfurece (`fury`).
   guardian: {
     name: 'Guardián del meteorito',
     verb: 'atacar',
@@ -549,13 +564,16 @@ export const ENEMY_DEFS: Record<'goblin' | 'golem' | 'spirit' | 'giant' | 'throw
     loot: [{ item: 'meteor_fragment', amount: 3 }, { item: 'coin', amount: 5 }],
     cost: 6,
     guard: { aggro: 15, leash: 25 },
+    fury: { below: 0.5, pace: 0.7 },
     specials: [
-      // Anillo de fuego: una onda lenta de 9 m que se esquiva saltando.
+      // Tajo de lava: pegado, baja el espadón delante y el suelo arde donde da. Se esquiva apartándose.
+      { id: 'lavaSlash', min: 0, max: 3.5, windup: 0.7, cooldown: 5, recover: 1.1, look: 'crouch' },
+      // Anillo de fuego: una onda lenta de 9 m que se esquiva saltando (enfurecido, dos seguidas).
       { id: 'fireRing', min: 0, max: 6, windup: 0.9, cooldown: 5, recover: 1.4, look: 'crouch' },
-      // Suelo ardiente: tres charcos alrededor del jugador que queman 5 s.
-      { id: 'burningGround', min: 3, max: 18, windup: 1, cooldown: 12, recover: 1.3, look: 'aim' },
-      // Rayo: marca donde estás y cae a los 0,9 s.
-      { id: 'lightning', min: 2, max: 20, windup: 0.8, cooldown: 7, recover: 1, look: 'aim' },
+      // Suelo ardiente: cuatro charcos de lava alrededor del jugador que queman 5 s.
+      { id: 'burningGround', min: 3, max: 18, windup: 1, cooldown: 10, recover: 1.3, look: 'aim' },
+      // Meteorito: alza el espadón, marca donde estás y cae uno pequeño 1 s después (enfurecido, tres).
+      { id: 'meteorDrop', min: 2, max: 22, windup: 0.8, cooldown: 6, recover: 1, look: 'aim' },
     ],
   },
   // Jefe de luz: casi no recibe daño hasta que un pico le rompe la coraza. Guarda el motor del avión.

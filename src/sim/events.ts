@@ -78,7 +78,8 @@ export type SimEventData =
   | { type: 'playerEquipped'; id: PlayerId; item: ItemId | null }
   /** `blocked`: lo que ha parado el escudo (sin él, nada). */
   /** `dazed`: una flecha le ha aturdido (anda más despacio un momento, y la vista lo enseña). */
-  | { type: 'playerHurt'; id: PlayerId; dmg: number; blocked?: number; dazed?: true }
+  /** `ignited`: el fuego del Guardián le ha prendido (BURN); `burning`: todo el daño es de estar ardiendo. */
+  | { type: 'playerHurt'; id: PlayerId; dmg: number; blocked?: number; dazed?: true; ignited?: true; burning?: true }
   | { type: 'playerDied'; id: PlayerId }
   | { type: 'playerRespawn'; id: PlayerId; x: number; z: number }
   /** Todos muertos (o, en solitario, sin vidas): a los pocos segundos se acaba la partida (`matchEnded`). */
@@ -112,6 +113,8 @@ export type SimEventData =
   | { type: 'graveOpened'; id: number }
   /** Un pico ha roto la coraza de un jefe de luz. */
   | { type: 'shellBroken'; id: number }
+  /** Un jefe con `fury` ha bajado de esa vida: se enfurece (ataca más seguido y algunos ataques se doblan). */
+  | { type: 'enemyFury'; id: number }
   /** Los mobs han subido: un rasgo con la campana o, sin él (`trait` null), uno de los saltos. */
   | { type: 'mobsRose'; trait: MobTrait | null; threat: ThreatState }
   /** El amuleto del olvido: los mobs pierden `trait` (null: no tenían ninguno). */

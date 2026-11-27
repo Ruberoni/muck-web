@@ -6,6 +6,7 @@ import { resolveCircle, type Collider, type SpatialGrid } from './collision'
 import type { CraftWorld, RecipeId } from './crafting'
 import {
   ARROW_DAZE,
+  BURN,
   DEATH_DROP_HEIGHT,
   ENEMY_DEFS,
   EYE_HEIGHT,
@@ -31,7 +32,7 @@ import {
   STATION_RANGE,
   STEP,
 } from './constants'
-import { Enemies, PLANE_TARGET, type EnemyData, type EnemyPrey, type EnemiesState } from './enemies'
+import { Enemies, furious, PLANE_TARGET, type EnemyData, type EnemyPrey, type EnemiesState } from './enemies'
 import { EventLog, type PlayerId, type SimEvent } from './events'
 import { createCombat, Interaction, type Combat } from './interaction'
 import { Inventory, KEY_ITEMS, type InventoryState, type ItemId } from './inventory'
@@ -48,7 +49,7 @@ import { mulberry32, type Rng } from './random'
 import { placeableOf, stationNear, Structures, structureSpot, warmAt, type PlaneState, type Structure, type StructuresState, type StructureSpot } from './structures'
 import { damageTaken, spendGuard } from './equipment'
 import { putInto, takeFrom } from './stations'
-import { guardFactor, hurt, isDead } from './survival'
+import { burnsNow, guardFactor, hurt, isDead } from './survival'
 import { Threat, type ThreatState } from './threat'
 import { DayClock, isNight, NIGHT_LENGTH } from './world/daycycle'
 import { createIsland, DEFAULT_ISLAND, inLake, type Island } from './world/island'
@@ -90,19 +91,32 @@ const SUMMON_RING = 3.5
 const FAST_ROCK_SPEED = 30
 const FAST_ROCK_DAMAGE = 85
 const FAST_ROCK_HEIGHT = 3.2
+// Los del Guardián del meteorito castigan igual que los del gigante y el Lanzarrocas, y además queman (BURN, unos 24
+// más mientras arde): sin armadura, lo que da de lleno mata.
+/** El tajo de lava: el espadón da delante, hacia el jugador, y el suelo arde ahí. */
+const LAVA_SLASH_REACH = 2.2
+const LAVA_SLASH_RADIUS = 2.4
+const LAVA_SLASH_DAMAGE = 95
 const FIRE_RING_RADIUS = 9
 const FIRE_RING_SPEED = 8
 const FIRE_RING_WIDTH = 1.4
-const FIRE_RING_DAMAGE = 18
-const LIGHTNING_RADIUS = 1.6
-const LIGHTNING_WARNING = 0.9
-const LIGHTNING_DAMAGE = 25
-const BURN_POOLS = 3
+const FIRE_RING_DAMAGE = 80
+/** Enfurecido, el segundo anillo sale tanto después del primero: hay que saltar dos veces. */
+const FIRE_RING_SECOND = 0.75
+/** El meteorito pequeño: cae donde estabas al acabar el aviso, que es lo que tarda en bajar. */
+const METEOR_DROP_RADIUS = 2.2
+const METEOR_DROP_WARNING = 1
+const METEOR_DROP_DAMAGE = 90
+/** Enfurecido caen tres: uno donde estás y dos a esta distancia, uno tras otro. */
+const METEOR_DROP_FURY = 3
+const METEOR_DROP_SPREAD = 3.5
+const METEOR_DROP_DELAY = 0.3
+const BURN_POOLS = 4
 const BURN_RADIUS = 2.2
 const BURN_WARNING = 0.8
 const BURN_TIME = 5
 const BURN_EVERY = 0.5
-const BURN_DAMAGE = 4
+const BURN_DAMAGE = 12
 const PULSE_RADIUS = 4.5
 const PULSE_WARNING = 0.5
 const PULSE_DAMAGE = 25
@@ -421,7 +435,7 @@ export class Simulation {
     // Los que salgan ahora, con la apariencia de la amenaza: la del tótem, la de la Noche Eterna o la de siempre.
     this.enemies.look = this.threat.state.totem ? 2 : this.threat.state.eternal ? 1 : 0
     // Los del mundo (meteoritos) no traen de dónde: caen de arriba y no se paran.
-    const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number }; daze?: true }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
+    const hits: { playerId: PlayerId; damage: number; from?: { x: number; z: number }; daze?: true; burn?: true; burning?: true }[] = this.enemies.step(STEP, prey, this.clock.phase, this.clock.day)
     hits.push(...this.projectiles.step(this.tick, prey))
     // Detrás de los proyectiles: la roca gorda estalla en el mismo paso en que cae. En el aire, la onda pasa por debajo.
     hits.push(...this.hazards.step(this.tick, present.map(({ id, player, alive, shieldUntil }) => ({ id, pos: player.pos, alive: alive && this.tick >= shieldUntil, grounded: player.grounded }))))
@@ -439,9 +453,15 @@ export class Simulation {
         })),
       ),
     )
+    // Ardiendo: cada BURN.every pierde un poco, hasta que se apaga; en el agua se apaga al momento.
+    for (const { id, player, alive } of present) {
+      if (player.burnLeft <= 0) continue
+      if (!alive || player.inWater) player.burnLeft = 0
+      else if (burnsNow(player, STEP)) hits.push({ playerId: id, damage: BURN.damage, burning: true })
+    }
     // Golpe a golpe, por si el escudo para unos y otros no; el aviso, uno por jugador y paso.
-    const taken = new Map<PlayerId, { dmg: number; blocked: number; dazed: boolean }>()
-    for (const { playerId, damage, from, daze } of hits) {
+    const taken = new Map<PlayerId, { dmg: number; blocked: number; dazed: boolean; ignited: boolean; burning: boolean }>()
+    for (const { playerId, damage, from, daze, burn, burning } of hits) {
       if (playerId === PLANE_TARGET) {
         this.hurtPlane(damage)
         continue
@@ -455,13 +475,27 @@ export class Simulation {
       // La flecha que pasa del escudo aturde: un momento más despacio.
       const dazed = daze === true && dealt > 0
       if (dazed) player.slowLeft = ARROW_DAZE.seconds
-      const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0, dazed: false }
+      // El fuego del Guardián prende (o vuelve a prender): sigue quemando BURN.seconds. En el agua no prende.
+      const ignited = burn === true && dealt > 0 && !player.inWater
+      if (ignited) player.burnLeft = BURN.seconds
+      const sum = taken.get(playerId) ?? { dmg: 0, blocked: 0, dazed: false, ignited: false, burning: true }
       sum.dmg += dealt
       sum.blocked += hit.blocked
       sum.dazed ||= dazed
+      sum.ignited ||= ignited
+      sum.burning &&= burning === true
       taken.set(playerId, sum)
     }
-    for (const [id, { dmg, blocked, dazed }] of taken) this.events.emit({ type: 'playerHurt', id, dmg, ...(blocked > 0 ? { blocked } : {}), ...(dazed ? { dazed: true as const } : {}) })
+    for (const [id, { dmg, blocked, dazed, ignited, burning }] of taken)
+      this.events.emit({
+        type: 'playerHurt',
+        id,
+        dmg,
+        ...(blocked > 0 ? { blocked } : {}),
+        ...(dazed ? { dazed: true as const } : {}),
+        ...(ignited ? { ignited: true as const } : {}),
+        ...(burning ? { burning: true as const } : {}),
+      })
 
     growBerries(this.world.regrowing, STEP, this.events.emit)
     this.structures.burn(STEP, this.oilUnit, isNight(this.clock.phase))
@@ -645,27 +679,53 @@ export class Simulation {
         this.projectiles.launch(this.tick, 'rock', from, aimedVelocity(from, aim(EYE_HEIGHT / 2), FAST_ROCK_SPEED), FAST_ROCK_DAMAGE)
         break
       }
-      case 'fireRing':
-        this.hazards.add({ look: 'fire', x, z, radius: FIRE_RING_RADIUS, startTick: this.tick, hitTick: this.tick, damage: FIRE_RING_DAMAGE, ring: { speed: FIRE_RING_SPEED, width: FIRE_RING_WIDTH } })
-        break
-      case 'lightning':
-      case 'lightBeam': {
-        // Donde está al acabar el aviso: el que se queda quieto se lo come.
-        const beam = id === 'lightBeam'
-        const warning = beam ? BEAM_WARNING : LIGHTNING_WARNING
-        this.hazards.add({ look: 'light', x: target.pos.x, z: target.pos.z, radius: beam ? BEAM_RADIUS : LIGHTNING_RADIUS, startTick: this.tick, hitTick: this.tick + ticks(warning), damage: beam ? BEAM_DAMAGE : LIGHTNING_DAMAGE })
+      case 'lavaSlash': {
+        // Como el golpe al suelo del Lanzarrocas, pero el espadón quema: alejarse durante el aviso lo esquiva.
+        const dx = target.pos.x - x
+        const dz = target.pos.z - z
+        const length = Math.hypot(dx, dz) || 1
+        const at = { x: x + (dx / length) * LAVA_SLASH_REACH, z: z + (dz / length) * LAVA_SLASH_REACH }
+        this.hazards.add({ look: 'fire', ...at, radius: LAVA_SLASH_RADIUS, startTick: this.tick, hitTick: this.tick, damage: LAVA_SLASH_DAMAGE, burn: true })
         break
       }
-      case 'burningGround':
+      case 'fireRing': {
+        // Enfurecido, otro detrás: el que cae del primer salto se come el segundo.
+        const rings = furious(e) ? 2 : 1
+        for (let i = 0; i < rings; i++) {
+          const hitTick = this.tick + ticks(i * FIRE_RING_SECOND)
+          this.hazards.add({ look: 'fire', x, z, radius: FIRE_RING_RADIUS, startTick: this.tick, hitTick, damage: FIRE_RING_DAMAGE, ring: { speed: FIRE_RING_SPEED, width: FIRE_RING_WIDTH }, burn: true })
+        }
+        break
+      }
+      case 'meteorDrop': {
+        // Donde está al acabar el aviso: el que se queda quieto se lo come. Enfurecido, dos más alrededor, uno tras otro.
+        const count = furious(e) ? METEOR_DROP_FURY : 1
+        const turn = this.rng() * Math.PI * 2
+        for (let i = 0; i < count; i++) {
+          const angle = turn + (i * Math.PI * 2) / Math.max(1, count - 1)
+          const r = i === 0 ? 0 : METEOR_DROP_SPREAD
+          const at = { x: target.pos.x + Math.cos(angle) * r, z: target.pos.z + Math.sin(angle) * r }
+          const hitTick = this.tick + ticks(METEOR_DROP_WARNING + i * METEOR_DROP_DELAY)
+          this.hazards.add({ look: 'meteor', ...at, radius: METEOR_DROP_RADIUS, startTick: this.tick, hitTick, damage: METEOR_DROP_DAMAGE, burn: true })
+        }
+        break
+      }
+      case 'lightBeam':
+        // Donde está al acabar el aviso: el que se queda quieto se lo come.
+        this.hazards.add({ look: 'light', x: target.pos.x, z: target.pos.z, radius: BEAM_RADIUS, startTick: this.tick, hitTick: this.tick + ticks(BEAM_WARNING), damage: BEAM_DAMAGE })
+        break
+      case 'burningGround': {
         // Uno donde está y los demás alrededor, repartidos: arden BURN_TIME segundos y queman cada BURN_EVERY.
+        const turn = this.rng() * Math.PI * 2
         for (let i = 0; i < BURN_POOLS; i++) {
-          const angle = this.rng() * Math.PI * 2
+          const angle = turn + (i * Math.PI * 2) / (BURN_POOLS - 1) + (this.rng() - 0.5) * 0.8
           const r = i === 0 ? 0 : 3 + this.rng() * 2
           const hitTick = this.tick + ticks(BURN_WARNING)
           const at = { x: target.pos.x + Math.cos(angle) * r, z: target.pos.z + Math.sin(angle) * r }
-          this.hazards.add({ look: 'fire', ...at, radius: BURN_RADIUS, startTick: this.tick, hitTick, endTick: hitTick + ticks(BURN_TIME), pulse: ticks(BURN_EVERY), damage: BURN_DAMAGE })
+          this.hazards.add({ look: 'lava', ...at, radius: BURN_RADIUS, startTick: this.tick, hitTick, endTick: hitTick + ticks(BURN_TIME), pulse: ticks(BURN_EVERY), damage: BURN_DAMAGE, burn: true })
         }
         break
+      }
       case 'pulse':
         this.hazards.add({ look: 'crystal', x, z, radius: PULSE_RADIUS, startTick: this.tick, hitTick: this.tick + ticks(PULSE_WARNING), damage: PULSE_DAMAGE })
         break

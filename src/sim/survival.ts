@@ -1,5 +1,6 @@
 import {
   ARROW_DAZE,
+  BURN,
   CAMPFIRE_HEAL_PER_SEC,
   STAMINA_MAX,
   STAMINA_RECOVER_THRESHOLD,
@@ -31,6 +32,8 @@ export interface Vitals {
   boosts?: BoostLevels
   /** Aturdido por una flecha del trasgo gigante: segundos que le quedan andando más despacio (ARROW_DAZE). */
   slowLeft: number
+  /** Ardiendo por el fuego del Guardián: segundos que le quedan (BURN; el daño lo pone la simulación). */
+  burnLeft: number
 }
 
 /** Lo que se recupera de la resistencia al tomar algo que la devuelve (los campos del jugador). */
@@ -41,7 +44,7 @@ export interface Breath {
 }
 
 /** Los campos de `Vitals` que empiezan a cero: sin pausa, curación ni efectos en marcha. */
-export const NO_HEALING = { healDelay: 0, regenLeft: 0, regenPerSec: 0, breathLeft: 0, speedLeft: 0, speedMul: 1, guardLeft: 0, guardMul: 1, slowLeft: 0 }
+export const NO_HEALING = { healDelay: 0, regenLeft: 0, regenPerSec: 0, breathLeft: 0, speedLeft: 0, speedMul: 1, guardLeft: 0, guardMul: 1, slowLeft: 0, burnLeft: 0 }
 
 /** Por cuánto se multiplica ahora la velocidad y el daño recibido. */
 export const speedFactor = (v: Vitals) => (v.speedLeft > 0 ? v.speedMul : 1) * (v.slowLeft > 0 ? ARROW_DAZE.factor : 1)
@@ -67,10 +70,21 @@ export function stepSurvival(v: Vitals, dt: number, warm = false) {
   v.guardLeft = Math.max(0, v.guardLeft - dt)
   if (v.guardLeft <= 0) v.guardMul = 1
   v.slowLeft = Math.max(0, v.slowLeft - dt)
+  v.burnLeft = Math.max(0, v.burnLeft - dt)
   if (v.regenLeft <= 0 || v.health <= 0) return
   v.regenLeft = Math.max(0, v.regenLeft - dt)
   v.health = Math.min(maxHealth, v.health + v.regenPerSec * dt)
   if (v.regenLeft <= 0) v.regenPerSec = 0
+}
+
+/**
+ * Si el fuego le quita vida en este paso (`dt`): cada BURN.every segundos mientras arde, el último justo al apagarse.
+ * Se mira antes de que `stepSurvival` descuente el paso.
+ */
+export function burnsNow(v: Pick<Vitals, 'burnLeft'>, dt: number) {
+  if (v.burnLeft <= 0) return false
+  const pulses = (left: number) => Math.ceil(left / BURN.every - 1e-6)
+  return pulses(Math.max(0, v.burnLeft - dt)) < pulses(v.burnLeft)
 }
 
 /** Daño de fuera (enemigos): quita vida y pausa la regeneración natural. El hambre no pasa por aquí. */
